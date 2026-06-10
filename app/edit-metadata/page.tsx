@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Tags, ShieldCheck, FileText, User, BookOpen, Key, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { Tags, ShieldCheck, FileText, User, BookOpen, Key, Loader2, Lock } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/apiClient";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
@@ -13,15 +13,56 @@ import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 export default function MetadataPage() {
     const [file, setFile] = useState<File | null>(null);
 
-    // Metadata state fields
+    // Form value input states
     const [title, setTitle] = useState("");
     const [author, setAuthor] = useState("");
     const [subject, setSubject] = useState("");
     const [keywords, setKeywords] = useState("");
 
+    // Password orchestration states
+    const [password, setPassword] = useState("");
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
+
     const [isProcessing, setIsProcessing] = useState(false);
     const [isReadingFile, setIsReadingFile] = useState(false);
     const [success, setSuccess] = useState(false);
+
+    // Pulls properties dynamically from the Go microservice
+    const loadMetadataFromBackend = async (targetFile: File, userPassword = "") => {
+        setIsReadingFile(true);
+        try {
+            const formData = new FormData();
+            formData.append("file", targetFile);
+            if (userPassword) {
+                formData.append("password", userPassword);
+            }
+
+            const response = await fetch("http://localhost:8080/api/structure/metadata/fetch", {
+                method: "POST",
+                body: formData,
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to process file keys.");
+            }
+
+            const properties: Record<string, string> = await response.json();
+
+            // Map lower-case normalized keys from backend properties payload
+            setTitle(properties["title"] || targetFile.name.replace(/\.pdf$/i, ""));
+            setAuthor(properties["author"] || "");
+            setSubject(properties["subject"] || "");
+            setKeywords(properties["keywords"] || "");
+
+            if (userPassword) setPassword(userPassword);
+            setShowPasswordModal(false);
+        } catch (err) {
+            console.error(err);
+            alert("Could not load current document information attributes safely.");
+        } finally {
+            setIsReadingFile(false);
+        }
+    };
 
     const onDrop = async (acceptedFiles: File[]) => {
         if (acceptedFiles.length === 0) return;
@@ -29,43 +70,43 @@ export default function MetadataPage() {
 
         setFile(uploadedFile);
         setSuccess(false);
-        setIsReadingFile(true);
+        setPassword("");
 
-        // Set a fallback title just in case the PDF has no title metadata
         setTitle(uploadedFile.name.replace(/\.pdf$/i, ""));
         setAuthor("");
         setSubject("");
         setKeywords("");
 
         try {
-            // Reuse the PDF.js library already installed for your previewers
             const pdfjsLib = await import("pdfjs-dist");
-            pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.mjs";
+            pdfjsLib.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
 
             const arrayBuffer = await uploadedFile.arrayBuffer();
             const typedArray = new Uint8Array(arrayBuffer);
 
-            const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
+            const loadingTask = pdfjsLib.getDocument({
+                data: typedArray,
+                disableWorker: false,
+                isEvalSupported: false
+            });
 
-            // Extract the internal dictionary properties
-            const metaData = await pdf.getMetadata();
+            await loadingTask.promise;
+            await loadingTask.destroy();
 
-            if (metaData && metaData.info) {
-                const info = metaData.info as any;
-
-                // Populate state if the properties exist inside the document
-                if (info.Title) setTitle(info.Title);
-                if (info.Author) setAuthor(info.Author);
-                if (info.Subject) setSubject(info.Subject);
-                if (info.Keywords) setKeywords(info.Keywords);
+            // File is open, pull metadata automatically
+            await loadMetadataFromBackend(uploadedFile);
+        } catch (error: any) {
+            if (error.name === "PasswordException") {
+                setShowPasswordModal(true);
+            } else {
+                console.error("Scanning routine failure:", error);
             }
-        } catch (error) {
-            console.error("Metadata extraction failed:", error);
-            // We don't alert the user here because the tool still works perfectly
-            // even if the frontend fails to pre-fill the existing data.
-        } finally {
-            setIsReadingFile(false);
         }
+    };
+
+    const handlePasswordUnlockSubmit = async () => {
+        if (!file || !password) return;
+        await loadMetadataFromBackend(file, password);
     };
 
     const handleMetadataUpdate = async () => {
@@ -77,19 +118,25 @@ export default function MetadataPage() {
 
             const formData = new FormData();
             formData.append("file", file);
+            formData.append("title", title.trim());
+            formData.append("author", author.trim());
+            formData.append("subject", subject.trim());
+            formData.append("keywords", keywords.trim());
 
-            // Append only if the user typed something
-            if (title.trim()) formData.append("title", title.trim());
-            if (author.trim()) formData.append("author", author.trim());
-            if (subject.trim()) formData.append("subject", subject.trim());
-            if (keywords.trim()) formData.append("keywords", keywords.trim());
+            if (password) {
+                formData.append("password", password);
+            }
 
-            await uploadAndDownloadFile("/structure/update-metadata", formData, `${file.name.replace(/\.pdf$/i, "")}-meta.pdf`);
+            await uploadAndDownloadFile(
+                "/structure/update-metadata",
+                formData,
+                `${file.name.replace(/\.pdf$/i, "")}-meta.pdf`
+            );
 
             setSuccess(true);
         } catch (err) {
             console.error(err);
-            alert(err instanceof Error ? err.message : "Failed to update PDF properties.");
+            alert(err instanceof Error ? err.message : "Failed to save modified options.");
         } finally {
             setIsProcessing(false);
         }
@@ -102,17 +149,72 @@ export default function MetadataPage() {
                 description="Modify hidden document properties like Title, Author, Subject, and SEO Keywords for better search indexing."
             />
 
-            <div className="mt-12 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8 shadow-lg">
+            <div className="mt-12 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8 shadow-lg relative">
                 <PdfUploader
                     onFilesAccepted={onDrop}
                     title="Upload PDF Document"
                     description="Drop file here to access internal document property dictionaries"
                 />
 
+                {showPasswordModal && (
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                        <div className="bg-[var(--card)] border border-[color:var(--border)] rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+                            <div className="flex items-center gap-3 border-b border-[color:var(--border)] pb-3">
+                                <div className="p-2 bg-amber-500/10 text-amber-500 rounded-xl">
+                                    <Lock size={20} />
+                                </div>
+                                <div>
+                                    <h4 className="text-sm font-bold text-[color:var(--foreground)]">Password Protected</h4>
+                                    <p className="text-xs text-[color:var(--muted)]">Please provide the password to read and override metadata block tables.</p>
+                                </div>
+                            </div>
+                            <div className="space-y-1">
+                                <input
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    placeholder="Enter File Password"
+                                    className="w-full px-4 py-3 bg-[var(--background)] border border-[color:var(--border)] rounded-xl text-sm outline-none focus:border-indigo-500 font-medium transition text-[color:var(--foreground)]"
+                                    autoFocus
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter" && password) handlePasswordUnlockSubmit();
+                                    }}
+                                />
+                            </div>
+                            <div className="flex justify-end gap-2 pt-2">
+                                <button
+                                    onClick={() => {
+                                        setFile(null);
+                                        setPassword("");
+                                        setShowPasswordModal(false);
+                                    }}
+                                    className="px-4 py-2 text-xs font-semibold text-[color:var(--muted)] hover:text-[color:var(--foreground)] transition"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handlePasswordUnlockSubmit}
+                                    disabled={!password || isReadingFile}
+                                    className="px-4 py-2 bg-indigo-500 text-white text-xs font-semibold rounded-xl hover:bg-indigo-600 transition disabled:opacity-50 flex items-center gap-1"
+                                >
+                                    {isReadingFile && <Loader2 className="animate-spin" size={12} />}
+                                    Unlock & Extract
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {file && (
                     <div className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
                         <div className="lg:col-span-5 space-y-6">
                             <PdfFileInfo file={file} />
+
+                            {password && (
+                                <div className="flex items-center gap-2 text-xs bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-3 py-2 rounded-xl w-fit font-medium">
+                                    <Key size={12} /> Decryption sequence configuration mounted.
+                                </div>
+                            )}
 
                             {success && (
                                 <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-900 dark:text-emerald-200 flex items-start gap-3">
@@ -129,19 +231,17 @@ export default function MetadataPage() {
                                     text="Update Document Properties"
                                     loadingText="Writing Metadata to File..."
                                     loading={isProcessing}
-                                    disabled={!file || isReadingFile || (!title && !author && !subject && !keywords)}
+                                    disabled={!file || isReadingFile}
                                     onClick={handleMetadataUpdate}
                                 />
                             </div>
                         </div>
 
                         <div className="lg:col-span-7 flex flex-col justify-start bg-[color:var(--background)]/30 border border-[color:var(--border)] rounded-2xl p-6 relative">
-
-                            {/* Optional Loading Overlay while extracting data */}
                             {isReadingFile && (
                                 <div className="absolute inset-0 z-10 bg-[color:var(--background)]/50 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center text-[color:var(--muted)]">
                                     <Loader2 className="animate-spin mb-3 text-indigo-500" size={28} />
-                                    <p className="text-sm font-medium">Scanning dictionary...</p>
+                                    <p className="text-sm font-medium">Scanning dictionary values from server payload...</p>
                                 </div>
                             )}
 
@@ -202,7 +302,6 @@ export default function MetadataPage() {
                                     />
                                 </div>
                             </div>
-
                         </div>
                     </div>
                 )}

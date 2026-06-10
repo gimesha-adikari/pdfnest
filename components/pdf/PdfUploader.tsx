@@ -1,85 +1,53 @@
 "use client";
 
-import { useDropzone } from "react-dropzone";
+import React, { useCallback } from "react";
+import { useDropzone, Accept } from "react-dropzone";
+import { UploadCloud } from "lucide-react";
 
 interface PdfUploaderProps {
     onFilesAccepted: (files: File[]) => void;
-    multiple?: boolean;
-    accept?: Record<string, string[]>;
     title?: string;
     description?: string;
+    accept?: Accept;
+    multiple?: boolean;
 }
 
 export default function PdfUploader({
                                         onFilesAccepted,
-                                        multiple = false,
-                                        accept = {
-                                            "application/pdf": [".pdf"],
-                                        },
-                                        title = "Upload PDF",
-                                        description = "Drag & drop files here or click to browse",
+                                        title = "Select or Drop Files Here",
+                                        description = "Supports standard documents configuration formats",
+                                        accept = { "application/pdf": [".pdf"] },
+                                        multiple = false
                                     }: PdfUploaderProps) {
-    const {
-        getRootProps,
-        getInputProps,
-        isDragActive,
-    } = useDropzone({
+    const onDrop = useCallback((acceptedFiles: File[]) => {
+        if (acceptedFiles.length > 0) {
+            onFilesAccepted(acceptedFiles);
+        }
+    }, [onFilesAccepted]);
+
+    const { getRootProps, getInputProps, isDragActive } = useDropzone({
+        onDrop,
         accept,
-        multiple,
-        onDrop: onFilesAccepted,
+        multiple
     });
 
     return (
         <div
             {...getRootProps()}
-            className={`
-                flex
-                min-h-[240px]
-                cursor-pointer
-                flex-col
-                items-center
-                justify-center
-                rounded-2xl
-                border-2
-                border-dashed
-                transition-all
-                duration-300
-
-                ${
+            className={`flex flex-col items-center justify-center border-2 border-dashed rounded-2xl p-10 cursor-pointer transition-all outline-none ${
                 isDragActive
-                    ? "border-indigo-500 bg-indigo-500/10 scale-[1.01]"
-                    : "border-[color:var(--border)] hover:border-indigo-500 hover:bg-indigo-500/5"
-            }
-            `}
+                    ? "border-indigo-500 bg-indigo-500/5"
+                    : "border-[color:var(--border)] bg-[var(--background)]/30 hover:border-[color:var(--muted)]"
+            }`}
         >
             <input {...getInputProps()} />
-
-            <div
-                className="
-                    flex
-                    h-16
-                    w-16
-                    items-center
-                    justify-center
-                    rounded-2xl
-                    bg-gradient-to-r
-                    from-indigo-500
-                    to-purple-600
-                    text-2xl
-                    text-white
-                    shadow-lg
-                "
-            >
-                📄
+            <div className="p-4 rounded-full bg-indigo-500/10 text-indigo-500 mb-4">
+                <UploadCloud size={28} />
             </div>
-
-            <h2 className="mt-5 text-2xl font-bold">
-                {isDragActive
-                    ? "Drop files here"
-                    : title}
-            </h2>
-
-            <p className="mt-2 text-center text-sm text-[color:var(--muted)]">
+            <p className="text-sm font-semibold text-[color:var(--foreground)] text-center mb-1">
+                {title}
+            </p>
+            <p className="text-xs text-[color:var(--muted)] text-center">
                 {description}
             </p>
         </div>

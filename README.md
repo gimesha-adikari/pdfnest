@@ -1,36 +1,134 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+![Project cover](cover.png)
+
+# PDFNest
+
+PDFNest is a Next.js PDF utility app for editing, protecting, converting, and extracting content from PDF files. It provides a browser UI for uploading documents, previewing pages where needed, sending files to a PDF processing backend, and downloading the processed output.
+
+## Features
+
+- Merge multiple PDFs into one document
+- Split PDFs by selected pages
+- Rotate, reorder, and delete PDF pages
+- Add text watermarks and page numbers
+- Compress PDF files
+- Edit PDF metadata
+- Lock and unlock protected PDFs
+- Convert images to PDF
+- Convert PDF pages to images
+- Extract text from PDFs
+- Convert text images into searchable PDF output
+- Light and dark theme support
+
+## Tech Stack
+
+- Next.js 16 App Router
+- React 19
+- TypeScript
+- Tailwind CSS 4
+- pdfjs-dist for client-side PDF previews
+- @dnd-kit for drag-and-drop page ordering
+- lucide-react icons
+
+## Requirements
+
+- Node.js 20 or newer
+- npm
+- A compatible PDF processing API server
+
+The frontend sends processing requests to `NEXT_PUBLIC_API_BASE_URL`, which defaults to:
+
+```bash
+http://localhost:8080/api
+```
 
 ## Getting Started
 
-First, run the development server:
+Install dependencies:
+
+```bash
+npm install
+```
+
+Create a local environment file if your backend is not running at the default URL:
+
+```bash
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8080/api
+```
+
+Start the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Available Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run dev
+```
 
-## Learn More
+Starts the local development server.
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run build
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Builds the app for production.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run start
+```
 
-## Deploy on Vercel
+Starts the production server after a successful build.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run lint
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Runs ESLint.
+
+## Backend API
+
+Most tools use `lib/apiClient.ts` to upload a `FormData` payload and download the returned file. The current UI expects these backend paths under the configured API base URL:
+
+- `POST /structure/merge`
+- `POST /structure/split`
+- `POST /structure/rotate`
+- `POST /structure/delete-pages`
+- `POST /structure/reorder-pages`
+- `POST /structure/watermark`
+- `POST /structure/add-page-numbers`
+- `POST /structure/metadata/fetch`
+- `POST /structure/update-metadata`
+- `POST /optimize/compress`
+- `POST /security/lock`
+- `POST /security/unlock`
+- `POST /conversion/to-pdf`
+- `POST /conversion/pdf-to-images`
+- `POST /ocr/extract-text`
+- `POST /images/to-text-pdf`
+
+The app also includes `app/api/lock/route.ts`, a Next.js route handler that proxies lock requests to `http://localhost:8080/api/security/lock`.
+
+## Project Structure
+
+```text
+app/                  App Router pages and route handlers
+components/           Shared UI components
+components/pdf/       PDF-specific upload, preview, and action components
+lib/                  Tool metadata, API client, and error helpers
+public/               Static assets and PDF.js worker
+```
+
+## Adding a Tool
+
+1. Add the page under `app/<tool-route>/page.tsx`.
+2. Add the navigation entry to `lib/toolsData.ts`.
+3. Reuse the shared PDF components in `components/pdf/` where possible.
+4. Use `uploadAndDownloadFile()` from `lib/apiClient.ts` for upload-and-download API flows.
+
+## License
+
+This project is licensed under the terms in [LICENSE](./LICENSE).

@@ -12,8 +12,7 @@ export default function Footer() {
                     <div>
                         <h3 className="text-lg font-bold">PDFNest</h3>
                         <p className="mt-3 text-sm leading-6 text-[color:var(--muted)]">
-                            Fast, privacy-friendly PDF tools that run entirely in your browser.
-                            No uploads. No sign-up.
+                            Files are processed inside secure, isolated sandboxes. All documents are permanently deleted from our system automatically immediately after download.
                         </p>
                     </div>
 
@@ -52,7 +51,7 @@ export default function Footer() {
                     <div>
                         <h4 className="font-semibold text-sm">Information</h4>
                         <div className="mt-3 flex flex-col gap-2 text-sm text-[color:var(--muted)]">
-                            <span>100% Browser Based</span>
+                            <span>All tools are available at no cost.</span>
                             <span>No Sign-Up Required</span>
                             <span>Privacy Friendly</span>
                             <Link

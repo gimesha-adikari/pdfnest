@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Move, ShieldCheck, Loader2, FileText } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Loader2, ArrowRight, ShieldCheck, Layers } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/apiClient";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
@@ -10,56 +10,24 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 
-interface PageItem {
-    id: string;
-    originalIndex: number;
-    thumbnail: string;
-}
-
-function formatMB(bytes: number) {
-    return (bytes / 1024 / 1024).toFixed(2);
-}
+import PageReorderGrid from "@/components/pdf/PageReorderGrid";
 
 export default function ReorderPagesPage() {
     const [file, setFile] = useState<File | null>(null);
-    const [pages, setPages] = useState<PageItem[]>([]);
-    const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-    const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+    const [pageOrder, setPageOrder] = useState<number[]>([]);
+    const [thumbnails, setThumbnails] = useState<string[]>([]);
 
+    const [isLoadingElements, setIsLoadingElements] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [isReadingTotal, setIsReadingTotal] = useState(false);
     const [success, setSuccess] = useState(false);
 
-    const generateThumbnails = async (pdf: any, totalPages: number) => {
-        const loadedPages: PageItem[] = [];
-
-        try {
-            for (let i = 1; i <= totalPages; i++) {
-                const page = await pdf.getPage(i);
-                const viewport = page.getViewport({ scale: 0.3 });
-
-                const canvas = document.createElement("canvas");
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
-                const ctx = canvas.getContext("2d");
-
-                if (ctx) {
-                    await page.render({ canvasContext: ctx, viewport }).promise;
-                    const imgData = canvas.toDataURL("image/jpeg", 0.6);
-
-                    loadedPages.push({
-                        id: `page-${i}-${Math.random()}`,
-                        originalIndex: i,
-                        thumbnail: imgData
-                    });
-
-                    setPages([...loadedPages]);
-                }
-            }
-        } catch (error) {
-            console.error(error);
-        }
-    };
+    useEffect(() => {
+        return () => {
+            thumbnails.forEach(src => {
+                if (src.startsWith("blob:")) URL.revokeObjectURL(src);
+            });
+        };
+    }, [file, thumbnails]);
 
     const onDrop = async (acceptedFiles: File[]) => {
         if (acceptedFiles.length === 0) return;
@@ -67,65 +35,70 @@ export default function ReorderPagesPage() {
 
         setFile(uploadedFile);
         setSuccess(false);
-        setPages([]);
-        setIsReadingTotal(true);
+        setThumbnails([]);
+        setIsLoadingElements(true);
 
         try {
             const pdfjsLib = await import("pdfjs-dist");
-            pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.mjs";
+            pdfjsLib.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
 
             const arrayBuffer = await uploadedFile.arrayBuffer();
             const typedArray = new Uint8Array(arrayBuffer);
 
-            const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
+            const loadingTask = pdfjsLib.getDocument({
+                data: typedArray,
+                disableWorker: false,
+                isEvalSupported: false
+            });
+
+            const pdf = await loadingTask.promise;
             const totalPages = pdf.numPages;
-            setIsReadingTotal(false);
 
-            generateThumbnails(pdf, totalPages);
+            const dynamicOrderArray = Array.from({ length: totalPages }, (_, i) => i + 1);
+            setPageOrder(dynamicOrderArray);
 
+            const generatedImages: string[] = [];
+
+            for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+                try {
+                    const page = await pdf.getPage(pageNum);
+                    const viewport = page.getViewport({ scale: 0.4 });
+
+                    const canvas = document.createElement("canvas");
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+
+                    const ctx = canvas.getContext("2d");
+                    if (ctx) {
+                        const renderTask = page.render({
+                            canvasContext: ctx,
+                            viewport: viewport
+                        });
+                        await renderTask.promise;
+
+                        generatedImages.push(canvas.toDataURL("image/jpeg", 0.7));
+                    }
+
+                    canvas.width = 0;
+                    canvas.height = 0;
+                } catch (pageError) {
+                    console.error(`Page ${pageNum} frame rendering collision:`, pageError);
+                    generatedImages.push("data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7");
+                }
+            }
+
+            setThumbnails(generatedImages);
+            await loadingTask.destroy();
         } catch (error) {
-            console.error(error);
-            alert("Could not read the structural metadata of this document.");
-            setIsReadingTotal(false);
+            console.error("Root Document Processing Exception:", error);
+            alert("Could not load document preview grids. Please check the browser console for details.");
+        } finally {
+            setIsLoadingElements(false);
         }
     };
 
-    const fileExtractedSize = useMemo(() => {
-        if (!file) return "0.00";
-        return formatMB(file.size);
-    }, [file]);
-
-    const handleDragStart = (index: number) => {
-        setDraggedIndex(index);
-    };
-
-    const handleDragOver = (e: React.DragEvent, index: number) => {
-        e.preventDefault();
-        setHoveredIndex(index);
-    };
-
-    const handleDrop = (index: number) => {
-        if (draggedIndex === null || draggedIndex === index) {
-            setDraggedIndex(null);
-            setHoveredIndex(null);
-            return;
-        }
-
-        const updatedPages = [...pages];
-        const [draggedItem] = updatedPages.splice(draggedIndex, 1);
-        updatedPages.splice(index, 0, draggedItem);
-
-        setPages(updatedPages);
-        setDraggedIndex(null);
-        setHoveredIndex(null);
-    };
-
-    const compiledSequenceString = useMemo(() => {
-        return pages.map(p => p.originalIndex).join(",");
-    }, [pages]);
-
-    const handleReorderProcessing = async () => {
-        if (!file || pages.length === 0) return;
+    const handleReorderSubmission = async () => {
+        if (!file || pageOrder.length === 0) return;
 
         try {
             setIsProcessing(true);
@@ -133,14 +106,19 @@ export default function ReorderPagesPage() {
 
             const formData = new FormData();
             formData.append("file", file);
-            formData.append("sequence", compiledSequenceString);
 
-            await uploadAndDownloadFile("/structure/reorder-pages", formData, `${file.name.replace(/\.pdf$/i, "")}-reordered.pdf`);
+            formData.append("sequence", pageOrder.join(","));
+
+            await uploadAndDownloadFile(
+                "/structure/reorder-pages",
+                formData,
+                `${file.name.replace(/\.pdf$/i, "")}-reordered.pdf`
+            );
 
             setSuccess(true);
         } catch (err) {
             console.error(err);
-            alert(err instanceof Error ? err.message : "Structure arrangement execution failure.");
+            alert(err instanceof Error ? err.message : "Reordering layout compilation runtime failure.");
         } finally {
             setIsProcessing(false);
         }
@@ -149,110 +127,67 @@ export default function ReorderPagesPage() {
     return (
         <PdfToolLayout>
             <PdfToolHero
-                title="Reorder PDF Pages"
-                description="Rearrange document page layouts seamlessly by dragging thumbnails into custom sorting variations before output generation."
+                title="Rearrange PDF Pages"
+                description="Drag, drop, and shuffle pages visually to reorder your document structures flawlessly."
             />
 
             <div className="mt-12 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8 shadow-lg">
                 <PdfUploader
                     onFilesAccepted={onDrop}
                     title="Upload PDF Document"
-                    description="Drop file here to generate the visual sequence drag dashboard workspace"
+                    description="Drop document here to load the interactive page manager grid workspace"
                 />
 
-                {file && (
+                {isLoadingElements && (
+                    <div className="flex flex-col items-center justify-center py-20 text-[color:var(--muted)]">
+                        <Loader2 className="animate-spin mb-3 text-indigo-500" size={32} />
+                        <p className="text-sm font-medium">Deconstructing document into visual page layouts...</p>
+                    </div>
+                )}
+
+                {!isLoadingElements && file && thumbnails.length > 0 && (
                     <div className="mt-8 space-y-6">
                         <PdfFileInfo file={file} />
 
-                        <div className="rounded-2xl border border-[color:var(--border)] p-5 bg-[color:var(--background)]/50">
-                            <h3 className="text-lg font-semibold flex items-center gap-2 mb-4">
-                                <Move size={18} className="text-indigo-500" />
-                                Interactive Page Sorter Board
-                            </h3>
-
-                            {isReadingTotal ? (
-                                <div className="flex flex-col justify-center items-center py-12 text-[color:var(--muted)]">
-                                    <Loader2 size={32} className="animate-spin mb-4 text-indigo-500" />
-                                    <p>Initializing page array structures...</p>
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4 max-h-[550px] overflow-y-auto p-2">
-                                    {pages.map((page, idx) => {
-                                        const isBeingDragged = draggedIndex === idx;
-                                        const isBeingHovered = hoveredIndex === idx;
-
-                                        return (
-                                            <div
-                                                key={page.id}
-                                                draggable
-                                                onDragStart={() => handleDragStart(idx)}
-                                                onDragOver={(e) => handleDragOver(e, idx)}
-                                                onDrop={() => handleDrop(idx)}
-                                                className={`
-                          flex flex-col items-center bg-[color:var(--card)] border rounded-2xl p-2 relative cursor-grab active:cursor-grabbing select-none shadow-sm transition-all duration-200
-                          ${isBeingDragged ? "opacity-30 border-dashed border-indigo-500 scale-95" : ""}
-                          ${isBeingHovered && !isBeingDragged ? "border-indigo-500 bg-indigo-500/5 translate-y-1 scale-105 shadow-md" : "border-[color:var(--border)]"}
-                        `}
-                                            >
-                                                <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm text-white rounded-md text-[10px] font-bold px-1.5 py-0.5 z-10">
-                                                    Order #{idx + 1}
-                                                </div>
-
-                                                <div className="absolute top-2 right-2 bg-indigo-500 text-white rounded-md text-[10px] font-bold px-1.5 py-0.5 z-10 opacity-70 group-hover:opacity-100">
-                                                    Orig. {page.originalIndex}
-                                                </div>
-
-                                                <div className="w-full aspect-[1/1.4] flex items-center justify-center overflow-hidden rounded-lg bg-[color:var(--background)] mt-6 mb-1">
-                                                    {page.thumbnail ? (
-                                                        <img
-                                                            src={page.thumbnail}
-                                                            alt={`Page index`}
-                                                            className="w-full h-full object-cover rounded-md pointer-events-none"
-                                                        />
-                                                    ) : (
-                                                        <div className="flex flex-col items-center justify-center w-full h-full text-[color:var(--muted)] opacity-50">
-                                                            <FileText size={24} className="mb-2" />
-                                                            <Loader2 size={14} className="animate-spin mt-1" />
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="grid gap-4 sm:grid-cols-2">
-                            <div className="rounded-2xl border border-[color:var(--border)] p-4 bg-transparent">
-                                <p className="text-sm text-[color:var(--muted)]">Source document size</p>
-                                <p className="mt-1 text-2xl font-bold">{fileExtractedSize} MB</p>
+                        <div className="border border-[color:var(--border)] bg-[color:var(--background)]/30 rounded-2xl p-6">
+                            <div className="flex items-center justify-between mb-6 border-b border-[color:var(--border)] pb-3">
+                                <h3 className="text-sm font-bold flex items-center gap-2 text-[color:var(--foreground)]">
+                                    <Layers size={16} className="text-indigo-500" /> Interactive Sorting Grid
+                                </h3>
+                                <span className="text-xs bg-indigo-500/10 text-indigo-500 px-2.5 py-1 rounded-full font-semibold">
+                                    {thumbnails.length} Total Pages
+                                </span>
                             </div>
-                            <div className="rounded-2xl border border-[color:var(--border)] p-4 bg-transparent">
-                                <p className="text-sm text-[color:var(--muted)]">Total Indexed Array Count</p>
-                                <p className="mt-1 text-2xl font-bold text-indigo-500">{pages.length} Pages</p>
-                            </div>
+
+                            {/* Clean, perfectly aligned data injection */}
+                            <PageReorderGrid
+                                items={pageOrder}
+                                setItems={setPageOrder}
+                                thumbnails={thumbnails}
+                            />
                         </div>
 
                         {success && (
-                            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5 text-emerald-900 dark:text-emerald-200 flex items-start gap-3">
-                                <ShieldCheck className="text-emerald-500 mt-0.5 shrink-0" size={18} />
-                                <div>
-                                    <p className="text-sm font-semibold">Document orchestration pipeline successful!</p>
-                                    <p className="text-xs mt-1 text-emerald-800/80 dark:text-emerald-200/70">
-                                        The requested internal matrix layout modification sequence has been processed by the Go engine.
+                            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-900 dark:text-emerald-200 flex items-start gap-3">
+                                <ShieldCheck className="text-emerald-500 mt-0.5 shrink-0" size={16} />
+                                <div className="text-xs">
+                                    <p className="font-semibold">Document Reordered Successfully!</p>
+                                    <p className="mt-0.5 text-emerald-800/80 dark:text-emerald-200/70">
+                                        Your modified page layout matrix has been recompiled and downloaded.
                                     </p>
                                 </div>
                             </div>
                         )}
 
-                        <PdfActionButton
-                            text="Generate Reordered PDF"
-                            loadingText="Piping Mapping Layout Matrix Sequence to Server..."
-                            loading={isProcessing}
-                            disabled={pages.length === 0}
-                            onClick={handleReorderProcessing}
-                        />
+                        <div className="pt-2">
+                            <PdfActionButton
+                                text="Save Page Setup"
+                                loadingText="Compiling Vector Streams on Backend..."
+                                loading={isProcessing}
+                                disabled={!file}
+                                onClick={handleReorderSubmission}
+                            />
+                        </div>
                     </div>
                 )}
             </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Hash, ShieldCheck, Loader2, FileText, Move, Languages } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/apiClient";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
@@ -32,6 +32,12 @@ export default function PageNumbersPage() {
     const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
     const [success, setSuccess] = useState(false);
 
+    useEffect(() => {
+        return () => {
+            setThumbnailSrc("");
+        };
+    }, [file]);
+
     const onDrop = async (acceptedFiles: File[]) => {
         if (acceptedFiles.length === 0) return;
         const uploadedFile = acceptedFiles[0];
@@ -48,7 +54,8 @@ export default function PageNumbersPage() {
             const arrayBuffer = await uploadedFile.arrayBuffer();
             const typedArray = new Uint8Array(arrayBuffer);
 
-            const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
+            const loadingTask = pdfjsLib.getDocument({ data: typedArray });
+            const pdf = await loadingTask.promise;
             setIsReadingTotal(false);
 
             setIsGeneratingPreview(true);
@@ -61,12 +68,20 @@ export default function PageNumbersPage() {
             const ctx = canvas.getContext("2d");
 
             if (ctx) {
-                await page.render({ canvasContext: ctx, viewport }).promise;
+                const renderTask = page.render({ canvasContext: ctx, viewport });
+                await renderTask.promise;
+
                 setThumbnailSrc(canvas.toDataURL("image/jpeg", 0.8));
+
+                canvas.width = 0;
+                canvas.height = 0;
             }
+
+            await loadingTask.destroy();
         } catch (error) {
             console.error(error);
             alert("Could not load viewport layout structures for page generation modeling.");
+            setThumbnailSrc("");
         } finally {
             setIsReadingTotal(false);
             setIsGeneratingPreview(false);

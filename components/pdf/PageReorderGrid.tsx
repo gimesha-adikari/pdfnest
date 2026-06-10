@@ -1,107 +1,55 @@
 "use client";
 
-import {
-    DndContext,
-    closestCenter,
-} from "@dnd-kit/core";
-
-import {
-    SortableContext,
-    rectSortingStrategy,
-    arrayMove,
-} from "@dnd-kit/sortable";
-
+import { useState, useEffect } from "react";
+import { DndContext, closestCenter } from "@dnd-kit/core";
+import { SortableContext, rectSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import SortablePageCard from "./SortablePageCard";
 
-interface PageItem {
-    id: string;
-    pageNumber: number;
-    thumbnail: string;
-}
-
 interface Props {
-    pages: PageItem[];
-    setPages: React.Dispatch<
-        React.SetStateAction<PageItem[]>
-    >;
+    items: number[];
+    setItems: React.Dispatch<React.SetStateAction<number[]>>;
+    thumbnails: string[];
 }
 
-export default function PageReorderGrid({
-                                            pages,
-                                            setPages,
-                                        }: Props) {
-    const handleDragEnd = (
-        event: any
-    ) => {
-        const {
-            active,
-            over,
-        } = event;
+export default function PageReorderGrid({ items, setItems, thumbnails }: Props) {
+    const [isMounted, setIsMounted] = useState(false);
 
-        if (
-            !over ||
-            active.id === over.id
-        ) {
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
+    const handleDragEnd = (event: any) => {
+        const { active, over } = event;
+
+        if (!over || active.id === over.id) {
             return;
         }
 
-        setPages((items) => {
-            const oldIndex =
-                items.findIndex(
-                    (item) =>
-                        item.id === active.id
-                );
-
-            const newIndex =
-                items.findIndex(
-                    (item) =>
-                        item.id === over.id
-                );
-
-            return arrayMove(
-                items,
-                oldIndex,
-                newIndex
-            );
+        setItems((prevItems) => {
+            const oldIndex = prevItems.indexOf(active.id);
+            const newIndex = prevItems.indexOf(over.id);
+            return arrayMove(prevItems, oldIndex, newIndex);
         });
     };
 
+    if (!isMounted) {
+        return (
+            <div className="min-h-[200px] flex items-center justify-center text-sm text-[color:var(--muted)]">
+                Initializing interactive grid...
+            </div>
+        );
+    }
+
     return (
-        <DndContext
-            collisionDetection={
-                closestCenter
-            }
-            onDragEnd={
-                handleDragEnd
-            }
-        >
-            <SortableContext
-                items={pages.map(
-                    (p) => p.id
-                )}
-                strategy={
-                    rectSortingStrategy
-                }
-            >
-                <div
-                    className="
-                        mt-8
-                        grid
-                        gap-4
-                        sm:grid-cols-2
-                        lg:grid-cols-4
-                    "
-                >
-                    {pages.map((page) => (
+        <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={items} strategy={rectSortingStrategy}>
+                <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    {items.map((pageNum) => (
                         <SortablePageCard
-                            key={page.id}
-                            id={page.id}
-                            pageNumber={
-                                page.pageNumber
-                            }
-                            thumbnail={
-                                page.thumbnail
-                            }
+                            key={pageNum}
+                            id={pageNum}
+                            pageNumber={pageNum}
+                            thumbnail={thumbnails[pageNum - 1]}
                         />
                     ))}
                 </div>
