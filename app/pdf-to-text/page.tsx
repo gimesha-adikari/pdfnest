@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ShieldCheck, Loader2, FileArchive, RefreshCw } from "lucide-react";
+import { ShieldCheck, Loader2, FileText, RefreshCw, Cpu } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/apiClient";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
@@ -10,7 +10,7 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 
-export default function PdfToImagesPage() {
+export default function OcrPage() {
     const [file, setFile] = useState<File | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
@@ -21,7 +21,7 @@ export default function PdfToImagesPage() {
         setSuccess(false);
     };
 
-    const handleUniversalConversion = async () => {
+    const handleOcrExtraction = async () => {
         if (!file) return;
 
         try {
@@ -31,13 +31,14 @@ export default function PdfToImagesPage() {
             const formData = new FormData();
             formData.append("file", file);
 
-            const zipDownloadName = `${file.name.replace(/\.pdf$/i, "")}-extracted-pages.zip`;
+            const txtDownloadName = `${file.name.replace(/\.pdf$/i, "")}-extracted-text.txt`;
 
-            await uploadAndDownloadFile("/conversion/pdf-to-images", formData, zipDownloadName);
+            await uploadAndDownloadFile("/ocr/extract-text", formData, txtDownloadName);
+
             setSuccess(true);
         } catch (err) {
             console.error(err);
-            alert(err instanceof Error ? err.message : "Server-side page rasterization failure.");
+            alert(err instanceof Error ? err.message : "Optical Character Recognition parsing failure.");
         } finally {
             setIsProcessing(false);
         }
@@ -46,16 +47,16 @@ export default function PdfToImagesPage() {
     return (
         <PdfToolLayout>
             <PdfToolHero
-                title="Convert PDF to Images"
-                description="Extract every page of your PDF into high-resolution JPG files. Processed entirely and securely on our high-performance document engine."
+                title="PDF OCR Text Extractor"
+                description="Convert scanned PDFs, image-only files, and documents into fully searchable, editable plain-text files seamlessly."
             />
 
             <div className="mt-12 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8 shadow-lg">
                 {!file && (
                     <PdfUploader
                         onFilesAccepted={onDrop}
-                        title="Upload PDF Document"
-                        description="Drop your file here to rasterize and package its pages into a clean ZIP archive"
+                        title="Upload Scanned Document"
+                        description="Drop your PDF here to run the Optical Character Recognition scanning matrix"
                     />
                 )}
 
@@ -68,9 +69,9 @@ export default function PdfToImagesPage() {
                                 <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-900 dark:text-emerald-200 flex items-start gap-3">
                                     <ShieldCheck className="text-emerald-500 mt-0.5 shrink-0" size={16} />
                                     <div className="text-xs">
-                                        <p className="font-semibold">ZIP file downloaded successfully!</p>
+                                        <p className="font-semibold">Text extracted successfully!</p>
                                         <p className="mt-0.5 text-emerald-800/80 dark:text-emerald-200/70">
-                                            All pages were successfully extracted into individual high-resolution image formats.
+                                            The document image array was parsed successfully and your editable text file has been downloaded.
                                         </p>
                                     </div>
                                 </div>
@@ -78,11 +79,11 @@ export default function PdfToImagesPage() {
 
                             <div className="w-full space-y-4">
                                 <PdfActionButton
-                                    text="Extract and Download Images"
-                                    loadingText="Processing Vector Layers on Server..."
+                                    text="Extract Text Layer (OCR)"
+                                    loadingText="Scanning Pixel Grids on Server..."
                                     loading={isProcessing}
                                     disabled={!file}
-                                    onClick={handleUniversalConversion}
+                                    onClick={handleOcrExtraction}
                                 />
 
                                 {!isProcessing && (
@@ -103,18 +104,18 @@ export default function PdfToImagesPage() {
                             {isProcessing ? (
                                 <div className="space-y-3 flex flex-col items-center justify-center text-[color:var(--muted)] animate-pulse">
                                     <Loader2 className="animate-spin text-indigo-500 mb-1" size={32} />
-                                    <p className="text-sm font-bold text-[color:var(--foreground)]">Rasterizing Document Grid Elements...</p>
-                                    <p className="text-xs max-w-xs">Ghostscript is safely flattening document structures into individual image files.</p>
+                                    <p className="text-sm font-bold text-[color:var(--foreground)]">Analyzing Typography Shapes...</p>
+                                    <p className="text-xs max-w-xs">Tesseract OCR is reading individual character matrix lines page-by-page.</p>
                                 </div>
                             ) : (
                                 <div className="space-y-4 text-[color:var(--muted)] flex flex-col items-center">
                                     <div className="p-4 rounded-full bg-indigo-500/10 text-indigo-500">
-                                        <FileArchive size={32} />
+                                        <Cpu size={32} />
                                     </div>
                                     <div>
-                                        <h4 className="text-md font-bold text-[color:var(--foreground)]">Ready for Extraction</h4>
+                                        <h4 className="text-md font-bold text-[color:var(--foreground)]">Ready for Character Matrix Scan</h4>
                                         <p className="text-xs mt-1 max-w-sm">
-                                            Clicking extract will download a compressed archive package containing your document's pages as sequential high-quality images.
+                                            Clicking extract will execute a system subprocess to turn flat pixels into readable words, numbers, and paragraphs.
                                         </p>
                                     </div>
                                 </div>

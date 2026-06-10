@@ -1,8 +1,8 @@
 export default function PdfFeatures() {
     const features = [
         {
-            title: "100% Browser Based",
-            description: "Files never leave your device.",
+            title: "100% Free",
+            description: "All tools are available at no cost.",
         },
         {
             title: "Fast Processing",

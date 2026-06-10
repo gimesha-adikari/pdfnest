@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
-import { Images, ShieldCheck, Loader2, Trash2, ArrowUp, ArrowDown, UploadCloud } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Images, ShieldCheck, Loader2, Trash2, ArrowUp, ArrowDown, UploadCloud, FileType } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/apiClient";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
@@ -14,13 +14,12 @@ interface ImageItem {
     previewUrl: string;
 }
 
-export default function ImagesToPdfPage() {
+export default function ImageToTextPdfPage() {
     const [images, setImages] = useState<ImageItem[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
 
-    // Clean up Object URLs when the component unmounts to prevent browser memory leaks
     useEffect(() => {
         return () => {
             images.forEach((img) => URL.revokeObjectURL(img.previewUrl));
@@ -30,7 +29,6 @@ export default function ImagesToPdfPage() {
     const processFiles = (files: File[]) => {
         if (!files || files.length === 0) return;
 
-        // Filter strictly for images
         const visualFiles = files.filter((file) => {
             const type = file.type.toLowerCase();
             return (
@@ -42,7 +40,7 @@ export default function ImagesToPdfPage() {
         });
 
         if (visualFiles.length === 0) {
-            alert("Please upload valid image files (JPG, PNG, WebP).");
+            alert("Please upload valid graphic files (JPG, PNG, WebP).");
             return;
         }
 
@@ -56,22 +54,13 @@ export default function ImagesToPdfPage() {
         setSuccess(false);
     };
 
-    // Custom Drag & Drop Handlers bypassing the restricted PdfUploader
     const handleDragOver = (e: React.DragEvent) => {
         e.preventDefault();
-        e.stopPropagation();
         setIsDragging(true);
-    };
-
-    const handleDragLeave = (e: React.DragEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDragging(false);
     };
 
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
-        e.stopPropagation();
         setIsDragging(false);
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             processFiles(Array.from(e.dataTransfer.files));
@@ -82,7 +71,6 @@ export default function ImagesToPdfPage() {
         if (e.target.files && e.target.files.length > 0) {
             processFiles(Array.from(e.target.files));
         }
-        // Reset the input value so the user can select the same file again if they deleted it
         e.target.value = "";
     };
 
@@ -114,12 +102,12 @@ export default function ImagesToPdfPage() {
                 formData.append("images", item.file);
             });
 
-            await uploadAndDownloadFile("/images/to-pdf", formData, "compiled-images.pdf");
+            await uploadAndDownloadFile("/images/to-text-pdf", formData, "ocr-extracted-text.pdf");
 
             setSuccess(true);
         } catch (err) {
             console.error(err);
-            alert(err instanceof Error ? err.message : "Image to PDF compilation failure.");
+            alert(err instanceof Error ? err.message : "Smart compilation failure.");
         } finally {
             setIsProcessing(false);
         }
@@ -128,18 +116,17 @@ export default function ImagesToPdfPage() {
     return (
         <PdfToolLayout>
             <PdfToolHero
-                title="Convert Images to PDF"
-                description="Transform PNG, JPG, and WebP graphics structurally into a perfectly unified, multi-page vector A4 document."
+                title="Smart Image to PDF (Text Layer Extraction)"
+                description="Extract visible written content out of your screenshots or pictures and compile them into an editable, copy-pasteable vector text PDF."
             />
 
             <div className="mt-12 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8 shadow-lg">
 
-                {/* CUSTOM IMAGE DROPZONE (Bypasses PdfUploader Restrictions) */}
                 <div
                     onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
+                    onDragLeave={() => setIsDragging(false)}
                     onDrop={handleDrop}
-                    className={`relative flex flex-col items-center justify-center w-full p-10 border-2 border-dashed rounded-2xl transition-all duration-200 ease-in-out ${
+                    className={`relative flex flex-col items-center justify-center w-full p-10 border-2 border-dashed rounded-2xl transition-all ${
                         isDragging
                             ? "border-indigo-500 bg-indigo-500/10"
                             : "border-[color:var(--border)] hover:border-indigo-400 hover:bg-[color:var(--background)]/50"
@@ -147,21 +134,18 @@ export default function ImagesToPdfPage() {
                 >
                     <input
                         type="file"
-                        id="image-upload-input"
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                         multiple
-                        accept="image/jpeg, image/jpg, image/png, image/webp"
+                        accept="image/*"
                         onChange={handleFileInput}
                     />
                     <div className="flex flex-col items-center pointer-events-none">
-                        <div className={`p-4 rounded-full mb-4 ${isDragging ? "bg-indigo-500/20 text-indigo-500" : "bg-[color:var(--background)] text-[color:var(--muted)]"}`}>
+                        <div className="p-4 rounded-full mb-4 bg-[color:var(--background)] text-[color:var(--muted)]">
                             <UploadCloud size={32} />
                         </div>
-                        <h3 className="text-lg font-bold text-[color:var(--foreground)]">
-                            Upload Graphic Assets
-                        </h3>
+                        <h3 className="text-lg font-bold text-[color:var(--foreground)]">Upload Document Snapshots</h3>
                         <p className="mt-2 text-sm text-[color:var(--muted)] text-center max-w-sm">
-                            Drag and drop your JPG, PNG, or WebP imagery here, or click to browse files.
+                            Drop images with text contents here. The system will read the words and drop the graphics.
                         </p>
                     </div>
                 </div>
@@ -170,57 +154,31 @@ export default function ImagesToPdfPage() {
                     <div className="mt-8 space-y-6">
                         <div className="w-full flex items-center justify-between border-b border-[color:var(--border)] pb-2">
                             <h3 className="text-sm font-bold uppercase tracking-wider text-[color:var(--muted)] flex items-center gap-1.5">
-                                <Images size={16} className="text-indigo-500" /> Compiled Page Flow Grid ({images.length})
+                                <FileType size={16} className="text-indigo-500" /> Target Conversion Grid ({images.length})
                             </h3>
-                            <p className="text-xs text-[color:var(--muted)]">Adjust ordering sequence via arrow selectors</p>
                         </div>
 
-                        {/* Rendered Thumbnail Sort Grid Matrix */}
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                             {images.map((img, index) => (
-                                <div
-                                    key={img.id}
-                                    className="relative group rounded-xl border border-[color:var(--border)] bg-[var(--card)] p-2 flex flex-col justify-between overflow-hidden shadow-sm transition hover:border-[color:var(--muted)]"
-                                >
+                                <div key={img.id} className="relative group rounded-xl border border-[color:var(--border)] bg-[var(--card)] p-2 flex flex-col justify-between overflow-hidden shadow-sm transition hover:border-[color:var(--muted)]">
                                     <div className="aspect-[3/4] relative w-full rounded-lg bg-[color:var(--border)]/30 overflow-hidden flex items-center justify-center">
-                                        <img
-                                            src={img.previewUrl}
-                                            alt="Thumbnail preview"
-                                            className="w-full h-full object-cover select-none pointer-events-none"
-                                        />
-
-                                        {/* Floating Page Number Tag */}
-                                        <div className="absolute top-1.5 left-1.5 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
+                                        <img src={img.previewUrl} alt="Preview" className="w-full h-full object-cover" />
+                                        <div className="absolute top-1.5 left-1.5 bg-black/60 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
                                             Page {index + 1}
                                         </div>
-
-                                        {/* Delete Icon Overlay Button */}
                                         <button
                                             onClick={() => removeImage(img.id, img.previewUrl)}
-                                            className="absolute top-1.5 right-1.5 p-1.5 rounded-md bg-red-500/90 text-white opacity-0 group-hover:opacity-100 transition shadow-md hover:bg-red-600 z-10"
+                                            className="absolute top-1.5 right-1.5 p-1.5 rounded-md bg-red-500 text-white opacity-0 group-hover:opacity-100 transition z-10"
                                         >
                                             <Trash2 size={12} />
                                         </button>
                                     </div>
-
-                                    <p className="text-[10px] truncate mt-2 font-mono text-[color:var(--muted)] px-1">
-                                        {img.file.name}
-                                    </p>
-
-                                    {/* Ordering Navigation Controllers */}
+                                    <p className="text-[10px] truncate mt-2 font-mono text-[color:var(--muted)] px-1">{img.file.name}</p>
                                     <div className="flex items-center gap-1 mt-2 pt-1.5 border-t border-[color:var(--border)]/60 justify-end">
-                                        <button
-                                            disabled={index === 0}
-                                            onClick={() => moveImage(index, "up")}
-                                            className="p-1 rounded-md border border-[color:var(--border)] hover:bg-[color:var(--card)] disabled:opacity-30 disabled:pointer-events-none text-[color:var(--foreground)]"
-                                        >
+                                        <button disabled={index === 0} onClick={() => moveImage(index, "up")} className="p-1 rounded-md border border-[color:var(--border)] hover:bg-[color:var(--card)] disabled:opacity-30 text-[color:var(--foreground)]">
                                             <ArrowUp size={10} />
                                         </button>
-                                        <button
-                                            disabled={index === images.length - 1}
-                                            onClick={() => moveImage(index, "down")}
-                                            className="p-1 rounded-md border border-[color:var(--border)] hover:bg-[color:var(--card)] disabled:opacity-30 disabled:pointer-events-none text-[color:var(--foreground)]"
-                                        >
+                                        <button disabled={index === images.length - 1} onClick={() => moveImage(index, "down")} className="p-1 rounded-md border border-[color:var(--border)] hover:bg-[color:var(--card)] disabled:opacity-30 text-[color:var(--foreground)]">
                                             <ArrowDown size={10} />
                                         </button>
                                     </div>
@@ -232,18 +190,16 @@ export default function ImagesToPdfPage() {
                             <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-900 dark:text-emerald-200 flex items-start gap-3">
                                 <ShieldCheck className="text-emerald-500 mt-0.5 shrink-0" size={16} />
                                 <div className="text-xs">
-                                    <p className="font-semibold">Document generation successful!</p>
-                                    <p className="mt-0.5 text-emerald-800/80 dark:text-emerald-200/70">
-                                        Your image assets have been compiled sequentially into a single file payload.
-                                    </p>
+                                    <p className="font-semibold">Copy-Pasteable PDF Created!</p>
+                                    <p className="mt-0.5 text-emerald-800/80 dark:text-emerald-200/70">The text has been extracted out of the pixel matrices and embedded as vector font strings.</p>
                                 </div>
                             </div>
                         )}
 
                         <div className="w-full mt-6">
                             <PdfActionButton
-                                text="Compile Pages to PDF"
-                                loadingText="Binding Image Arrays on Server..."
+                                text="Extract Text & Build PDF"
+                                loadingText="Running Optical Matrix character scanning..."
                                 loading={isProcessing}
                                 disabled={images.length === 0}
                                 onClick={handleConversion}
