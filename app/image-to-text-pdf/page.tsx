@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { Images, ShieldCheck, Loader2, Trash2, ArrowUp, ArrowDown, UploadCloud, FileType } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/apiClient";
+import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import { notify } from "@/lib/notify";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
@@ -40,7 +42,7 @@ export default function ImageToTextPdfPage() {
         });
 
         if (visualFiles.length === 0) {
-            alert("Please upload valid graphic files (JPG, PNG, WebP).");
+            notify("Please upload valid graphic files (JPG, PNG, WebP).");
             return;
         }
 
@@ -102,12 +104,22 @@ export default function ImageToTextPdfPage() {
                 formData.append("images", item.file);
             });
 
-            await uploadAndDownloadFile("/images/to-text-pdf", formData, "ocr-extracted-text.pdf");
+            const responseBlob = await uploadAndDownloadFile("/api/ocr/to-text-pdf", formData);
+
+            const downloadUrl = window.URL.createObjectURL(responseBlob);
+            const link = document.createElement("a");
+            link.href = downloadUrl;
+            link.download = "ocr-extracted-text.pdf";
+            document.body.appendChild(link);
+            link.click();
+
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
 
             setSuccess(true);
         } catch (err) {
             console.error(err);
-            alert(err instanceof Error ? err.message : "Smart compilation failure.");
+            notify(getFriendlyErrorMessage(err));
         } finally {
             setIsProcessing(false);
         }

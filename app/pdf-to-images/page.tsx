@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { ShieldCheck, Loader2, FileArchive, RefreshCw } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/apiClient";
+import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import { notify } from "@/lib/notify";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
@@ -33,11 +35,26 @@ export default function PdfToImagesPage() {
 
             const zipDownloadName = `${file.name.replace(/\.pdf$/i, "")}-extracted-pages.zip`;
 
-            await uploadAndDownloadFile("/conversion/pdf-to-images", formData, zipDownloadName);
+            if ((file as any).originalPassword){
+                formData.append("file_password", (file as any).originalPassword)
+            }
+
+            const responseBlob = await uploadAndDownloadFile("/api/conversion/pdf-to-images", formData);
+
+            const downloadUrl = window.URL.createObjectURL(responseBlob);
+            const link = document.createElement("a");
+            link.href = downloadUrl;
+            link.download = zipDownloadName;
+            document.body.appendChild(link);
+            link.click();
+
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
+
             setSuccess(true);
         } catch (err) {
             console.error(err);
-            alert(err instanceof Error ? err.message : "Server-side page rasterization failure.");
+            notify(getFriendlyErrorMessage(err));
         } finally {
             setIsProcessing(false);
         }
@@ -56,6 +73,8 @@ export default function PdfToImagesPage() {
                         onFilesAccepted={onDrop}
                         title="Upload PDF Document"
                         description="Drop your file here to rasterize and package its pages into a clean ZIP archive"
+                        multiple={false}
+                        accept=".pdf"
                     />
                 )}
 
@@ -87,11 +106,12 @@ export default function PdfToImagesPage() {
 
                                 {!isProcessing && (
                                     <button
+                                        type="button"
                                         onClick={() => {
                                             setFile(null);
                                             setSuccess(false);
                                         }}
-                                        className="w-full py-2.5 rounded-xl border border-[color:var(--border)] bg-[var(--card)] text-xs font-bold text-[color:var(--muted)] hover:text-[color:var(--foreground)] hover:border-[color:var(--muted)] transition flex items-center justify-center gap-1.5"
+                                        className="w-full py-2.5 rounded-xl border border border-[color:var(--border)] bg-[var(--card)] text-xs font-bold text-[color:var(--muted)] hover:text-[color:var(--foreground)] hover:border-[color:var(--muted)] transition flex items-center justify-center gap-1.5"
                                     >
                                         <RefreshCw size={12} /> Reset and Upload Another Document
                                     </button>

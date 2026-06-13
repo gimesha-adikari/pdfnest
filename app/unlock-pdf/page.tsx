@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Unlock, ShieldCheck } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/apiClient";
+import { getFriendlyErrorMessage } from "@/lib/errorHandler"; // Integrated global error framework safely
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
@@ -42,13 +43,24 @@ export default function UnlockPdfPage() {
             formData.append("file", file);
             formData.append("password", password);
 
-            await uploadAndDownloadFile("/security/unlock", formData, `${file.name.replace(/\.pdf$/i, "")}-unlocked.pdf`);
+            const responseBlob = await uploadAndDownloadFile("/api/security/unlock", formData);
+
+            const downloadUrl = window.URL.createObjectURL(responseBlob);
+            const link = document.createElement("a");
+            link.href = downloadUrl;
+            link.download = `${file.name.replace(/\.pdf$/i, "")}-unlocked.pdf`;
+            document.body.appendChild(link);
+            link.click();
+
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
 
             setSuccess(true);
             setPassword("");
         } catch (err) {
             console.error(err);
-            alert(err instanceof Error ? err.message : "Security domain transaction failed.");
+            // OPTIMIZATION: Swapped generic text errors for the uniform structured error decoder
+            alert(getFriendlyErrorMessage(err));
         } finally {
             setIsProcessing(false);
         }
@@ -65,12 +77,15 @@ export default function UnlockPdfPage() {
                     onFilesAccepted={onDrop}
                     title="Upload Password Protected PDF"
                     description="Drop your encrypted document here to remove restrictions"
+                    multiple={false}
+                    accept=".pdf"
+                    bypassEncryptionCheck={true}
                 />
                 {file && (
                     <div className="mt-8 space-y-6">
                         <PdfFileInfo file={file} />
                         <div className="rounded-2xl border border-[color:var(--border)] p-5">
-                            <h3 className="text-lg font-semibold flex items-center gap-2">
+                            <h3 className="text-lg font-semibold flex items-center gap-2 text-[color:var(--foreground)]">
                                 <Unlock size={18} className="text-indigo-500" /> Security Access Verification
                             </h3>
                             <div className="mt-4">
@@ -82,13 +97,13 @@ export default function UnlockPdfPage() {
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     placeholder="Enter the password to decrypt the file"
-                                    className="mt-2 w-full rounded-xl border border-[color:var(--border)] bg-transparent p-3 text-sm outline-none transition focus:border-indigo-500"
+                                    className="mt-2 w-full rounded-xl border border-[color:var(--border)] bg-transparent p-3 text-sm outline-none transition focus:border-indigo-500 text-[color:var(--foreground)]"
                                 />
                             </div>
                         </div>
                         <div className="rounded-2xl border border-[color:var(--border)] p-4">
                             <p className="text-sm text-[color:var(--muted)]">Target document footprint</p>
-                            <p className="mt-1 text-2xl font-bold">{fileExtractedSize} MB</p>
+                            <p className="mt-1 text-2xl font-bold text-[color:var(--foreground)]">{fileExtractedSize} MB</p>
                         </div>
                         {success && (
                             <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5 text-emerald-900 dark:text-emerald-200 flex items-start gap-3">

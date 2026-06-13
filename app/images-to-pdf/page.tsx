@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Image as ImageIcon, Loader2, FileImage, ShieldCheck } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/apiClient";
+import { getFriendlyErrorMessage } from "@/lib/errorHandler"; // Integrated global error framework safely
+import { notify } from "@/lib/notify";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
@@ -35,17 +37,30 @@ export default function ImagesToPdfPage() {
                 formData.append("images", img);
             });
 
-            await uploadAndDownloadFile(
-                "/conversion/to-pdf",
-                formData,
-                "compiled-images.pdf"
+            // OPTIMIZATION: Updated routing pattern to target the domain-grouped Conversion path securely
+            const responseBlob = await uploadAndDownloadFile(
+                "/api/conversion/to-pdf",
+                formData
             );
+
+            // OPTIMIZATION: Enforced robust synchronous browser local file streaming trigger sequence
+            const downloadUrl = window.URL.createObjectURL(responseBlob);
+            const link = document.createElement("a");
+            link.href = downloadUrl;
+            link.download = "compiled-images.pdf";
+            document.body.appendChild(link);
+            link.click();
+
+            // Reclaim resources instantly after download is executed
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
 
             setSuccess(true);
             setImages([]);
         } catch (err) {
             console.error(err);
-            alert(err instanceof Error ? err.message : "Image payload packaging runtime failure.");
+            // OPTIMIZATION: Mapped exception states to the unified client error decoder
+            notify(getFriendlyErrorMessage(err));
         } finally {
             setIsProcessing(false);
         }
@@ -64,9 +79,7 @@ export default function ImagesToPdfPage() {
                     title="Upload Graphic Attachments"
                     description="Drop PNG, JPEG, or WebP images here to package them into sequence matrices"
                     multiple={true}
-                    accept={{
-                        "image/*": [".png", ".jpg", ".jpeg", ".webp"]
-                    }}
+                    accept="image/*"
                 />
 
                 {images.length > 0 && (
@@ -76,6 +89,7 @@ export default function ImagesToPdfPage() {
                                 <ImageIcon size={16} className="text-indigo-500" /> Compiled Queue ({images.length})
                             </h3>
                             <button
+                                type="button"
                                 onClick={() => setImages([])}
                                 className="text-xs text-red-500 hover:underline font-medium"
                             >
@@ -122,7 +136,7 @@ export default function ImagesToPdfPage() {
                             </div>
                         )}
 
-                        <div className="pt-4">
+                        <div className="w-full pt-4">
                             <PdfActionButton
                                 text={`Compile ${images.length} Image${images.length > 1 ? "s" : ""} into PDF`}
                                 loadingText="Processing Image Matrix Conversion..."

@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Scissors, ShieldCheck, CheckCircle2, Loader2, FileText } from "lucide-react";
-import type { PDFDocumentProxy } from "pdfjs-dist";
+import { Scissors, ShieldCheck, Loader2, FileText, CheckCircle2 } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/apiClient";
+import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import { notify } from "@/lib/notify";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
@@ -21,12 +22,15 @@ export default function SplitPdfPage() {
     const [thumbnails, setThumbnails] = useState<string[]>([]);
     const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
 
+    // Tracks the last clicked page index to calculate Shift bounds
+    const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+
     const [isProcessing, setIsProcessing] = useState(false);
     const [isReadingTotal, setIsReadingTotal] = useState(false);
     const [isGeneratingPreviews, setIsGeneratingPreviews] = useState(false);
     const [success, setSuccess] = useState(false);
 
-    const generateThumbnails = async (pdf: PDFDocumentProxy, totalPages: number) => {
+    const generateThumbnails = async (pdf: any, totalPages: number) => {
         setIsGeneratingPreviews(true);
         const loadedThumbnails: string[] = [];
 
@@ -47,9 +51,13 @@ export default function SplitPdfPage() {
 
                     setThumbnails([...loadedThumbnails]);
                 }
+
+                canvas.width = 0;
+                canvas.height = 0;
+                canvas.remove();
             }
         } catch (error) {
-            console.error(error);
+            console.error("Visual selector frame compilation failed:", error);
         } finally {
             setIsGeneratingPreviews(false);
         }
@@ -62,12 +70,13 @@ export default function SplitPdfPage() {
         setFile(uploadedFile);
         setSuccess(false);
         setSelectedPages(new Set());
+        setLastSelectedIndex(null); // Clear active shift-anchor context
         setThumbnails([]);
         setIsReadingTotal(true);
 
         try {
             const pdfjsLib = await import("pdfjs-dist");
-            pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.mjs";
+            pdfjsLib.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
 
             const arrayBuffer = await uploadedFile.arrayBuffer();
             const typedArray = new Uint8Array(arrayBuffer);
@@ -81,7 +90,7 @@ export default function SplitPdfPage() {
 
         } catch (error) {
             console.error(error);
-            alert("Could not read the structural metadata of this document.");
+            notify("Could not read the structural metadata of this document.");
             setIsReadingTotal(false);
         }
     };
@@ -91,13 +100,46 @@ export default function SplitPdfPage() {
         return formatMB(file.size);
     }, [file]);
 
-    const togglePageSelection = (pageNum: number) => {
+    const togglePageSelection = (pageNum: number, event: React.MouseEvent) => {
+        // Prevent generic paragraph text selection highlighting when holding Shift keys
+        if (event.shiftKey) {
+            event.preventDefault();
+        }
+
         setSelectedPages((prev) => {
             const next = new Set(prev);
-            if (next.has(pageNum)) next.delete(pageNum);
-            else next.add(pageNum);
+
+            // Handle Shift Click range calculations
+            if (event.shiftKey && lastSelectedIndex !== null) {
+                const start = Math.min(lastSelectedIndex, pageNum);
+                const end = Math.max(lastSelectedIndex, pageNum);
+
+                // Determine whether to add or remove the range based on the anchor's state
+                const shouldSelectRange = prev.has(lastSelectedIndex);
+
+                for (let i = start; i <= end; i++) {
+                    if (shouldSelectRange) {
+                        next.add(i);
+                    } else {
+                        next.delete(i);
+                    }
+                }
+                return next;
+            }
+
+            // Fallback default context toggling loop
+            if (next.has(pageNum)) {
+                next.delete(pageNum);
+            } else {
+                next.add(pageNum);
+            }
             return next;
         });
+
+        // Retain selection anchor unless a range expansion sequence occurred
+        if (!event.shiftKey) {
+            setLastSelectedIndex(pageNum);
+        }
     };
 
     const selectAll = () => {
@@ -106,7 +148,10 @@ export default function SplitPdfPage() {
         setSelectedPages(all);
     };
 
-    const clearSelection = () => setSelectedPages(new Set());
+    const clearSelection = () => {
+        setSelectedPages(new Set());
+        setLastSelectedIndex(null);
+    };
 
     const compiledPageString = useMemo(() => {
         return Array.from(selectedPages).sort((a, b) => a - b).join(", ");
@@ -123,13 +168,28 @@ export default function SplitPdfPage() {
             formData.append("file", file);
             formData.append("pages", compiledPageString);
 
-            await uploadAndDownloadFile("/structure/split", formData, `${file.name.replace(/\.pdf$/i, "")}-extracted.pdf`);
+            if ((file as any).originalPassword){
+                formData.append("file_password", (file as any).originalPassword)
+            }
+
+            const responseBlob = await uploadAndDownloadFile("/api/structure/split", formData);
+
+            const downloadUrl = window.URL.createObjectURL(responseBlob);
+            const link = document.createElement("a");
+            link.href = downloadUrl;
+            link.download = `${file.name.replace(/\.pdf$/i, "")}-extracted.pdf`;
+            document.body.appendChild(link);
+            link.click();
+
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
 
             setSuccess(true);
             setSelectedPages(new Set());
+            setLastSelectedIndex(null);
         } catch (err) {
             console.error(err);
-            alert(err instanceof Error ? err.message : "Structure processing domain error occurred.");
+            notify(getFriendlyErrorMessage(err));
         } finally {
             setIsProcessing(false);
         }
@@ -147,6 +207,8 @@ export default function SplitPdfPage() {
                     onFilesAccepted={onDrop}
                     title="Upload PDF to Extract From"
                     description="Drop file here to load the visual page selector"
+                    multiple={false}
+                    accept=".pdf"
                 />
 
                 {file && (
@@ -182,20 +244,21 @@ export default function SplitPdfPage() {
 
                                             return (
                                                 <button
+                                                    type="button"
                                                     key={pageNum}
-                                                    onClick={() => togglePageSelection(pageNum)}
+                                                    onClick={(e) => togglePageSelection(pageNum, e)}
                                                     className={`
-                            relative flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all aspect-[1/1.4] overflow-hidden group
-                            ${isSelected
+                                                    relative flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all aspect-[1/1.4] overflow-hidden group select-none
+                                                    ${isSelected
                                                         ? "border-indigo-500 bg-indigo-500/10 shadow-md"
                                                         : "border-[color:var(--border)] hover:border-indigo-400/50 bg-[color:var(--card)]"}
-                          `}
+                                                  `}
                                                 >
                                                     {thumbnailSrc ? (
                                                         <img
                                                             src={thumbnailSrc}
                                                             alt={`Page ${pageNum}`}
-                                                            className={`w-full h-full object-cover rounded-md transition-opacity ${isSelected ? 'opacity-100' : 'opacity-80 group-hover:opacity-100'}`}
+                                                            className={`w-full h-full object-cover rounded-md transition-opacity pointer-events-none ${isSelected ? 'opacity-100' : 'opacity-80 group-hover:opacity-100'}`}
                                                         />
                                                     ) : (
                                                         <div className="flex flex-col items-center justify-center w-full h-full text-[color:var(--muted)] opacity-50">
@@ -204,12 +267,12 @@ export default function SplitPdfPage() {
                                                         </div>
                                                     )}
 
-                                                    <div className={`absolute bottom-0 w-full py-1 text-center text-xs font-bold backdrop-blur-md bg-black/40 text-white`}>
+                                                    <div className="absolute bottom-0 w-full py-1 text-center text-xs font-bold backdrop-blur-md bg-black/40 text-white">
                                                         Pg {pageNum}
                                                     </div>
 
                                                     {isSelected && (
-                                                        <div className="absolute top-2 right-2 bg-indigo-500 rounded-full text-white shadow-lg scale-110 z-10">
+                                                        <div className="absolute top-2 right-2 bg-indigo-500 rounded-full text-white shadow-lg scale-110 z-101">
                                                             <CheckCircle2 size={20} className="fill-indigo-500 stroke-white" />
                                                         </div>
                                                     )}
@@ -231,13 +294,25 @@ export default function SplitPdfPage() {
                         <div className="grid gap-4 sm:grid-cols-2">
                             <div className="rounded-2xl border border-[color:var(--border)] p-4 bg-transparent">
                                 <p className="text-sm text-[color:var(--muted)]">Source document size</p>
-                                <p className="mt-1 text-2xl font-bold">{fileExtractedSize} MB</p>
+                                <p className="mt-1 text-2xl font-bold text-[color:var(--foreground)]">{fileExtractedSize} MB</p>
                             </div>
                             <div className="rounded-2xl border border-[color:var(--border)] p-4 bg-transparent">
                                 <p className="text-sm text-[color:var(--muted)]">Selected Pages</p>
                                 <p className="mt-1 text-2xl font-bold text-indigo-500">{selectedPages.size} / {pageCount}</p>
                             </div>
                         </div>
+
+                        {success && (
+                            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5 text-emerald-900 dark:text-emerald-200 flex items-start gap-3">
+                                <ShieldCheck className="text-emerald-500 mt-0.5 shrink-0" size={18} />
+                                <div>
+                                    <p className="text-sm font-semibold">Document sub-page split successful!</p>
+                                    <p className="text-xs mt-1 text-emerald-800/80 dark:text-emerald-200/70">
+                                        The targeted page matrices were extracted on the backend and downloaded cleanly.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
 
                         <PdfActionButton
                             text={`Extract ${selectedPages.size} ${selectedPages.size === 1 ? 'Page' : 'Pages'}`}

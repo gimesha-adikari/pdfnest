@@ -3,12 +3,14 @@
 import { useMemo, useState } from "react";
 import { ShieldCheck } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/apiClient";
+import { getFriendlyErrorMessage } from "@/lib/errorHandler";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
+import {notify } from "@/lib/notify"
 
 function formatMB(bytes: number) {
     return (bytes / 1024 / 1024).toFixed(2);
@@ -40,11 +42,26 @@ export default function CompressPdfPage() {
             const formData = new FormData();
             formData.append("file", file);
 
-            await uploadAndDownloadFile("/optimize/compress", formData, `${file.name.replace(/\.pdf$/i, "")}-compressed.pdf`);
+            if ((file as any).originalPassword){
+                formData.append("file_password", (file as any).originalPassword)
+            }
+
+            const responseBlob = await uploadAndDownloadFile("/api/optimize/compress", formData);
+
+            const downloadUrl = window.URL.createObjectURL(responseBlob);
+            const link = document.createElement("a");
+            link.href = downloadUrl;
+            link.download = `optimized_${file.name}`;
+            document.body.appendChild(link);
+            link.click();
+
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
+
             setSuccess(true);
         } catch (err) {
             console.error(err);
-            alert(err instanceof Error ? err.message : "Optimization domain processing failed.");
+            notify(getFriendlyErrorMessage(err));
         } finally {
             setIsProcessing(false);
         }
@@ -61,6 +78,8 @@ export default function CompressPdfPage() {
                     onFilesAccepted={onDrop}
                     title="Upload PDF to Compress"
                     description="Drop heavy documents here to compress file storage metrics"
+                    multiple={false}
+                    accept=".pdf"
                 />
                 {file && (
                     <div className="mt-8 space-y-6">

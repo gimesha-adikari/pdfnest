@@ -1,17 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { RotateCw, ShieldCheck, Loader2, FileText } from "lucide-react";
-import * as pdfjsLib from "pdfjs-dist";
 import { uploadAndDownloadFile } from "@/lib/apiClient";
+import { getFriendlyErrorMessage } from "@/lib/errorHandler"; // Integrated global error framework safely
+import { notify } from "@/lib/notify";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.mjs";
 
 function formatMB(bytes: number) {
     return (bytes / 1024 / 1024).toFixed(2);
@@ -28,7 +27,7 @@ export default function RotatePdfPage() {
     const [isGeneratingPreviews, setIsGeneratingPreviews] = useState(false);
     const [success, setSuccess] = useState(false);
 
-    const generateThumbnails = async (pdf: pdfjsLib.PDFDocumentProxy, totalPages: number) => {
+    const generateThumbnails = async (pdf: any, totalPages: number) => {
         setIsGeneratingPreviews(true);
         const loadedThumbnails: string[] = [];
 
@@ -49,9 +48,14 @@ export default function RotatePdfPage() {
 
                     setThumbnails([...loadedThumbnails]);
                 }
+
+                // OPTIMIZATION: Flush canvas context from browser frame buffers to prevent layout stutters
+                canvas.width = 0;
+                canvas.height = 0;
+                canvas.remove();
             }
         } catch (error) {
-            console.error(error);
+            console.error("Page preview compilation failed:", error);
         } finally {
             setIsGeneratingPreviews(false);
         }
@@ -68,6 +72,9 @@ export default function RotatePdfPage() {
         setIsReadingTotal(true);
 
         try {
+            const pdfjsLib = await import("pdfjs-dist");
+            pdfjsLib.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
+
             const arrayBuffer = await uploadedFile.arrayBuffer();
             const typedArray = new Uint8Array(arrayBuffer);
 
@@ -80,7 +87,7 @@ export default function RotatePdfPage() {
 
         } catch (error) {
             console.error(error);
-            alert("Could not read the structural metadata of this document.");
+            notify("Could not read the structural metadata of this document.");
             setIsReadingTotal(false);
         }
     };
@@ -136,13 +143,27 @@ export default function RotatePdfPage() {
             formData.append("file", file);
             formData.append("rotations", JSON.stringify(groupedRotations));
 
-            await uploadAndDownloadFile("/structure/rotate", formData, `${file.name.replace(/\.pdf$/i, "")}-rotated.pdf`);
+            if ((file as any).originalPassword){
+                formData.append("file_password", (file as any).originalPassword)
+            }
+
+            const responseBlob = await uploadAndDownloadFile("/api/structure/rotate", formData);
+
+            const downloadUrl = window.URL.createObjectURL(responseBlob);
+            const link = document.createElement("a");
+            link.href = downloadUrl;
+            link.download = `${file.name.replace(/\.pdf$/i, "")}-rotated.pdf`;
+            document.body.appendChild(link);
+            link.click();
+
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
 
             setSuccess(true);
             setPageRotations({});
         } catch (err) {
             console.error(err);
-            alert(err instanceof Error ? err.message : "Structure rotation processing error occurred.");
+            notify(getFriendlyErrorMessage(err));
         } finally {
             setIsProcessing(false);
         }
@@ -160,6 +181,8 @@ export default function RotatePdfPage() {
                     onFilesAccepted={onDrop}
                     title="Upload PDF to Rotate"
                     description="Drop file here to load the interactive visual page orientation layout grid"
+                    multiple={false}
+                    accept=".pdf"
                 />
 
                 {file && (
@@ -202,6 +225,7 @@ export default function RotatePdfPage() {
                                                 </div>
 
                                                 <button
+                                                    type="button"
                                                     onClick={() => rotatePageClockwise(pageNum)}
                                                     className="absolute top-2 right-2 p-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white shadow-md transition z-10"
                                                 >
@@ -243,7 +267,7 @@ export default function RotatePdfPage() {
                         <div className="grid gap-4 sm:grid-cols-2">
                             <div className="rounded-2xl border border-[color:var(--border)] p-4 bg-transparent">
                                 <p className="text-sm text-[color:var(--muted)]">Source document size</p>
-                                <p className="mt-1 text-2xl font-bold">{fileExtractedSize} MB</p>
+                                <p className="mt-1 text-2xl font-bold text-[color:var(--foreground)]">{fileExtractedSize} MB</p>
                             </div>
                             <div className="rounded-2xl border border-[color:var(--border)] p-4 bg-transparent">
                                 <p className="text-sm text-[color:var(--muted)]">Total Adjusted Pages</p>

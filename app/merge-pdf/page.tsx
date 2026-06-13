@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { Loader2, FileText } from "lucide-react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { getErrorMessage } from "@/lib/errorHandler";
+import { getFriendlyErrorMessage } from "@/lib/errorHandler"; // Safely mapped your uniform decoder
 import { uploadAndDownloadFile } from "@/lib/apiClient";
+import { notify } from "@/lib/notify";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFileList from "@/components/pdf/PdfFileList";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
@@ -20,8 +21,9 @@ export default function MergePdfPage() {
 
     const generateFileThumbnail = async (file: File) => {
         try {
+            // OPTIMIZATION: On-demand import prevents Next hydration drops or document-undefined crashes
             const pdfjsLib = await import("pdfjs-dist");
-            pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.mjs";
+            pdfjsLib.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
 
             const arrayBuffer = await file.arrayBuffer();
             const typedArray = new Uint8Array(arrayBuffer);
@@ -46,6 +48,10 @@ export default function MergePdfPage() {
                         [fileKey]: imgData
                     }));
                 }
+
+                canvas.width = 0;
+                canvas.height = 0;
+                canvas.remove();
             }
         } catch (error) {
             console.error("Failed to generate file preview:", error);
@@ -56,7 +62,7 @@ export default function MergePdfPage() {
         const MAX_FILE_SIZE = 50 * 1024 * 1024;
         const validFiles = newFiles.filter(file => {
             if (file.size > MAX_FILE_SIZE) {
-                alert(`${file.name} exceeds 50MB limit`);
+                notify(`${file.name} exceeds 50MB limit`);
                 return false;
             }
             return true;
@@ -115,21 +121,38 @@ export default function MergePdfPage() {
 
     const mergePdfs = async () => {
         if (files.length < 2) {
-            alert("Please select at least 2 PDF files.");
+            notify("Please select at least 2 PDF files.");
             return;
         }
 
         try {
             setIsMerging(true);
             const formData = new FormData();
-            files.forEach((file) => {
+
+            files.forEach((file, index) => {
                 formData.append("files", file);
+
+                if ((file as any).originalPassword) {
+                    formData.append(`password_${index}`, (file as any).originalPassword);
+                }
             });
 
-            await uploadAndDownloadFile("/structure/merge", formData, "merged-document.pdf");
+            const responseBlob = await uploadAndDownloadFile("/api/structure/merge", formData);
+
+            const downloadUrl = window.URL.createObjectURL(responseBlob);
+            const link = document.createElement("a");
+            link.href = downloadUrl;
+            link.download = "merged-document.pdf";
+            document.body.appendChild(link);
+            link.click();
+
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
+
         } catch (error) {
             console.error(error);
-            alert(`Failed to merge PDFs.\n\n${getErrorMessage(error)}`);
+            // OPTIMIZATION: Decodes JSON exception metrics matching backend structures perfectly
+            notify(`Failed to merge PDFs.\n\n${getFriendlyErrorMessage(error)}`);
         } finally {
             setIsMerging(false);
         }
@@ -146,9 +169,10 @@ export default function MergePdfPage() {
             <div className="mt-12 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8 shadow-lg">
                 <PdfUploader
                     onFilesAccepted={onDrop}
-                    multiple
                     title="Upload PDFs"
                     description="Select multiple PDFs to merge"
+                    multiple={true}
+                    accept=".pdf"
                 />
 
                 {files.length > 0 && (

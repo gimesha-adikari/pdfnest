@@ -1,15 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Trash2, ShieldCheck, CheckCircle2, Loader2, FileText } from "lucide-react";
-import type { PDFDocumentProxy } from "pdfjs-dist";
+import { Trash2, ShieldCheck, Loader2, FileText } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/apiClient";
+import { getFriendlyErrorMessage } from "@/lib/errorHandler";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
+import { notify } from "@/lib/notify";
 
 function formatMB(bytes: number) {
     return (bytes / 1024 / 1024).toFixed(2);
@@ -20,6 +21,9 @@ export default function DeletePagesPage() {
     const [pageCount, setPageCount] = useState<number>(0);
     const [thumbnails, setThumbnails] = useState<string[]>([]);
     const [pagesToDelete, setPagesToDelete] = useState<Set<number>>(new Set());
+
+    // Tracks the last clicked page to serve as an anchor for Shift ranges
+    const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [isReadingTotal, setIsReadingTotal] = useState(false);
@@ -47,9 +51,13 @@ export default function DeletePagesPage() {
 
                     setThumbnails([...loadedThumbnails]);
                 }
+
+                canvas.width = 0;
+                canvas.height = 0;
+                canvas.remove();
             }
         } catch (error) {
-            console.error(error);
+            console.error("Visual grid generation warning:", error);
         } finally {
             setIsGeneratingPreviews(false);
         }
@@ -62,12 +70,13 @@ export default function DeletePagesPage() {
         setFile(uploadedFile);
         setSuccess(false);
         setPagesToDelete(new Set());
+        setLastSelectedIndex(null); // Reset range selection baseline
         setThumbnails([]);
         setIsReadingTotal(true);
 
         try {
             const pdfjsLib = await import("pdfjs-dist");
-            pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.mjs";
+            pdfjsLib.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
 
             const arrayBuffer = await uploadedFile.arrayBuffer();
             const typedArray = new Uint8Array(arrayBuffer);
@@ -81,7 +90,7 @@ export default function DeletePagesPage() {
 
         } catch (error) {
             console.error(error);
-            alert("Could not read the structural metadata of this document.");
+            notify("Could not read the structural metadata of this document.");
             setIsReadingTotal(false);
         }
     };
@@ -91,13 +100,46 @@ export default function DeletePagesPage() {
         return formatMB(file.size);
     }, [file]);
 
-    const togglePageDeletion = (pageNum: number) => {
+    const togglePageDeletion = (pageNum: number, event: React.MouseEvent) => {
+        // Prevent default browser text-highlight overlays when holding down Shift
+        if (event.shiftKey) {
+            event.preventDefault();
+        }
+
         setPagesToDelete((prev) => {
             const next = new Set(prev);
-            if (next.has(pageNum)) next.delete(pageNum);
-            else next.add(pageNum);
+
+            // Handle Shift + Click Range Selection
+            if (event.shiftKey && lastSelectedIndex !== null) {
+                const start = Math.min(lastSelectedIndex, pageNum);
+                const end = Math.max(lastSelectedIndex, pageNum);
+
+                // Check if the initial anchor point was already selected
+                const shouldSelect = prev.has(lastSelectedIndex);
+
+                for (let i = start; i <= end; i++) {
+                    if (shouldSelect) {
+                        next.add(i);
+                    } else {
+                        next.delete(i);
+                    }
+                }
+                return next;
+            }
+
+            // Default: Standard or Command/Control Toggling
+            if (next.has(pageNum)) {
+                next.delete(pageNum);
+            } else {
+                next.add(pageNum);
+            }
             return next;
         });
+
+        // Always update the anchor point unless a shift range calculation just completed
+        if (!event.shiftKey) {
+            setLastSelectedIndex(pageNum);
+        }
     };
 
     const selectAll = () => {
@@ -106,7 +148,10 @@ export default function DeletePagesPage() {
         setPagesToDelete(all);
     };
 
-    const clearSelection = () => setPagesToDelete(new Set());
+    const clearSelection = () => {
+        setPagesToDelete(new Set());
+        setLastSelectedIndex(null);
+    };
 
     const compiledPageString = useMemo(() => {
         return Array.from(pagesToDelete).sort((a, b) => a - b).join(", ");
@@ -115,7 +160,7 @@ export default function DeletePagesPage() {
     const handleDeleteProcessing = async () => {
         if (!file || pagesToDelete.size === 0) return;
         if (pagesToDelete.size === pageCount) {
-            alert("Cannot remove every single page from the document tree model container.");
+            notify("Cannot remove every single page from the document tree model container.");
             return;
         }
 
@@ -127,13 +172,28 @@ export default function DeletePagesPage() {
             formData.append("file", file);
             formData.append("pages", compiledPageString);
 
-            await uploadAndDownloadFile("/structure/delete-pages", formData, `${file.name.replace(/\.pdf$/i, "")}-edited.pdf`);
+            if ((file as any).originalPassword){
+                formData.append("file_password", (file as any).originalPassword)
+            }
+
+            const responseBlob = await uploadAndDownloadFile("/api/structure/delete-pages", formData);
+
+            const downloadUrl = window.URL.createObjectURL(responseBlob);
+            const link = document.createElement("a");
+            link.href = downloadUrl;
+            link.download = `pruned_${file.name}`;
+            document.body.appendChild(link);
+            link.click();
+
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
 
             setSuccess(true);
             setPagesToDelete(new Set());
+            setLastSelectedIndex(null);
         } catch (err) {
             console.error(err);
-            alert(err instanceof Error ? err.message : "Structure page removal processing execution failed.");
+            notify(getFriendlyErrorMessage(err));
         } finally {
             setIsProcessing(false);
         }
@@ -151,6 +211,8 @@ export default function DeletePagesPage() {
                     onFilesAccepted={onDrop}
                     title="Upload PDF Document"
                     description="Drop file here to initialize the visual removal grid"
+                    multiple={false}
+                    accept=".pdf"
                 />
 
                 {file && (
@@ -187,19 +249,19 @@ export default function DeletePagesPage() {
                                             return (
                                                 <button
                                                     key={pageNum}
-                                                    onClick={() => togglePageDeletion(pageNum)}
+                                                    onClick={(e) => togglePageDeletion(pageNum, e)}
                                                     className={`
-                            relative flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all aspect-[1/1.4] overflow-hidden group
-                            ${isSelectedForDeletion
+                                                    relative flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all aspect-[1/1.4] overflow-hidden group select-none
+                                                    ${isSelectedForDeletion
                                                         ? "border-red-500 bg-red-500/10 shadow-md grayscale opacity-40 hover:opacity-60"
                                                         : "border-[color:var(--border)] hover:border-red-400/50 bg-[color:var(--card)]"}
-                          `}
+                                                  `}
                                                 >
                                                     {thumbnailSrc ? (
                                                         <img
                                                             src={thumbnailSrc}
                                                             alt={`Page ${pageNum}`}
-                                                            className="w-full h-full object-cover rounded-md"
+                                                            className="w-full h-full object-cover rounded-md pointer-events-none"
                                                         />
                                                     ) : (
                                                         <div className="flex flex-col items-center justify-center w-full h-full text-[color:var(--muted)] opacity-50">

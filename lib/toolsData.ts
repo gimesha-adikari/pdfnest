@@ -54,28 +54,25 @@ export const NAV_TOOLS: ToolItem[] = [
         description: "Easily add page numbers to your PDF document. Choose position, dimensions, and numerical formatting styles.",
         href: "/add-page-numbers",
         category: "editing",
-        isNew: true,
+        isNew: false,
     },
     {
         title: "Edit PDF Metadata",
         description: "Modify document property values like Title, Author, Subject description and system Keywords tags.",
         href: "/edit-metadata",
         category: "editing",
-        isNew: true,
     },
     {
         title: "Protect PDF",
         description: "Secure your documents by applying robust, high-grade permissions encryption configurations.",
         href: "/lock-pdf",
-        category: "convert",
-        isNew: true,
+        category: "security",
     },
     {
         title: "Unlock PDF",
         description: "Strip protection limits, passwords, and security encryption blocks instantly from your documents.",
         href: "/unlock-pdf",
-        category: "convert",
-        isNew: true,
+        category: "security",
     },
     {
         title: "Images to PDF",
@@ -98,5 +95,45 @@ export const NAV_TOOLS: ToolItem[] = [
         description: "Extract Text from Images and convert to PDF",
         href: "/image-to-text-pdf",
         category: "convert"
-    },
+    },{
+        title: "PDF Studio",
+        description: "Edit and process your PDF in one tool",
+        href: "/studio",
+        category: "editing"
+    },{
+        title: "Office to PDF",
+        description: "Convert Word (.docx), Excel (.xlsx), and PowerPoint (.pptx) documents into standard vector PDFs instantly.",
+        href: "/office-to-pdf",
+        category: "convert",
+        isNew: true,
+    }, {
+        title: "URL to PDF Website Capture",
+        description: "Input a live webpage link to render, scrape, and capture the DOM viewport directly into a printable vector PDF template document.",
+        href: "/url-to-pdf",
+        category: "convert",
+        isNew: true,
+    },{
+        title: "Markdown to PDF",
+        description: "Convert documentation files (.md) into clean, typography-focused vector PDFs instantly.",
+        href: "/markdown-to-pdf",
+        category: "convert",
+        isNew: true,
+    },{
+        title: "Source Code to PDF",
+        description: "Convert development script documents into clean syntax-highlighted printable vector sheets instantly.",
+        href: "/code-to-pdf",
+        category: "convert",
+        isNew: true,
+    },{
+        title: "Secure Redaction",
+        description: "Permanently scrub and strip explicit textual references entirely out of the underlying source objects.",
+        href: "/redact-pdf",
+        icon: "ShieldAlert",
+        category: "security"
+    },{
+        title: "PDF Editor",
+        description: "edit PDF as you wish",
+        href: "/edit-pdf",
+        category: "editing"
+    }
 ];

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { ShieldCheck, Loader2, FileText, RefreshCw, Cpu } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/apiClient";
+import { getFriendlyErrorMessage } from "@/lib/errorHandler"; // Integrated global error framework safely
+import { notify } from "@/lib/notify";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
@@ -33,12 +35,27 @@ export default function OcrPage() {
 
             const txtDownloadName = `${file.name.replace(/\.pdf$/i, "")}-extracted-text.txt`;
 
-            await uploadAndDownloadFile("/ocr/extract-text", formData, txtDownloadName);
+            if ((file as any).originalPassword){
+                formData.append("file_password", (file as any).originalPassword)
+            }
+
+            const responseBlob = await uploadAndDownloadFile("/api/ocr/extract-text", formData);
+
+            const downloadUrl = window.URL.createObjectURL(responseBlob);
+            const link = document.createElement("a");
+            link.href = downloadUrl;
+            link.download = txtDownloadName;
+            document.body.appendChild(link);
+            link.click();
+
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
 
             setSuccess(true);
         } catch (err) {
             console.error(err);
-            alert(err instanceof Error ? err.message : "Optical Character Recognition parsing failure.");
+            // OPTIMIZATION: Replaced generic string notifys with the uniform error decoder
+            notify(getFriendlyErrorMessage(err));
         } finally {
             setIsProcessing(false);
         }
@@ -57,6 +74,8 @@ export default function OcrPage() {
                         onFilesAccepted={onDrop}
                         title="Upload Scanned Document"
                         description="Drop your PDF here to run the Optical Character Recognition scanning matrix"
+                        multiple={false}
+                        accept=".pdf"
                     />
                 )}
 
@@ -88,6 +107,7 @@ export default function OcrPage() {
 
                                 {!isProcessing && (
                                     <button
+                                        type="button"
                                         onClick={() => {
                                             setFile(null);
                                             setSuccess(false);

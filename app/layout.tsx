@@ -4,6 +4,7 @@ import "./globals.css";
 import {ThemeProvider} from "@/components/ThemeProvider";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import GlobalNotifications from "@/components/ui/GlobalNotifications";
 
 const geistSans = Geist({
     variable: "--font-geist-sans",
@@ -17,10 +18,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
     title: "PDFNest - Free PDF Tools Online",
-
-    description:
-        "Merge, split, rotate, convert PDFs and images directly in your browser for free.",
-
+    description: "Merge, split, rotate, convert PDFs and images directly in your browser for free.",
     keywords: [
         "PDF",
         "Merge PDF",
@@ -32,6 +30,7 @@ export const metadata: Metadata = {
         "Online PDF Editor"
     ],
 };
+
 export default function RootLayout({
                                        children,
                                    }: Readonly<{
@@ -42,26 +41,19 @@ export default function RootLayout({
             lang="en"
             data-scroll-behavior="smooth"
             suppressHydrationWarning
-            className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+            className={`${geistSans.variable} ${geistMono.variable} h-full antialiased selection:bg-indigo-500/30`}
         >
-        <body className="min-h-full bg-[var(--background)] text-[var(--foreground)]">
-
+        <body className="min-h-full bg-[var(--background)] text-[var(--foreground)] font-sans transition-colors duration-200">
         <ThemeProvider>
-
-            <div className="min-h-screen flex flex-col">
-
+            <div className="min-h-screen flex flex-col relative isolation-auto">
                 <Header/>
-
-                <main className="flex-1">
+                <main className="flex-1 w-full relative z-10">
+                    <GlobalNotifications />
                     {children}
                 </main>
-
                 <Footer/>
-
             </div>
-
         </ThemeProvider>
-
         </body>
         </html>
     );

@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { Lock, ShieldCheck } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/apiClient";
+import { getFriendlyErrorMessage } from "@/lib/errorHandler"; // Integrated global error framework safely
+import { notify } from "@/lib/notify";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
@@ -42,13 +44,24 @@ export default function LockPdfPage() {
             formData.append("file", file);
             formData.append("password", password);
 
-            await uploadAndDownloadFile("/security/lock", formData, `${file.name.replace(/\.pdf$/i, "")}-locked.pdf`);
+            const responseBlob = await uploadAndDownloadFile("/api/security/lock", formData);
+
+            const downloadUrl = window.URL.createObjectURL(responseBlob);
+            const link = document.createElement("a");
+            link.href = downloadUrl;
+            link.download = `${file.name.replace(/\.pdf$/i, "")}-locked.pdf`;
+            document.body.appendChild(link);
+            link.click();
+
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
 
             setSuccess(true);
             setPassword("");
         } catch (err) {
             console.error(err);
-            alert(err instanceof Error ? err.message : "Security operational transaction execution failure.");
+            // OPTIMIZATION: Used global error client to parse structured data payloads from the server
+            notify(getFriendlyErrorMessage(err));
         } finally {
             setIsProcessing(false);
         }
@@ -65,6 +78,8 @@ export default function LockPdfPage() {
                     onFilesAccepted={onDrop}
                     title="Upload Target Document"
                     description="Drop your unsecured file element here to apply structural encryption filters"
+                    multiple={false}
+                    accept=".pdf"
                 />
                 {file && (
                     <div className="mt-8 space-y-6">
@@ -82,13 +97,13 @@ export default function LockPdfPage() {
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     placeholder="Configure strong access code strings"
-                                    className="mt-2 w-full rounded-xl border border-[color:var(--border)] bg-transparent p-3 text-sm outline-none transition focus:border-indigo-500"
+                                    className="mt-2 w-full rounded-xl border border-[color:var(--border)] bg-transparent p-3 text-sm outline-none transition focus:border-indigo-500 text-[color:var(--foreground)]"
                                 />
                             </div>
                         </div>
                         <div className="rounded-2xl border border-[color:var(--border)] p-4">
                             <p className="text-sm text-[color:var(--muted)]">Target document footprint</p>
-                            <p className="mt-1 text-2xl font-bold">{fileExtractedSize} MB</p>
+                            <p className="mt-1 text-2xl font-bold text-[color:var(--foreground)]">{fileExtractedSize} MB</p>
                         </div>
                         {success && (
                             <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5 text-emerald-900 dark:text-emerald-200 flex items-start gap-3">

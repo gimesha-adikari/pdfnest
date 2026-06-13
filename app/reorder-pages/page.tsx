@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Loader2, ArrowRight, ShieldCheck, Layers } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/apiClient";
+import { getFriendlyErrorMessage } from "@/lib/errorHandler"; // Integrated global error framework safely
+import { notify } from "@/lib/notify";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
@@ -91,7 +93,7 @@ export default function ReorderPagesPage() {
             await loadingTask.destroy();
         } catch (error) {
             console.error("Root Document Processing Exception:", error);
-            alert("Could not load document preview grids. Please check the browser console for details.");
+            notify("Could not load document preview grids. Please check the browser console for details.");
         } finally {
             setIsLoadingElements(false);
         }
@@ -106,19 +108,34 @@ export default function ReorderPagesPage() {
 
             const formData = new FormData();
             formData.append("file", file);
-
             formData.append("sequence", pageOrder.join(","));
 
-            await uploadAndDownloadFile(
-                "/structure/reorder-pages",
-                formData,
-                `${file.name.replace(/\.pdf$/i, "")}-reordered.pdf`
+            if ((file as any).originalPassword){
+                formData.append("file_password", (file as any).originalPassword)
+            }
+
+            const responseBlob = await uploadAndDownloadFile(
+                "/api/structure/reorder-pages",
+                formData
             );
+
+            // OPTIMIZATION: Enforced robust synchronous browser local file streaming trigger sequence
+            const downloadUrl = window.URL.createObjectURL(responseBlob);
+            const link = document.createElement("a");
+            link.href = downloadUrl;
+            link.download = `${file.name.replace(/\.pdf$/i, "")}-reordered.pdf`;
+            document.body.appendChild(link);
+            link.click();
+
+            // Clean up browser hardware pointers immediately
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
 
             setSuccess(true);
         } catch (err) {
             console.error(err);
-            alert(err instanceof Error ? err.message : "Reordering layout compilation runtime failure.");
+            // OPTIMIZATION: Mapped catch states directly to the uniform global JSON error decoder
+            notify(getFriendlyErrorMessage(err));
         } finally {
             setIsProcessing(false);
         }
@@ -136,6 +153,8 @@ export default function ReorderPagesPage() {
                     onFilesAccepted={onDrop}
                     title="Upload PDF Document"
                     description="Drop document here to load the interactive page manager grid workspace"
+                    multiple={false}
+                    accept=".pdf"
                 />
 
                 {isLoadingElements && (
@@ -159,7 +178,6 @@ export default function ReorderPagesPage() {
                                 </span>
                             </div>
 
-                            {/* Clean, perfectly aligned data injection */}
                             <PageReorderGrid
                                 items={pageOrder}
                                 setItems={setPageOrder}

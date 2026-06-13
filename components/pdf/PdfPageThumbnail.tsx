@@ -1,8 +1,10 @@
+import React from "react";
+
 interface PdfPageThumbnailProps {
     thumbnail: string;
     pageNumber: number;
     selected: boolean;
-    onClick: () => void;
+    onClick: (e: React.MouseEvent) => void;
 }
 
 export default function PdfPageThumbnail({
@@ -19,6 +21,7 @@ export default function PdfPageThumbnail({
                 rounded-2xl
                 border
                 transition-all
+                select-none
 
                 ${
                 selected
@@ -30,7 +33,7 @@ export default function PdfPageThumbnail({
             <img
                 src={thumbnail}
                 alt={`Page ${pageNumber}`}
-                className="w-full"
+                className="w-full pointer-events-none"
             />
 
             <div
