@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { FileCode, ShieldCheck, Loader2, Eye, Sliders } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/apiClient";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import { uploadAndDownloadFile } from "@/lib/api";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
@@ -11,6 +10,7 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import { notify } from "@/lib/notify";
+import { PdfProgressTracker } from "@/components/pdf/PdfProgressTracker";
 
 export default function MarkdownToPdfPage() {
     const [file, setFile] = useState<File | null>(null);
@@ -21,18 +21,10 @@ export default function MarkdownToPdfPage() {
     const [finalBlob, setFinalBlob] = useState<Blob | null>(null);
 
     const [uploadProgress, setUploadProgress] = useState(0);
+    const [taskId, setTaskId] = useState<string>("");
 
     const [paperSize, setPaperSize] = useState("A4");
-
-    // Expanded margin tracking state configuration matrix
-    const [margins, setMargins] = useState({ top: 0.5, bottom: 0.5, left: 0.5, right: 0.5 });
-
-    // Instantly refresh layout whenever any bounding field triggers updates
-    useEffect(() => {
-        if (file) {
-            generateLivePreview(file);
-        }
-    }, [paperSize, margins.top, margins.bottom, margins.left, margins.right]);
+    const [margins, setMargins] = useState({ top: 0.0, bottom: 0.0,left: 0.0, right: 0.0});
 
     const onDrop = async (acceptedFiles: File[]) => {
         if (acceptedFiles.length === 0) return;
@@ -46,6 +38,7 @@ export default function MarkdownToPdfPage() {
         try {
             setIsPreviewLoading(true);
             setUploadProgress(0);
+            setTaskId("");
 
             const formData = new FormData();
             formData.append("file", targetFile);
@@ -56,26 +49,52 @@ export default function MarkdownToPdfPage() {
             formData.append("marginLeft", margins.left.toString());
             formData.append("marginRight", margins.right.toString());
 
-            const pdfBlob = await uploadAndDownloadFile("/api/conversion/markdown-to-pdf", formData, (progress) => {
-                setUploadProgress(progress);
+            const baseApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+            const response = await fetch(`${baseApiUrl}/api/conversion/markdown-to-pdf-async`, {
+                method: "POST",
+                body: formData,
             });
+
+            if (!response.ok) throw new Error("Could not initialize markdown compiler cluster node.");
+
+            const data = await response.json();
+            setTaskId(data.taskId);
+        } catch (err) {
+            console.error(err);
+            notify("Could not update document layout preview coordinates.");
+            setIsPreviewLoading(false);
+        }
+    };
+
+    const handleTaskComplete = async (downloadUrl: string) => {
+        try {
+            const baseApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+            const response = await fetch(`${baseApiUrl}${downloadUrl}`);
+            if (!response.ok) throw new Error("Re-download framework pipeline error.");
+
+            const pdfBlob = await response.blob();
             setFinalBlob(pdfBlob);
 
             const previewFormData = new FormData();
             previewFormData.append("file", new File([pdfBlob], "intermed.pdf", { type: "application/pdf" }));
 
-            const imageBlob = await
-                uploadAndDownloadFile("/api/conversion/preview/page", previewFormData);
+            const imageBlob = await uploadAndDownloadFile("/api/conversion/preview/page", previewFormData);
 
             if (previewUrl) window.URL.revokeObjectURL(previewUrl);
             setPreviewUrl(window.URL.createObjectURL(imageBlob));
         } catch (err) {
-            console.error(err);
-            notify("Could not update document layout preview coordinates.");
+            notify("Failed to collect final compiled asset frames from cluster nodes.");
         } finally {
             setIsPreviewLoading(false);
+            setTaskId("");
         }
     };
+
+    useEffect(() => {
+        if (file) {
+            generateLivePreview(file);
+        }
+    }, [paperSize, margins.top, margins.bottom, margins.left, margins.right]);
 
     const handleFinalDownload = () => {
         if (!finalBlob || !file) return;
@@ -104,12 +123,11 @@ export default function MarkdownToPdfPage() {
             <div className="mx-auto max-w-7xl px-4 py-8">
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
 
-                    {/* LEFT COLUMN: Controls & Setup panels */}
                     <div className="lg:col-span-5 space-y-6">
                         <div className="rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-6 shadow-lg space-y-4">
                             <h2 className="text-xs font-bold uppercase tracking-wider text-[color:var(--muted)]">1. Stage Document</h2>
                             <PdfUploader onFilesAccepted={onDrop} title="Upload Markdown" description=".md or .markdown files" multiple={false} accept=".md,.markdown" />
-                            {file && <PdfFileInfo file={file} onClear={() => { setFile(null); setPreviewUrl(null); setFinalBlob(null); setSuccess(false); }} />}
+                            {file && <PdfFileInfo file={file} onClear={() => { setFile(null); setPreviewUrl(null); setFinalBlob(null); setSuccess(false); setTaskId(""); }} />}
                         </div>
 
                         {file && (
@@ -128,7 +146,6 @@ export default function MarkdownToPdfPage() {
                                     </select>
                                 </div>
 
-                                {/* Custom Bounding Margins 2x2 Input Grid */}
                                 <div className="space-y-2">
                                     <label className="text-xs font-medium text-[color:var(--muted)]">Print Margin Boundaries (Inches)</label>
                                     <div className="grid grid-cols-2 gap-2">
@@ -158,24 +175,11 @@ export default function MarkdownToPdfPage() {
                                     </div>
                                 )}
 
-                                {isPreviewLoading && uploadProgress > 0 && (
-                                    <div className="space-y-1.5 animate-in fade-in duration-150">
-                                        <div className="flex justify-between text-[10px] uppercase tracking-wider font-bold text-[color:var(--muted)]">
-                                            <span>{uploadProgress === 90 ? "Rendering PDF Assets..." : "Uploading Content"}</span>
-                                            <span>{uploadProgress}%</span>
-                                        </div>
-                                        <div className="w-full h-1.5 bg-[color:var(--background)] rounded-full overflow-hidden border border-[color:var(--border)]">
-                                            <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
-                                        </div>
-                                    </div>
-                                )}
-
                                 <PdfActionButton text="Save Portrait PDF Document" loadingText="Finalizing Streams..." loading={isProcessing} disabled={isProcessing || !finalBlob} onClick={handleFinalDownload} />
                             </div>
                         )}
                     </div>
 
-                    {/* RIGHT COLUMN: Interactive Portrait Sheet Frame Wrapper */}
                     <div className="lg:col-span-7 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-6 shadow-lg space-y-4">
                         <h2 className="text-sm font-bold uppercase tracking-wider text-[color:var(--muted)] flex items-center gap-2">
                             <Eye size={16} />
@@ -183,14 +187,17 @@ export default function MarkdownToPdfPage() {
                         </h2>
 
                         <div className="relative w-full aspect-[3/4] rounded-2xl border border-[color:var(--border)] bg-[color:var(--background)] overflow-hidden flex items-center justify-center p-4">
-                            {isPreviewLoading && (
+                            {isPreviewLoading && taskId ? (
+                                <div className="absolute inset-0 bg-[color:var(--card)]/60 backdrop-blur-sm z-10 flex flex-col items-center justify-center p-6">
+                                    <p className="text-xs font-bold text-[color:var(--foreground)] mb-3">Compiling Markdown Layout Ast Trees...</p>
+                                    <PdfProgressTracker taskId={taskId} onComplete={handleTaskComplete} />
+                                </div>
+                            ) : isPreviewLoading ? (
                                 <div className="absolute inset-0 bg-[color:var(--card)]/60 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-3">
                                     <Loader2 className="animate-spin text-indigo-500" size={32} />
-                                    <p className="text-xs font-semibold text-[color:var(--muted)]">
-                                        {uploadProgress < 90 ? `Streaming Document Tracks (${uploadProgress}%)` : "Invoking Headless Compilation Engines..."}
-                                    </p>
+                                    <p className="text-xs font-semibold text-[color:var(--muted)]">Uploading content to render nodes...</p>
                                 </div>
-                            )}
+                            ) : null}
 
                             {previewUrl ? (
                                 <div className="w-full h-full flex items-center justify-center overflow-auto shadow-inner bg-neutral-900 rounded-xl p-2">

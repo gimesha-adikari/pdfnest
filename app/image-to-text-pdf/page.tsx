@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { Images, ShieldCheck, Loader2, Trash2, ArrowUp, ArrowDown, UploadCloud, FileType } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/apiClient";
 import { getFriendlyErrorMessage } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
+import { PdfProgressTracker } from "@/components/pdf/PdfProgressTracker";
 
 interface ImageItem {
     id: string;
@@ -21,6 +21,7 @@ export default function ImageToTextPdfPage() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
+    const [taskId, setTaskId] = useState<string>("");
 
     useEffect(() => {
         return () => {
@@ -98,31 +99,42 @@ export default function ImageToTextPdfPage() {
         try {
             setIsProcessing(true);
             setSuccess(false);
+            setTaskId("");
 
             const formData = new FormData();
             images.forEach((item) => {
                 formData.append("images", item.file);
             });
 
-            const responseBlob = await uploadAndDownloadFile("/api/ocr/to-text-pdf", formData);
+            const baseApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+            const response = await fetch(`${baseApiUrl}/api/ocr/to-text-pdf-async`, {
+                method: "POST",
+                body: formData,
+            });
 
-            const downloadUrl = window.URL.createObjectURL(responseBlob);
-            const link = document.createElement("a");
-            link.href = downloadUrl;
-            link.download = "ocr-extracted-text.pdf";
-            document.body.appendChild(link);
-            link.click();
+            if (!response.ok) throw new Error("Processing network cluster node failed to queue task data.");
 
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(downloadUrl);
-
-            setSuccess(true);
+            const data = await response.json();
+            setTaskId(data.taskId);
         } catch (err) {
             console.error(err);
             notify(getFriendlyErrorMessage(err));
-        } finally {
             setIsProcessing(false);
         }
+    };
+
+    const handleTaskComplete = (downloadUrl: string) => {
+        const baseApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+        const link = document.createElement("a");
+        link.href = `${baseApiUrl}${downloadUrl}`;
+        link.download = "ocr-extracted-text.pdf";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        setSuccess(true);
+        setIsProcessing(false);
+        setTaskId("");
     };
 
     return (
@@ -209,13 +221,20 @@ export default function ImageToTextPdfPage() {
                         )}
 
                         <div className="w-full mt-6">
-                            <PdfActionButton
-                                text="Extract Text & Build PDF"
-                                loadingText="Running Optical Matrix character scanning..."
-                                loading={isProcessing}
-                                disabled={images.length === 0}
-                                onClick={handleConversion}
-                            />
+                            {isProcessing && taskId ? (
+                                <div className="flex flex-col items-center justify-center space-y-3 py-4 border rounded-xl border-dashed">
+                                    <p className="text-xs font-mono text-muted-foreground animate-pulse">Tracking instance: {taskId}</p>
+                                    <PdfProgressTracker taskId={taskId} onComplete={handleTaskComplete} />
+                                </div>
+                            ) : (
+                                <PdfActionButton
+                                    text="Extract Text & Build PDF"
+                                    loadingText="Initializing remote tracking engine..."
+                                    loading={isProcessing}
+                                    disabled={images.length === 0}
+                                    onClick={handleConversion}
+                                />
+                            )}
                         </div>
                     </div>
                 )}

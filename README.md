@@ -91,7 +91,7 @@ Runs ESLint.
 
 ## Backend API
 
-Most tools use `lib/apiClient.ts` to upload a `FormData` payload and download the returned file. The current UI expects these backend paths under the configured API base URL:
+Most tools use `lib/api.ts` to upload a `FormData` payload and download the returned file. The current UI expects these backend paths under the configured API base URL:
 
 - `POST /structure/merge`
 - `POST /structure/split`
@@ -127,7 +127,7 @@ public/               Static assets and PDF.js worker
 1. Add the page under `app/<tool-route>/page.tsx`.
 2. Add the navigation entry to `lib/toolsData.ts`.
 3. Reuse the shared PDF components in `components/pdf/` where possible.
-4. Use `uploadAndDownloadFile()` from `lib/apiClient.ts` for upload-and-download API flows.
+4. Use `uploadAndDownloadFile()` from `lib/api.ts` for upload-and-download API flows.
 
 ## License
 

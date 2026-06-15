@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Loader2, FileText } from "lucide-react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { getFriendlyErrorMessage } from "@/lib/errorHandler"; // Safely mapped your uniform decoder
-import { uploadAndDownloadFile } from "@/lib/apiClient";
+import { uploadAndDownloadFile } from "@/lib/api";
 import { notify } from "@/lib/notify";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFileList from "@/components/pdf/PdfFileList";
@@ -18,10 +18,12 @@ export default function MergePdfPage() {
     const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
     const [isMerging, setIsMerging] = useState(false);
     const [isGeneratingPreviews, setIsGeneratingPreviews] = useState(false);
+    const [fileMeta, setFileMeta] = useState<
+        Record<string, { originalPassword?: string }>
+    >({});
 
     const generateFileThumbnail = async (file: File) => {
         try {
-            // OPTIMIZATION: On-demand import prevents Next hydration drops or document-undefined crashes
             const pdfjsLib = await import("pdfjs-dist");
             pdfjsLib.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
 
@@ -39,7 +41,12 @@ export default function MergePdfPage() {
                 const ctx = canvas.getContext("2d");
 
                 if (ctx) {
-                    await page.render({ canvasContext: ctx, viewport }).promise;
+                    await page.render({
+                        canvas,
+                        canvasContext: ctx,
+                        viewport,
+                    }).promise;
+
                     const imgData = canvas.toDataURL("image/jpeg", 0.5);
 
                     const fileKey = `${file.name}-${file.size}-${file.lastModified}`;
@@ -132,8 +139,11 @@ export default function MergePdfPage() {
             files.forEach((file, index) => {
                 formData.append("files", file);
 
-                if ((file as any).originalPassword) {
-                    formData.append(`password_${index}`, (file as any).originalPassword);
+                const fileKey = `${file.name}-${file.size}-${file.lastModified}`;
+                const password = fileMeta[fileKey]?.originalPassword;
+
+                if (password) {
+                    formData.append(`password_${index}`, password);
                 }
             });
 

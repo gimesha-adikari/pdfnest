@@ -2,13 +2,14 @@
 
 import { useState, useRef, useEffect } from "react";
 import { ShieldAlert, Type, MousePointerSquareDashed, Trash2 } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/apiClient";
+import { uploadAndDownloadFile } from "@/lib/api";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import { notify } from "@/lib/notify";
+import type { PDFDocumentProxy } from "pdfjs-dist";
 
 interface DrawnBox {
     id: string;
@@ -22,17 +23,15 @@ interface DrawnBox {
 
 export default function RedactPdfPage() {
     const [file, setFile] = useState<File | null>(null);
-    const [pdfDoc, setPdfDoc] = useState<any>(null);
+    const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy|null>(null);
     const [totalPages, setTotalPages] = useState<number>(0);
     const [isReading, setIsReading] = useState<boolean>(false);
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
-    // Modes & Inputs
     const [mode, setMode] = useState<"text" | "draw">("text");
     const [keywords, setKeywords] = useState<string>("");
     const [drawnBoxes, setDrawnBoxes] = useState<DrawnBox[]>([]);
 
-    // Drawing state tracking
     const [isDrawing, setIsDrawing] = useState(false);
     const [startPos, setStartPos] = useState({ x: 0, y: 0 });
     const [currentBox, setCurrentBox] = useState<DrawnBox | null>(null);
@@ -90,9 +89,12 @@ export default function RedactPdfPage() {
 
             context.scale(dpr, dpr);
 
-            await page.render({ canvasContext: context, viewport }).promise;
+            await page.render({
+                canvas,
+                canvasContext: context,
+                viewport,
+            }).promise;
 
-            // Draw finalized boxes on top of this canvas view
             const pageBoxes = drawnBoxes.filter(b => b.page === pageNum);
             pageBoxes.forEach(box => {
                 context.fillStyle = "rgba(0, 0, 0, 0.9)";
@@ -104,7 +106,6 @@ export default function RedactPdfPage() {
                 );
             });
 
-            // Draw temporary live box if actively dragging
             if (currentBox && currentBox.page === pageNum) {
                 context.fillStyle = "rgba(99, 102, 241, 0.4)";
                 context.strokeStyle = "#6366f1";
@@ -131,7 +132,7 @@ export default function RedactPdfPage() {
         for (let i = 1; i <= totalPages; i++) {
             drawPageContents(i);
         }
-    }, [pdfDoc, totalPages, file, drawnBoxes, currentBox]);
+    }, [pdfDoc, totalPages, file, drawnBoxes, currentBox, drawPageContents]);
 
     // Mouse Event Handlers for Area Selection
     const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>, pageNum: number) => {

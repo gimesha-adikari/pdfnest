@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Trash2, ShieldCheck, Loader2, FileText } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/apiClient";
+import { uploadAndDownloadFile } from "@/lib/api";
 import { getFriendlyErrorMessage } from "@/lib/errorHandler";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
@@ -11,6 +11,8 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import { notify } from "@/lib/notify";
+import {PDFDocumentProxy} from "pdfjs-dist";
+import {FileWithPassword} from "@/lib/types";
 
 function formatMB(bytes: number) {
     return (bytes / 1024 / 1024).toFixed(2);
@@ -22,7 +24,6 @@ export default function DeletePagesPage() {
     const [thumbnails, setThumbnails] = useState<string[]>([]);
     const [pagesToDelete, setPagesToDelete] = useState<Set<number>>(new Set());
 
-    // Tracks the last clicked page to serve as an anchor for Shift ranges
     const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
 
     const [isProcessing, setIsProcessing] = useState(false);
@@ -30,7 +31,7 @@ export default function DeletePagesPage() {
     const [isGeneratingPreviews, setIsGeneratingPreviews] = useState(false);
     const [success, setSuccess] = useState(false);
 
-    const generateThumbnails = async (pdf: any, totalPages: number) => {
+    const generateThumbnails = async (pdf: PDFDocumentProxy, totalPages: number) => {
         setIsGeneratingPreviews(true);
         const loadedThumbnails: string[] = [];
 
@@ -45,7 +46,11 @@ export default function DeletePagesPage() {
                 const ctx = canvas.getContext("2d");
 
                 if (ctx) {
-                    await page.render({ canvasContext: ctx, viewport }).promise;
+                    await page.render({
+                        canvas,
+                        canvasContext: ctx,
+                        viewport
+                    }).promise;
                     const imgData = canvas.toDataURL("image/jpeg", 0.6);
                     loadedThumbnails.push(imgData);
 
@@ -172,8 +177,10 @@ export default function DeletePagesPage() {
             formData.append("file", file);
             formData.append("pages", compiledPageString);
 
-            if ((file as any).originalPassword){
-                formData.append("file_password", (file as any).originalPassword)
+            const typedFile = file as FileWithPassword;
+
+            if (typedFile.originalPassword) {
+                formData.append("file_password", typedFile.originalPassword);
             }
 
             const responseBlob = await uploadAndDownloadFile("/api/structure/delete-pages", formData);

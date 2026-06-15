@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Lock, ShieldCheck } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/apiClient";
+import { uploadAndDownloadFile } from "@/lib/api";
 import { getFriendlyErrorMessage } from "@/lib/errorHandler"; // Integrated global error framework safely
 import { notify } from "@/lib/notify";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";

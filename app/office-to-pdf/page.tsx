@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { FileText, ShieldCheck, Loader2, Eye } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/apiClient";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import { uploadAndDownloadFile } from "@/lib/api";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
@@ -30,7 +29,6 @@ export default function OfficeToPdfPage() {
         setPreviewUrl(null);
         setFinalBlob(null);
 
-        // Instantly compile layout previews on document drop
         await generateLiveOfficePreview(selectedFile);
     };
 

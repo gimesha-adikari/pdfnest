@@ -1,4 +1,4 @@
-import { BackendError } from "./apiClient";
+import { BackendError } from "./api";
 
 export function getFriendlyErrorMessage(error: unknown): string {
     if (error instanceof Error) {

@@ -3,7 +3,7 @@
 
 import React, { useState, useCallback } from "react";
 import { UploadCloud, Lock, Loader2 } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/apiClient";
+import { uploadAndDownloadFile } from "@/lib/api";
 
 // Helper function to check if a PDF file is encrypted
 const checkEncryption = async (file: File): Promise<boolean> => {

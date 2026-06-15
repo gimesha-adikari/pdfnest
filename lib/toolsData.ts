@@ -2,7 +2,7 @@ export interface ToolItem {
     title: string;
     description: string;
     href: string;
-    category: "editing" | "convert";
+    category: "editing" | "convert" | "security";
     isNew?: boolean;
 }
 
@@ -128,7 +128,6 @@ export const NAV_TOOLS: ToolItem[] = [
         title: "Secure Redaction",
         description: "Permanently scrub and strip explicit textual references entirely out of the underlying source objects.",
         href: "/redact-pdf",
-        icon: "ShieldAlert",
         category: "security"
     },{
         title: "PDF Editor",

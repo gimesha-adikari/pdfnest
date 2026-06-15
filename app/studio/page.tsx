@@ -28,7 +28,7 @@ import {
     User,
     Unlock
 } from "lucide-react";
-import {uploadAndDownloadFile} from "@/lib/apiClient";
+import {uploadAndDownloadFile} from "@/lib/api";
 import {getFriendlyErrorMessage} from "@/lib/errorHandler";
 import {notify} from "@/lib/notify";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";

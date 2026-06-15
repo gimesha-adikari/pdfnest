@@ -2,7 +2,7 @@
 
 import {useState, useEffect} from "react";
 import {Code, ShieldCheck, Loader2, Eye, Sliders} from "lucide-react";
-import {uploadAndDownloadFile} from "@/lib/apiClient";
+import {uploadAndDownloadFile} from "@/lib/api";
 import {getFriendlyErrorMessage} from "@/lib/errorHandler";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
@@ -25,11 +25,6 @@ export default function CodeToPdfPage() {
     const [paperSize, setPaperSize] = useState("A4");
     const [margins, setMargins] = useState({top: 0.0, bottom: 0.0, left: 0.0, right: 0.0});
 
-    useEffect(() => {
-        if (file) {
-            generateLiveCodePreview(file);
-        }
-    }, [paperSize, margins.top, margins.bottom, margins.left, margins.right]);
 
     const onDrop = async (acceptedFiles: File[]) => {
         if (acceptedFiles.length === 0) return;
@@ -71,6 +66,13 @@ export default function CodeToPdfPage() {
             setIsPreviewLoading(false);
         }
     };
+
+    useEffect(() => {
+        if (file) {
+            generateLiveCodePreview(file);
+        }
+    }, [paperSize, margins.top, margins.bottom, margins.left, margins.right]);
+
 
     const handleFinalDownload = () => {
         if (!finalBlob || !file) return;

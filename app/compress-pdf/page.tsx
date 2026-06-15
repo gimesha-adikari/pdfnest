@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ShieldCheck } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/apiClient";
+import { uploadAndDownloadFile } from "@/lib/api";
 import { getFriendlyErrorMessage } from "@/lib/errorHandler";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
@@ -11,6 +11,7 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import {notify } from "@/lib/notify"
+import {FileWithPassword} from "@/lib/types"
 
 function formatMB(bytes: number) {
     return (bytes / 1024 / 1024).toFixed(2);
@@ -42,8 +43,10 @@ export default function CompressPdfPage() {
             const formData = new FormData();
             formData.append("file", file);
 
-            if ((file as any).originalPassword){
-                formData.append("file_password", (file as any).originalPassword)
+            const typedFile = file as FileWithPassword;
+
+            if (typedFile.originalPassword) {
+                formData.append("file_password", typedFile.originalPassword);
             }
 
             const responseBlob = await uploadAndDownloadFile("/api/optimize/compress", formData);

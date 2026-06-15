@@ -6,7 +6,7 @@ import {
     AlertTriangle,
     XCircle,
     Info,
-    X,
+    X, LucideIcon,
 } from "lucide-react";
 
 type ToastType = "success" | "error" | "info" | "warning";
@@ -20,7 +20,7 @@ interface ToastItem {
 const toastStyles: Record<
     ToastType,
     {
-        icon: any;
+        icon: LucideIcon;
         className: string;
     }
 > = {

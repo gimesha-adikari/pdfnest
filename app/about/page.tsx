@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ShieldCheck, Zap, Sparkles, Heart, Server, Flame } from "lucide-react";
+import { ShieldCheck, Zap, Sparkles, Server, Flame } from "lucide-react";
 
 export default function AboutPage() {
     const values = [

@@ -1,8 +1,8 @@
 "use client";
 
-import {useMemo, useState, useEffect} from "react";
+import { useState, useEffect, useRef} from "react";
 import {Hash, ShieldCheck, Loader2, FileText, Move, Languages} from "lucide-react";
-import {uploadAndDownloadFile} from "@/lib/apiClient";
+import {uploadAndDownloadFile} from "@/lib/api";
 import {getFriendlyErrorMessage} from "@/lib/errorHandler"; // Kept error decoder isolated safely
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
@@ -10,6 +10,8 @@ import PdfFeatures from "@/components/pdf/PdfFeatures";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
+import {RenderParameters} from "pdfjs-dist/types/src/display/api";
+import {FileWithPassword} from "@/lib/types";
 
 function formatMB(bytes: number) {
     return (bytes / 1024 / 1024).toFixed(2);
@@ -32,69 +34,70 @@ export default function PageNumbersPage() {
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
     const [success, setSuccess] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
+    const isCancelled=useRef(false);
 
     useEffect(() => {
         if (!file) {
-            setThumbnailSrc("");
+            queueMicrotask(() => setThumbnailSrc(""));
             return;
         }
 
-        let isMounted = true;
-        setIsRenderingThumbnail(true);
-        setError(null);
+        isCancelled.current = false;
 
         const renderPreview = async () => {
+            setIsRenderingThumbnail(true);
+            setError(null);
+
             try {
-                // Dynamically load to safely isolate window object executions away from Next SSR
                 const pdfjs = await import("pdfjs-dist");
-                pdfjs.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
+                pdfjs.GlobalWorkerOptions.workerSrc =
+                    window.location.origin + "/pdf.worker.mjs";
 
                 const arrayBuffer = await file.arrayBuffer();
-                const loadingTask = pdfjs.getDocument({data: arrayBuffer });
-                const pdf = await loadingTask.promise;
+                const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
 
                 if (pdf.numPages === 0) throw new Error("Empty PDF document context.");
 
                 const page = await pdf.getPage(1);
-                const viewport = page.getViewport({scale: 0.4 });
-
-                if (!isMounted) return;
+                const viewport = page.getViewport({ scale: 0.4 });
 
                 const canvas = document.createElement("canvas");
                 const context = canvas.getContext("2d");
+
                 canvas.width = viewport.width;
                 canvas.height = viewport.height;
 
-                if (context) {
-                    const renderContext = {
-                        canvasContext: context,
-                        viewport: viewport,
-                    };
-                    await page.render(renderContext).promise;
+                if (!context || isCancelled.current) return;
 
-                    if (isMounted) {
-                        setThumbnailSrc(canvas.toDataURL("image/jpeg", 0.85));
-                    }
+                const renderContext: RenderParameters = {
+                    canvasContext: context,
+                    viewport,
+                    canvas,
+                };
+
+                await page.render(renderContext).promise;
+
+                if (!isCancelled.current) {
+                    setThumbnailSrc(canvas.toDataURL("image/jpeg", 0.85));
                 }
 
-                canvas.width = 0;
-                canvas.height = 0;
                 canvas.remove();
-
             } catch (err) {
-                console.error("Preview render skipped gracefully:", err);
-                if (isMounted) {
+                if (!isCancelled.current) {
+                    console.error(err);
                     setThumbnailSrc("");
                 }
             } finally {
-                if (isMounted) setIsRenderingThumbnail(false);
+                if (!isCancelled.current) {
+                    setIsRenderingThumbnail(false);
+                }
             }
         };
 
         renderPreview();
 
         return () => {
-            isMounted = false;
+            isCancelled.current = true;
         };
     }, [file]);
 
@@ -113,8 +116,10 @@ export default function PageNumbersPage() {
             const formatDescription = `font:${fontFamily}, scale:${normalizedScale} abs, pos:${position}, rot:0`;
             formData.append("description", formatDescription);
 
-            if ((file as any).originalPassword){
-                formData.append("file_password", (file as any).originalPassword)
+            const typedFile = file as FileWithPassword;
+
+            if (typedFile.originalPassword) {
+                formData.append("file_password", typedFile.originalPassword);
             }
 
             const responseBlob = await uploadAndDownloadFile("/api/structure/add-page-numbers", formData);
@@ -149,9 +154,6 @@ export default function PageNumbersPage() {
 
             <div className="mx-auto max-w-5xl px-4 py-8">
                 {!file ? (
-                    /* CRITICAL RESTORATION: Left your component invocation exactly
-                       as originally written, keeping your custom onFilesAccepted handler intact.
-                    */
                     <PdfUploader
                         onFilesAccepted={(files) => {
                             if (files && files.length > 0) {

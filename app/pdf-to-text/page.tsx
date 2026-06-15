@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ShieldCheck, Loader2, FileText, RefreshCw, Cpu } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/apiClient";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler"; // Integrated global error framework safely
+import { ShieldCheck, Loader2, RefreshCw, Cpu } from "lucide-react";
+import { getFriendlyErrorMessage } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
@@ -11,11 +10,13 @@ import PdfFeatures from "@/components/pdf/PdfFeatures";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
+import { PdfProgressTracker } from "@/components/pdf/PdfProgressTracker";
 
 export default function OcrPage() {
     const [file, setFile] = useState<File | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
+    const [taskId, setTaskId] = useState<string>("");
 
     const onDrop = (acceptedFiles: File[]) => {
         if (acceptedFiles.length === 0) return;
@@ -29,36 +30,46 @@ export default function OcrPage() {
         try {
             setIsProcessing(true);
             setSuccess(false);
+            setTaskId("");
 
             const formData = new FormData();
             formData.append("file", file);
 
-            const txtDownloadName = `${file.name.replace(/\.pdf$/i, "")}-extracted-text.txt`;
-
-            if ((file as any).originalPassword){
-                formData.append("file_password", (file as any).originalPassword)
+            if ((file as any).originalPassword) {
+                formData.append("file_password", (file as any).originalPassword);
             }
 
-            const responseBlob = await uploadAndDownloadFile("/api/ocr/extract-text", formData);
+            const baseApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+            const response = await fetch(`${baseApiUrl}/api/ocr/extract-text-async`, {
+                method: "POST",
+                body: formData,
+            });
 
-            const downloadUrl = window.URL.createObjectURL(responseBlob);
-            const link = document.createElement("a");
-            link.href = downloadUrl;
-            link.download = txtDownloadName;
-            document.body.appendChild(link);
-            link.click();
+            if (!response.ok) throw new Error("Could not initialize extraction tracking subprocess node.");
 
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(downloadUrl);
-
-            setSuccess(true);
+            const data = await response.json();
+            setTaskId(data.taskId);
         } catch (err) {
             console.error(err);
-            // OPTIMIZATION: Replaced generic string notifys with the uniform error decoder
             notify(getFriendlyErrorMessage(err));
-        } finally {
             setIsProcessing(false);
         }
+    };
+
+    const handleTaskComplete = (downloadUrl: string) => {
+        const txtDownloadName = `${file?.name.replace(/\.pdf$/i, "")}-extracted-text.txt`;
+        const baseApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
+        const link = document.createElement("a");
+        link.href = `${baseApiUrl}${downloadUrl}`;
+        link.download = txtDownloadName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        setSuccess(true);
+        setIsProcessing(false);
+        setTaskId("");
     };
 
     return (
@@ -99,8 +110,8 @@ export default function OcrPage() {
                             <div className="w-full space-y-4">
                                 <PdfActionButton
                                     text="Extract Text Layer (OCR)"
-                                    loadingText="Scanning Pixel Grids on Server..."
-                                    loading={isProcessing}
+                                    loadingText="Initializing transaction token node..."
+                                    loading={isProcessing && !taskId}
                                     disabled={!file}
                                     onClick={handleOcrExtraction}
                                 />
@@ -121,11 +132,15 @@ export default function OcrPage() {
                         </div>
 
                         <div className="lg:col-span-7 flex flex-col items-center justify-center bg-[color:var(--background)]/30 border border-dashed border-[color:var(--border)] rounded-2xl p-8 text-center min-h-[260px] relative overflow-hidden">
-                            {isProcessing ? (
+                            {isProcessing && taskId ? (
+                                <div className="w-full flex flex-col items-center justify-center space-y-4">
+                                    <p className="text-sm font-bold text-[color:var(--foreground)]">Analyzing Typography Shapes...</p>
+                                    <PdfProgressTracker taskId={taskId} onComplete={handleTaskComplete} />
+                                </div>
+                            ) : isProcessing ? (
                                 <div className="space-y-3 flex flex-col items-center justify-center text-[color:var(--muted)] animate-pulse">
                                     <Loader2 className="animate-spin text-indigo-500 mb-1" size={32} />
-                                    <p className="text-sm font-bold text-[color:var(--foreground)]">Analyzing Typography Shapes...</p>
-                                    <p className="text-xs max-w-xs">Tesseract OCR is reading individual character matrix lines page-by-page.</p>
+                                    <p className="text-sm font-bold text-[color:var(--foreground)]">Uploading Document Data Stream...</p>
                                 </div>
                             ) : (
                                 <div className="space-y-4 text-[color:var(--muted)] flex flex-col items-center">

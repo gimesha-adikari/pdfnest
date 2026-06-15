@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Tags, ShieldCheck, FileText, User, BookOpen, Loader2, X } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/apiClient";
+import { uploadAndDownloadFile } from "@/lib/api";
 import { getFriendlyErrorMessage } from "@/lib/errorHandler";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
@@ -116,7 +116,7 @@ export default function MetadataPage() {
                 description="Modify hidden document properties like Title, Author, Subject, and SEO Keywords for better search indexing."
             />
 
-            <div className="mt-12 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8 shadow-lg relative">
+            <div className="mt-12 rounded-3xl border border-border bg-[var(--card)] p-8 shadow-lg relative">
                 {!file && (
                     <PdfUploader
                         onFilesAccepted={onDrop}

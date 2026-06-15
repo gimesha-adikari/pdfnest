@@ -1,17 +1,19 @@
 interface PdfFileInfoProps {
     file: File;
+    onClear?: () => void;
 }
 
 export default function PdfFileInfo({
                                         file,
+                                        onClear,
                                     }: PdfFileInfoProps) {
     return (
         <div
             className="
                 rounded-xl
                 border
-                border-[color:var(--border)]
-                bg-[var(--card)]
+                border-border
+                bg-card
                 p-4
             "
         >
@@ -24,7 +26,7 @@ export default function PdfFileInfo({
                         items-center
                         justify-center
                         rounded-xl
-                        bg-gradient-to-r
+                        bg-linear-to-r
                         from-red-500
                         to-pink-500
                         text-white
@@ -39,10 +41,26 @@ export default function PdfFileInfo({
                         {file.name}
                     </p>
 
-                    <p className="mt-1 text-sm text-[color:var(--muted)]">
+                    <p className="mt-1 text-sm text-muted">
                         {(file.size / 1024 / 1024).toFixed(2)} MB
                     </p>
                 </div>
+
+                {onClear&&(
+                    <button
+                        onClick={onClear}
+                        className="
+                        rounded-lg
+                        px-3
+                        py-2
+                        text-sm
+                        font-medium
+                        hover:bg-red-500/10
+                    "
+                    >
+                        Remove
+                    </button>
+                )}
             </div>
         </div>
     );

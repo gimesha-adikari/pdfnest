@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Scissors, ShieldCheck, Loader2, FileText, CheckCircle2 } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/apiClient";
+import { uploadAndDownloadFile } from "@/lib/api";
 import { getFriendlyErrorMessage } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";

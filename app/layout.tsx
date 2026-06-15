@@ -39,6 +39,7 @@ export default function RootLayout({
     return (
         <html
             lang="en"
+            data-theme="dark"
             data-scroll-behavior="smooth"
             suppressHydrationWarning
             className={`${geistSans.variable} ${geistMono.variable} h-full antialiased selection:bg-indigo-500/30`}

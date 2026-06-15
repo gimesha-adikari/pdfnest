@@ -7,21 +7,21 @@ export default function Footer() {
     const securityTools = NAV_TOOLS.filter((t) => t.category === "security");
 
     return (
-        <footer className="mt-auto border-t border-[color:var(--border)] bg-[var(--card)]/50 backdrop-blur-md relative z-10">
+        <footer className="mt-auto border-t border-border bg-(--card)/50 backdrop-blur-md relative z-10">
             <div className="mx-auto max-w-7xl px-6 py-12">
                 <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-4">
                     <div className="space-y-3">
-                        <h3 className="text-md font-black tracking-tight bg-gradient-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent select-none">
+                        <h3 className="text-md font-black tracking-tight bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent select-none">
                             PDFNest Engine
                         </h3>
-                        <p className="text-xs leading-relaxed text-[color:var(--muted)] font-medium">
+                        <p className="text-xs leading-relaxed text-muted font-medium">
                             Files are processed inside secure, isolated execution environments. All structural data payloads are permanently wiped from sandbox tracks automatically immediately upon download completion.
                         </p>
                     </div>
 
                     <div>
-                        <h4 className="font-bold text-xs uppercase tracking-widest text-[color:var(--foreground)] mb-3">Structure Layers</h4>
-                        <div className="flex flex-col gap-2 text-xs font-medium text-[color:var(--muted)]">
+                        <h4 className="font-bold text-xs uppercase tracking-widest text-foreground mb-3">Structure Layers</h4>
+                        <div className="flex flex-col gap-2 text-xs font-medium text-muted">
                             {editingTools.slice(0, 6).map((tool) => (
                                 <Link
                                     key={tool.href}
@@ -37,8 +37,8 @@ export default function Footer() {
                     </div>
 
                     <div>
-                        <h4 className="font-bold text-xs uppercase tracking-widest text-[color:var(--foreground)] mb-3">Convert & Secure</h4>
-                        <div className="flex flex-col gap-2 text-xs font-medium text-[color:var(--muted)]">
+                        <h4 className="font-bold text-xs uppercase tracking-widest text-foreground mb-3">Convert & Secure</h4>
+                        <div className="flex flex-col gap-2 text-xs font-medium text-muted">
                             {convertTools.slice(0, 6).map((tool) => (
                                 <Link
                                     key={tool.href}

@@ -4,7 +4,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
 interface Props {
-    id: string;
+    id: number;
     pageNumber: number;
     thumbnail: string;
 }

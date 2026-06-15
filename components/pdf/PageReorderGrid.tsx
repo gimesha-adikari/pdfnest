@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { DndContext, closestCenter } from "@dnd-kit/core";
+import {DndContext, closestCenter, DragEndEvent} from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import SortablePageCard from "./SortablePageCard";
 
@@ -15,10 +15,11 @@ export default function PageReorderGrid({ items, setItems, thumbnails }: Props) 
     const [isMounted, setIsMounted] = useState(false);
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setIsMounted(true);
     }, []);
 
-    const handleDragEnd = (event: any) => {
+    const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
 
         if (!over || active.id === over.id) {
@@ -26,8 +27,9 @@ export default function PageReorderGrid({ items, setItems, thumbnails }: Props) 
         }
 
         setItems((prevItems) => {
-            const oldIndex = prevItems.indexOf(active.id);
-            const newIndex = prevItems.indexOf(over.id);
+            const oldIndex = prevItems.indexOf(Number(active.id));
+            const newIndex = prevItems.indexOf(Number(over.id));
+
             return arrayMove(prevItems, oldIndex, newIndex);
         });
     };

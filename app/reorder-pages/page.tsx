@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
-import { Loader2, ArrowRight, ShieldCheck, Layers } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/apiClient";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler"; // Integrated global error framework safely
-import { notify } from "@/lib/notify";
+import {useEffect, useState} from "react";
+import {Layers, Loader2, ShieldCheck} from "lucide-react";
+import {uploadAndDownloadFile} from "@/lib/api";
+import {getFriendlyErrorMessage} from "@/lib/errorHandler"; // Integrated global error framework safely
+import {notify} from "@/lib/notify";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
@@ -13,6 +13,7 @@ import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 
 import PageReorderGrid from "@/components/pdf/PageReorderGrid";
+import {FileWithPassword} from "@/lib/types";
 
 export default function ReorderPagesPage() {
     const [file, setFile] = useState<File | null>(null);
@@ -49,14 +50,12 @@ export default function ReorderPagesPage() {
 
             const loadingTask = pdfjsLib.getDocument({
                 data: typedArray,
-                disableWorker: false,
-                isEvalSupported: false
             });
 
             const pdf = await loadingTask.promise;
             const totalPages = pdf.numPages;
 
-            const dynamicOrderArray = Array.from({ length: totalPages }, (_, i) => i + 1);
+            const dynamicOrderArray = Array.from({length: totalPages}, (_, i) => i + 1);
             setPageOrder(dynamicOrderArray);
 
             const generatedImages: string[] = [];
@@ -64,7 +63,7 @@ export default function ReorderPagesPage() {
             for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
                 try {
                     const page = await pdf.getPage(pageNum);
-                    const viewport = page.getViewport({ scale: 0.4 });
+                    const viewport = page.getViewport({scale: 0.4});
 
                     const canvas = document.createElement("canvas");
                     canvas.width = viewport.width;
@@ -72,10 +71,12 @@ export default function ReorderPagesPage() {
 
                     const ctx = canvas.getContext("2d");
                     if (ctx) {
-                        const renderTask = page.render({
-                            canvasContext: ctx,
-                            viewport: viewport
-                        });
+                        const renderTask =
+                            page.render({
+                                canvas,
+                                canvasContext: ctx,
+                                viewport: viewport
+                            });
                         await renderTask.promise;
 
                         generatedImages.push(canvas.toDataURL("image/jpeg", 0.7));
@@ -110,8 +111,10 @@ export default function ReorderPagesPage() {
             formData.append("file", file);
             formData.append("sequence", pageOrder.join(","));
 
-            if ((file as any).originalPassword){
-                formData.append("file_password", (file as any).originalPassword)
+            const typedFile = file as FileWithPassword;
+
+            if (typedFile.originalPassword) {
+                formData.append("file_password", typedFile.originalPassword);
             }
 
             const responseBlob = await uploadAndDownloadFile(
@@ -159,21 +162,24 @@ export default function ReorderPagesPage() {
 
                 {isLoadingElements && (
                     <div className="flex flex-col items-center justify-center py-20 text-[color:var(--muted)]">
-                        <Loader2 className="animate-spin mb-3 text-indigo-500" size={32} />
+                        <Loader2 className="animate-spin mb-3 text-indigo-500" size={32}/>
                         <p className="text-sm font-medium">Deconstructing document into visual page layouts...</p>
                     </div>
                 )}
 
                 {!isLoadingElements && file && thumbnails.length > 0 && (
                     <div className="mt-8 space-y-6">
-                        <PdfFileInfo file={file} />
+                        <PdfFileInfo file={file}/>
 
-                        <div className="border border-[color:var(--border)] bg-[color:var(--background)]/30 rounded-2xl p-6">
-                            <div className="flex items-center justify-between mb-6 border-b border-[color:var(--border)] pb-3">
+                        <div
+                            className="border border-[color:var(--border)] bg-[color:var(--background)]/30 rounded-2xl p-6">
+                            <div
+                                className="flex items-center justify-between mb-6 border-b border-[color:var(--border)] pb-3">
                                 <h3 className="text-sm font-bold flex items-center gap-2 text-[color:var(--foreground)]">
-                                    <Layers size={16} className="text-indigo-500" /> Interactive Sorting Grid
+                                    <Layers size={16} className="text-indigo-500"/> Interactive Sorting Grid
                                 </h3>
-                                <span className="text-xs bg-indigo-500/10 text-indigo-500 px-2.5 py-1 rounded-full font-semibold">
+                                <span
+                                    className="text-xs bg-indigo-500/10 text-indigo-500 px-2.5 py-1 rounded-full font-semibold">
                                     {thumbnails.length} Total Pages
                                 </span>
                             </div>
@@ -186,8 +192,9 @@ export default function ReorderPagesPage() {
                         </div>
 
                         {success && (
-                            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-900 dark:text-emerald-200 flex items-start gap-3">
-                                <ShieldCheck className="text-emerald-500 mt-0.5 shrink-0" size={16} />
+                            <div
+                                className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-900 dark:text-emerald-200 flex items-start gap-3">
+                                <ShieldCheck className="text-emerald-500 mt-0.5 shrink-0" size={16}/>
                                 <div className="text-xs">
                                     <p className="font-semibold">Document Reordered Successfully!</p>
                                     <p className="mt-0.5 text-emerald-800/80 dark:text-emerald-200/70">
@@ -210,7 +217,7 @@ export default function ReorderPagesPage() {
                 )}
             </div>
 
-            <PdfFeatures />
+            <PdfFeatures/>
         </PdfToolLayout>
     );
 }
