@@ -101,9 +101,21 @@ export const NAV_TOOLS: ToolItem[] = [
         href: "/studio",
         category: "editing"
     },{
-        title: "Office to PDF",
-        description: "Convert Word (.docx), Excel (.xlsx), and PowerPoint (.pptx) documents into standard vector PDFs instantly.",
-        href: "/office-to-pdf",
+        title: "Word to PDF",
+        description: "Convert Word (.docx) documents into standard vector PDFs instantly.",
+        href: "/word-to-pdf",
+        category: "convert",
+        isNew: true,
+    },{
+        title: "Excel to PDF",
+        description: "Convert Excel (.xlsx) documents into standard vector PDFs instantly.",
+        href: "/excel-to-pdf",
+        category: "convert",
+        isNew: true,
+    },{
+        title: "PowerPoint to PDF",
+        description: "Convert PowerPoint (.pptx) documents into standard vector PDFs instantly.",
+        href: "/powerpoint-to-pdf",
         category: "convert",
         isNew: true,
     }, {
@@ -134,5 +146,20 @@ export const NAV_TOOLS: ToolItem[] = [
         description: "edit PDF as you wish",
         href: "/edit-pdf",
         category: "editing"
+    },{
+        title: "PDF to Excel",
+        description: "Convert PDF to Excel",
+        href: "/pdf-to-excel",
+        category: "convert"
+    },{
+        title: "PDF to Word",
+        description: "Convert PDF to Word",
+        href: "/pdf-to-word",
+        category: "convert"
+    },{
+        title: "PDF to PowerPoint",
+        description: "Convert PDF to PowerPoint",
+        href: "/pdf-to-powerpoint",
+        category: "convert"
     }
 ];

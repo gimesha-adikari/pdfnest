@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {DndContext, closestCenter, DragEndEvent} from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import SortablePageCard from "./SortablePageCard";
@@ -36,7 +36,7 @@ export default function PageReorderGrid({ items, setItems, thumbnails }: Props) 
 
     if (!isMounted) {
         return (
-            <div className="min-h-[200px] flex items-center justify-center text-sm text-[color:var(--muted)]">
+            <div className="min-h-50 flex items-center justify-center text-sm text-muted">
                 Initializing interactive grid...
             </div>
         );
