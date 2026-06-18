@@ -7,7 +7,7 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import { notify } from "@/lib/notify";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-``````
+
 interface LayoutElement {
     text: string;
     x: number;

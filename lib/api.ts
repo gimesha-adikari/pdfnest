@@ -29,9 +29,6 @@ function getHeader(headers: unknown, key: string): string {
     return "";
 }
 
-/**
- * Unified Axios error handler (no any, no unsafe access)
- */
 async function handleAxiosError(error: unknown): Promise<never> {
     if (!axios.isAxiosError(error)) {
         throw new Error("Unexpected non-Axios error occurred.");
@@ -40,36 +37,43 @@ async function handleAxiosError(error: unknown): Promise<never> {
     const response = error.response;
 
     if (!response) {
-        throw new Error(
-            error.message || "Network transport failure."
-        );
+        throw new Error(error.message || "Network transport failure.");
     }
 
-    const contentType = getHeader(response.headers, "content-type");
     const data = response.data;
 
-    if (contentType.includes("application/json") && data instanceof Blob) {
-        const text = await data.text();
+    if (data instanceof Blob) {
+        let text = "";
 
         try {
-            const parsed: BackendError = JSON.parse(text);
-            throw new Error(JSON.stringify(parsed));
+            text = await data.text();
         } catch {
-            throw new Error("Downstream pipeline unmarshaling failure.");
+            throw new Error("Failed to read error response from the server.");
+        }
+
+        // 1. Try to parse it as JSON first, without throwing inside the try block
+        let parsed: any = null;
+        try {
+            parsed = JSON.parse(text);
+        } catch {
+            // It's not JSON, which is fine!
+        }
+
+        // 2. Now evaluate what we got and throw the clean message
+        if (parsed && typeof parsed === "object") {
+            throw new Error(parsed.message || parsed.error || "Server error occurred.");
+        } else {
+            throw new Error(text || `Server rejected request with status ${response.status}`);
         }
     }
 
-    if (data instanceof Blob) {
-        throw new Error(
-            `Server rejected request with status ${response.status}`
-        );
+    // Standard fallback if the response wasn't a Blob
+    try {
+        const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+        throw new Error(parsed.message || parsed.error || JSON.stringify(parsed));
+    } catch {
+        throw new Error(typeof data === "string" ? data : `Server rejected request with status ${response.status}`);
     }
-
-    throw new Error(
-        typeof data === "string"
-            ? data
-            : `Server rejected request with status ${response.status}`
-    );
 }
 
 /**

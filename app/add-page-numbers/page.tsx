@@ -12,6 +12,8 @@ import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import {RenderParameters} from "pdfjs-dist/types/src/display/api";
 import {FileWithPassword} from "@/lib/types";
+import ToolFAQ from "@/components/SEO/ToolFAQ";
+import {NAV_TOOLS} from "@/lib/toolsData";
 
 function formatMB(bytes: number) {
     return (bytes / 1024 / 1024).toFixed(2);
@@ -143,6 +145,11 @@ export default function PageNumbersPage() {
             setIsProcessing(false);
         }
     };
+
+    const tool =
+        NAV_TOOLS.find(
+            (t)=>t.href==="/add-page-numbers"
+        );
 
     return (
         <PdfToolLayout>

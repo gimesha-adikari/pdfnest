@@ -1,11 +1,9 @@
-// file: /home/gimesha/My_Projects/next/pdfnest/components/pdf/PdfUploader.tsx
 "use client";
 
 import React, { useState, useCallback } from "react";
 import { UploadCloud, Lock, Loader2 } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
 
-// Helper function to check if a PDF file is encrypted
 const checkEncryption = async (file: File): Promise<boolean> => {
     try {
         const pdfjs = await import("pdfjs-dist");
@@ -14,10 +12,16 @@ const checkEncryption = async (file: File): Promise<boolean> => {
         const arrayBuffer = await file.arrayBuffer();
         const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
         await loadingTask.promise;
-        return false; // File is not locked
+        return false;
     } catch (error: any) {
+
+        if (error.name === "InvalidPDFException" || error.message.includes("Invalid Root")) {
+            console.warn("File appears corrupted, skipping encryption check.");
+            return false;
+        }
+
         if (error.name === "PasswordException") {
-            return true; // File is encrypted/locked
+            return true;
         }
         throw error;
     }
@@ -29,7 +33,7 @@ interface PdfUploaderProps {
     description?: string;
     accept?: string;
     multiple?: boolean;
-    bypassEncryptionCheck?: boolean; // Optional flag to completely skip interception
+    bypassEncryptionCheck?: boolean;
 }
 
 export default function PdfUploader({

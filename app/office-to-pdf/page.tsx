@@ -40,13 +40,11 @@ export default function OfficeToPdfPage() {
             const formData = new FormData();
             formData.append("file", targetFile);
 
-            // 1. Compile the file into a PDF stream block via Axios client tracking
             const pdfBlob = await uploadAndDownloadFile("/api/conversion/office-to-pdf", formData, (progress) => {
                 setUploadProgress(progress);
             });
             setFinalBlob(pdfBlob);
 
-            // 2. Pass resulting stream onto page rasterizer to pull down Page 1 snapshot image
             const previewFormData = new FormData();
             previewFormData.append("file", new File([pdfBlob], "office_snap.pdf", { type: "application/pdf" }));
 
@@ -89,7 +87,6 @@ export default function OfficeToPdfPage() {
             <div className="mx-auto max-w-7xl px-4 py-8">
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
 
-                    {/* LEFT COLUMN: Uploader dropzone staging center (5 cols) */}
                     <div className="lg:col-span-5 space-y-6 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-6 shadow-lg">
                         <h2 className="text-xs font-bold uppercase tracking-wider text-[color:var(--muted)]">1. Stage Document</h2>
                         <PdfUploader onFilesAccepted={onDrop} title="Upload Office Asset" description=".docx, .xlsx, .pptx files" multiple={false} accept=".docx,.doc,.xlsx,.xls,.pptx,.ppt" />
@@ -105,7 +102,6 @@ export default function OfficeToPdfPage() {
                                     </div>
                                 )}
 
-                                {/* Progress bar metrics row */}
                                 {isPreviewLoading && uploadProgress > 0 && (
                                     <div className="space-y-1.5">
                                         <div className="flex justify-between text-[10px] uppercase tracking-wider font-bold text-[color:var(--muted)]">
@@ -123,7 +119,6 @@ export default function OfficeToPdfPage() {
                         )}
                     </div>
 
-                    {/* RIGHT COLUMN: Instant Portrait Sheet Visual Deck (7 cols) */}
                     <div className="lg:col-span-7 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-6 shadow-lg space-y-4">
                         <h2 className="text-sm font-bold uppercase tracking-wider text-[color:var(--muted)] flex items-center gap-2">
                             <Eye size={16} />

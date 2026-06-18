@@ -17,6 +17,12 @@ export default function Footer() {
                         <p className="text-xs leading-relaxed text-muted font-medium">
                             Files are processed inside secure, isolated execution environments. All structural data payloads are permanently wiped from sandbox tracks automatically immediately upon download completion.
                         </p>
+                        <Link
+                            href="/privacy"
+                            className="text-xs text-[color:var(--muted)] hover:text-indigo-500 transition-colors font-medium"
+                        >
+                            Privacy Policy
+                        </Link>
                     </div>
 
                     <div>
@@ -72,6 +78,7 @@ export default function Footer() {
                             <span className="flex items-center gap-1.5">No Costs or Licensing</span>
                             <span className="flex items-center gap-1.5">Isolated Security Run</span>
                             <span className="flex items-center gap-1.5">Privacy Compliant Proxy</span>
+
                             <Link
                                 href="/about"
                                 className="mt-2 hover:text-indigo-500 transition-colors text-[var(--foreground)] font-bold uppercase tracking-wide text-[10px]"
