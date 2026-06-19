@@ -11,6 +11,7 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import { notify } from "@/lib/notify";
+import {useAuth} from "@/context/AuthContext";
 
 interface OfficeToPdfConverterProps {
     sourceType: "word" | "excel" | "powerpoint";
@@ -27,6 +28,8 @@ export default function OfficeToPdfConverter({
                                                  description,
                                                  icon
                                              }: OfficeToPdfConverterProps) {
+    const { requireAuth } = useAuth();
+
     const [file, setFile] = useState<File | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isPreviewLoading, setIsPreviewLoading] = useState(false);
@@ -52,7 +55,6 @@ export default function OfficeToPdfConverter({
             const formData = new FormData();
             formData.append("file", targetFile);
 
-            // API endpoint that generates a quick render stream of page 1
             const responseBlob = await uploadAndDownloadFile("/api/conversion/preview/page", formData);
             const blobUrl = URL.createObjectURL(responseBlob);
             setPreviewUrl(blobUrl);
@@ -64,47 +66,48 @@ export default function OfficeToPdfConverter({
     };
 
     const handleConversion = async () => {
-        if (!file) return;
+        requireAuth(async () => {
 
-        try {
-            setIsProcessing(true);
-            setSuccess(false);
-            setUploadProgress(10);
+            if (!file) return;
 
-            const formData = new FormData();
-            formData.append("file", file);
+            try {
+                setIsProcessing(true);
+                setSuccess(false);
+                setUploadProgress(10);
 
-            // Fake structural upload progress intervals
-            const progressTimer = setInterval(() => {
-                setUploadProgress((prev) => (prev < 85 ? prev + 15 : prev));
-            }, 150);
+                const formData = new FormData();
+                formData.append("file", file);
 
-            const apiEndpoint = `/api/conversion/${sourceType}-to-pdf`;
-            const responseBlob = await uploadAndDownloadFile(apiEndpoint, formData);
+                const progressTimer = setInterval(() => {
+                    setUploadProgress((prev) => (prev < 85 ? prev + 15 : prev));
+                }, 150);
 
-            clearInterval(progressTimer);
-            setUploadProgress(100);
+                const apiEndpoint = `/api/conversion/${sourceType}-to-pdf`;
+                const responseBlob = await uploadAndDownloadFile(apiEndpoint, formData);
 
-            setFinalBlob(responseBlob);
-            setSuccess(true);
+                clearInterval(progressTimer);
+                setUploadProgress(100);
 
-            // Automatic native file download trigger
-            const downloadUrl = window.URL.createObjectURL(responseBlob);
-            const link = document.createElement("a");
-            link.href = downloadUrl;
-            const baseName = file.name.substring(0, file.name.lastIndexOf("."));
-            link.download = `${baseName}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(downloadUrl);
+                setFinalBlob(responseBlob);
+                setSuccess(true);
 
-        } catch (err) {
-            console.error(err);
-            notify(getFriendlyErrorMessage(err));
-        } finally {
-            setIsProcessing(false);
-        }
+                const downloadUrl = window.URL.createObjectURL(responseBlob);
+                const link = document.createElement("a");
+                link.href = downloadUrl;
+                const baseName = file.name.substring(0, file.name.lastIndexOf("."));
+                link.download = `${baseName}.pdf`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(downloadUrl);
+
+            } catch (err) {
+                console.error(err);
+                notify(getFriendlyErrorMessage(err));
+            } finally {
+                setIsProcessing(false);
+            }
+        });
     };
 
     const clearWorkspace = () => {

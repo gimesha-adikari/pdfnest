@@ -10,8 +10,11 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import { notify } from "@/lib/notify";
+import {useAuth} from "@/context/AuthContext";
 
 export default function OfficeToPdfPage() {
+    const { requireAuth } = useAuth();
+
     const [file, setFile] = useState<File | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isPreviewLoading, setIsPreviewLoading] = useState(false);
@@ -61,19 +64,22 @@ export default function OfficeToPdfPage() {
     };
 
     const handleFinalDownload = () => {
-        if (!finalBlob || !file) return;
-        setIsProcessing(true);
-        const downloadUrl = window.URL.createObjectURL(finalBlob);
-        const link = document.createElement("a");
-        link.href = downloadUrl;
-        const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
-        link.download = `${baseName}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(downloadUrl);
-        setSuccess(true);
-        setIsProcessing(false);
+        requireAuth(async () => {
+
+            if (!finalBlob || !file) return;
+            setIsProcessing(true);
+            const downloadUrl = window.URL.createObjectURL(finalBlob);
+            const link = document.createElement("a");
+            link.href = downloadUrl;
+            const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+            link.download = `${baseName}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
+            setSuccess(true);
+            setIsProcessing(false);
+        });
     };
 
     return (

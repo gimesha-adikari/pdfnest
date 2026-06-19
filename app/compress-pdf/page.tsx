@@ -12,12 +12,15 @@ import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import {notify } from "@/lib/notify"
 import {FileWithPassword} from "@/lib/types"
+import {useAuth} from "@/context/AuthContext";
 
 function formatMB(bytes: number) {
     return (bytes / 1024 / 1024).toFixed(2);
 }
 
 export default function CompressPdfPage() {
+    const { requireAuth } = useAuth();
+
     const [file, setFile] = useState<File | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
@@ -34,40 +37,44 @@ export default function CompressPdfPage() {
     }, [file]);
 
     const handleCompression = async () => {
-        if (!file) return;
+        requireAuth(async () => {
 
-        try {
-            setIsProcessing(true);
-            setSuccess(false);
+            if (!file) return;
 
-            const formData = new FormData();
-            formData.append("file", file);
+            try {
+                setIsProcessing(true);
+                setSuccess(false);
 
-            const typedFile = file as FileWithPassword;
+                const formData = new FormData();
+                formData.append("file", file);
 
-            if (typedFile.originalPassword) {
-                formData.append("file_password", typedFile.originalPassword);
+                const typedFile = file as FileWithPassword;
+
+                if (typedFile.originalPassword) {
+                    formData.append("file_password", typedFile.originalPassword);
+                }
+
+                const responseBlob = await uploadAndDownloadFile("/api/optimize/compress", formData);
+
+                const downloadUrl = window.URL.createObjectURL(responseBlob);
+                const link = document.createElement("a");
+                link.href = downloadUrl;
+                link.download = `optimized_${file.name}`;
+                document.body.appendChild(link);
+                link.click();
+
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(downloadUrl);
+
+                setSuccess(true);
+            } catch (err) {
+                console.error(err);
+                notify(getFriendlyErrorMessage(err));
+            } finally {
+                setIsProcessing(false);
             }
 
-            const responseBlob = await uploadAndDownloadFile("/api/optimize/compress", formData);
-
-            const downloadUrl = window.URL.createObjectURL(responseBlob);
-            const link = document.createElement("a");
-            link.href = downloadUrl;
-            link.download = `optimized_${file.name}`;
-            document.body.appendChild(link);
-            link.click();
-
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(downloadUrl);
-
-            setSuccess(true);
-        } catch (err) {
-            console.error(err);
-            notify(getFriendlyErrorMessage(err));
-        } finally {
-            setIsProcessing(false);
-        }
+        });
     };
 
     return (

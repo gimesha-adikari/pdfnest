@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { FileEdit, Download, Loader2, RefreshCw } from "lucide-react";
+import {useEffect, useRef, useState} from "react";
+import {Download, FileEdit, Loader2, RefreshCw} from "lucide-react";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfUploader from "@/components/pdf/PdfUploader";
-import { notify } from "@/lib/notify";
-import type { PDFDocumentProxy } from "pdfjs-dist";
+import {notify} from "@/lib/notify";
+import type {PDFDocumentProxy} from "pdfjs-dist";
+import {useAuth} from "@/context/AuthContext";
 
 interface LayoutElement {
     text: string;
@@ -28,6 +29,8 @@ interface PageData {
 }
 
 export default function PrecisionEditPdfPage() {
+    const {requireAuth} = useAuth();
+
     const [file, setFile] = useState<File | null>(null);
     const [pages, setPages] = useState<PageData[]>([]);
     const [sourceTracker, setSourceTracker] = useState<string>("");
@@ -37,46 +40,48 @@ export default function PrecisionEditPdfPage() {
     const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
 
     const onDrop = async (acceptedFiles: File[]) => {
-        if (acceptedFiles.length === 0) return;
-        const uploadedFile = acceptedFiles[0];
-        setFile(uploadedFile);
-        setIsExtracting(true);
-        setPages([]);
-        setPdfDocument(null);
+        requireAuth(async () => {
+            if (acceptedFiles.length === 0) return;
+            const uploadedFile = acceptedFiles[0];
+            setFile(uploadedFile);
+            setIsExtracting(true);
+            setPages([]);
+            setPdfDocument(null);
 
-        try {
-            const formData = new FormData();
-            formData.append("file", uploadedFile);
+            try {
+                const formData = new FormData();
+                formData.append("file", uploadedFile);
 
-            const response = await fetch("http://localhost:8080/api/edit/extract", {
-                method: "POST",
-                body: formData,
-            });
+                const response = await fetch("http://localhost:8080/api/edit/extract", {
+                    method: "POST",
+                    body: formData,
+                });
 
-            if (!response.ok) throw new Error("Failed extraction call.");
-            const data = await response.json();
+                if (!response.ok) throw new Error("Failed extraction call.");
+                const data = await response.json();
 
-            if (data.pages) {
-                setPages(data.pages);
-                setSourceTracker(data.source_tracker);
+                if (data.pages) {
+                    setPages(data.pages);
+                    setSourceTracker(data.source_tracker);
 
-                const pdfjsLib = await import("pdfjs-dist");
-                pdfjsLib.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
-                const arrayBuffer = await uploadedFile.arrayBuffer();
-                const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+                    const pdfjsLib = await import("pdfjs-dist");
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
+                    const arrayBuffer = await uploadedFile.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({data: new Uint8Array(arrayBuffer)}).promise;
 
-                setPdfDocument(pdf);
-                notify("Document layout mapped successfully.");
-            } else {
-                throw new Error(data.error || "Malformed response payload.");
+                    setPdfDocument(pdf);
+                    notify("Document layout mapped successfully.");
+                } else {
+                    throw new Error(data.error || "Malformed response payload.");
+                }
+            } catch (e) {
+                console.error(e);
+                notify("Failed to parse structural layout grids.");
+                setFile(null);
+            } finally {
+                setIsExtracting(false);
             }
-        } catch (e) {
-            console.error(e);
-            notify("Failed to parse structural layout grids.");
-            setFile(null);
-        } finally {
-            setIsExtracting(false);
-        }
+        });
     };
 
     const handleInputChange = (pageIdx: number, elementIdx: number, val: string) => {
@@ -88,48 +93,54 @@ export default function PrecisionEditPdfPage() {
     };
 
     const handleCompileSubmit = async () => {
-        if (!file || pages.length === 0) return;
-        setIsCompiling(true);
+        requireAuth(async () => {
 
-        try {
-            const response = await fetch("http://localhost:8080/api/edit/compile", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ pages, source_tracker: sourceTracker }),
-            });
+            if (!file || pages.length === 0) return;
+            setIsCompiling(true);
 
-            if (!response.ok) throw new Error("Compilation rejected.");
+            try {
+                const response = await fetch("http://localhost:8080/api/edit/compile", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({pages, source_tracker: sourceTracker}),
+                });
 
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = `edited_${file.name}`;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
+                if (!response.ok) throw new Error("Compilation rejected.");
 
-            notify("Success! Patched PDF document downloaded.");
-        } catch (e) {
-            console.error(e);
-            notify("Compilation failure occurred.");
-        } finally {
-            setIsCompiling(false);
-        }
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `edited_${file.name}`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+
+                notify("Success! Patched PDF document downloaded.");
+            } catch (e) {
+                console.error(e);
+                notify("Compilation failure occurred.");
+            } finally {
+                setIsCompiling(false);
+            }
+        });
     };
 
     return (
         <PdfToolLayout>
-            <PdfToolHero title="Precision PDF Layout Editor" description="Modify text elements inline while preserving original formatting matrix loops perfectly." />
+            <PdfToolHero title="Precision PDF Layout Editor"
+                         description="Modify text elements inline while preserving original formatting matrix loops perfectly."/>
 
             <div className="mt-12 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8 shadow-lg">
                 {!file && !isExtracting && (
-                    <PdfUploader onFilesAccepted={onDrop} title="Upload Document" description="Select a file to parse precise coordinate text overlays" multiple={false} accept=".pdf" />
+                    <PdfUploader onFilesAccepted={onDrop} title="Upload Document"
+                                 description="Select a file to parse precise coordinate text overlays" multiple={false}
+                                 accept=".pdf"/>
                 )}
 
                 {isExtracting && (
                     <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
-                        <Loader2 className="animate-spin mb-4" size={32} />
+                        <Loader2 className="animate-spin mb-4" size={32}/>
                         <p>Deconstructing text lines and tracking alignment grids across all pages...</p>
                     </div>
                 )}
@@ -137,11 +148,20 @@ export default function PrecisionEditPdfPage() {
                 {file && !isExtracting && pdfDocument && (
                     <div className="space-y-6">
                         <div className="flex items-center justify-between border-b pb-4">
-                            <h3 className="font-semibold flex items-center gap-2"><FileEdit size={18} className="text-indigo-500"/> Workspace Canvas: {file.name}</h3>
-                            <button onClick={() => { setFile(null); setPages([]); setPdfDocument(null); }} className="text-sm text-red-500 hover:underline flex items-center gap-1"><RefreshCw size={13} /> Reset Workspace</button>
+                            <h3 className="font-semibold flex items-center gap-2"><FileEdit size={18}
+                                                                                            className="text-indigo-500"/> Workspace
+                                Canvas: {file.name}</h3>
+                            <button onClick={() => {
+                                setFile(null);
+                                setPages([]);
+                                setPdfDocument(null);
+                            }} className="text-sm text-red-500 hover:underline flex items-center gap-1"><RefreshCw
+                                size={13}/> Reset Workspace
+                            </button>
                         </div>
 
-                        <div className="bg-zinc-200 dark:bg-zinc-950 p-8 rounded-2xl flex flex-col items-center gap-12 max-h-[800px] overflow-y-auto shadow-inner border">
+                        <div
+                            className="bg-zinc-200 dark:bg-zinc-950 p-8 rounded-2xl flex flex-col items-center gap-12 max-h-[800px] overflow-y-auto shadow-inner border">
                             {pages.map((page, pageIdx) => (
                                 <PdfPageCanvasItem
                                     key={page.page_num}
@@ -153,8 +173,10 @@ export default function PrecisionEditPdfPage() {
                             ))}
                         </div>
 
-                        <button onClick={handleCompileSubmit} disabled={isCompiling || pages.length === 0} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition">
-                            {isCompiling ? <><Loader2 className="animate-spin" /> Assembling Layers Across All Pages...</> : <><Download /> Export Precision Vector Document Changes</>}
+                        <button onClick={handleCompileSubmit} disabled={isCompiling || pages.length === 0}
+                                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition">
+                            {isCompiling ? <><Loader2 className="animate-spin"/> Assembling Layers Across All
+                                Pages...</> : <><Download/> Export Precision Vector Document Changes</>}
                         </button>
                     </div>
                 )}
@@ -171,7 +193,7 @@ interface PageItemProps {
 }
 
 // FIXED: Corrected 'func' keyword declaration to 'function' to build type scope signatures properly
-function PdfPageCanvasItem({ page, pageIdx, pdfDocument, handleInputChange }: PageItemProps) {
+function PdfPageCanvasItem({page, pageIdx, pdfDocument, handleInputChange}: PageItemProps) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const [isRendered, setIsRendered] = useState(false);
 
@@ -188,7 +210,7 @@ function PdfPageCanvasItem({ page, pageIdx, pdfDocument, handleInputChange }: Pa
                 const context = canvas.getContext("2d");
                 if (!context) return;
 
-                const viewport = pdfPage.getViewport({ scale: 1.0 });
+                const viewport = pdfPage.getViewport({scale: 1.0});
 
                 canvas.width = viewport.width;
                 canvas.height = viewport.height;
@@ -208,7 +230,9 @@ function PdfPageCanvasItem({ page, pageIdx, pdfDocument, handleInputChange }: Pa
         }
 
         drawPageInstance();
-        return () => { isMounted = false; };
+        return () => {
+            isMounted = false;
+        };
     }, [pdfDocument, page.page_num]);
 
     return (
@@ -220,13 +244,15 @@ function PdfPageCanvasItem({ page, pageIdx, pdfDocument, handleInputChange }: Pa
                 marginBottom: "24px"
             }}
         >
-            <span className="absolute -left-20 top-2 text-xs font-bold text-zinc-500 bg-white shadow-sm border border-zinc-200 px-2 py-1 rounded z-20">
+            <span
+                className="absolute -left-20 top-2 text-xs font-bold text-zinc-500 bg-white shadow-sm border border-zinc-200 px-2 py-1 rounded z-20">
                 Page {page.page_num}
             </span>
 
-            <canvas ref={canvasRef} className="absolute top-0 left-0 z-0 rounded" />
+            <canvas ref={canvasRef} className="absolute top-0 left-0 z-0 rounded"/>
 
-            <div className={`absolute top-0 left-0 w-full h-full z-10 pointer-events-none transition-opacity duration-300 ${isRendered ? 'opacity-100' : 'opacity-0'}`}>
+            <div
+                className={`absolute top-0 left-0 w-full h-full z-10 pointer-events-none transition-opacity duration-300 ${isRendered ? 'opacity-100' : 'opacity-0'}`}>
                 {page.elements.map((element: LayoutElement, elementIdx: number) => {
                     const elementBg = element.bg_color || "#ffffff";
                     const elementText = element.text_color || "#000000";

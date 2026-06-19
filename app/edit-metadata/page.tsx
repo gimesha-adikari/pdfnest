@@ -11,8 +11,11 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import { notify } from "@/lib/notify";
+import {useAuth} from "@/context/AuthContext";
 
 export default function MetadataPage() {
+    const { requireAuth } = useAuth();
+
     const [file, setFile] = useState<File | null>(null);
 
     const [title, setTitle] = useState("");
@@ -72,41 +75,44 @@ export default function MetadataPage() {
     };
 
     const handleMetadataUpdate = async () => {
-        if (!file) return;
+        requireAuth(async () => {
 
-        try {
-            setIsProcessing(true);
-            setSuccess(false);
+            if (!file) return;
 
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("title", title.trim());
-            formData.append("author", author.trim());
-            formData.append("subject", subject.trim());
-            formData.append("keywords", keywords.trim());
+            try {
+                setIsProcessing(true);
+                setSuccess(false);
 
-            const responseBlob = await uploadAndDownloadFile(
-                "/api/structure/update-metadata",
-                formData
-            );
+                const formData = new FormData();
+                formData.append("file", file);
+                formData.append("title", title.trim());
+                formData.append("author", author.trim());
+                formData.append("subject", subject.trim());
+                formData.append("keywords", keywords.trim());
 
-            const downloadUrl = window.URL.createObjectURL(responseBlob);
-            const link = document.createElement("a");
-            link.href = downloadUrl;
-            link.download = `${file.name.replace(/\.pdf$/i, "")}-meta.pdf`;
-            document.body.appendChild(link);
-            link.click();
+                const responseBlob = await uploadAndDownloadFile(
+                    "/api/structure/update-metadata",
+                    formData
+                );
 
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(downloadUrl);
+                const downloadUrl = window.URL.createObjectURL(responseBlob);
+                const link = document.createElement("a");
+                link.href = downloadUrl;
+                link.download = `${file.name.replace(/\.pdf$/i, "")}-meta.pdf`;
+                document.body.appendChild(link);
+                link.click();
 
-            setSuccess(true);
-        } catch (err) {
-            console.error(err);
-            notify(getFriendlyErrorMessage(err));
-        } finally {
-            setIsProcessing(false);
-        }
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(downloadUrl);
+
+                setSuccess(true);
+            } catch (err) {
+                console.error(err);
+                notify(getFriendlyErrorMessage(err));
+            } finally {
+                setIsProcessing(false);
+            }
+        });
     };
 
     return (

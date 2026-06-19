@@ -3,19 +3,22 @@
 import { useMemo, useState } from "react";
 import { Unlock, ShieldCheck } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler"; // Integrated global error framework safely
+import { getFriendlyErrorMessage } from "@/lib/errorHandler";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
+import {useAuth} from "@/context/AuthContext";
 
 function formatMB(bytes: number) {
     return (bytes / 1024 / 1024).toFixed(2);
 }
 
 export default function UnlockPdfPage() {
+    const { requireAuth } = useAuth();
+
     const [file, setFile] = useState<File | null>(null);
     const [password, setPassword] = useState("");
     const [isProcessing, setIsProcessing] = useState(false);
@@ -33,37 +36,39 @@ export default function UnlockPdfPage() {
     }, [file]);
 
     const handleUnlockProcessing = async () => {
-        if (!file || !password) return;
+        requireAuth(async () => {
 
-        try {
-            setIsProcessing(true);
-            setSuccess(false);
+            if (!file || !password) return;
 
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("password", password);
+            try {
+                setIsProcessing(true);
+                setSuccess(false);
 
-            const responseBlob = await uploadAndDownloadFile("/api/security/unlock", formData);
+                const formData = new FormData();
+                formData.append("file", file);
+                formData.append("password", password);
 
-            const downloadUrl = window.URL.createObjectURL(responseBlob);
-            const link = document.createElement("a");
-            link.href = downloadUrl;
-            link.download = `${file.name.replace(/\.pdf$/i, "")}-unlocked.pdf`;
-            document.body.appendChild(link);
-            link.click();
+                const responseBlob = await uploadAndDownloadFile("/api/security/unlock", formData);
 
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(downloadUrl);
+                const downloadUrl = window.URL.createObjectURL(responseBlob);
+                const link = document.createElement("a");
+                link.href = downloadUrl;
+                link.download = `${file.name.replace(/\.pdf$/i, "")}-unlocked.pdf`;
+                document.body.appendChild(link);
+                link.click();
 
-            setSuccess(true);
-            setPassword("");
-        } catch (err) {
-            console.error(err);
-            // OPTIMIZATION: Swapped generic text errors for the uniform structured error decoder
-            alert(getFriendlyErrorMessage(err));
-        } finally {
-            setIsProcessing(false);
-        }
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(downloadUrl);
+
+                setSuccess(true);
+                setPassword("");
+            } catch (err) {
+                console.error(err);
+                alert(getFriendlyErrorMessage(err));
+            } finally {
+                setIsProcessing(false);
+            }
+        });
     };
 
     return (

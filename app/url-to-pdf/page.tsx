@@ -9,8 +9,11 @@ import PdfFeatures from "@/components/pdf/PdfFeatures";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import {notify} from "@/lib/notify";
 import {PdfProgressTracker} from "@/components/pdf/PdfProgressTracker";
+import {useAuth} from "@/context/AuthContext";
 
 export default function UrlToPdfPage() {
+    const { requireAuth } = useAuth();
+
     const [url, setUrl] = useState("");
     const [isProcessing, setIsProcessing] = useState(false);
     const [isPreviewLoading, setIsPreviewLoading] = useState(false);
@@ -25,35 +28,38 @@ export default function UrlToPdfPage() {
     const [margins, setMargins] = useState({top: 0.0, bottom: 0.0, left: 0.0, right: 0.0});
 
     const generateLiveWebPreview = async () => {
-        try {
-            setIsPreviewLoading(true);
-            setUploadProgress(0);
-            setSuccess(false);
-            setTaskId("");
+        requireAuth(async () => {
 
-            const formData = new FormData();
-            formData.append("url", url);
-            formData.append("paperSize", paperSize);
-            formData.append("marginTop", margins.top.toString());
-            formData.append("marginBottom", margins.bottom.toString());
-            formData.append("marginLeft", margins.left.toString());
-            formData.append("marginRight", margins.right.toString());
+            try {
+                setIsPreviewLoading(true);
+                setUploadProgress(0);
+                setSuccess(false);
+                setTaskId("");
 
-            const baseApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-            const response = await fetch(`${baseApiUrl}/api/conversion/html-to-pdf-async`, {
-                method: "POST",
-                body: formData,
-            });
+                const formData = new FormData();
+                formData.append("url", url);
+                formData.append("paperSize", paperSize);
+                formData.append("marginTop", margins.top.toString());
+                formData.append("marginBottom", margins.bottom.toString());
+                formData.append("marginLeft", margins.left.toString());
+                formData.append("marginRight", margins.right.toString());
 
-            if (!response.ok) throw new Error("Could not initialize remote HTML headless layout context instance nodes.");
+                const baseApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+                const response = await fetch(`${baseApiUrl}/api/conversion/html-to-pdf-async`, {
+                    method: "POST",
+                    body: formData,
+                });
 
-            const data = await response.json();
-            setTaskId(data.taskId);
-        } catch (err: any) {
-            console.error(err);
-            notify(err.message || "Could not generate target viewport snapshot preview.");
-            setIsPreviewLoading(false);
-        }
+                if (!response.ok) throw new Error("Could not initialize remote HTML headless layout context instance nodes.");
+
+                const data = await response.json();
+                setTaskId(data.taskId);
+            } catch (err: any) {
+                console.error(err);
+                notify(err.message || "Could not generate target viewport snapshot preview.");
+                setIsPreviewLoading(false);
+            }
+        });
     };
 
     const handleTaskComplete = async (downloadUrl: string) => {

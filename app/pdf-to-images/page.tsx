@@ -11,8 +11,11 @@ import PdfFeatures from "@/components/pdf/PdfFeatures";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
+import {useAuth} from "@/context/AuthContext";
 
 export default function PdfToImagesPage() {
+    const { requireAuth } = useAuth();
+
     const [file, setFile] = useState<File | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
@@ -24,40 +27,43 @@ export default function PdfToImagesPage() {
     };
 
     const handleUniversalConversion = async () => {
-        if (!file) return;
+        requireAuth(async () => {
 
-        try {
-            setIsProcessing(true);
-            setSuccess(false);
+            if (!file) return;
 
-            const formData = new FormData();
-            formData.append("file", file);
+            try {
+                setIsProcessing(true);
+                setSuccess(false);
 
-            const zipDownloadName = `${file.name.replace(/\.pdf$/i, "")}-extracted-pages.zip`;
+                const formData = new FormData();
+                formData.append("file", file);
 
-            if ((file as any).originalPassword){
-                formData.append("file_password", (file as any).originalPassword)
+                const zipDownloadName = `${file.name.replace(/\.pdf$/i, "")}-extracted-pages.zip`;
+
+                if ((file as any).originalPassword) {
+                    formData.append("file_password", (file as any).originalPassword)
+                }
+
+                const responseBlob = await uploadAndDownloadFile("/api/conversion/pdf-to-images", formData);
+
+                const downloadUrl = window.URL.createObjectURL(responseBlob);
+                const link = document.createElement("a");
+                link.href = downloadUrl;
+                link.download = zipDownloadName;
+                document.body.appendChild(link);
+                link.click();
+
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(downloadUrl);
+
+                setSuccess(true);
+            } catch (err) {
+                console.error(err);
+                notify(getFriendlyErrorMessage(err));
+            } finally {
+                setIsProcessing(false);
             }
-
-            const responseBlob = await uploadAndDownloadFile("/api/conversion/pdf-to-images", formData);
-
-            const downloadUrl = window.URL.createObjectURL(responseBlob);
-            const link = document.createElement("a");
-            link.href = downloadUrl;
-            link.download = zipDownloadName;
-            document.body.appendChild(link);
-            link.click();
-
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(downloadUrl);
-
-            setSuccess(true);
-        } catch (err) {
-            console.error(err);
-            notify(getFriendlyErrorMessage(err));
-        } finally {
-            setIsProcessing(false);
-        }
+        });
     };
 
     return (

@@ -5,9 +5,6 @@ export interface BackendError {
     message: string;
 }
 
-/**
- * Safe header reader (works with AxiosHeaders + plain objects)
- */
 function getHeader(headers: unknown, key: string): string {
     if (!headers || typeof headers !== "object") return "";
 
@@ -19,7 +16,6 @@ function getHeader(headers: unknown, key: string): string {
     const lower = h[key.toLowerCase()];
     if (typeof lower === "string") return lower;
 
-    // AxiosHeaders fallback
     const maybeGet = (headers as { get?: (k: string) => unknown }).get;
     if (typeof maybeGet === "function") {
         const val = maybeGet.call(headers, key);
@@ -40,6 +36,10 @@ async function handleAxiosError(error: unknown): Promise<never> {
         throw new Error(error.message || "Network transport failure.");
     }
 
+    if (response.status === 429) {
+        throw new Error("Daily processing limit reached! Please upgrade to Pro tier to continue.");
+    }
+
     const data = response.data;
 
     if (data instanceof Blob) {
@@ -51,7 +51,6 @@ async function handleAxiosError(error: unknown): Promise<never> {
             throw new Error("Failed to read error response from the server.");
         }
 
-        // 1. Try to parse it as JSON first, without throwing inside the try block
         let parsed: any = null;
         try {
             parsed = JSON.parse(text);
@@ -59,7 +58,6 @@ async function handleAxiosError(error: unknown): Promise<never> {
             // It's not JSON, which is fine!
         }
 
-        // 2. Now evaluate what we got and throw the clean message
         if (parsed && typeof parsed === "object") {
             throw new Error(parsed.message || parsed.error || "Server error occurred.");
         } else {
@@ -67,7 +65,6 @@ async function handleAxiosError(error: unknown): Promise<never> {
         }
     }
 
-    // Standard fallback if the response wasn't a Blob
     try {
         const parsed = typeof data === 'string' ? JSON.parse(data) : data;
         throw new Error(parsed.message || parsed.error || JSON.stringify(parsed));
@@ -76,16 +73,10 @@ async function handleAxiosError(error: unknown): Promise<never> {
     }
 }
 
-/**
- * Base URL resolver
- */
 function getBaseUrl(): string {
     return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 }
 
-/**
- * Main API function: upload → process → optional re-lock → download
- */
 export async function uploadAndDownloadFile(
     endpoint: string,
     formData: FormData,
@@ -97,6 +88,10 @@ export async function uploadAndDownloadFile(
         : `${baseUrl}${endpoint}`;
 
     const fileEntry = formData.get("file");
+
+    if (fileEntry instanceof File && fileEntry.size > 15 * 1024 * 1024) {
+        throw new Error("File payload exceeds maximum platform allowance of 15MB.");
+    }
 
     const passwordToRestore =
         fileEntry instanceof File
@@ -110,6 +105,7 @@ export async function uploadAndDownloadFile(
     try {
         const response = await axios.post(targetUrl, formData, {
             responseType: "blob",
+            withCredentials: true,
             headers: {
                 "Content-Type": "multipart/form-data",
             },
@@ -160,6 +156,7 @@ export async function uploadAndDownloadFile(
                 lockForm,
                 {
                     responseType: "blob",
+                    withCredentials: true, // Maintain session during re-lock
                 }
             );
 
@@ -170,4 +167,29 @@ export async function uploadAndDownloadFile(
     }
 
     return resultBlob;
+}
+
+export async function fetchJson<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
+    const url = `${BASE_URL}${endpoint}`;
+
+    const config: RequestInit = {
+        ...options,
+        credentials: "include",
+        headers: {
+            "Content-Type": "application/json",
+            ...(options.headers || {}),
+        },
+    };
+
+    const response = await fetch(url, config);
+
+    if (!response.ok) {
+        const errPayload = await response.json().catch(() => ({}));
+        throw new Error(errPayload.error || `Network error: ${response.status}`);
+    }
+
+    if (response.status === 204) return {} as T;
+
+    return response.json();
 }

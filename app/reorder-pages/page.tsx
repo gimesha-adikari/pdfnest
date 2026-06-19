@@ -3,7 +3,7 @@
 import {useEffect, useState} from "react";
 import {Layers, Loader2, ShieldCheck} from "lucide-react";
 import {uploadAndDownloadFile} from "@/lib/api";
-import {getFriendlyErrorMessage} from "@/lib/errorHandler"; // Integrated global error framework safely
+import {getFriendlyErrorMessage} from "@/lib/errorHandler";
 import {notify} from "@/lib/notify";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
@@ -14,8 +14,11 @@ import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 
 import PageReorderGrid from "@/components/pdf/PageReorderGrid";
 import {FileWithPassword} from "@/lib/types";
+import {useAuth} from "@/context/AuthContext";
 
 export default function ReorderPagesPage() {
+    const { requireAuth } = useAuth();
+
     const [file, setFile] = useState<File | null>(null);
     const [pageOrder, setPageOrder] = useState<number[]>([]);
     const [thumbnails, setThumbnails] = useState<string[]>([]);
@@ -101,47 +104,47 @@ export default function ReorderPagesPage() {
     };
 
     const handleReorderSubmission = async () => {
-        if (!file || pageOrder.length === 0) return;
+        requireAuth(async () => {
 
-        try {
-            setIsProcessing(true);
-            setSuccess(false);
+            if (!file || pageOrder.length === 0) return;
 
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("sequence", pageOrder.join(","));
+            try {
+                setIsProcessing(true);
+                setSuccess(false);
 
-            const typedFile = file as FileWithPassword;
+                const formData = new FormData();
+                formData.append("file", file);
+                formData.append("sequence", pageOrder.join(","));
 
-            if (typedFile.originalPassword) {
-                formData.append("file_password", typedFile.originalPassword);
+                const typedFile = file as FileWithPassword;
+
+                if (typedFile.originalPassword) {
+                    formData.append("file_password", typedFile.originalPassword);
+                }
+
+                const responseBlob = await uploadAndDownloadFile(
+                    "/api/structure/reorder-pages",
+                    formData
+                );
+
+                const downloadUrl = window.URL.createObjectURL(responseBlob);
+                const link = document.createElement("a");
+                link.href = downloadUrl;
+                link.download = `${file.name.replace(/\.pdf$/i, "")}-reordered.pdf`;
+                document.body.appendChild(link);
+                link.click();
+
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(downloadUrl);
+
+                setSuccess(true);
+            } catch (err) {
+                console.error(err);
+                notify(getFriendlyErrorMessage(err));
+            } finally {
+                setIsProcessing(false);
             }
-
-            const responseBlob = await uploadAndDownloadFile(
-                "/api/structure/reorder-pages",
-                formData
-            );
-
-            // OPTIMIZATION: Enforced robust synchronous browser local file streaming trigger sequence
-            const downloadUrl = window.URL.createObjectURL(responseBlob);
-            const link = document.createElement("a");
-            link.href = downloadUrl;
-            link.download = `${file.name.replace(/\.pdf$/i, "")}-reordered.pdf`;
-            document.body.appendChild(link);
-            link.click();
-
-            // Clean up browser hardware pointers immediately
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(downloadUrl);
-
-            setSuccess(true);
-        } catch (err) {
-            console.error(err);
-            // OPTIMIZATION: Mapped catch states directly to the uniform global JSON error decoder
-            notify(getFriendlyErrorMessage(err));
-        } finally {
-            setIsProcessing(false);
-        }
+        });
     };
 
     return (

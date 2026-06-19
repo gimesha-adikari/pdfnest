@@ -12,6 +12,7 @@ import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import { notify } from "@/lib/notify";
 import { FileWithPassword } from "@/lib/types";
+import {useAuth} from "@/context/AuthContext";
 
 interface OfficeConverterProps {
     targetFormat: "docx" | "xlsx" | "pptx";
@@ -25,6 +26,8 @@ function formatMB(bytes: number) {
 }
 
 export default function OfficeConverter({ targetFormat, title, description, icon }: OfficeConverterProps) {
+    const { requireAuth } = useAuth();
+
     const [file, setFile] = useState<File | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
@@ -52,41 +55,44 @@ export default function OfficeConverter({ targetFormat, title, description, icon
     }, [targetFormat]);
 
     const handleConversion = async () => {
-        if (!file) return;
+        requireAuth(async () => {
 
-        try {
-            setIsProcessing(true);
-            setSuccess(false);
+            if (!file) return;
 
-            const formData = new FormData();
-            formData.append("file", file);
+            try {
+                setIsProcessing(true);
+                setSuccess(false);
 
-            const typedFile = file as FileWithPassword;
-            if (typedFile.originalPassword) {
-                formData.append("file_password", typedFile.originalPassword);
+                const formData = new FormData();
+                formData.append("file", file);
+
+                const typedFile = file as FileWithPassword;
+                if (typedFile.originalPassword) {
+                    formData.append("file_password", typedFile.originalPassword);
+                }
+
+                const responseBlob = await uploadAndDownloadFile(apiEndpoint, formData);
+
+                const downloadUrl = window.URL.createObjectURL(responseBlob);
+                const link = document.createElement("a");
+                link.href = downloadUrl;
+
+                const baseName = file.name.replace(/\.pdf$/i, "");
+                link.download = `${baseName}.${targetFormat}`;
+                document.body.appendChild(link);
+                link.click();
+
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(downloadUrl);
+
+                setSuccess(true);
+            } catch (err) {
+                console.error(err);
+                notify(getFriendlyErrorMessage(err));
+            } finally {
+                setIsProcessing(false);
             }
-
-            const responseBlob = await uploadAndDownloadFile(apiEndpoint, formData);
-
-            const downloadUrl = window.URL.createObjectURL(responseBlob);
-            const link = document.createElement("a");
-            link.href = downloadUrl;
-
-            const baseName = file.name.replace(/\.pdf$/i, "");
-            link.download = `${baseName}.${targetFormat}`;
-            document.body.appendChild(link);
-            link.click();
-
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(downloadUrl);
-
-            setSuccess(true);
-        } catch (err) {
-            console.error(err);
-            notify(getFriendlyErrorMessage(err));
-        } finally {
-            setIsProcessing(false);
-        }
+        });
     };
 
     return (

@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { RotateCw, ShieldCheck, Loader2, FileText } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler"; // Integrated global error framework safely
+import { getFriendlyErrorMessage } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
@@ -11,12 +11,15 @@ import PdfFeatures from "@/components/pdf/PdfFeatures";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
+import {useAuth} from "@/context/AuthContext";
 
 function formatMB(bytes: number) {
     return (bytes / 1024 / 1024).toFixed(2);
 }
 
 export default function RotatePdfPage() {
+    const { requireAuth } = useAuth();
+
     const [file, setFile] = useState<File | null>(null);
     const [pageCount, setPageCount] = useState<number>(0);
     const [thumbnails, setThumbnails] = useState<string[]>([]);
@@ -49,7 +52,6 @@ export default function RotatePdfPage() {
                     setThumbnails([...loadedThumbnails]);
                 }
 
-                // OPTIMIZATION: Flush canvas context from browser frame buffers to prevent layout stutters
                 canvas.width = 0;
                 canvas.height = 0;
                 canvas.remove();
@@ -124,49 +126,52 @@ export default function RotatePdfPage() {
     };
 
     const handleRotateProcessing = async () => {
-        if (!file) return;
+        requireAuth(async () => {
 
-        try {
-            setIsProcessing(true);
-            setSuccess(false);
+            if (!file) return;
 
-            const groupedRotations: Record<string, number> = {};
-            Object.entries(pageRotations).forEach(([pageStr, degrees]) => {
-                if (degrees > 0) {
-                    if (!groupedRotations[pageStr]) {
-                        groupedRotations[pageStr] = degrees;
+            try {
+                setIsProcessing(true);
+                setSuccess(false);
+
+                const groupedRotations: Record<string, number> = {};
+                Object.entries(pageRotations).forEach(([pageStr, degrees]) => {
+                    if (degrees > 0) {
+                        if (!groupedRotations[pageStr]) {
+                            groupedRotations[pageStr] = degrees;
+                        }
                     }
+                });
+
+                const formData = new FormData();
+                formData.append("file", file);
+                formData.append("rotations", JSON.stringify(groupedRotations));
+
+                if ((file as any).originalPassword) {
+                    formData.append("file_password", (file as any).originalPassword)
                 }
-            });
 
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("rotations", JSON.stringify(groupedRotations));
+                const responseBlob = await uploadAndDownloadFile("/api/structure/rotate", formData);
 
-            if ((file as any).originalPassword){
-                formData.append("file_password", (file as any).originalPassword)
+                const downloadUrl = window.URL.createObjectURL(responseBlob);
+                const link = document.createElement("a");
+                link.href = downloadUrl;
+                link.download = `${file.name.replace(/\.pdf$/i, "")}-rotated.pdf`;
+                document.body.appendChild(link);
+                link.click();
+
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(downloadUrl);
+
+                setSuccess(true);
+                setPageRotations({});
+            } catch (err) {
+                console.error(err);
+                notify(getFriendlyErrorMessage(err));
+            } finally {
+                setIsProcessing(false);
             }
-
-            const responseBlob = await uploadAndDownloadFile("/api/structure/rotate", formData);
-
-            const downloadUrl = window.URL.createObjectURL(responseBlob);
-            const link = document.createElement("a");
-            link.href = downloadUrl;
-            link.download = `${file.name.replace(/\.pdf$/i, "")}-rotated.pdf`;
-            document.body.appendChild(link);
-            link.click();
-
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(downloadUrl);
-
-            setSuccess(true);
-            setPageRotations({});
-        } catch (err) {
-            console.error(err);
-            notify(getFriendlyErrorMessage(err));
-        } finally {
-            setIsProcessing(false);
-        }
+        });
     };
 
     return (

@@ -37,6 +37,7 @@ import PdfFeatures from "@/components/pdf/PdfFeatures";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
+import {useAuth} from "@/context/AuthContext";
 
 type ActivePanel = "pages" | "watermark" | "merge" | "compress" | "metadata" | "security";
 
@@ -52,6 +53,8 @@ const STYLISTIC_FONTS = [
 ];
 
 export default function VirtualDocumentStudio() {
+    const { requireAuth } = useAuth();
+
     const [activeFile, setActiveFile] = useState<File | null>(null);
     const [presentBlob, setPresentBlob] = useState<Blob | null>(null);
     const [pastBlobs, setPastBlobs] = useState<Blob[]>([]);
@@ -146,7 +149,7 @@ export default function VirtualDocumentStudio() {
         setIsProcessingAction(true);
 
         try {
-            let mutatedBlob = await actionFn(presentBlob);
+            const mutatedBlob = await actionFn(presentBlob);
 
             await updateWorkspaceState(mutatedBlob);
         } catch (err) {
@@ -157,20 +160,23 @@ export default function VirtualDocumentStudio() {
     };
 
     const handleInitialUpload = async (acceptedFiles: File[]) => {
-        if (!acceptedFiles || acceptedFiles.length === 0) return;
-        const targetFile = acceptedFiles[0];
+        requireAuth(async () => {
 
-        try {
-            const initialPages = await scanBlobPageBoundaries(targetFile, "");
-            await initializeWorkspaceWithCredentials(targetFile, "", initialPages);
-        } catch (err: any) {
-            if (err.name === "PasswordException" || err.code === 1 || String(err).includes("password")) {
-                setPendingLockedFile(targetFile);
-                setUploadPromptPassword("");
-            } else {
-                notify("Failed to parse document structure metrics: " + err.message);
+            if (!acceptedFiles || acceptedFiles.length === 0) return;
+            const targetFile = acceptedFiles[0];
+
+            try {
+                const initialPages = await scanBlobPageBoundaries(targetFile, "");
+                await initializeWorkspaceWithCredentials(targetFile, "", initialPages);
+            } catch (err: any) {
+                if (err.name === "PasswordException" || err.code === 1 || String(err).includes("password")) {
+                    setPendingLockedFile(targetFile);
+                    setUploadPromptPassword("");
+                } else {
+                    notify("Failed to parse document structure metrics: " + err.message);
+                }
             }
-        }
+        });
     };
 
     const handleVerifyAndMountLockedFile = async (e: React.FormEvent) => {

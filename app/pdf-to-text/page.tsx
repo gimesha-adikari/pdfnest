@@ -11,8 +11,11 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import { PdfProgressTracker } from "@/components/pdf/PdfProgressTracker";
+import {useAuth} from "@/context/AuthContext";
 
 export default function OcrPage() {
+    const { requireAuth } = useAuth();
+
     const [file, setFile] = useState<File | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
@@ -25,35 +28,37 @@ export default function OcrPage() {
     };
 
     const handleOcrExtraction = async () => {
-        if (!file) return;
+        requireAuth(async () => {
+            if (!file) return;
 
-        try {
-            setIsProcessing(true);
-            setSuccess(false);
-            setTaskId("");
+            try {
+                setIsProcessing(true);
+                setSuccess(false);
+                setTaskId("");
 
-            const formData = new FormData();
-            formData.append("file", file);
+                const formData = new FormData();
+                formData.append("file", file);
 
-            if ((file as any).originalPassword) {
-                formData.append("file_password", (file as any).originalPassword);
+                if ((file as any).originalPassword) {
+                    formData.append("file_password", (file as any).originalPassword);
+                }
+
+                const baseApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+                const response = await fetch(`${baseApiUrl}/api/ocr/extract-text-async`, {
+                    method: "POST",
+                    body: formData,
+                });
+
+                if (!response.ok) throw new Error("Could not initialize extraction tracking subprocess node.");
+
+                const data = await response.json();
+                setTaskId(data.taskId);
+            } catch (err) {
+                console.error(err);
+                notify(getFriendlyErrorMessage(err));
+                setIsProcessing(false);
             }
-
-            const baseApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-            const response = await fetch(`${baseApiUrl}/api/ocr/extract-text-async`, {
-                method: "POST",
-                body: formData,
-            });
-
-            if (!response.ok) throw new Error("Could not initialize extraction tracking subprocess node.");
-
-            const data = await response.json();
-            setTaskId(data.taskId);
-        } catch (err) {
-            console.error(err);
-            notify(getFriendlyErrorMessage(err));
-            setIsProcessing(false);
-        }
+        });
     };
 
     const handleTaskComplete = (downloadUrl: string) => {

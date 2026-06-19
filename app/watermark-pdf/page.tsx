@@ -21,7 +21,8 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
-import PdfUploader from "@/components/pdf/PdfUploader"; // 👈 Integrated the shared universal processor component
+import PdfUploader from "@/components/pdf/PdfUploader";
+import {useAuth} from "@/context/AuthContext"; // 👈 Integrated the shared universal processor component
 
 const STYLISTIC_FONTS = [
     { id: "Helvetica", name: "Sans-Serif Modern (Helvetica)", cssClass: "font-sans font-bold" },
@@ -30,6 +31,8 @@ const STYLISTIC_FONTS = [
 ];
 
 export default function WatermarkPdfPage() {
+    const { requireAuth } = useAuth();
+
     const [file, setFile] = useState<File | null>(null);
     const [watermarkType, setWatermarkType] = useState<"text" | "image">("text");
 
@@ -62,6 +65,7 @@ export default function WatermarkPdfPage() {
 
     useEffect(() => {
         if (!file) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setPdfDocument(null);
             setTotalPages(0);
             setCurrentPage(1);
@@ -135,65 +139,68 @@ export default function WatermarkPdfPage() {
     };
 
     const handleWatermarkProcessing = async () => {
-        if (!file) return;
-        if (watermarkType === "text" && !watermarkText.trim()) return;
-        if (watermarkType === "image" && !imageFile) return;
+        requireAuth(async () => {
 
-        try {
-            setIsProcessing(true);
-            setSuccess(false);
+            if (!file) return;
+            if (watermarkType === "text" && !watermarkText.trim()) return;
+            if (watermarkType === "image" && !imageFile) return;
 
-            let backendPosition = position;
-            if (position === "cc") backendPosition = "c";
-            else if (position === "cl") backendPosition = "l";
-            else if (position === "cr") backendPosition = "r";
+            try {
+                setIsProcessing(true);
+                setSuccess(false);
 
-            let normalizedScale;
-            if (watermarkType == "image") {
-                normalizedScale = (fontSize / 500).toFixed(2);
-            } else {
-                normalizedScale = (fontSize / 40).toFixed(2);
+                let backendPosition = position;
+                if (position === "cc") backendPosition = "c";
+                else if (position === "cl") backendPosition = "l";
+                else if (position === "cr") backendPosition = "r";
+
+                let normalizedScale;
+                if (watermarkType == "image") {
+                    normalizedScale = (fontSize / 500).toFixed(2);
+                } else {
+                    normalizedScale = (fontSize / 40).toFixed(2);
+                }
+                const newRotation = -rotation;
+                console.log(rotation + ":" + newRotation);
+                const description = `font:${fontFamily}, pos:${backendPosition}, scale:${normalizedScale}, rot:${newRotation}, op:${opacity}`;
+
+                const formData = new FormData();
+                formData.append("file", file);
+                formData.append("description", description);
+
+                if (watermarkType === "text") {
+                    formData.append("text", watermarkText.trim());
+                } else if (watermarkType === "image" && imageFile) {
+                    formData.append("watermarkImage", imageFile);
+                }
+
+                if ((file as any).originalPassword) {
+                    formData.append("file_password", (file as any).originalPassword)
+                }
+
+                const responseBlob = await uploadAndDownloadFile(
+                    "/api/structure/watermark",
+                    formData
+                );
+
+                const downloadUrl = window.URL.createObjectURL(responseBlob);
+                const link = document.createElement("a");
+                link.href = downloadUrl;
+                link.download = `${file.name.replace(/\.pdf$/i, "")}-marked.pdf`;
+                document.body.appendChild(link);
+                link.click();
+
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(downloadUrl);
+
+                setSuccess(true);
+            } catch (err) {
+                console.error(err);
+                alert(getFriendlyErrorMessage(err));
+            } finally {
+                setIsProcessing(false);
             }
-            let newRotation = -rotation;
-            console.log(rotation + ":" + newRotation);
-            const description = `font:${fontFamily}, pos:${backendPosition}, scale:${normalizedScale}, rot:${newRotation}, op:${opacity}`;
-
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("description", description);
-
-            if (watermarkType === "text") {
-                formData.append("text", watermarkText.trim());
-            } else if (watermarkType === "image" && imageFile) {
-                formData.append("watermarkImage", imageFile);
-            }
-
-            if ((file as any).originalPassword){
-                formData.append("file_password", (file as any).originalPassword)
-            }
-
-            const responseBlob = await uploadAndDownloadFile(
-                "/api/structure/watermark",
-                formData
-            );
-
-            const downloadUrl = window.URL.createObjectURL(responseBlob);
-            const link = document.createElement("a");
-            link.href = downloadUrl;
-            link.download = `${file.name.replace(/\.pdf$/i, "")}-marked.pdf`;
-            document.body.appendChild(link);
-            link.click();
-
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(downloadUrl);
-
-            setSuccess(true);
-        } catch (err) {
-            console.error(err);
-            alert(getFriendlyErrorMessage(err));
-        } finally {
-            setIsProcessing(false);
-        }
+        });
     };
 
     const fontStyleClass = useMemo(() => {

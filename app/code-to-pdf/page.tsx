@@ -1,9 +1,8 @@
 "use client";
 
-import {useState, useEffect} from "react";
-import {Code, ShieldCheck, Loader2, Eye, Sliders} from "lucide-react";
+import {useEffect, useState} from "react";
+import {Code, Eye, Loader2, ShieldCheck, Sliders} from "lucide-react";
 import {uploadAndDownloadFile} from "@/lib/api";
-import {getFriendlyErrorMessage} from "@/lib/errorHandler";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
@@ -11,8 +10,11 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import {notify} from "@/lib/notify";
+import {useAuth} from "@/context/AuthContext";
 
 export default function CodeToPdfPage() {
+    const {requireAuth} = useAuth();
+
     const [file, setFile] = useState<File | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isPreviewLoading, setIsPreviewLoading] = useState(false);
@@ -35,36 +37,39 @@ export default function CodeToPdfPage() {
     };
 
     const generateLiveCodePreview = async (targetFile: File) => {
-        try {
-            setIsPreviewLoading(true);
-            setUploadProgress(0);
+        requireAuth(async () => {
 
-            const formData = new FormData();
-            formData.append("file", targetFile);
-            formData.append("paperSize", paperSize);
-            formData.append("marginTop", margins.top.toString());
-            formData.append("marginBottom", margins.bottom.toString());
-            formData.append("marginLeft", margins.left.toString());
-            formData.append("marginRight", margins.right.toString());
+            try {
+                setIsPreviewLoading(true);
+                setUploadProgress(0);
 
-            const pdfBlob = await uploadAndDownloadFile("/api/conversion/code-to-pdf", formData, (progress) => {
-                setUploadProgress(progress);
-            });
-            setFinalBlob(pdfBlob);
+                const formData = new FormData();
+                formData.append("file", targetFile);
+                formData.append("paperSize", paperSize);
+                formData.append("marginTop", margins.top.toString());
+                formData.append("marginBottom", margins.bottom.toString());
+                formData.append("marginLeft", margins.left.toString());
+                formData.append("marginRight", margins.right.toString());
 
-            const previewFormData = new FormData();
-            previewFormData.append("file", new File([pdfBlob], "code_snapshot.pdf", {type: "application/pdf"}));
+                const pdfBlob = await uploadAndDownloadFile("/api/conversion/code-to-pdf", formData, (progress) => {
+                    setUploadProgress(progress);
+                });
+                setFinalBlob(pdfBlob);
 
-            const imageBlob = await uploadAndDownloadFile("/api/conversion/preview/page", previewFormData);
+                const previewFormData = new FormData();
+                previewFormData.append("file", new File([pdfBlob], "code_snapshot.pdf", {type: "application/pdf"}));
 
-            if (previewUrl) window.URL.revokeObjectURL(previewUrl);
-            setPreviewUrl(window.URL.createObjectURL(imageBlob));
-        } catch (err) {
-            console.error(err);
-            notify("Could not compute syntax highlight document layout previews.");
-        } finally {
-            setIsPreviewLoading(false);
-        }
+                const imageBlob = await uploadAndDownloadFile("/api/conversion/preview/page", previewFormData);
+
+                if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+                setPreviewUrl(window.URL.createObjectURL(imageBlob));
+            } catch (err) {
+                console.error(err);
+                notify("Could not compute syntax highlight document layout previews.");
+            } finally {
+                setIsPreviewLoading(false);
+            }
+        });
     };
 
     useEffect(() => {
@@ -75,19 +80,21 @@ export default function CodeToPdfPage() {
 
 
     const handleFinalDownload = () => {
-        if (!finalBlob || !file) return;
-        setIsProcessing(true);
-        const downloadUrl = window.URL.createObjectURL(finalBlob);
-        const link = document.createElement("a");
-        link.href = downloadUrl;
-        const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
-        link.download = `${baseName}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(downloadUrl);
-        setSuccess(true);
-        setIsProcessing(false);
+        requireAuth(async () => {
+            if (!finalBlob || !file) return;
+            setIsProcessing(true);
+            const downloadUrl = window.URL.createObjectURL(finalBlob);
+            const link = document.createElement("a");
+            link.href = downloadUrl;
+            const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+            link.download = `${baseName}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
+            setSuccess(true);
+            setIsProcessing(false);
+        });
     };
 
     return (

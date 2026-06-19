@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Lock, ShieldCheck } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler"; // Integrated global error framework safely
+import { getFriendlyErrorMessage } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
@@ -11,12 +11,15 @@ import PdfFeatures from "@/components/pdf/PdfFeatures";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
+import {useAuth} from "@/context/AuthContext";
 
 function formatMB(bytes: number) {
     return (bytes / 1024 / 1024).toFixed(2);
 }
 
 export default function LockPdfPage() {
+    const { requireAuth } = useAuth();
+
     const [file, setFile] = useState<File | null>(null);
     const [password, setPassword] = useState("");
     const [isProcessing, setIsProcessing] = useState(false);
@@ -34,37 +37,39 @@ export default function LockPdfPage() {
     }, [file]);
 
     const handleLockProcessing = async () => {
-        if (!file || !password) return;
+        requireAuth(async () => {
 
-        try {
-            setIsProcessing(true);
-            setSuccess(false);
+            if (!file || !password) return;
 
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("password", password);
+            try {
+                setIsProcessing(true);
+                setSuccess(false);
 
-            const responseBlob = await uploadAndDownloadFile("/api/security/lock", formData);
+                const formData = new FormData();
+                formData.append("file", file);
+                formData.append("password", password);
 
-            const downloadUrl = window.URL.createObjectURL(responseBlob);
-            const link = document.createElement("a");
-            link.href = downloadUrl;
-            link.download = `${file.name.replace(/\.pdf$/i, "")}-locked.pdf`;
-            document.body.appendChild(link);
-            link.click();
+                const responseBlob = await uploadAndDownloadFile("/api/security/lock", formData);
 
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(downloadUrl);
+                const downloadUrl = window.URL.createObjectURL(responseBlob);
+                const link = document.createElement("a");
+                link.href = downloadUrl;
+                link.download = `${file.name.replace(/\.pdf$/i, "")}-locked.pdf`;
+                document.body.appendChild(link);
+                link.click();
 
-            setSuccess(true);
-            setPassword("");
-        } catch (err) {
-            console.error(err);
-            // OPTIMIZATION: Used global error client to parse structured data payloads from the server
-            notify(getFriendlyErrorMessage(err));
-        } finally {
-            setIsProcessing(false);
-        }
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(downloadUrl);
+
+                setSuccess(true);
+                setPassword("");
+            } catch (err) {
+                console.error(err);
+                notify(getFriendlyErrorMessage(err));
+            } finally {
+                setIsProcessing(false);
+            }
+        });
     };
 
     return (

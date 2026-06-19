@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef} from "react";
 import {Hash, ShieldCheck, Loader2, FileText, Move, Languages} from "lucide-react";
 import {uploadAndDownloadFile} from "@/lib/api";
-import {getFriendlyErrorMessage} from "@/lib/errorHandler"; // Kept error decoder isolated safely
+import {getFriendlyErrorMessage} from "@/lib/errorHandler";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
@@ -12,8 +12,8 @@ import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import {RenderParameters} from "pdfjs-dist/types/src/display/api";
 import {FileWithPassword} from "@/lib/types";
-import ToolFAQ from "@/components/SEO/ToolFAQ";
 import {NAV_TOOLS} from "@/lib/toolsData";
+import {useAuth} from "@/context/AuthContext";
 
 function formatMB(bytes: number) {
     return (bytes / 1024 / 1024).toFixed(2);
@@ -26,10 +26,12 @@ const STYLISTIC_FONTS = [
 ];
 
 export default function PageNumbersPage() {
+    const { requireAuth } = useAuth();
+
     const [file, setFile] = useState<File | null>(null);
     const [fontFamily, setFontFamily] = useState<string>("Helvetica");
     const [fontSize, setFontSize] = useState<number>(12);
-    const [position, setPosition] = useState<string>("bc"); // default Bottom-Center
+    const [position, setPosition] = useState<string>("bc");
 
     const [thumbnailSrc, setThumbnailSrc] = useState<string>("");
     const [isRenderingThumbnail, setIsRenderingThumbnail] = useState<boolean>(false);
@@ -104,46 +106,50 @@ export default function PageNumbersPage() {
     }, [file]);
 
     const handleNumberingProcessing = async () => {
-        if (!file) return;
+        requireAuth(async () => {
 
-        setIsProcessing(true);
-        setSuccess(false);
-        setError(null);
+            if (!file) return;
 
-        try {
-            const formData = new FormData();
-            formData.append("file", file);
+            setIsProcessing(true);
+            setSuccess(false);
+            setError(null);
 
-            const normalizedScale = (fontSize / 25).toFixed(2);
-            const formatDescription = `font:${fontFamily}, scale:${normalizedScale} abs, pos:${position}, rot:0`;
-            formData.append("description", formatDescription);
+            try {
+                const formData = new FormData();
+                formData.append("file", file);
 
-            const typedFile = file as FileWithPassword;
+                const normalizedScale = (fontSize / 25).toFixed(2);
+                const formatDescription = `font:${fontFamily}, scale:${normalizedScale} abs, pos:${position}, rot:0`;
+                formData.append("description", formatDescription);
 
-            if (typedFile.originalPassword) {
-                formData.append("file_password", typedFile.originalPassword);
+                const typedFile = file as FileWithPassword;
+
+                if (typedFile.originalPassword) {
+                    formData.append("file_password", typedFile.originalPassword);
+                }
+
+                const responseBlob = await uploadAndDownloadFile("/api/structure/add-page-numbers", formData);
+
+
+                const downloadUrl = window.URL.createObjectURL(responseBlob);
+                const link = document.createElement("a");
+                link.href = downloadUrl;
+                link.download = `numbered_${file.name}`;
+                document.body.appendChild(link);
+                link.click();
+
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(downloadUrl);
+
+                setSuccess(true);
+            } catch (err) {
+                console.error(err);
+                setError(getFriendlyErrorMessage(err));
+            } finally {
+                setIsProcessing(false);
             }
 
-            const responseBlob = await uploadAndDownloadFile("/api/structure/add-page-numbers", formData);
-
-
-            const downloadUrl = window.URL.createObjectURL(responseBlob);
-            const link = document.createElement("a");
-            link.href = downloadUrl;
-            link.download = `numbered_${file.name}`;
-            document.body.appendChild(link);
-            link.click();
-
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(downloadUrl);
-
-            setSuccess(true);
-        } catch (err) {
-            console.error(err);
-            setError(getFriendlyErrorMessage(err));
-        } finally {
-            setIsProcessing(false);
-        }
+        });
     };
 
     const tool =

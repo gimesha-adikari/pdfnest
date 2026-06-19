@@ -11,6 +11,7 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import { notify } from "@/lib/notify";
+import {useAuth} from "@/context/AuthContext";
 
 interface PdfSimpleActionProps {
     title: string;
@@ -25,6 +26,8 @@ interface PdfSimpleActionProps {
 export default function PdfSimpleAction({
                                             title, description, icon, apiEndpoint, actionText, loadingText, successMessage
                                         }: PdfSimpleActionProps) {
+    const { requireAuth } = useAuth();
+
     const [file, setFile] = useState<File | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
@@ -36,35 +39,38 @@ export default function PdfSimpleAction({
     };
 
     const handleProcess = async () => {
-        if (!file) return;
+        requireAuth(async () => {
 
-        try {
-            setIsProcessing(true);
-            setSuccess(false);
+            if (!file) return;
 
-            const formData = new FormData();
-            formData.append("file", file);
+            try {
+                setIsProcessing(true);
+                setSuccess(false);
 
-            const responseBlob = await uploadAndDownloadFile(apiEndpoint, formData);
+                const formData = new FormData();
+                formData.append("file", file);
 
-            const downloadUrl = window.URL.createObjectURL(responseBlob);
-            const link = document.createElement("a");
-            link.href = downloadUrl;
+                const responseBlob = await uploadAndDownloadFile(apiEndpoint, formData);
 
-            const prefix = apiEndpoint.split('/').pop() || "processed";
-            link.download = `${prefix}_${file.name}`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(downloadUrl);
+                const downloadUrl = window.URL.createObjectURL(responseBlob);
+                const link = document.createElement("a");
+                link.href = downloadUrl;
 
-            setSuccess(true);
-        } catch (err) {
-            console.error(err);
-            notify(getFriendlyErrorMessage(err));
-        } finally {
-            setIsProcessing(false);
-        }
+                const prefix = apiEndpoint.split('/').pop() || "processed";
+                link.download = `${prefix}_${file.name}`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(downloadUrl);
+
+                setSuccess(true);
+            } catch (err) {
+                console.error(err);
+                notify(getFriendlyErrorMessage(err));
+            } finally {
+                setIsProcessing(false);
+            }
+        });
     };
 
     return (

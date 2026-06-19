@@ -3,15 +3,18 @@
 import { useState } from "react";
 import { Image as ImageIcon, Loader2, FileImage, ShieldCheck } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler"; // Integrated global error framework safely
+import { getFriendlyErrorMessage } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
+import {useAuth} from "@/context/AuthContext";
 
 export default function ImagesToPdfPage() {
+    const { requireAuth } = useAuth();
+
     const [images, setImages] = useState<File[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
@@ -26,44 +29,43 @@ export default function ImagesToPdfPage() {
     };
 
     const handleCompilePdf = async () => {
-        if (images.length === 0) return;
+        requireAuth(async () => {
 
-        try {
-            setIsProcessing(true);
-            setSuccess(false);
+            if (images.length === 0) return;
 
-            const formData = new FormData();
-            images.forEach((img) => {
-                formData.append("images", img);
-            });
+            try {
+                setIsProcessing(true);
+                setSuccess(false);
 
-            // OPTIMIZATION: Updated routing pattern to target the domain-grouped Conversion path securely
-            const responseBlob = await uploadAndDownloadFile(
-                "/api/conversion/to-pdf",
-                formData
-            );
+                const formData = new FormData();
+                images.forEach((img) => {
+                    formData.append("images", img);
+                });
 
-            // OPTIMIZATION: Enforced robust synchronous browser local file streaming trigger sequence
-            const downloadUrl = window.URL.createObjectURL(responseBlob);
-            const link = document.createElement("a");
-            link.href = downloadUrl;
-            link.download = "compiled-images.pdf";
-            document.body.appendChild(link);
-            link.click();
+                const responseBlob = await uploadAndDownloadFile(
+                    "/api/conversion/to-pdf",
+                    formData
+                );
 
-            // Reclaim resources instantly after download is executed
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(downloadUrl);
+                const downloadUrl = window.URL.createObjectURL(responseBlob);
+                const link = document.createElement("a");
+                link.href = downloadUrl;
+                link.download = "compiled-images.pdf";
+                document.body.appendChild(link);
+                link.click();
 
-            setSuccess(true);
-            setImages([]);
-        } catch (err) {
-            console.error(err);
-            // OPTIMIZATION: Mapped exception states to the unified client error decoder
-            notify(getFriendlyErrorMessage(err));
-        } finally {
-            setIsProcessing(false);
-        }
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(downloadUrl);
+
+                setSuccess(true);
+                setImages([]);
+            } catch (err) {
+                console.error(err);
+                notify(getFriendlyErrorMessage(err));
+            } finally {
+                setIsProcessing(false);
+            }
+        });
     };
 
     return (

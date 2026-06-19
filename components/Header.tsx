@@ -5,9 +5,12 @@ import Image from "next/image";
 import ThemeToggle from "./ThemeToggle";
 import ToolSearch from "./ui/ToolSearch";
 import { NAV_TOOLS } from "@/lib/toolsData";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Zap, LogOut } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 export default function Header() {
+    const { subscription, isAuthenticated, logout } = useAuth();
+
     const editingTools = NAV_TOOLS.filter(
         (tool) => tool.category === "editing"
     );
@@ -111,8 +114,9 @@ export default function Header() {
                             Home
                         </Link>
 
-                        {/* Mega Menu */}
-                        <div className="relative group/menu">
+                        {/* Mega Menu Wrapper */}
+                        {/* CHANGE: Changed group/menu wrapper properties to static placement alignment to calculate against top max-w container instead of button width */}
+                        <div className="static group/menu">
                             <button
                                 className="
                                     flex items-center gap-1
@@ -135,15 +139,17 @@ export default function Header() {
                                 />
                             </button>
 
+                            {/* Dropdown Card Grid Container */}
+                            {/* FIX: Set left/right bounds to 6 (matching max-w padding) and switched translate to absolute full width mapping */}
                             <div
                                 className="
                                     invisible
                                     absolute
-                                    left-1/2
+                                    left-6 right-6
                                     top-full
-                                    mt-3
-                                    w-[900px]
-                                    -translate-x-1/2
+                                    mt-2
+                                    mx-auto
+                                    max-w-7xl
                                     rounded-3xl
                                     border border-[color:var(--border)]
                                     bg-[var(--card)]
@@ -314,7 +320,32 @@ export default function Header() {
                         </Link>
                     </nav>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-4">
+                        {/* Auth & Subscription Status */}
+                        {isAuthenticated && subscription ? (
+                            <div className="flex items-center gap-3">
+                                <div className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm border ${
+                                    subscription.tier === "pro"
+                                        ? "bg-amber-500/10 text-amber-500 border-amber-500/30"
+                                        : "bg-[color:var(--border)] text-[color:var(--muted-foreground)] border-transparent"
+                                }`}>
+                                    <Zap size={14} className={subscription.tier === "pro" ? "animate-pulse" : ""} />
+                                    <span className="uppercase tracking-wider">{subscription.tier} Account</span>
+                                </div>
+                                <button
+                                    onClick={logout}
+                                    className="p-2 rounded-xl text-[color:var(--muted-foreground)] hover:bg-[color:var(--border)]/50 hover:text-[color:var(--foreground)] transition-colors"
+                                    title="Sign Out"
+                                >
+                                    <LogOut size={18} />
+                                </button>
+                            </div>
+                        ) : (
+                            <Link href="/login" className="text-sm font-semibold hover:text-indigo-500 transition-colors">
+                                Sign In
+                            </Link>
+                        )}
+
                         <ThemeToggle />
                     </div>
                 </div>

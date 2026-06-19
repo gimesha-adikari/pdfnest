@@ -11,32 +11,32 @@ import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import SignaturePad from "@/components/pdf/SignaturePad";
 import DraggableSignature from "@/components/pdf/DraggableSignature";
+import {useAuth} from "@/context/AuthContext";
 
-// Define our Stamp structure so we can track multiple signatures across pages
 type Stamp = { id: number; page: number; x: number; y: number; w: number; h: number };
 
 export default function SignPdfPage() {
+    const { requireAuth } = useAuth();
+
     const [file, setFile] = useState<File | null>(null);
     const [signatureBlob, setSignatureBlob] = useState<Blob | null>(null);
     const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
 
-    // Page Navigation State
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1); // Tracks the actual PDF length
     const [pagePreviewUrl, setPagePreviewUrl] = useState<string | null>(null);
     const [isPreviewLoading, setIsPreviewLoading] = useState(false);
     const previewContainerRef = useRef<HTMLDivElement>(null);
 
-    // Track all signatures across all pages
     const [stamps, setStamps] = useState<Stamp[]>([]);
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
 
-    // Convert drawn blob into a usable image URL
     useEffect(() => {
         if (signatureBlob) {
             const url = URL.createObjectURL(signatureBlob);
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setSignatureUrl(url);
             return () => URL.revokeObjectURL(url);
         } else {
@@ -45,7 +45,6 @@ export default function SignPdfPage() {
         }
     }, [signatureBlob]);
 
-    // Fetch a new preview image whenever the page number changes
     const fetchPreview = async (targetFile: File, pageNum: number) => {
         try {
             setIsPreviewLoading(true);
@@ -71,7 +70,6 @@ export default function SignPdfPage() {
         setStamps([]);
         setSuccess(false);
 
-        // Instantly calculate total pages using pdfjs
         try {
             const pdfjs = await import("pdfjs-dist");
             pdfjs.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
@@ -80,14 +78,13 @@ export default function SignPdfPage() {
             setTotalPages(pdfDoc.numPages);
         } catch (err) {
             console.warn("Could not read PDF page count", err);
-            setTotalPages(999); // Fallback so the user can still navigate if the parser fails
+            setTotalPages(999);
         }
 
         await fetchPreview(selectedFile, 1);
     };
 
     const handlePageChange = async (newPage: number) => {
-        // Prevent navigating past boundaries
         if (newPage < 1 || newPage > totalPages || !file) return;
         setCurrentPage(newPage);
         await fetchPreview(file, newPage);
@@ -108,59 +105,60 @@ export default function SignPdfPage() {
     };
 
     const handleSignDocument = async () => {
-        if (!file || !signatureBlob || stamps.length === 0) {
-            notify("Please place at least one signature on the document.");
-            return;
-        }
+        requireAuth(async () => {
 
-        try {
-            setIsProcessing(true);
-            setSuccess(false);
+            if (!file || !signatureBlob || stamps.length === 0) {
+                notify("Please place at least one signature on the document.");
+                return;
+            }
 
-            const container = previewContainerRef.current;
-            if (!container) throw new Error("Preview container lost");
+            try {
+                setIsProcessing(true);
+                setSuccess(false);
 
-            // Calculate the math for EVERY stamp placed across the document
-            const PDF_WIDTH_POINTS = 595;
-            const scaleFactor = PDF_WIDTH_POINTS / container.clientWidth;
+                const container = previewContainerRef.current;
+                if (!container) throw new Error("Preview container lost");
 
-            const backendStamps = stamps.map(stamp => {
-                const finalX = stamp.x * scaleFactor;
-                const flippedY = container.clientHeight - stamp.y - stamp.h;
-                const finalY = flippedY * scaleFactor;
+                const PDF_WIDTH_POINTS = 595;
+                const scaleFactor = PDF_WIDTH_POINTS / container.clientWidth;
 
-                return {
-                    page: stamp.page,
-                    x: Math.round(finalX),
-                    y: Math.round(finalY)
-                };
-            });
+                const backendStamps = stamps.map(stamp => {
+                    const finalX = stamp.x * scaleFactor;
+                    const flippedY = container.clientHeight - stamp.y - stamp.h;
+                    const finalY = flippedY * scaleFactor;
 
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("signature", new File([signatureBlob], "signature.png", { type: "image/png" }));
-            formData.append("stamps", JSON.stringify(backendStamps)); // Send array to Go
+                    return {
+                        page: stamp.page,
+                        x: Math.round(finalX),
+                        y: Math.round(finalY)
+                    };
+                });
 
-            const responseBlob = await uploadAndDownloadFile("/api/structure/sign", formData);
+                const formData = new FormData();
+                formData.append("file", file);
+                formData.append("signature", new File([signatureBlob], "signature.png", {type: "image/png"}));
+                formData.append("stamps", JSON.stringify(backendStamps)); // Send array to Go
 
-            const downloadUrl = window.URL.createObjectURL(responseBlob);
-            const link = document.createElement("a");
-            link.href = downloadUrl;
-            link.download = `signed_${file.name}`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(downloadUrl);
+                const responseBlob = await uploadAndDownloadFile("/api/structure/sign", formData);
 
-            setSuccess(true);
-        } catch (err: any) {
-            notify(err.message || "Failed to sign document");
-        } finally {
-            setIsProcessing(false);
-        }
+                const downloadUrl = window.URL.createObjectURL(responseBlob);
+                const link = document.createElement("a");
+                link.href = downloadUrl;
+                link.download = `signed_${file.name}`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(downloadUrl);
+
+                setSuccess(true);
+            } catch (err: any) {
+                notify(err.message || "Failed to sign document");
+            } finally {
+                setIsProcessing(false);
+            }
+        });
     };
 
-    // Filter stamps so we only show the ones placed on the CURRENT page in the UI
     const currentPageStamps = stamps.filter(s => s.page === currentPage);
 
     return (
@@ -169,7 +167,6 @@ export default function SignPdfPage() {
 
             <div className="mt-12 max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
 
-                {/* Left Column: Tools */}
                 <div className="lg:col-span-5 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-6 shadow-lg space-y-6">
                     <h2 className="text-sm font-bold uppercase tracking-wider text-[color:var(--muted)]">1. Create Signature</h2>
                     <SignaturePad onSignatureChange={setSignatureBlob} />
@@ -201,10 +198,8 @@ export default function SignPdfPage() {
                     )}
                 </div>
 
-                {/* Right Column: Interactive Document Viewer */}
                 <div className="lg:col-span-7 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-6 shadow-lg min-h-[600px] flex flex-col">
 
-                    {/* Toolbar with Page Controls */}
                     <div className="flex items-center justify-between mb-4 bg-[color:var(--background)] p-2 rounded-xl border border-[color:var(--border)]">
                         <div className="flex items-center gap-2">
                             <button
@@ -248,12 +243,10 @@ export default function SignPdfPage() {
                             </div>
                         )}
 
-                        {/* THE DROPZONE CONTAINER */}
                         {pagePreviewUrl && (
                             <div ref={previewContainerRef} className="relative shadow-2xl border border-neutral-700/50">
                                 <img src={pagePreviewUrl} alt={`Page ${currentPage}`} className="max-w-full max-h-[700px] object-contain pointer-events-none" />
 
-                                {/* Map through ONLY the stamps belonging to the CURRENT page */}
                                 {currentPageStamps.map((stamp) => (
                                     <DraggableSignature
                                         key={stamp.id}

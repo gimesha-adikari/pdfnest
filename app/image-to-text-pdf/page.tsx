@@ -9,6 +9,7 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import { PdfProgressTracker } from "@/components/pdf/PdfProgressTracker";
+import {useAuth} from "@/context/AuthContext";
 
 interface ImageItem {
     id: string;
@@ -17,6 +18,8 @@ interface ImageItem {
 }
 
 export default function ImageToTextPdfPage() {
+    const { requireAuth } = useAuth();
+
     const [images, setImages] = useState<ImageItem[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
@@ -94,33 +97,36 @@ export default function ImageToTextPdfPage() {
     };
 
     const handleConversion = async () => {
-        if (images.length === 0) return;
+        requireAuth(async () => {
 
-        try {
-            setIsProcessing(true);
-            setSuccess(false);
-            setTaskId("");
+            if (images.length === 0) return;
 
-            const formData = new FormData();
-            images.forEach((item) => {
-                formData.append("images", item.file);
-            });
+            try {
+                setIsProcessing(true);
+                setSuccess(false);
+                setTaskId("");
 
-            const baseApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-            const response = await fetch(`${baseApiUrl}/api/ocr/to-text-pdf-async`, {
-                method: "POST",
-                body: formData,
-            });
+                const formData = new FormData();
+                images.forEach((item) => {
+                    formData.append("images", item.file);
+                });
 
-            if (!response.ok) throw new Error("Processing network cluster node failed to queue task data.");
+                const baseApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+                const response = await fetch(`${baseApiUrl}/api/ocr/to-text-pdf-async`, {
+                    method: "POST",
+                    body: formData,
+                });
 
-            const data = await response.json();
-            setTaskId(data.taskId);
-        } catch (err) {
-            console.error(err);
-            notify(getFriendlyErrorMessage(err));
-            setIsProcessing(false);
-        }
+                if (!response.ok) throw new Error("Processing network cluster node failed to queue task data.");
+
+                const data = await response.json();
+                setTaskId(data.taskId);
+            } catch (err) {
+                console.error(err);
+                notify(getFriendlyErrorMessage(err));
+                setIsProcessing(false);
+            }
+        });
     };
 
     const handleTaskComplete = (downloadUrl: string) => {

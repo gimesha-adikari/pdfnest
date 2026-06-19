@@ -13,12 +13,15 @@ import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import { notify } from "@/lib/notify";
 import {PDFDocumentProxy} from "pdfjs-dist";
 import {FileWithPassword} from "@/lib/types";
+import {useAuth} from "@/context/AuthContext";
 
 function formatMB(bytes: number) {
     return (bytes / 1024 / 1024).toFixed(2);
 }
 
 export default function DeletePagesPage() {
+    const { requireAuth } = useAuth();
+
     const [file, setFile] = useState<File | null>(null);
     const [pageCount, setPageCount] = useState<number>(0);
     const [thumbnails, setThumbnails] = useState<string[]>([]);
@@ -106,7 +109,6 @@ export default function DeletePagesPage() {
     }, [file]);
 
     const togglePageDeletion = (pageNum: number, event: React.MouseEvent) => {
-        // Prevent default browser text-highlight overlays when holding down Shift
         if (event.shiftKey) {
             event.preventDefault();
         }
@@ -114,12 +116,10 @@ export default function DeletePagesPage() {
         setPagesToDelete((prev) => {
             const next = new Set(prev);
 
-            // Handle Shift + Click Range Selection
             if (event.shiftKey && lastSelectedIndex !== null) {
                 const start = Math.min(lastSelectedIndex, pageNum);
                 const end = Math.max(lastSelectedIndex, pageNum);
 
-                // Check if the initial anchor point was already selected
                 const shouldSelect = prev.has(lastSelectedIndex);
 
                 for (let i = start; i <= end; i++) {
@@ -132,7 +132,6 @@ export default function DeletePagesPage() {
                 return next;
             }
 
-            // Default: Standard or Command/Control Toggling
             if (next.has(pageNum)) {
                 next.delete(pageNum);
             } else {
@@ -141,7 +140,6 @@ export default function DeletePagesPage() {
             return next;
         });
 
-        // Always update the anchor point unless a shift range calculation just completed
         if (!event.shiftKey) {
             setLastSelectedIndex(pageNum);
         }
@@ -163,47 +161,50 @@ export default function DeletePagesPage() {
     }, [pagesToDelete]);
 
     const handleDeleteProcessing = async () => {
-        if (!file || pagesToDelete.size === 0) return;
-        if (pagesToDelete.size === pageCount) {
-            notify("Cannot remove every single page from the document tree model container.");
-            return;
-        }
+        requireAuth(async () => {
 
-        try {
-            setIsProcessing(true);
-            setSuccess(false);
-
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("pages", compiledPageString);
-
-            const typedFile = file as FileWithPassword;
-
-            if (typedFile.originalPassword) {
-                formData.append("file_password", typedFile.originalPassword);
+            if (!file || pagesToDelete.size === 0) return;
+            if (pagesToDelete.size === pageCount) {
+                notify("Cannot remove every single page from the document tree model container.");
+                return;
             }
 
-            const responseBlob = await uploadAndDownloadFile("/api/structure/delete-pages", formData);
+            try {
+                setIsProcessing(true);
+                setSuccess(false);
 
-            const downloadUrl = window.URL.createObjectURL(responseBlob);
-            const link = document.createElement("a");
-            link.href = downloadUrl;
-            link.download = `pruned_${file.name}`;
-            document.body.appendChild(link);
-            link.click();
+                const formData = new FormData();
+                formData.append("file", file);
+                formData.append("pages", compiledPageString);
 
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(downloadUrl);
+                const typedFile = file as FileWithPassword;
 
-            setSuccess(true);
-            setPagesToDelete(new Set());
-            setLastSelectedIndex(null);
-        } catch (err) {
-            console.error(err);
-            notify(getFriendlyErrorMessage(err));
-        } finally {
-            setIsProcessing(false);
-        }
+                if (typedFile.originalPassword) {
+                    formData.append("file_password", typedFile.originalPassword);
+                }
+
+                const responseBlob = await uploadAndDownloadFile("/api/structure/delete-pages", formData);
+
+                const downloadUrl = window.URL.createObjectURL(responseBlob);
+                const link = document.createElement("a");
+                link.href = downloadUrl;
+                link.download = `pruned_${file.name}`;
+                document.body.appendChild(link);
+                link.click();
+
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(downloadUrl);
+
+                setSuccess(true);
+                setPagesToDelete(new Set());
+                setLastSelectedIndex(null);
+            } catch (err) {
+                console.error(err);
+                notify(getFriendlyErrorMessage(err));
+            } finally {
+                setIsProcessing(false);
+            }
+        });
     };
 
     return (

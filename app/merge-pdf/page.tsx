@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Loader2, FileText } from "lucide-react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler"; // Safely mapped your uniform decoder
+import { getFriendlyErrorMessage } from "@/lib/errorHandler";
 import { uploadAndDownloadFile } from "@/lib/api";
 import { notify } from "@/lib/notify";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
@@ -12,8 +12,11 @@ import PdfFeatures from "@/components/pdf/PdfFeatures";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfUploader from "@/components/pdf/PdfUploader";
+import {useAuth} from "@/context/AuthContext";
 
 export default function MergePdfPage() {
+    const { requireAuth } = useAuth();
+
     const [files, setFiles] = useState<File[]>([]);
     const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
     const [isMerging, setIsMerging] = useState(false);
@@ -127,45 +130,49 @@ export default function MergePdfPage() {
     };
 
     const mergePdfs = async () => {
-        if (files.length < 2) {
-            notify("Please select at least 2 PDF files.");
-            return;
-        }
+        requireAuth(async () => {
 
-        try {
-            setIsMerging(true);
-            const formData = new FormData();
 
-            files.forEach((file, index) => {
-                formData.append("files", file);
+            if (files.length < 2) {
+                notify("Please select at least 2 PDF files.");
+                return;
+            }
 
-                const fileKey = `${file.name}-${file.size}-${file.lastModified}`;
-                const password = fileMeta[fileKey]?.originalPassword;
+            try {
+                setIsMerging(true);
+                const formData = new FormData();
 
-                if (password) {
-                    formData.append(`password_${index}`, password);
-                }
-            });
+                files.forEach((file, index) => {
+                    formData.append("files", file);
 
-            const responseBlob = await uploadAndDownloadFile("/api/structure/merge", formData);
+                    const fileKey = `${file.name}-${file.size}-${file.lastModified}`;
+                    const password = fileMeta[fileKey]?.originalPassword;
 
-            const downloadUrl = window.URL.createObjectURL(responseBlob);
-            const link = document.createElement("a");
-            link.href = downloadUrl;
-            link.download = "merged-document.pdf";
-            document.body.appendChild(link);
-            link.click();
+                    if (password) {
+                        formData.append(`password_${index}`, password);
+                    }
+                });
 
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(downloadUrl);
+                const responseBlob = await uploadAndDownloadFile("/api/structure/merge", formData);
 
-        } catch (error) {
-            console.error(error);
-            // OPTIMIZATION: Decodes JSON exception metrics matching backend structures perfectly
-            notify(`Failed to merge PDFs.\n\n${getFriendlyErrorMessage(error)}`);
-        } finally {
-            setIsMerging(false);
-        }
+                const downloadUrl = window.URL.createObjectURL(responseBlob);
+                const link = document.createElement("a");
+                link.href = downloadUrl;
+                link.download = "merged-document.pdf";
+                document.body.appendChild(link);
+                link.click();
+
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(downloadUrl);
+
+            } catch (error) {
+                console.error(error);
+                // OPTIMIZATION: Decodes JSON exception metrics matching backend structures perfectly
+                notify(`Failed to merge PDFs.\n\n${getFriendlyErrorMessage(error)}`);
+            } finally {
+                setIsMerging(false);
+            }
+        });
     };
 
     const totalSizeMB = (files.reduce((sum, file) => sum + file.size, 0) / 1024 / 1024).toFixed(2);

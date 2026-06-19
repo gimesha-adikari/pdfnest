@@ -11,8 +11,11 @@ import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import { notify } from "@/lib/notify";
 import { PdfProgressTracker } from "@/components/pdf/PdfProgressTracker";
+import {useAuth} from "@/context/AuthContext";
 
 export default function MarkdownToPdfPage() {
+    const { requireAuth } = useAuth();
+
     const [file, setFile] = useState<File | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isPreviewLoading, setIsPreviewLoading] = useState(false);
@@ -67,27 +70,31 @@ export default function MarkdownToPdfPage() {
     };
 
     const handleTaskComplete = async (downloadUrl: string) => {
-        try {
-            const baseApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-            const response = await fetch(`${baseApiUrl}${downloadUrl}`);
-            if (!response.ok) throw new Error("Re-download framework pipeline error.");
+        requireAuth(async () => {
 
-            const pdfBlob = await response.blob();
-            setFinalBlob(pdfBlob);
+            try {
+                const baseApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+                const response = await fetch(`${baseApiUrl}${downloadUrl}`);
+                if (!response.ok) throw new Error("Re-download framework pipeline error.");
 
-            const previewFormData = new FormData();
-            previewFormData.append("file", new File([pdfBlob], "intermed.pdf", { type: "application/pdf" }));
+                const pdfBlob = await response.blob();
+                setFinalBlob(pdfBlob);
 
-            const imageBlob = await uploadAndDownloadFile("/api/conversion/preview/page", previewFormData);
+                const previewFormData = new FormData();
+                previewFormData.append("file", new File([pdfBlob], "intermed.pdf", {type: "application/pdf"}));
 
-            if (previewUrl) window.URL.revokeObjectURL(previewUrl);
-            setPreviewUrl(window.URL.createObjectURL(imageBlob));
-        } catch (err) {
-            notify("Failed to collect final compiled asset frames from cluster nodes.");
-        } finally {
-            setIsPreviewLoading(false);
-            setTaskId("");
-        }
+                const imageBlob = await uploadAndDownloadFile("/api/conversion/preview/page", previewFormData);
+
+                if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+                setPreviewUrl(window.URL.createObjectURL(imageBlob));
+            } catch (err) {
+                notify("Failed to collect final compiled asset frames from cluster nodes.");
+            } finally {
+                setIsPreviewLoading(false);
+                setTaskId("");
+            }
+
+        });
     };
 
     useEffect(() => {

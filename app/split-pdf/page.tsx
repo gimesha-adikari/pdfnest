@@ -1,34 +1,37 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Scissors, ShieldCheck, Loader2, FileText, CheckCircle2 } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
-import { notify } from "@/lib/notify";
+import {useMemo, useState} from "react";
+import {CheckCircle2, FileText, Loader2, Scissors, ShieldCheck} from "lucide-react";
+import {uploadAndDownloadFile} from "@/lib/api";
+import {getFriendlyErrorMessage} from "@/lib/errorHandler";
+import {notify} from "@/lib/notify";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
+import {useAuth} from "@/context/AuthContext";
 
 function formatMB(bytes: number) {
     return (bytes / 1024 / 1024).toFixed(2);
 }
 
 export default function SplitPdfPage() {
+    const { requireAuth } = useAuth();
+
     const [file, setFile] = useState<File | null>(null);
     const [pageCount, setPageCount] = useState<number>(0);
     const [thumbnails, setThumbnails] = useState<string[]>([]);
     const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
 
-    // Tracks the last clicked page index to calculate Shift bounds
     const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [isReadingTotal, setIsReadingTotal] = useState(false);
     const [isGeneratingPreviews, setIsGeneratingPreviews] = useState(false);
     const [success, setSuccess] = useState(false);
+
 
     const generateThumbnails = async (pdf: any, totalPages: number) => {
         setIsGeneratingPreviews(true);
@@ -37,7 +40,7 @@ export default function SplitPdfPage() {
         try {
             for (let i = 1; i <= totalPages; i++) {
                 const page = await pdf.getPage(i);
-                const viewport = page.getViewport({ scale: 0.3 });
+                const viewport = page.getViewport({scale: 0.3});
 
                 const canvas = document.createElement("canvas");
                 canvas.width = viewport.width;
@@ -45,7 +48,7 @@ export default function SplitPdfPage() {
                 const ctx = canvas.getContext("2d");
 
                 if (ctx) {
-                    await page.render({ canvasContext: ctx, viewport }).promise;
+                    await page.render({canvasContext: ctx, viewport}).promise;
                     const imgData = canvas.toDataURL("image/jpeg", 0.6);
                     loadedThumbnails.push(imgData);
 
@@ -81,7 +84,7 @@ export default function SplitPdfPage() {
             const arrayBuffer = await uploadedFile.arrayBuffer();
             const typedArray = new Uint8Array(arrayBuffer);
 
-            const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
+            const pdf = await pdfjsLib.getDocument({data: typedArray}).promise;
             const totalPages = pdf.numPages;
             setPageCount(totalPages);
             setIsReadingTotal(false);
@@ -101,7 +104,6 @@ export default function SplitPdfPage() {
     }, [file]);
 
     const togglePageSelection = (pageNum: number, event: React.MouseEvent) => {
-        // Prevent generic paragraph text selection highlighting when holding Shift keys
         if (event.shiftKey) {
             event.preventDefault();
         }
@@ -109,12 +111,10 @@ export default function SplitPdfPage() {
         setSelectedPages((prev) => {
             const next = new Set(prev);
 
-            // Handle Shift Click range calculations
             if (event.shiftKey && lastSelectedIndex !== null) {
                 const start = Math.min(lastSelectedIndex, pageNum);
                 const end = Math.max(lastSelectedIndex, pageNum);
 
-                // Determine whether to add or remove the range based on the anchor's state
                 const shouldSelectRange = prev.has(lastSelectedIndex);
 
                 for (let i = start; i <= end; i++) {
@@ -127,7 +127,6 @@ export default function SplitPdfPage() {
                 return next;
             }
 
-            // Fallback default context toggling loop
             if (next.has(pageNum)) {
                 next.delete(pageNum);
             } else {
@@ -136,7 +135,6 @@ export default function SplitPdfPage() {
             return next;
         });
 
-        // Retain selection anchor unless a range expansion sequence occurred
         if (!event.shiftKey) {
             setLastSelectedIndex(pageNum);
         }
@@ -158,41 +156,43 @@ export default function SplitPdfPage() {
     }, [selectedPages]);
 
     const handleSplitProcessing = async () => {
-        if (!file || selectedPages.size === 0) return;
+        requireAuth(async () => {
+            if (!file || selectedPages.size === 0) return;
 
-        try {
-            setIsProcessing(true);
-            setSuccess(false);
+            try {
+                setIsProcessing(true);
+                setSuccess(false);
 
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("pages", compiledPageString);
+                const formData = new FormData();
+                formData.append("file", file);
+                formData.append("pages", compiledPageString);
 
-            if ((file as any).originalPassword){
-                formData.append("file_password", (file as any).originalPassword)
+                if ((file as any).originalPassword) {
+                    formData.append("file_password", (file as any).originalPassword)
+                }
+
+                const responseBlob = await uploadAndDownloadFile("/api/structure/split", formData);
+
+                const downloadUrl = window.URL.createObjectURL(responseBlob);
+                const link = document.createElement("a");
+                link.href = downloadUrl;
+                link.download = `${file.name.replace(/\.pdf$/i, "")}-extracted.pdf`;
+                document.body.appendChild(link);
+                link.click();
+
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(downloadUrl);
+
+                setSuccess(true);
+                setSelectedPages(new Set());
+                setLastSelectedIndex(null);
+            } catch (err) {
+                console.error(err);
+                notify(getFriendlyErrorMessage(err));
+            } finally {
+                setIsProcessing(false);
             }
-
-            const responseBlob = await uploadAndDownloadFile("/api/structure/split", formData);
-
-            const downloadUrl = window.URL.createObjectURL(responseBlob);
-            const link = document.createElement("a");
-            link.href = downloadUrl;
-            link.download = `${file.name.replace(/\.pdf$/i, "")}-extracted.pdf`;
-            document.body.appendChild(link);
-            link.click();
-
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(downloadUrl);
-
-            setSuccess(true);
-            setSelectedPages(new Set());
-            setLastSelectedIndex(null);
-        } catch (err) {
-            console.error(err);
-            notify(getFriendlyErrorMessage(err));
-        } finally {
-            setIsProcessing(false);
-        }
+        });
     };
 
     return (
@@ -213,31 +213,39 @@ export default function SplitPdfPage() {
 
                 {file && (
                     <div className="mt-8 space-y-6">
-                        <PdfFileInfo file={file} />
+                        <PdfFileInfo file={file}/>
 
-                        <div className="rounded-2xl border border-[color:var(--border)] p-5 bg-[color:var(--background)]/50">
+                        <div
+                            className="rounded-2xl border border-[color:var(--border)] p-5 bg-[color:var(--background)]/50">
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-lg font-semibold flex items-center gap-2">
-                                    <Scissors size={18} className="text-indigo-500" />
+                                    <Scissors size={18} className="text-indigo-500"/>
                                     Visual Page Selector
                                 </h3>
                                 {pageCount > 0 && (
                                     <div className="flex gap-3 text-sm">
-                                        <button onClick={selectAll} className="text-indigo-500 hover:text-indigo-600 font-medium transition">Select All</button>
-                                        <button onClick={clearSelection} className="text-[color:var(--muted)] hover:text-red-500 font-medium transition">Clear</button>
+                                        <button onClick={selectAll}
+                                                className="text-indigo-500 hover:text-indigo-600 font-medium transition">Select
+                                            All
+                                        </button>
+                                        <button onClick={clearSelection}
+                                                className="text-[color:var(--muted)] hover:text-red-500 font-medium transition">Clear
+                                        </button>
                                     </div>
                                 )}
                             </div>
 
                             {isReadingTotal ? (
-                                <div className="flex flex-col justify-center items-center py-12 text-[color:var(--muted)]">
-                                    <Loader2 size={32} className="animate-spin mb-4 text-indigo-500" />
+                                <div
+                                    className="flex flex-col justify-center items-center py-12 text-[color:var(--muted)]">
+                                    <Loader2 size={32} className="animate-spin mb-4 text-indigo-500"/>
                                     <p>Scanning document layout matrices...</p>
                                 </div>
                             ) : (
                                 <>
-                                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4 max-h-[500px] overflow-y-auto p-2">
-                                        {Array.from({ length: pageCount }).map((_, idx) => {
+                                    <div
+                                        className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4 max-h-[500px] overflow-y-auto p-2">
+                                        {Array.from({length: pageCount}).map((_, idx) => {
                                             const pageNum = idx + 1;
                                             const isSelected = selectedPages.has(pageNum);
                                             const thumbnailSrc = thumbnails[idx];
@@ -261,19 +269,23 @@ export default function SplitPdfPage() {
                                                             className={`w-full h-full object-cover rounded-md transition-opacity pointer-events-none ${isSelected ? 'opacity-100' : 'opacity-80 group-hover:opacity-100'}`}
                                                         />
                                                     ) : (
-                                                        <div className="flex flex-col items-center justify-center w-full h-full text-[color:var(--muted)] opacity-50">
-                                                            <FileText size={24} className="mb-2" />
-                                                            <Loader2 size={14} className="animate-spin mt-1" />
+                                                        <div
+                                                            className="flex flex-col items-center justify-center w-full h-full text-[color:var(--muted)] opacity-50">
+                                                            <FileText size={24} className="mb-2"/>
+                                                            <Loader2 size={14} className="animate-spin mt-1"/>
                                                         </div>
                                                     )}
 
-                                                    <div className="absolute bottom-0 w-full py-1 text-center text-xs font-bold backdrop-blur-md bg-black/40 text-white">
+                                                    <div
+                                                        className="absolute bottom-0 w-full py-1 text-center text-xs font-bold backdrop-blur-md bg-black/40 text-white">
                                                         Pg {pageNum}
                                                     </div>
 
                                                     {isSelected && (
-                                                        <div className="absolute top-2 right-2 bg-indigo-500 rounded-full text-white shadow-lg scale-110 z-101">
-                                                            <CheckCircle2 size={20} className="fill-indigo-500 stroke-white" />
+                                                        <div
+                                                            className="absolute top-2 right-2 bg-indigo-500 rounded-full text-white shadow-lg scale-110 z-101">
+                                                            <CheckCircle2 size={20}
+                                                                          className="fill-indigo-500 stroke-white"/>
                                                         </div>
                                                     )}
                                                 </button>
@@ -281,7 +293,8 @@ export default function SplitPdfPage() {
                                         })}
                                     </div>
 
-                                    <div className="mt-6 flex items-center justify-between border-t border-[color:var(--border)] pt-4">
+                                    <div
+                                        className="mt-6 flex items-center justify-between border-t border-[color:var(--border)] pt-4">
                                         <p className="text-sm text-[color:var(--muted)]">Target Extraction Array:</p>
                                         <p className="font-mono text-sm font-semibold text-indigo-500 bg-indigo-500/10 px-3 py-1 rounded-lg">
                                             {compiledPageString || "No pages selected"}
@@ -303,8 +316,9 @@ export default function SplitPdfPage() {
                         </div>
 
                         {success && (
-                            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5 text-emerald-900 dark:text-emerald-200 flex items-start gap-3">
-                                <ShieldCheck className="text-emerald-500 mt-0.5 shrink-0" size={18} />
+                            <div
+                                className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5 text-emerald-900 dark:text-emerald-200 flex items-start gap-3">
+                                <ShieldCheck className="text-emerald-500 mt-0.5 shrink-0" size={18}/>
                                 <div>
                                     <p className="text-sm font-semibold">Document sub-page split successful!</p>
                                     <p className="text-xs mt-1 text-emerald-800/80 dark:text-emerald-200/70">
@@ -325,7 +339,7 @@ export default function SplitPdfPage() {
                 )}
             </div>
 
-            <PdfFeatures />
+            <PdfFeatures/>
         </PdfToolLayout>
     );
 }

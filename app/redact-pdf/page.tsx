@@ -10,11 +10,11 @@ import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import { notify } from "@/lib/notify";
 import type { PDFDocumentProxy } from "pdfjs-dist";
+import {useAuth} from "@/context/AuthContext";
 
 interface DrawnBox {
     id: string;
     page: number;
-    // Relative percentages (0 to 1) so it works independent of screen sizes
     x: number;
     y: number;
     width: number;
@@ -22,6 +22,8 @@ interface DrawnBox {
 }
 
 export default function RedactPdfPage() {
+    const { requireAuth } = useAuth();
+
     const [file, setFile] = useState<File | null>(null);
     const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy|null>(null);
     const [totalPages, setTotalPages] = useState<number>(0);
@@ -64,7 +66,6 @@ export default function RedactPdfPage() {
         }
     };
 
-    // Render loop helper
     const drawPageContents = async (pageNum: number) => {
         if (!pdfDoc) return;
         try {
@@ -134,7 +135,6 @@ export default function RedactPdfPage() {
         }
     }, [pdfDoc, totalPages, file, drawnBoxes, currentBox, drawPageContents]);
 
-    // Mouse Event Handlers for Area Selection
     const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>, pageNum: number) => {
         if (mode !== "draw") return;
         const canvas = canvasRefs.current[pageNum - 1];
@@ -184,33 +184,35 @@ export default function RedactPdfPage() {
     };
 
     const handleRedactionSubmit = async () => {
-        if (!file) return;
-        setIsProcessing(true);
+        requireAuth(async () => {
 
-        try {
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("keywords", keywords.trim());
-            // Send the coordinates data down as a stringified JSON array
-            formData.append("boxes", JSON.stringify(drawnBoxes));
+            if (!file) return;
+            setIsProcessing(true);
 
-            const responseBlob = await uploadAndDownloadFile("/api/security/redact-text", formData);
-            const downloadUrl = window.URL.createObjectURL(responseBlob);
+            try {
+                const formData = new FormData();
+                formData.append("file", file);
+                formData.append("keywords", keywords.trim());
+                formData.append("boxes", JSON.stringify(drawnBoxes));
 
-            const link = document.createElement("a");
-            link.href = downloadUrl;
-            link.download = `redacted_${file.name}`;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
+                const responseBlob = await uploadAndDownloadFile("/api/security/redact-text", formData);
+                const downloadUrl = window.URL.createObjectURL(responseBlob);
 
-            notify("All text matches and manual drawn areas completely scrubbed!");
-        } catch (error) {
-            console.error(error);
-            notify("Redaction processing pipeline failed.");
-        } finally {
-            setIsProcessing(false);
-        }
+                const link = document.createElement("a");
+                link.href = downloadUrl;
+                link.download = `redacted_${file.name}`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+
+                notify("All text matches and manual drawn areas completely scrubbed!");
+            } catch (error) {
+                console.error(error);
+                notify("Redaction processing pipeline failed.");
+            } finally {
+                setIsProcessing(false);
+            }
+        });
     };
 
     return (
