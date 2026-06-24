@@ -1,18 +1,20 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import GoogleLoginButton from "@/components/auth/GoogleLoginButton";
 import { ArrowLeft, Mail, Lock, Loader2 } from "lucide-react";
-import { fetchJson } from "@/lib/api"; // Make sure to import this!
+import { fetchJson } from "@/lib/api";
 
-export default function LoginPage() {
+function LoginContent() {
     const { isAuthenticated, isLoading: isAuthLoading, refreshSession } = useAuth();
     const router = useRouter();
+    const searchParams = useSearchParams();
 
-    // Form State
+    const callbackUrl = searchParams.get("callbackUrl") || "/";
+
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
@@ -20,9 +22,9 @@ export default function LoginPage() {
 
     useEffect(() => {
         if (!isAuthLoading && isAuthenticated) {
-            router.push("/");
+            router.push(callbackUrl);
         }
-    }, [isAuthenticated, isAuthLoading, router]);
+    }, [isAuthenticated, isAuthLoading, router, callbackUrl]);
 
     const handleManualLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -81,7 +83,6 @@ export default function LoginPage() {
                     </div>
                 )}
 
-                {/* Manual Login Form */}
                 <form onSubmit={handleManualLogin} className="space-y-4 mb-6">
                     <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--muted-foreground)]" size={18} />
@@ -128,12 +129,20 @@ export default function LoginPage() {
                 </div>
 
                 <div className="mt-6 text-sm text-[color:var(--muted-foreground)] text-center">
-                    Don't have an account?{" "}
-                    <Link href="/register" className="font-semibold text-indigo-500 hover:underline">
+                    Don&#39;t have an account?{" "}
+                    <Link href={`/register?callbackUrl=${encodeURIComponent(callbackUrl)}`} className="font-semibold text-indigo-500 hover:underline">
                         Sign up
                     </Link>
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-[var(--background)]"><Loader2 className="animate-spin text-indigo-500" size={32} /></div>}>
+            <LoginContent />
+        </Suspense>
     );
 }

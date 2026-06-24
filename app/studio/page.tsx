@@ -1,6 +1,7 @@
 "use client";
 
-import React, {useState, useEffect, useCallback, useMemo, useRef} from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import Link from "next/link";
 import {
     Undo2,
     Redo2,
@@ -26,18 +27,20 @@ import {
     Loader2,
     FileText,
     User,
-    Unlock
+    Unlock,
+    Zap,
+    ArrowRight
 } from "lucide-react";
-import {uploadAndDownloadFile} from "@/lib/api";
-import {getFriendlyErrorMessage} from "@/lib/errorHandler";
-import {notify} from "@/lib/notify";
+import { uploadAndDownloadFile } from "@/lib/api";
+import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import { notify } from "@/lib/notify";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
-import {useAuth} from "@/context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 
 type ActivePanel = "pages" | "watermark" | "merge" | "compress" | "metadata" | "security";
 
@@ -47,18 +50,28 @@ interface VirtualPage {
 }
 
 const STYLISTIC_FONTS = [
-    {id: "Helvetica", name: "Sans-Serif Modern (Helvetica)", cssClass: "font-sans font-bold"},
-    {id: "Times-Roman", name: "Classic Editorial (Times Roman)", cssClass: "font-serif font-medium"},
-    {id: "Courier", name: "Monospace Tech (Courier)", cssClass: "font-mono font-normal"}
+    { id: "Helvetica", name: "Sans-Serif Modern (Helvetica)", cssClass: "font-sans font-bold" },
+    { id: "Times-Roman", name: "Classic Editorial (Times Roman)", cssClass: "font-serif font-medium" },
+    { id: "Courier", name: "Monospace Tech (Courier)", cssClass: "font-mono font-normal" }
 ];
 
+// Pre-initialize PDFJS configurations once globally outside the React lifecycle loop
+if (typeof window !== "undefined") {
+    import("pdfjs-dist").then((pdfjs) => {
+        pdfjs.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
+    });
+}
+
 export default function VirtualDocumentStudio() {
-    const { requireAuth } = useAuth();
+    const { requireAuth, isAuthenticated, subscription, isLoading } = useAuth();
 
     const [activeFile, setActiveFile] = useState<File | null>(null);
     const [presentBlob, setPresentBlob] = useState<Blob | null>(null);
     const [pastBlobs, setPastBlobs] = useState<Blob[]>([]);
     const [futureBlobs, setFutureBlobs] = useState<Blob[]>([]);
+
+    // Secure state metric instead of mutating JavaScript Native Blob elements directly
+    const [documentPassword, setDocumentPassword] = useState<string>("");
 
     const [activePanel, setActivePanel] = useState<ActivePanel>("pages");
     const [currentPageIndex, setCurrentPageIndex] = useState<number>(0);
@@ -72,9 +85,6 @@ export default function VirtualDocumentStudio() {
 
     const [shouldReLockOnExport, setShouldReLockOnExport] = useState<boolean>(false);
     const [originalEncryptionPassword, setOriginalEncryptionPassword] = useState<string>("");
-
-    const [secondaryFilePassword, setSecondaryFilePassword] = useState("");
-    const [isSecondaryLocked, setIsSecondaryLocked] = useState(false);
 
     const [pendingLockedFile, setPendingLockedFile] = useState<File | null>(null);
     const [uploadPromptPassword, setUploadPromptPassword] = useState<string>("");
@@ -105,17 +115,15 @@ export default function VirtualDocumentStudio() {
 
     const scanBlobPageBoundaries = async (targetBlob: Blob, forcedPassword?: string): Promise<VirtualPage[]> => {
         const pdfjs = await import("pdfjs-dist");
-        pdfjs.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
         const buffer = await targetBlob.arrayBuffer();
-
-        const password = forcedPassword !== undefined ? forcedPassword : ((targetBlob as any).originalPassword || "");
+        const password = forcedPassword !== undefined ? forcedPassword : documentPassword;
 
         const doc = await pdfjs.getDocument({
             data: buffer,
             password: password
         }).promise;
 
-        return Array.from({length: doc.numPages}, (_, i) => ({
+        return Array.from({ length: doc.numPages }, (_, i) => ({
             id: `v-page-${crypto.randomUUID()}`,
             pageNumber: i + 1
         }));
@@ -123,11 +131,6 @@ export default function VirtualDocumentStudio() {
 
     const updateWorkspaceState = useCallback(async (newBlob: Blob) => {
         if (!presentBlob) return;
-
-        const existingPassword = (presentBlob as any).originalPassword;
-        if (existingPassword) {
-            (newBlob as any).originalPassword = existingPassword;
-        }
 
         setIsProcessingAction(true);
         try {
@@ -142,7 +145,7 @@ export default function VirtualDocumentStudio() {
         } finally {
             setIsProcessingAction(false);
         }
-    }, [presentBlob]);
+    }, [presentBlob, documentPassword]);
 
     const executeStudioPipeline = async (operationName: string, actionFn: (targetBlob: Blob) => Promise<Blob>) => {
         if (!presentBlob || !activeFile) return;
@@ -150,7 +153,6 @@ export default function VirtualDocumentStudio() {
 
         try {
             const mutatedBlob = await actionFn(presentBlob);
-
             await updateWorkspaceState(mutatedBlob);
         } catch (err) {
             notify(getFriendlyErrorMessage(err));
@@ -161,12 +163,12 @@ export default function VirtualDocumentStudio() {
 
     const handleInitialUpload = async (acceptedFiles: File[]) => {
         requireAuth(async () => {
-
             if (!acceptedFiles || acceptedFiles.length === 0) return;
             const targetFile = acceptedFiles[0];
 
             try {
                 const initialPages = await scanBlobPageBoundaries(targetFile, "");
+                setDocumentPassword("");
                 await initializeWorkspaceWithCredentials(targetFile, "", initialPages);
             } catch (err: any) {
                 if (err.name === "PasswordException" || err.code === 1 || String(err).includes("password")) {
@@ -194,6 +196,7 @@ export default function VirtualDocumentStudio() {
 
             const verifiedPages = await scanBlobPageBoundaries(clearUnwrappedBlob, "");
 
+            setDocumentPassword(validKey);
             setOriginalEncryptionPassword(validKey);
             setShouldReLockOnExport(true);
             setPendingLockedFile(null);
@@ -206,7 +209,6 @@ export default function VirtualDocumentStudio() {
             setIsCheckingPassword(false);
         }
     };
-
 
     const isPdfPasswordProtected = async (file: File): Promise<boolean> => {
         try {
@@ -226,16 +228,11 @@ export default function VirtualDocumentStudio() {
 
         await executeStudioPipeline("Merge Document", async (unlockedBlob) => {
             const formData = new FormData();
-
             formData.append(
                 "files",
-                new File([unlockedBlob], activeFile.name, {
-                    type: "application/pdf",
-                })
+                new File([unlockedBlob], activeFile.name, { type: "application/pdf" })
             );
-
             formData.append("files", secondaryFile);
-
             return await uploadAndDownloadFile("/api/structure/merge", formData);
         });
 
@@ -244,28 +241,19 @@ export default function VirtualDocumentStudio() {
 
     const handleUnlockAndMergeSecondaryFile = async (e: React.FormEvent) => {
         e.preventDefault();
-
         if (!pendingMergeLockedFile || !mergePromptPassword.trim()) return;
 
         setIsCheckingMergePassword(true);
-
         try {
             const unlockData = new FormData();
-
             unlockData.append("file", pendingMergeLockedFile);
             unlockData.append("password", mergePromptPassword.trim());
 
-            const unlockedBlob = await uploadAndDownloadFile(
-                "/api/security/unlock",
-                unlockData
-            );
-
+            const unlockedBlob = await uploadAndDownloadFile("/api/security/unlock", unlockData);
             const unlockedFile = new File(
                 [unlockedBlob],
                 pendingMergeLockedFile.name,
-                {
-                    type: "application/pdf",
-                }
+                { type: "application/pdf" }
             );
 
             await executeSecondaryMerge(unlockedFile);
@@ -280,7 +268,7 @@ export default function VirtualDocumentStudio() {
     };
 
     const initializeWorkspaceWithCredentials = async (fileBlob: Blob, key: string, structuralPages: VirtualPage[]) => {
-        setActiveFile(new File([fileBlob], activeFile?.name || pendingLockedFile?.name || "document.pdf", {type: "application/pdf"}));
+        setActiveFile(new File([fileBlob], activeFile?.name || pendingLockedFile?.name || "document.pdf", { type: "application/pdf" }));
         setPresentBlob(fileBlob);
         setPastBlobs([]);
         setFutureBlobs([]);
@@ -291,9 +279,9 @@ export default function VirtualDocumentStudio() {
 
         try {
             const formData = new FormData();
-            formData.append("file", new File([fileBlob], "doc.pdf", {type: "application/pdf"}));
+            formData.append("file", new File([fileBlob], "doc.pdf", { type: "application/pdf" }));
             const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-            const res = await fetch(`${baseUrl}/api/structure/metadata/fetch`, {method: "POST", body: formData});
+            const res = await fetch(`${baseUrl}/api/structure/metadata/fetch`, { method: "POST", body: formData });
             if (res.ok) {
                 const props = await res.json();
                 setDocTitle(props["title"] || (activeFile?.name || pendingLockedFile?.name || "document.pdf").replace(/\.pdf$/i, ""));
@@ -316,6 +304,7 @@ export default function VirtualDocumentStudio() {
         setUploadPromptPassword("");
         setShouldReLockOnExport(false);
         setOriginalEncryptionPassword("");
+        setDocumentPassword("");
         if (previewImageSrc) URL.revokeObjectURL(previewImageSrc);
         setPreviewImageSrc("");
         setPreviewCacheToken("");
@@ -323,15 +312,18 @@ export default function VirtualDocumentStudio() {
 
     useEffect(() => {
         if (!presentBlob || virtualPages.length === 0 || !virtualPages[currentPageIndex]) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setPreviewImageSrc("");
             return;
         }
+
+        const abortController = new AbortController();
 
         const fetchPreviewFrame = async () => {
             setIsRenderingPreview(true);
             try {
                 const formData = new FormData();
-                const tempFile = new File([presentBlob], activeFile?.name || "document.pdf", {type: "application/pdf"});
+                const tempFile = new File([presentBlob], activeFile?.name || "document.pdf", { type: "application/pdf" });
 
                 formData.append("file", tempFile);
                 formData.append("page", (currentPageIndex + 1).toString());
@@ -342,26 +334,53 @@ export default function VirtualDocumentStudio() {
                 const response = await fetch(`${baseUrl}/api/conversion/preview/page`, {
                     method: "POST",
                     body: formData,
+                    credentials: "include",
+                    signal: abortController.signal
                 });
 
                 if (response.ok) {
                     const imgBlob = await response.blob();
-                    if (previewImageSrc && previewImageSrc.trim() !== "") {
-                        URL.revokeObjectURL(previewImageSrc);
-                    }
-                    setPreviewImageSrc(URL.createObjectURL(imgBlob));
+                    setPreviewImageSrc(prev => {
+                        if (prev && prev.trim() !== "") URL.revokeObjectURL(prev);
+                        return URL.createObjectURL(imgBlob);
+                    });
                 } else {
                     console.error(`Preview system endpoint rejected translation request with status: ${response.status}`);
                 }
-            } catch (err) {
-                console.error("Failed to render high-fidelity server preview layout asset:", err);
+            } catch (err: any) {
+                if (err.name !== "AbortError") {
+                    console.error("Failed to render high-fidelity server preview layout asset:", err);
+                }
             } finally {
-                setIsRenderingPreview(false);
+                if (!abortController.signal.aborted) {
+                    setIsRenderingPreview(false);
+                }
             }
         };
 
         fetchPreviewFrame();
-    }, [presentBlob, currentPageIndex, virtualPages, previewCacheToken]);
+
+        return () => {
+            abortController.abort();
+        };
+    }, [presentBlob, currentPageIndex, virtualPages, previewCacheToken, activeFile]);
+
+    // Bind Workspace Global Hotkeys for rapid sequential editing
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (!presentBlob || virtualPages.length === 0) return;
+            if (document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "SELECT") return;
+
+            if (e.key === "ArrowLeft") {
+                setCurrentPageIndex(prev => Math.max(0, prev - 1));
+            } else if (e.key === "ArrowRight") {
+                setCurrentPageIndex(prev => Math.min(virtualPages.length - 1, prev + 1));
+            }
+        };
+
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [presentBlob, virtualPages.length]);
 
     useEffect(() => {
         return () => {
@@ -373,10 +392,10 @@ export default function VirtualDocumentStudio() {
         if (!activeFile) return;
         await executeStudioPipeline("Rotate Page", async (unlockedBlob) => {
             const formData = new FormData();
-            formData.append("file", new File([unlockedBlob], activeFile.name, {type: "application/pdf"}));
+            formData.append("file", new File([unlockedBlob], activeFile.name, { type: "application/pdf" }));
 
             const actualPageNumber = (currentPageIndex + 1).toString();
-            const rotationMatrixMap = {[actualPageNumber]: 90};
+            const rotationMatrixMap = { [actualPageNumber]: 90 };
             formData.append("rotations", JSON.stringify(rotationMatrixMap));
 
             return await uploadAndDownloadFile("/api/structure/rotate", formData);
@@ -385,9 +404,12 @@ export default function VirtualDocumentStudio() {
 
     const handleDeleteActivePage = async () => {
         if (!activeFile || virtualPages.length <= 1) return;
+
+        if (!window.confirm("Are you sure you want to delete this page track component from the document context?")) return;
+
         await executeStudioPipeline("Delete Page", async (unlockedBlob) => {
             const formData = new FormData();
-            formData.append("file", new File([unlockedBlob], activeFile.name, {type: "application/pdf"}));
+            formData.append("file", new File([unlockedBlob], activeFile.name, { type: "application/pdf" }));
             formData.append("pages", (currentPageIndex + 1).toString());
 
             const nextPages = virtualPages.filter((_, i) => i !== currentPageIndex);
@@ -404,7 +426,7 @@ export default function VirtualDocumentStudio() {
         if (!activeFile) return;
         await executeStudioPipeline("Apply Watermark", async (unlockedBlob) => {
             const formData = new FormData();
-            formData.append("file", new File([unlockedBlob], activeFile.name, {type: "application/pdf"}));
+            formData.append("file", new File([unlockedBlob], activeFile.name, { type: "application/pdf" }));
 
             const normalizedScale = (watermarkFontSize / 40).toFixed(2);
             const description = `font:${watermarkFont}, pos:c, scale:${normalizedScale}, rot:${watermarkRotation}, op:${watermarkOpacity}`;
@@ -416,32 +438,23 @@ export default function VirtualDocumentStudio() {
         });
     };
 
-    const handleAppendSecondaryFile = async (
-        e: React.ChangeEvent<HTMLInputElement>
-    ) => {
+    const handleAppendSecondaryFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const addedFiles = Array.from(e.target.files || []);
-
         if (addedFiles.length === 0 || !activeFile) return;
 
         const secondaryFile = addedFiles[0];
-
         e.target.value = "";
 
         try {
             const locked = await isPdfPasswordProtected(secondaryFile);
-
             if (locked) {
                 setPendingMergeLockedFile(secondaryFile);
                 setMergePromptPassword("");
                 return;
             }
-
             await executeSecondaryMerge(secondaryFile);
         } catch (err: any) {
-            notify(
-                "Failed to analyze secondary PDF structure: " +
-                (err?.message || "Unknown error")
-            );
+            notify("Failed to analyze secondary PDF structure: " + (err?.message || "Unknown error"));
         }
     };
 
@@ -449,8 +462,7 @@ export default function VirtualDocumentStudio() {
         if (!activeFile) return;
         await executeStudioPipeline("Compress PDF File", async (unlockedBlob) => {
             const formData = new FormData();
-            formData.append("file", new File([unlockedBlob], activeFile.name, {type: "application/pdf"}));
-
+            formData.append("file", new File([unlockedBlob], activeFile.name, { type: "application/pdf" }));
             return await uploadAndDownloadFile("/api/optimize/compress", formData);
         });
         notify("Document payload size successfully optimized on the backend server node!");
@@ -460,7 +472,7 @@ export default function VirtualDocumentStudio() {
         if (!activeFile) return;
         await executeStudioPipeline("Update Metadata", async (unlockedBlob) => {
             const formData = new FormData();
-            formData.append("file", new File([unlockedBlob], activeFile.name, {type: "application/pdf"}));
+            formData.append("file", new File([unlockedBlob], activeFile.name, { type: "application/pdf" }));
             formData.append("title", docTitle.trim());
             formData.append("author", docAuthor.trim());
             formData.append("subject", docSubject.trim());
@@ -474,8 +486,7 @@ export default function VirtualDocumentStudio() {
     const handleLockDocument = () => {
         if (!presentBlob || !securityPass.trim()) return;
 
-        (presentBlob as any).originalPassword = securityPass.trim();
-
+        setDocumentPassword(securityPass.trim());
         setOriginalEncryptionPassword(securityPass.trim());
         setShouldReLockOnExport(true);
         setSecurityPass("");
@@ -488,12 +499,11 @@ export default function VirtualDocumentStudio() {
         setIsProcessingAction(true);
         try {
             let exportBlob = presentBlob;
-
-            const password = (presentBlob as any).originalPassword;
+            const password = documentPassword;
 
             if (password) {
                 const lockData = new FormData();
-                lockData.append("file", new File([presentBlob], activeFile.name, {type: "application/pdf"}));
+                lockData.append("file", new File([presentBlob], activeFile.name, { type: "application/pdf" }));
                 lockData.append("password", password);
                 exportBlob = await uploadAndDownloadFile("/api/security/lock", lockData);
             }
@@ -515,7 +525,7 @@ export default function VirtualDocumentStudio() {
 
         setIsProcessingAction(true);
         try {
-            const revertedPages = await scanBlobPageBoundaries(targetBlob, "");
+            const revertedPages = await scanBlobPageBoundaries(targetBlob);
             setVirtualPages(revertedPages);
 
             setPastBlobs(prev => prev.slice(0, -1));
@@ -537,7 +547,7 @@ export default function VirtualDocumentStudio() {
 
         setIsProcessingAction(true);
         try {
-            const advancedPages = await scanBlobPageBoundaries(targetBlob, "");
+            const advancedPages = await scanBlobPageBoundaries(targetBlob);
             setVirtualPages(advancedPages);
 
             setFutureBlobs(prev => prev.slice(0, -1));
@@ -553,20 +563,94 @@ export default function VirtualDocumentStudio() {
         }
     };
 
+    if (!isLoading && !isAuthenticated) {
+        return (
+            <PdfToolLayout>
+                <div className="mx-auto max-w-2xl px-4 py-20 text-center flex flex-col items-center">
+                    <div className="w-16 h-16 bg-amber-500/10 text-amber-500 rounded-2xl flex items-center justify-center mb-6 shadow-sm border border-amber-500/10">
+                        <Zap size={32} className="animate-pulse" />
+                    </div>
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/5 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-amber-500 mb-4">
+                        Premium Workspace Module
+                    </span>
+                    <h2 className="text-3xl sm:text-5xl font-black text-[color:var(--foreground)] tracking-tight leading-tight">
+                        Unlock Virtual <br /> Document Studio
+                    </h2>
+                    <p className="mt-4 text-sm sm:text-base leading-relaxed text-[color:var(--muted)] font-medium max-w-md">
+                        Advanced structural page composition, custom text stamp overlays, scaling dimensions, and real-time canvas visualization matrices are restricted to Pro subscribers.
+                    </p>
+                    <h2>Sign in to access Pro features</h2>
+                    <div className="mt-8 flex flex-col sm:flex-row items-center gap-4 w-full justify-center">
+                        <Link
+                            href="/login"
+                            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-3.5 text-sm font-bold text-white shadow-md shadow-amber-600/10 hover:opacity-95 transition-all"
+                        >
+                            Sign in to Pro Account <ArrowRight size={16} />
+                        </Link>
+                        <Link
+                            href="/"
+                            className="w-full sm:w-auto px-6 py-3.5 border border-[color:var(--border)] hover:bg-[var(--card)] text-sm font-bold rounded-xl text-[color:var(--foreground)] transition-all"
+                        >
+                            Return to Free Dashboard
+                        </Link>
+                    </div>
+                </div>
+            </PdfToolLayout>
+        );
+    }
+    if (
+        !isLoading &&
+        isAuthenticated &&
+        (!subscription || subscription.tier !== "pro")
+    ) {
+        return (
+            <PdfToolLayout>
+                <div className="mx-auto max-w-2xl px-4 py-20 text-center flex flex-col items-center">
+                    <div className="w-16 h-16 bg-amber-500/10 text-amber-500 rounded-2xl flex items-center justify-center mb-6 shadow-sm border border-amber-500/10">
+                        <Zap size={32} className="animate-pulse" />
+                    </div>
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/5 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-amber-500 mb-4">
+                        Premium Workspace Module
+                    </span>
+                    <h2 className="text-3xl sm:text-5xl font-black text-[color:var(--foreground)] tracking-tight leading-tight">
+                        Unlock Virtual <br /> Document Studio
+                    </h2>
+                    <p className="mt-4 text-sm sm:text-base leading-relaxed text-[color:var(--muted)] font-medium max-w-md">
+                        Advanced structural page composition, custom text stamp overlays, scaling dimensions, and real-time canvas visualization matrices are restricted to Pro subscribers.
+                    </p>
+                    <div className="mt-8 flex flex-col sm:flex-row items-center gap-4 w-full justify-center">
+                        <Link
+                            href="/subscribe"
+                            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-3.5 text-sm font-bold text-white shadow-md shadow-amber-600/10 hover:opacity-95 transition-all"
+                        >
+                            Upgrade to Pro Tier <ArrowRight size={16} />
+                        </Link>
+                        <Link
+                            href="/"
+                            className="w-full sm:w-auto px-6 py-3.5 border border-[color:var(--border)] hover:bg-[var(--card)] text-sm font-bold rounded-xl text-[color:var(--foreground)] transition-all"
+                        >
+                            Return to Free Dashboard
+                        </Link>
+                    </div>
+                </div>
+            </PdfToolLayout>
+        );
+    }
+
     return (
         <PdfToolLayout>
             <div className="-mx-4 xl:-mx-60 px-4">
-                <div
-                    className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 mb-6 rounded-2xl bg-[var(--card)] border border-[color:var(--border)] shadow-sm">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 mb-6 rounded-2xl bg-[var(--card)] border border-[color:var(--border)] shadow-sm">
                     <div className="flex items-center gap-3">
                         <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-500">
                             <Layers size={22}/>
                         </div>
                         <div>
-                            <h2 className="text-md font-bold text-[color:var(--foreground)]">Virtual Document
-                                Studio</h2>
-                            <p className="text-xs text-[color:var(--muted)]">Chain actions, reorganize page topologies,
-                                and stamp vectors in real-time.</p>
+                            <div className="flex items-center gap-2">
+                                <h2 className="text-md font-bold text-[color:var(--foreground)]">Virtual Document Studio</h2>
+                                <span className="bg-amber-500/10 border border-amber-500/20 text-amber-500 font-mono text-[9px] font-black tracking-widest uppercase px-1.5 py-0.5 rounded">PRO</span>
+                            </div>
+                            <p className="text-xs text-[color:var(--muted)]">Chain actions, reorganize page topologies, and stamp vectors in real-time.</p>
                         </div>
                     </div>
 
@@ -577,7 +661,7 @@ export default function VirtualDocumentStudio() {
                                 onClick={executeUndo}
                                 disabled={pastBlobs.length === 0}
                                 className="p-2 rounded-xl border border-[color:var(--border)] bg-[var(--card)] hover:text-indigo-500 text-[color:var(--muted)] disabled:opacity-30 transition shadow-sm"
-                                title="Undo Step"
+                                title="Undo Step (Or use Left Arrow key to cycle preview views)"
                             >
                                 <Undo2 size={16}/>
                             </button>
@@ -586,7 +670,7 @@ export default function VirtualDocumentStudio() {
                                 onClick={executeRedo}
                                 disabled={futureBlobs.length === 0}
                                 className="p-2 rounded-xl border border-[color:var(--border)] bg-[var(--card)] hover:text-indigo-500 text-[color:var(--muted)] disabled:opacity-30 transition shadow-sm"
-                                title="Redo Step"
+                                title="Redo Step (Or use Right Arrow key to cycle preview views)"
                             >
                                 <Redo2 size={16}/>
                             </button>
@@ -605,17 +689,13 @@ export default function VirtualDocumentStudio() {
                 </div>
 
                 {pendingLockedFile && (
-                    <div
-                        className="rounded-3xl border border-amber-500/30 bg-amber-500/5 p-8 max-w-xl mx-auto shadow-xl text-center animate-in fade-in zoom-in-95 duration-200 mb-8">
-                        <div
-                            className="w-12 h-12 bg-amber-500/10 text-amber-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <div className="rounded-3xl border border-amber-500/30 bg-amber-500/5 p-8 max-w-xl mx-auto shadow-xl text-center animate-in fade-in zoom-in-95 duration-200 mb-8">
+                        <div className="w-12 h-12 bg-amber-500/10 text-amber-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
                             <Unlock size={22}/>
                         </div>
-                        <h3 className="text-md font-bold text-[color:var(--foreground)] mb-1">Encrypted File
-                            Detected</h3>
+                        <h3 className="text-md font-bold text-[color:var(--foreground)] mb-1">Encrypted File Detected</h3>
                         <p className="text-xs text-[color:var(--muted)] mb-6 leading-relaxed">
-                            This document is encrypted. Provide its correct passphrase to initialize the editing
-                            environment workspace.
+                            This document is encrypted. Provide its correct passphrase to initialize the editing environment workspace.
                         </p>
                         <form onSubmit={handleVerifyAndMountLockedFile} className="flex gap-2 max-w-md mx-auto">
                             <input
@@ -659,12 +739,11 @@ export default function VirtualDocumentStudio() {
 
                 {presentBlob && activeFile && !pendingLockedFile && (
                     <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start min-h-[75vh]">
-
                         <div className="xl:col-span-2 flex flex-col gap-4 bg-[var(--card)] border border-[color:var(--border)] rounded-2xl p-4 shadow-sm h-[75vh] overflow-hidden">
                             <div className="flex items-center justify-between border-b border-[color:var(--border)] pb-3">
-        <span className="text-xs font-bold uppercase tracking-wider text-[color:var(--muted)] flex items-center gap-1.5">
-            <Files size={14} /> Layout Pages Map
-        </span>
+                                <span className="text-xs font-bold uppercase tracking-wider text-[color:var(--muted)] flex items-center gap-1.5">
+                                    <Files size={14} /> Layout Pages Map
+                                </span>
                                 <button
                                     type="button"
                                     onClick={handleResetWorkspace}
@@ -675,9 +754,7 @@ export default function VirtualDocumentStudio() {
                             </div>
 
                             <div
-                                style={{
-                                    scrollbarWidth: 'thin', /* For Firefox fallback */
-                                }}
+                                style={{ scrollbarWidth: 'thin' }}
                                 className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-zinc-300 dark:[&::-webkit-scrollbar-thumb]:bg-zinc-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-indigo-500 transition-colors"
                             >
                                 {virtualPages.map((page, idx) => (
@@ -690,19 +767,16 @@ export default function VirtualDocumentStudio() {
                                                 : "bg-[var(--background)]/40 border-[color:var(--border)] hover:border-[color:var(--muted)]"
                                         }`}
                                     >
-                                        <div
-                                            className="w-10 h-14 bg-[color:var(--background)] border rounded shadow-sm shrink-0 flex items-center justify-center text-[10px] font-mono font-bold text-gray-400 select-none">
+                                        <div className="w-10 h-14 bg-[color:var(--background)] border rounded shadow-sm shrink-0 flex items-center justify-center text-[10px] font-mono font-bold text-gray-400 select-none">
                                             P: {page.pageNumber}
                                         </div>
 
                                         <div className="flex-1 min-w-0">
                                             <p className="text-xs font-bold text-[color:var(--foreground)]">Page {idx + 1}</p>
-                                            <p className="text-[10px] text-[color:var(--muted)]">Sequence code:
-                                                #{page.pageNumber}</p>
+                                            <p className="text-[10px] text-[color:var(--muted)]">Sequence code: #{page.pageNumber}</p>
                                         </div>
 
-                                        <div
-                                            className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute right-2 bg-[var(--card)] pl-1 border-l border-[color:var(--border)] h-fit">
+                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute right-2 bg-[var(--card)] pl-1 border-l border-[color:var(--border)] h-fit">
                                             <button
                                                 type="button"
                                                 onClick={(e) => {
@@ -737,32 +811,24 @@ export default function VirtualDocumentStudio() {
                             </div>
                         </div>
 
-                        <div
-                            className="xl:col-span-6 flex flex-col justify-between items-center bg-[var(--card)] border border-[color:var(--border)] rounded-2xl p-4 shadow-sm h-[75vh] relative">
-
+                        <div className="xl:col-span-6 flex flex-col justify-between items-center bg-[var(--card)] border border-[color:var(--border)] rounded-2xl p-4 shadow-sm h-[75vh] relative">
                             {(isRenderingPreview || isProcessingAction) && (
-                                <div
-                                    className="absolute inset-0 bg-white/60 dark:bg-zinc-950/60 backdrop-blur-sm z-30 flex flex-col items-center justify-center text-xs font-medium text-zinc-500 rounded-2xl">
+                                <div className="absolute inset-0 bg-white/60 dark:bg-zinc-950/60 backdrop-blur-sm z-30 flex flex-col items-center justify-center text-xs font-medium text-zinc-500 rounded-2xl">
                                     <Loader2 className="animate-spin text-indigo-500 mb-2" size={26}/>
                                     Syncing high-fidelity server layouts...
                                 </div>
                             )}
 
-                            <div
-                                className="w-full flex items-center justify-between border-b border-[color:var(--border)] pb-3 text-xs font-bold text-[color:var(--foreground)]">
-                                <span className="flex items-center gap-1.5"><Maximize2 size={14}
-                                                                                       className="text-indigo-500"/> Active Visualizer Node</span>
-                                <span
-                                    className="font-mono text-[10px] bg-[color:var(--background)] border border-[color:var(--border)] px-2 py-0.5 rounded text-[color:var(--muted)]">
-                                Sheet {currentPageIndex + 1} of {virtualPages.length}
-                            </span>
+                            <div className="w-full flex items-center justify-between border-b border-[color:var(--border)] pb-3 text-xs font-bold text-[color:var(--foreground)]">
+                                <span className="flex items-center gap-1.5"><Maximize2 size={14} className="text-indigo-500"/> Active Visualizer Node</span>
+                                <span className="font-mono text-[10px] bg-[color:var(--background)] border border-[color:var(--border)] px-2 py-0.5 rounded text-[color:var(--muted)]">
+                                    Sheet {currentPageIndex + 1} of {virtualPages.length}
+                                </span>
                             </div>
 
-                            <div
-                                className="flex-1 w-full flex items-center justify-center bg-[var(--background)]/40 dark:bg-black/10 rounded-xl border border-[color:var(--border)] m-4 relative overflow-hidden select-none p-2">
+                            <div className="flex-1 w-full flex items-center justify-center bg-[var(--background)]/40 dark:bg-black/10 rounded-xl border border-[color:var(--border)] m-4 relative overflow-hidden select-none p-2">
                                 {previewImageSrc ? (
-                                    <div
-                                        className="relative inline-block max-w-full max-h-[52vh] overflow-hidden shadow-2xl rounded border bg-white">
+                                    <div className="relative inline-block max-w-full max-h-[52vh] overflow-hidden shadow-2xl rounded border bg-white">
                                         <img
                                             src={previewImageSrc}
                                             alt={`Active page view context ${currentPageIndex + 1}`}
@@ -770,8 +836,7 @@ export default function VirtualDocumentStudio() {
                                         />
 
                                         {activePanel === "watermark" && watermarkText.trim() && (
-                                            <div
-                                                className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 overflow-hidden">
+                                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 overflow-hidden">
                                                 <div
                                                     style={{
                                                         opacity: watermarkOpacity,
@@ -800,8 +865,8 @@ export default function VirtualDocumentStudio() {
                                     <ChevronLeft size={16}/>
                                 </button>
                                 <span className="text-xs font-mono font-bold text-[color:var(--foreground)]">
-                                Page {currentPageIndex + 1}
-                            </span>
+                                    Page {currentPageIndex + 1}
+                                </span>
                                 <button
                                     type="button"
                                     disabled={currentPageIndex >= virtualPages.length - 1}
@@ -813,9 +878,7 @@ export default function VirtualDocumentStudio() {
                             </div>
                         </div>
 
-                        <div
-                            className="xl:col-span-4 flex flex-col bg-[var(--card)] border border-[color:var(--border)] rounded-2xl shadow-sm h-[75vh] overflow-hidden">
-
+                        <div className="xl:col-span-4 flex flex-col bg-[var(--card)] border border-[color:var(--border)] rounded-2xl shadow-sm h-[75vh] overflow-hidden">
                             <div
                                 onMouseDown={(e) => {
                                     const container = e.currentTarget;
@@ -869,13 +932,11 @@ export default function VirtualDocumentStudio() {
                             <div className="flex-1 overflow-y-auto p-5 space-y-6 scrollbar-thin">
                                 {activePanel === "pages" && (
                                     <div className="space-y-4 animate-in fade-in-50 duration-150">
-                                        <div
-                                            className="flex items-center gap-2 text-xs font-bold text-[color:var(--foreground)] border-b border-[color:var(--border)] pb-2">
+                                        <div className="flex items-center gap-2 text-xs font-bold text-[color:var(--foreground)] border-b border-[color:var(--border)] pb-2">
                                             <Sliders size={14} className="text-indigo-500"/> Page Vector Operations
                                         </div>
                                         <p className="text-xs text-[color:var(--muted)] leading-relaxed">
-                                            Execute standalone geometric changes directly applied to the currently
-                                            loaded index track.
+                                            Execute standalone geometric changes directly applied to the currently loaded index track.
                                         </p>
                                         <div className="grid grid-cols-2 gap-2">
                                             <button
@@ -898,15 +959,12 @@ export default function VirtualDocumentStudio() {
 
                                 {activePanel === "watermark" && (
                                     <div className="space-y-5 animate-in fade-in-50 duration-150">
-                                        <div
-                                            className="flex items-center gap-2 text-xs font-bold text-[color:var(--foreground)] border-b border-[color:var(--border)] pb-2">
+                                        <div className="flex items-center gap-2 text-xs font-bold text-[color:var(--foreground)] border-b border-[color:var(--border)] pb-2">
                                             <Type size={14} className="text-indigo-500"/> Secure Overlays & Stamps
                                         </div>
 
                                         <div className="space-y-2">
-                                            <label
-                                                className="text-[10px] font-bold uppercase tracking-wider text-[color:var(--muted)] flex items-center gap-1"><Sparkles
-                                                size={11}/> Watermark Text</label>
+                                            <label className="text-[10px] font-bold uppercase tracking-wider text-[color:var(--muted)] flex items-center gap-1"><Sparkles size={11}/> Watermark Text</label>
                                             <input
                                                 type="text"
                                                 value={watermarkText}
@@ -916,9 +974,7 @@ export default function VirtualDocumentStudio() {
                                         </div>
 
                                         <div className="space-y-2">
-                                            <label
-                                                className="text-[10px] font-bold uppercase tracking-wider text-[color:var(--muted)]">Typography
-                                                Family</label>
+                                            <label className="text-[10px] font-bold uppercase tracking-wider text-[color:var(--muted)]">Typography Family</label>
                                             <select
                                                 value={watermarkFont}
                                                 onChange={(e) => setWatermarkFont(e.target.value)}
@@ -931,8 +987,7 @@ export default function VirtualDocumentStudio() {
                                         </div>
 
                                         <div className="space-y-2">
-                                            <div
-                                                className="flex justify-between text-[10px] font-bold uppercase tracking-wider text-[color:var(--muted)]">
+                                            <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider text-[color:var(--muted)]">
                                                 <span>Sizing Scale Dimensions</span>
                                                 <span className="text-indigo-500 font-mono">{watermarkFontSize}%</span>
                                             </div>
@@ -944,11 +999,9 @@ export default function VirtualDocumentStudio() {
                                         </div>
 
                                         <div className="space-y-2">
-                                            <div
-                                                className="flex justify-between text-[10px] font-bold uppercase tracking-wider text-[color:var(--muted)]">
+                                            <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider text-[color:var(--muted)]">
                                                 <span>Blend Opacity</span>
-                                                <span
-                                                    className="text-indigo-500 font-mono">{Math.round(watermarkOpacity * 100)}%</span>
+                                                <span className="text-indigo-500 font-mono">{Math.round(watermarkOpacity * 100)}%</span>
                                             </div>
                                             <input
                                                 type="range" min="0.05" max="1.0" step="0.05" value={watermarkOpacity}
@@ -958,8 +1011,7 @@ export default function VirtualDocumentStudio() {
                                         </div>
 
                                         <div className="space-y-2">
-                                            <div
-                                                className="flex justify-between text-[10px] font-bold uppercase tracking-wider text-[color:var(--muted)]">
+                                            <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider text-[color:var(--muted)]">
                                                 <span>Rotation Angle</span>
                                                 <span className="text-indigo-500 font-mono">{watermarkRotation}°</span>
                                             </div>
@@ -981,34 +1033,26 @@ export default function VirtualDocumentStudio() {
 
                                 {activePanel === "merge" && (
                                     <div className="space-y-4 animate-in fade-in-50 duration-150">
-                                        <div
-                                            className="flex items-center gap-2 text-xs font-bold text-[color:var(--foreground)] border-b border-[color:var(--border)] pb-2">
-                                            <FolderPlus size={14} className="text-indigo-500"/> Combine Supplementary
-                                            File
+                                        <div className="flex items-center gap-2 text-xs font-bold text-[color:var(--foreground)] border-b border-[color:var(--border)] pb-2">
+                                            <FolderPlus size={14} className="text-indigo-500"/> Combine Supplementary File
                                         </div>
                                         <p className="text-xs text-[color:var(--muted)] leading-relaxed">
-                                            Select another document asset container. The engine will instantly bake its
-                                            contents onto the back tail limits of this track.
+                                            Select another document asset container. The engine will instantly bake its contents onto the back tail limits of this track.
                                         </p>
 
                                         {pendingMergeLockedFile && (
-                                            <div
-                                                className="rounded-2xl border border-indigo-500/30 bg-indigo-500/5 p-4 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                                            <div className="rounded-2xl border border-indigo-500/30 bg-indigo-500/5 p-4 space-y-4 animate-in fade-in zoom-in-95 duration-200">
                                                 <div className="flex items-center gap-2">
-                                                    <div
-                                                        className="w-9 h-9 bg-indigo-500/10 text-indigo-500 rounded-xl flex items-center justify-center shrink-0">
+                                                    <div className="w-9 h-9 bg-indigo-500/10 text-indigo-500 rounded-xl flex items-center justify-center shrink-0">
                                                         <Unlock size={16}/>
                                                     </div>
                                                     <div>
-                                                        <h3 className="text-xs font-bold text-[color:var(--foreground)]">Locked
-                                                            PDF Detected</h3>
-                                                        <p className="text-[10px] text-[color:var(--muted)]">Enter the
-                                                            password to unlock and merge this PDF.</p>
+                                                        <h3 className="text-xs font-bold text-[color:var(--foreground)]">Locked PDF Detected</h3>
+                                                        <p className="text-[10px] text-[color:var(--muted)]">Enter the password to unlock and merge this PDF.</p>
                                                     </div>
                                                 </div>
 
-                                                <form onSubmit={handleUnlockAndMergeSecondaryFile}
-                                                      className="space-y-3">
+                                                <form onSubmit={handleUnlockAndMergeSecondaryFile} className="space-y-3">
                                                     <input
                                                         type="password"
                                                         required
@@ -1024,9 +1068,7 @@ export default function VirtualDocumentStudio() {
                                                             disabled={isCheckingMergePassword || !mergePromptPassword.trim()}
                                                             className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-xs font-bold rounded-xl transition shadow-md shadow-indigo-600/10 flex items-center justify-center gap-1.5"
                                                         >
-                                                            {isCheckingMergePassword &&
-                                                                <Loader2 size={12} className="animate-spin"/>} Unlock &
-                                                            Merge
+                                                            {isCheckingMergePassword && <Loader2 size={12} className="animate-spin"/>} Unlock & Merge
                                                         </button>
                                                         <button
                                                             type="button"
@@ -1043,16 +1085,13 @@ export default function VirtualDocumentStudio() {
                                             </div>
                                         )}
 
-                                        <input type="file" ref={appendFileInputRef} accept=".pdf" className="hidden"
-                                               onChange={handleAppendSecondaryFile}/>
+                                        <input type="file" ref={appendFileInputRef} accept=".pdf" className="hidden" onChange={handleAppendSecondaryFile}/>
                                         <div
                                             onClick={() => appendFileInputRef.current?.click()}
                                             className="p-6 border-2 border-dashed border-[color:var(--border)] hover:border-indigo-500/40 bg-[var(--background)]/30 hover:bg-indigo-500/5 rounded-xl text-center transition cursor-pointer flex flex-col items-center justify-center gap-2 group"
                                         >
-                                            <Plus size={20}
-                                                  className="text-[color:var(--muted)] group-hover:text-indigo-500 transition-colors"/>
-                                            <span
-                                                className="text-xs font-bold text-[color:var(--foreground)] group-hover:text-indigo-500 transition-colors">Append Supplementary Track</span>
+                                            <Plus size={20} className="text-[color:var(--muted)] group-hover:text-indigo-500 transition-colors"/>
+                                            <span className="text-xs font-bold text-[color:var(--foreground)] group-hover:text-indigo-500 transition-colors">Append Supplementary Track</span>
                                             <span className="text-[10px] text-[color:var(--muted)]">Accepts standard .pdf files directly</span>
                                         </div>
                                     </div>
@@ -1060,75 +1099,47 @@ export default function VirtualDocumentStudio() {
 
                                 {activePanel === "compress" && (
                                     <div className="space-y-4 animate-in fade-in-50 duration-150">
-                                        <div
-                                            className="flex items-center gap-2 text-xs font-bold text-[color:var(--foreground)] border-b border-[color:var(--border)] pb-2">
-                                            <Scissors size={14} className="text-indigo-500"/> Size Allocator
-                                            Optimization
+                                        <div className="flex items-center gap-2 text-xs font-bold text-[color:var(--foreground)] border-b border-[color:var(--border)] pb-2">
+                                            <Scissors size={14} className="text-indigo-500"/> Size Allocator Optimization
                                         </div>
                                         <p className="text-xs text-[color:var(--muted)] leading-relaxed">
-                                            Ghostscript triggers layout optimization routines directly applied onto the
-                                            file stream buffer context.
+                                            Ghostscript triggers layout optimization routines directly applied onto the file stream buffer context.
                                         </p>
-                                        <PdfActionButton text="Optimize PDF File Size"
-                                                         loadingText="Processing Ghostscript Pipeline..."
-                                                         loading={isProcessingAction} onClick={handleCompressDocument}/>
+                                        <PdfActionButton text="Optimize PDF File Size" loadingText="Processing Ghostscript Pipeline..." loading={isProcessingAction} onClick={handleCompressDocument}/>
                                     </div>
                                 )}
 
                                 {activePanel === "metadata" && (
                                     <div className="space-y-4 animate-in fade-in-50 duration-150">
-                                        <div
-                                            className="flex items-center gap-2 text-xs font-bold text-[color:var(--foreground)] border-b border-[color:var(--border)] pb-2">
+                                        <div className="flex items-center gap-2 text-xs font-bold text-[color:var(--foreground)] border-b border-[color:var(--border)] pb-2">
                                             <Tag size={14} className="text-indigo-500"/> Info Table Dictionary Editor
                                         </div>
                                         <div className="space-y-3">
                                             <div className="space-y-1">
-                                                <label
-                                                    className="text-[10px] font-bold text-[color:var(--muted)] flex items-center gap-1 uppercase"><FileText
-                                                    size={10}/> Document Title</label>
-                                                <input type="text" value={docTitle}
-                                                       onChange={(e) => setDocTitle(e.target.value)}
-                                                       className="w-full px-3 py-2 text-xs border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl outline-none font-medium text-[color:var(--foreground)]"/>
+                                                <label className="text-[10px] font-bold text-[color:var(--muted)] flex items-center gap-1 uppercase"><FileText size={10}/> Document Title</label>
+                                                <input type="text" value={docTitle} onChange={(e) => setDocTitle(e.target.value)} className="w-full px-3 py-2 text-xs border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl outline-none font-medium text-[color:var(--foreground)]"/>
                                             </div>
                                             <div className="space-y-1">
-                                                <label
-                                                    className="text-[10px] font-bold text-[color:var(--muted)] flex items-center gap-1 uppercase"><User
-                                                    size={10}/> Creator Signature</label>
-                                                <input type="text" value={docAuthor}
-                                                       onChange={(e) => setDocAuthor(e.target.value)}
-                                                       className="w-full px-3 py-2 text-xs border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl outline-none font-medium text-[color:var(--foreground)]"
-                                                       placeholder="Acme Corp Admin"/>
+                                                <label className="text-[10px] font-bold text-[color:var(--muted)] flex items-center gap-1 uppercase"><User size={10}/> Creator Signature</label>
+                                                <input type="text" value={docAuthor} onChange={(e) => setDocAuthor(e.target.value)} className="w-full px-3 py-2 text-xs border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl outline-none font-medium text-[color:var(--foreground)]" placeholder="Acme Corp Admin"/>
                                             </div>
                                             <div className="space-y-1">
-                                                <label
-                                                    className="text-[10px] font-bold text-[color:var(--muted)] flex items-center gap-1 uppercase"><Tag
-                                                    size={10}/> Subject Matter</label>
-                                                <input type="text" value={docSubject}
-                                                       onChange={(e) => setDocSubject(e.target.value)}
-                                                       className="w-full px-3 py-2 text-xs border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl outline-none font-medium text-[color:var(--foreground)]"
-                                                       placeholder="Quarterly Audit"/>
+                                                <label className="text-[10px] font-bold text-[color:var(--muted)] flex items-center gap-1 uppercase"><Tag size={10}/> Subject Matter</label>
+                                                <input type="text" value={docSubject} onChange={(e) => setDocSubject(e.target.value)} className="w-full px-3 py-2 text-xs border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl outline-none font-medium text-[color:var(--foreground)]" placeholder="Quarterly Audit"/>
                                             </div>
                                             <div className="space-y-1">
-                                                <label
-                                                    className="text-[10px] font-bold text-[color:var(--muted)] flex items-center gap-1 uppercase"><Hash
-                                                    size={10}/> SEO Index Keywords</label>
-                                                <input type="text" value={docKeywords}
-                                                       onChange={(e) => setDocKeywords(e.target.value)}
-                                                       className="w-full px-3 py-2 text-xs border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl outline-none font-medium text-[color:var(--foreground)]"
-                                                       placeholder="report, metrics, secure"/>
+                                                <label className="text-[10px] font-bold text-[color:var(--muted)] flex items-center gap-1 uppercase"><Hash size={10}/> SEO Index Keywords</label>
+                                                <input type="text" value={docKeywords} onChange={(e) => setDocKeywords(e.target.value)} className="w-full px-3 py-2 text-xs border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl outline-none font-medium text-[color:var(--foreground)]" placeholder="report, metrics, secure"/>
                                             </div>
                                         </div>
-                                        <PdfActionButton text="Override Metadata Blocks" loading={isProcessingAction}
-                                                         onClick={handleUpdateMetadata}/>
+                                        <PdfActionButton text="Override Metadata Blocks" loading={isProcessingAction} onClick={handleUpdateMetadata}/>
                                     </div>
                                 )}
 
                                 {activePanel === "security" && (
                                     <div className="space-y-4 animate-in fade-in-50 duration-150">
-                                        <div
-                                            className="flex items-center gap-2 text-xs font-bold text-[color:var(--foreground)] border-b border-[color:var(--border)] pb-2">
-                                            <ShieldAlert size={14} className="text-indigo-500"/> AES-256 Bit Encryption
-                                            Module
+                                        <div className="flex items-center gap-2 text-xs font-bold text-[color:var(--foreground)] border-b border-[color:var(--border)] pb-2">
+                                            <ShieldAlert size={14} className="text-indigo-500"/> AES-256 Bit Encryption Module
                                         </div>
                                         <p className="text-xs text-[color:var(--muted)] leading-relaxed">
                                             {shouldReLockOnExport && originalEncryptionPassword ? (
@@ -1138,29 +1149,20 @@ export default function VirtualDocumentStudio() {
                                             )}
                                         </p>
                                         <div className="space-y-1">
-                                            <label
-                                                className="text-[10px] font-bold text-[color:var(--muted)] uppercase">Passphrase
-                                                Protection Lock</label>
-                                            <input type="password" value={securityPass}
-                                                   onChange={(e) => setSecurityPass(e.target.value)}
-                                                   className="w-full px-3 py-2 text-xs border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl outline-none font-medium text-[color:var(--foreground)]"
-                                                   placeholder="Set Output Secure Key"/>
+                                            <label className="text-[10px] font-bold text-[color:var(--muted)] uppercase">Passphrase Protection Lock</label>
+                                            <input type="password" value={securityPass} onChange={(e) => setSecurityPass(e.target.value)} className="w-full px-3 py-2 text-xs border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl outline-none font-medium text-[color:var(--foreground)]" placeholder="Set Output Secure Key"/>
                                         </div>
 
-                                        <PdfActionButton text="Configure Download Key"
-                                                         loadingText="Updating Encryption Profiles..."
-                                                         loading={isProcessingAction} onClick={handleLockDocument}/>
+                                        <PdfActionButton text="Configure Download Key" loadingText="Updating Encryption Profiles..." loading={isProcessingAction} onClick={handleLockDocument}/>
                                     </div>
                                 )}
                             </div>
 
-                            <div
-                                className="p-4 border-t border-[color:var(--border)] bg-[color:var(--background)]/30 shrink-0 flex items-center justify-between text-[10px] text-[color:var(--muted)] font-mono font-bold">
+                            <div className="p-4 border-t border-[color:var(--border)] bg-[color:var(--background)]/30 shrink-0 flex items-center justify-between text-[10px] text-[color:var(--muted)] font-mono font-bold">
                                 <span className="flex items-center gap-1"><Settings size={10} className="animate-spin"/> Live engine instance connected</span>
                                 <span>v1.0.0</span>
                             </div>
                         </div>
-
                     </div>
                 )}
             </div>

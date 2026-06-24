@@ -26,7 +26,9 @@ export default function GoogleLoginButton({ onSuccessCallback }: GoogleLoginButt
             if (onSuccessCallback) {
                 onSuccessCallback();
             } else {
-                window.location.href = "/";
+                const searchParams = new URLSearchParams(window.location.search);
+                const callbackUrl = searchParams.get("callbackUrl") || "/";
+                window.location.href = callbackUrl;
             }
         } catch (err: any) {
             alert(`Authentication pipeline rejection layout: ${err.message}`);

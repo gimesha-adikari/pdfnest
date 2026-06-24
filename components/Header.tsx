@@ -1,27 +1,47 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import ThemeToggle from "./ThemeToggle";
 import ToolSearch from "./ui/ToolSearch";
 import { NAV_TOOLS } from "@/lib/toolsData";
-import { ChevronDown, Zap, LogOut } from "lucide-react";
+import { ChevronDown, LogOut, Zap, ShieldAlert, Sparkles } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { fetchJson } from "@/lib/api";
 
 export default function Header() {
-    const { subscription, isAuthenticated, logout } = useAuth();
+    const { subscription, isAuthenticated, logout, user } = useAuth();
+    const pathname = usePathname();
+    const [forceHide, setForceHide] = useState(false);
+    const [toolsList, setToolsList] = useState<any[]>([]);
 
-    const editingTools = NAV_TOOLS.filter(
-        (tool) => tool.category === "editing"
-    );
+    useEffect(() => {
+        fetchJson("/site-content/tools")
+            .then((data: any) => {
+                if (Array.isArray(data) && data.length > 0) {
+                    setToolsList(data);
+                } else {
+                    setToolsList(NAV_TOOLS);
+                }
+            })
+            .catch((err) => {
+                console.error("Failed fetching header tools from database, falling back:", err);
+                setToolsList(NAV_TOOLS);
+            });
+    }, []);
 
-    const convertTools = NAV_TOOLS.filter(
-        (tool) => tool.category === "convert"
-    );
+    const closeMenu = () => {
+        setForceHide(true);
+        setTimeout(() => setForceHide(false), 150);
+    };
 
-    const securityTools = NAV_TOOLS.filter(
-        (tool) => tool.category === "security"
-    );
+    const editingTools = toolsList.filter((tool) => (tool.Category || tool.category) === "editing");
+    const convertTools = toolsList.filter((tool) => (tool.Category || tool.category) === "convert");
+    const securityTools = toolsList.filter((tool) => (tool.Category || tool.category) === "security");
+
+    const isPro = subscription?.tier === "pro";
 
     return (
         <header
@@ -34,7 +54,6 @@ export default function Header() {
         >
             <div className="mx-auto max-w-7xl px-6">
                 <div className="flex h-16 items-center justify-between">
-                    {/* Logo */}
                     <Link
                         href="/"
                         className="
@@ -99,7 +118,6 @@ export default function Header() {
                         </div>
                     </Link>
 
-                    {/* Navigation */}
                     <nav className="hidden md:flex items-center gap-2">
                         <Link
                             href="/"
@@ -114,8 +132,6 @@ export default function Header() {
                             Home
                         </Link>
 
-                        {/* Mega Menu Wrapper */}
-                        {/* CHANGE: Changed group/menu wrapper properties to static placement alignment to calculate against top max-w container instead of button width */}
                         <div className="static group/menu">
                             <button
                                 className="
@@ -139,9 +155,8 @@ export default function Header() {
                                 />
                             </button>
 
-                            {/* Dropdown Card Grid Container */}
-                            {/* FIX: Set left/right bounds to 6 (matching max-w padding) and switched translate to absolute full width mapping */}
                             <div
+                                style={forceHide ? { display: "none" } : undefined}
                                 className="
                                     invisible
                                     absolute
@@ -174,17 +189,17 @@ export default function Header() {
                                 </div>
 
                                 <div className="grid grid-cols-3 gap-8">
-                                    {/* Editing */}
                                     <div>
                                         <h4 className="mb-3 font-bold">
                                             ✏️ Editing
                                         </h4>
 
                                         <div className="space-y-1">
-                                            {editingTools.map((tool) => (
+                                            {editingTools.map((tool, idx) => (
                                                 <Link
-                                                    key={tool.href}
-                                                    href={tool.href}
+                                                    key={tool.Href || tool.href || idx}
+                                                    href={tool.Href || tool.href}
+                                                    onClick={closeMenu}
                                                     className="
                                                         flex items-center justify-between
                                                         rounded-xl
@@ -193,9 +208,9 @@ export default function Header() {
                                                         hover:bg-[color:var(--background)]
                                                     "
                                                 >
-                                                    <span>{tool.title}</span>
+                                                    <span>{tool.Title || tool.title}</span>
 
-                                                    {tool.isNew && (
+                                                    {(tool.IsNew || tool.isNew) && (
                                                         <span
                                                             className="
                                                                 rounded-md
@@ -215,17 +230,17 @@ export default function Header() {
                                         </div>
                                     </div>
 
-                                    {/* Convert */}
                                     <div>
                                         <h4 className="mb-3 font-bold">
                                             🔄 Convert
                                         </h4>
 
                                         <div className="space-y-1">
-                                            {convertTools.map((tool) => (
+                                            {convertTools.map((tool, idx) => (
                                                 <Link
-                                                    key={tool.href}
-                                                    href={tool.href}
+                                                    key={tool.Href || tool.href || idx}
+                                                    href={tool.Href || tool.href}
+                                                    onClick={closeMenu}
                                                     className="
                                                         flex items-center justify-between
                                                         rounded-xl
@@ -234,9 +249,9 @@ export default function Header() {
                                                         hover:bg-[color:var(--background)]
                                                     "
                                                 >
-                                                    <span>{tool.title}</span>
+                                                    <span>{tool.Title || tool.title}</span>
 
-                                                    {tool.isNew && (
+                                                    {(tool.IsNew || tool.isNew) && (
                                                         <span
                                                             className="
                                                                 rounded-md
@@ -256,17 +271,17 @@ export default function Header() {
                                         </div>
                                     </div>
 
-                                    {/* Security */}
                                     <div>
                                         <h4 className="mb-3 font-bold">
                                             🔒 Security
                                         </h4>
 
                                         <div className="space-y-1">
-                                            {securityTools.map((tool) => (
+                                            {securityTools.map((tool, idx) => (
                                                 <Link
-                                                    key={tool.href}
-                                                    href={tool.href}
+                                                    key={tool.Href || tool.href || idx}
+                                                    href={tool.Href || tool.href}
+                                                    onClick={closeMenu}
                                                     className="
                                                         flex items-center justify-between
                                                         rounded-xl
@@ -275,7 +290,7 @@ export default function Header() {
                                                         hover:bg-[color:var(--background)]
                                                     "
                                                 >
-                                                    <span>{tool.title}</span>
+                                                    <span>{tool.Title || tool.title}</span>
                                                 </Link>
                                             ))}
                                         </div>
@@ -291,6 +306,7 @@ export default function Header() {
                                 >
                                     <Link
                                         href="/tools"
+                                        onClick={closeMenu}
                                         className="
                                             text-sm
                                             font-semibold
@@ -306,6 +322,16 @@ export default function Header() {
 
                         <ToolSearch />
 
+                        {isAuthenticated && !isPro && (
+                            <Link
+                                href="/subscribe"
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold border border-amber-500/20 bg-amber-500/5 text-amber-500 hover:bg-amber-500/10 transition shadow-sm"
+                            >
+                                <Sparkles size={12} className="animate-pulse" />
+                                Go Pro
+                            </Link>
+                        )}
+
                         <Link
                             href="/about"
                             className="
@@ -318,32 +344,63 @@ export default function Header() {
                         >
                             About
                         </Link>
+
+                        {isAuthenticated && user?.role === "admin" && (
+                            <Link
+                                href="/admin"
+                                className="
+                                    rounded-xl
+                                    px-3 py-2
+                                    text-sm
+                                    font-bold
+                                    text-indigo-500
+                                    bg-indigo-500/5
+                                    border border-indigo-500/10
+                                    hover:bg-indigo-500/10
+                                    transition flex items-center gap-1.5
+                                "
+                            >
+                                <ShieldAlert size={14} />
+                                Admin Panel
+                            </Link>
+                        )}
                     </nav>
 
                     <div className="flex items-center gap-4">
-                        {/* Auth & Subscription Status */}
                         {isAuthenticated && subscription ? (
                             <div className="flex items-center gap-3">
-                                <div className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm border ${
-                                    subscription.tier === "pro"
-                                        ? "bg-amber-500/10 text-amber-500 border-amber-500/30"
-                                        : "bg-[color:var(--border)] text-[color:var(--muted-foreground)] border-transparent"
-                                }`}>
-                                    <Zap size={14} className={subscription.tier === "pro" ? "animate-pulse" : ""} />
-                                    <span className="uppercase tracking-wider">{subscription.tier} Account</span>
-                                </div>
+                                <Link
+                                    href="/dashboard"
+                                    className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm border transition-all hover:scale-105 active:scale-95 duration-150 cursor-pointer ${
+                                        subscription.tier === "pro"
+                                            ? "bg-amber-500/10 text-amber-500 border-amber-500/30 hover:bg-amber-500/20"
+                                            : "bg-[color:var(--border)] text-[color:var(--muted-foreground)] border-transparent hover:bg-[color:var(--border)]/80"
+                                    }`}
+                                >
+                                    <Zap size={14} className={subscription.tier === "pro" ? "animate-pulse" : ""}/>
+                                    <span className="uppercase tracking-wider">
+                                        {subscription.tier} <span className="hidden sm:inline">Account</span>
+                                    </span>
+                                </Link>
                                 <button
                                     onClick={logout}
                                     className="p-2 rounded-xl text-[color:var(--muted-foreground)] hover:bg-[color:var(--border)]/50 hover:text-[color:var(--foreground)] transition-colors"
                                     title="Sign Out"
                                 >
-                                    <LogOut size={18} />
+                                    <LogOut size={18}/>
                                 </button>
                             </div>
                         ) : (
-                            <Link href="/login" className="text-sm font-semibold hover:text-indigo-500 transition-colors">
-                                Sign In
-                            </Link>
+                            <div className="flex items-center gap-3">
+                                <Link href="/subscribe" className="text-xs font-bold text-indigo-500 hover:underline md:hidden">
+                                    Upgrade
+                                </Link>
+                                {/* UPDATED TO INJECT CALLBACK URL HERE */}
+                                <Link href={`/login?callbackUrl=${encodeURIComponent(pathname)}`}
+                                      className="text-sm font-semibold hover:text-indigo-500 transition-colors">
+                                    Sign In
+                                </Link>
+                            </div>
                         )}
 
                         <ThemeToggle />

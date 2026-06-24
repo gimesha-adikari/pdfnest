@@ -4,9 +4,13 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { fetchJson } from "@/lib/api";
 
 interface SubscriptionStatus {
-    tier: "free" | "pro";
+    role: string;
+    tier: "free" | "plus" | "pro";
     status: string;
     current_period_end: string;
+    custom_credits: number;
+    update_url?: string;
+    cancel_url?: string;
 }
 
 interface AuthContextType {
@@ -39,7 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const subData = await fetchJson<SubscriptionStatus>("/billing/status");
             setSubscription(subData);
             setIsAuthenticated(true);
-            setUser({ id: "active-session", email: "Active User", role: "user" });
+            setUser({ id: "active-session", email: "Active User", role: subData.role || "user" });
         } catch (err) {
             setUser(null);
             setSubscription(null);

@@ -1,18 +1,21 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import GoogleLoginButton from "@/components/auth/GoogleLoginButton";
 import { ArrowLeft, CheckCircle2, Mail, Lock, Loader2 } from "lucide-react";
 import { fetchJson } from "@/lib/api";
 
-export default function RegisterPage() {
+function RegisterContent() {
     const { isAuthenticated, isLoading: isAuthLoading, refreshSession } = useAuth();
     const router = useRouter();
+    const searchParams = useSearchParams();
 
-    // Form State
+    // Safely parse the callback route
+    const callbackUrl = searchParams.get("callbackUrl") || "/";
+
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
@@ -20,9 +23,9 @@ export default function RegisterPage() {
 
     useEffect(() => {
         if (!isAuthLoading && isAuthenticated) {
-            router.push("/");
+            router.push(callbackUrl);
         }
-    }, [isAuthenticated, isAuthLoading, router]);
+    }, [isAuthenticated, isAuthLoading, router, callbackUrl]);
 
     const handleManualRegister = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -30,19 +33,16 @@ export default function RegisterPage() {
         setIsSubmitting(true);
 
         try {
-            // 1. Create the account
             await fetchJson("/auth/register", {
                 method: "POST",
                 body: JSON.stringify({ email, password }),
             });
 
-            // 2. Automatically log them in to get the auth_token cookie
             await fetchJson("/auth/login", {
                 method: "POST",
                 body: JSON.stringify({ email, password }),
             });
 
-            // 3. Sync the frontend state
             await refreshSession();
         } catch (err: any) {
             setError(err.message || "Failed to create account. Email may already be in use.");
@@ -61,7 +61,6 @@ export default function RegisterPage() {
 
     return (
         <div className="min-h-screen flex flex-col md:flex-row bg-[var(--background)]">
-            {/* Left Side - Branding & Benefits */}
             <div className="hidden md:flex md:w-1/2 bg-indigo-500/5 border-r border-[color:var(--border)] flex-col justify-center p-12 lg:p-24 relative">
                 <Link href="/" className="absolute top-8 left-8 flex items-center gap-2 text-sm font-medium text-[color:var(--muted-foreground)] hover:text-indigo-500 transition-colors">
                     <ArrowLeft size={16} /> Back to Home
@@ -87,7 +86,6 @@ export default function RegisterPage() {
                 </div>
             </div>
 
-            {/* Right Side - Sign Up Form */}
             <div className="flex-1 flex flex-col items-center justify-center p-6 relative">
                 <Link href="/" className="md:hidden absolute top-8 left-6 flex items-center gap-2 text-sm font-medium text-[color:var(--muted-foreground)]">
                     <ArrowLeft size={16} /> Back
@@ -105,7 +103,6 @@ export default function RegisterPage() {
                         </div>
                     )}
 
-                    {/* Manual Register Form */}
                     <form onSubmit={handleManualRegister} className="space-y-4 mb-6">
                         <div className="relative">
                             <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--muted-foreground)]" size={18} />
@@ -149,10 +146,18 @@ export default function RegisterPage() {
                     </div>
 
                     <div className="text-sm text-[color:var(--muted-foreground)] text-center">
-                        Already have an account? <Link href="/login" className="font-semibold text-indigo-500 hover:underline">Log in</Link>
+                        Already have an account? <Link href={`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`} className="font-semibold text-indigo-500 hover:underline">Log in</Link>
                     </div>
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function RegisterPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-[var(--background)]"><Loader2 className="animate-spin text-indigo-500" size={32} /></div>}>
+            <RegisterContent />
+        </Suspense>
     );
 }

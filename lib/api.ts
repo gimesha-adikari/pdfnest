@@ -1,3 +1,4 @@
+// file: lib/api.ts
 import axios from "axios";
 
 export interface BackendError {
@@ -31,9 +32,22 @@ async function handleAxiosError(error: unknown): Promise<never> {
     }
 
     const response = error.response;
+    const configUrl = error.config?.url || "";
 
     if (!response) {
         throw new Error(error.message || "Network transport failure.");
+    }
+
+    // --- GLOBAL 401 UNAUTHORIZED INTERCEPTOR ---
+    // Prevent redirect loop for background auth checks
+    const isAuthEndpoint = configUrl.includes("/status") || configUrl.includes("/auth");
+    if (response.status === 401 && !isAuthEndpoint) {
+        if (typeof window !== "undefined") {
+            const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
+            window.location.href = `/login?callbackUrl=${currentPath}`;
+            // Return an unresolved promise to halt execution in the current call stack
+            return new Promise(() => {}) as Promise<never>;
+        }
     }
 
     if (response.status === 429) {
@@ -55,7 +69,7 @@ async function handleAxiosError(error: unknown): Promise<never> {
         try {
             parsed = JSON.parse(text);
         } catch {
-            // It's not JSON, which is fine!
+            // Ignore parse error
         }
 
         if (parsed && typeof parsed === "object") {
@@ -169,7 +183,7 @@ export async function uploadAndDownloadFile(
     return resultBlob;
 }
 
-export async function fetchJson<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
+export async function fetchJson<T = unknown>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
     const url = `${BASE_URL}${endpoint}`;
 
@@ -185,8 +199,18 @@ export async function fetchJson<T = any>(endpoint: string, options: RequestInit 
     const response = await fetch(url, config);
 
     if (!response.ok) {
+        const isAuthEndpoint = endpoint.includes("/status") || endpoint.includes("/auth");
+
+        if (response.status === 401 && !isAuthEndpoint) {
+            if (typeof window !== "undefined") {
+                const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
+                window.location.href = `/login?callbackUrl=${currentPath}`;
+                return new Promise(() => {}) as Promise<T>;
+            }
+        }
+
         const errPayload = await response.json().catch(() => ({}));
-        throw new Error(errPayload.error || `Network error: ${response.status}`);
+        throw new Error(errPayload.error || errPayload.message || `Network error: ${response.status}`);
     }
 
     if (response.status === 204) return {} as T;

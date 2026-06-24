@@ -4,13 +4,11 @@ export interface ToolFAQ {
 }
 
 export interface ToolItem {
+    ID?: number;
     title: string;
     description: string;
     href: string;
-    category:
-        | "editing"
-        | "convert"
-        | "security";
+    category: "editing" | "convert" | "security";
     keywords?: string[];
     seoTitle?: string;
     seoDescription?: string;
@@ -19,8 +17,10 @@ export interface ToolItem {
     faq?: ToolFAQ[];
     features?: string[];
     isNew?: boolean;
+    accept?: string;
+    multiple?: boolean;
 }
-
+// export const NAV_TOOLS: ToolItem[] =[];
 export const NAV_TOOLS: ToolItem[] = [
     {
         title: "Merge PDF",
@@ -41,6 +41,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/compress-pdf",
             "/pdf-to-word"
         ],
+        accept: ".pdf",
+        multiple: true,
         faq: [
             {
                 question: "Can I merge multiple PDF files?",
@@ -69,6 +71,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/merge-pdf",
             "/delete-pages"
         ],
+        accept: ".pdf",
+        multiple: false,
         faq: [
             {
                 question: "Can I extract specific pages from a PDF?",
@@ -97,6 +101,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/edit-pdf",
             "/delete-pages"
         ],
+        accept: ".pdf",
+        multiple: false,
         faq: [
             {
                 question: "Can I rotate individual pages or the whole document?",
@@ -125,6 +131,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/split-pdf",
             "/reorder-pages"
         ],
+        accept: ".pdf",
+        multiple: false,
         faq: [
             {
                 question: "How do I remove a page from my PDF?",
@@ -153,6 +161,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/merge-pdf",
             "/delete-pages"
         ],
+        accept: ".pdf",
+        multiple: false,
         faq: [
             {
                 question: "How do I rearrange the pages in my PDF?",
@@ -181,6 +191,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/edit-pdf",
             "/lock-pdf"
         ],
+        accept: ".pdf",
+        multiple: false,
         faq: [
             {
                 question: "Can I use an image as a watermark?",
@@ -209,6 +221,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/merge-pdf",
             "/grayscale-pdf"
         ],
+        accept: ".pdf",
+        multiple: false,
         faq: [
             {
                 question: "Will compressing my PDF ruin the images?",
@@ -238,6 +252,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/watermark-pdf"
         ],
         isNew: false,
+        accept: ".pdf",
+        multiple: false,
         faq: [
             {
                 question: "Can I choose where the page numbers appear?",
@@ -266,6 +282,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/edit-pdf",
             "/repair-pdf"
         ],
+        accept: ".pdf",
+        multiple: false,
         faq: [
             {
                 question: "What metadata fields can I edit?",
@@ -294,6 +312,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/unlock-pdf",
             "/watermark-pdf"
         ],
+        accept: ".pdf",
+        multiple: false,
         faq: [
             {
                 question: "What type of encryption is used to protect my PDF?",
@@ -322,6 +342,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/lock-pdf",
             "/edit-pdf"
         ],
+        accept: ".pdf",
+        multiple: false,
         faq: [
             {
                 question: "Can I remove a password if I forgot it?",
@@ -350,6 +372,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/pdf-to-images",
             "/merge-pdf"
         ],
+        accept: "image/*, .png, .jpg, .jpeg, .webp, .gif",
+        multiple: true,
         faq: [
             {
                 question: "What image formats are supported?",
@@ -378,6 +402,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/images-to-pdf",
             "/pdf-to-text"
         ],
+        accept: ".pdf",
+        multiple: false,
         faq: [
             {
                 question: "Will each page become a separate image?",
@@ -406,6 +432,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/pdf-to-word",
             "/image-to-text-pdf"
         ],
+        accept: ".pdf",
+        multiple: false,
         faq: [
             {
                 question: "Can this tool extract text from scanned documents?",
@@ -418,30 +446,59 @@ export const NAV_TOOLS: ToolItem[] = [
         ]
     },
     {
-        title: "Text Images to Text PDF",
-        description: "Extract text elements from scanned images or documents using smart OCR processing structures.",
-        href: "/image-to-text-pdf",
+        title: "Image to Searchable PDF",
+        description: "Convert scanned images into searchable PDFs while preserving the original layout, colors, logos, formatting, and design.",
+        href: "/image-to-searchable-pdf",
         category: "convert",
-        seoTitle: "Image OCR to Text PDF Online Free",
-        seoDescription: "Convert scanned images into searchable, selectable text PDFs using advanced OCR technology.",
-        intent: "Users want to make text within an image searchable and selectable in a PDF.",
+
+        seoTitle: "Image to Searchable PDF Online Free | OCR Image to PDF",
+        seoDescription: "Convert images, screenshots, and scanned documents into searchable PDFs online for free. Preserve the original appearance while adding selectable and searchable text with OCR.",
+
+        intent: "Users want to convert scanned images into searchable PDFs without losing the original visual layout and formatting.",
+
         keywords: [
-            "screenshot ocr to pdf",
-            "optical character recognition scan",
-            "editable image text text layer"
+            "image to searchable pdf",
+            "ocr image to pdf",
+            "searchable pdf from image",
+            "scan image to searchable pdf",
+            "image ocr pdf",
+            "searchable scanned pdf",
+            "screenshot to searchable pdf",
+            "convert image to searchable pdf",
+            "ocr searchable pdf online",
+            "searchable document from image"
         ],
+
         related: [
             "/pdf-to-text",
-            "/images-to-pdf"
+            "/images-to-pdf",
+            "/ocr-pdf"
         ],
+
+        accept: "image/*, .png, .jpg, .jpeg, .webp, .gif",
+
+        multiple: false,
+
         faq: [
             {
-                question: "Does this tool use OCR technology?",
-                answer: "Yes, the tool utilizes smart Optical Character Recognition (OCR) to analyze the image and convert pixel text into selectable, searchable PDF text."
+                question: "Does this tool preserve the original image layout?",
+                answer: "Yes. The original image is preserved exactly as uploaded, including colors, logos, fonts, spacing, and design elements. OCR is added as a hidden text layer without changing the appearance."
             },
             {
-                question: "What languages does the text recognition support?",
-                answer: "Our advanced OCR engine supports character recognition for a wide variety of global languages automatically."
+                question: "Can I search and copy text from the generated PDF?",
+                answer: "Yes. The generated PDF contains a searchable OCR text layer, allowing you to search, select, and copy text while keeping the original image appearance intact."
+            },
+            {
+                question: "Will the PDF look different from my uploaded image?",
+                answer: "No. The visual appearance remains virtually identical to the original image. The OCR process only adds an invisible searchable text layer behind the image."
+            },
+            {
+                question: "What image formats are supported?",
+                answer: "You can upload JPG, JPEG, PNG, WebP, GIF, and most common image formats for OCR conversion."
+            },
+            {
+                question: "What languages does OCR support?",
+                answer: "OCR language support depends on the installed OCR engine languages. Most major global languages can be recognized accurately when the corresponding language packs are available."
             }
         ]
     },
@@ -462,6 +519,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/edit-pdf",
             "/merge-pdf"
         ],
+        accept: ".pdf",
+        multiple: false,
         faq: [
             {
                 question: "What can I do in the PDF Studio?",
@@ -491,6 +550,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/excel-to-pdf"
         ],
         isNew: true,
+        accept: ".doc, .docx, application/msword, application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        multiple: false,
         faq: [
             {
                 question: "Will my Word formatting be preserved?",
@@ -520,6 +581,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/word-to-pdf"
         ],
         isNew: true,
+        accept: ".xls, .xlsx, application/vnd.ms-excel, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        multiple: false,
         faq: [
             {
                 question: "Will all my spreadsheet tabs convert to PDF?",
@@ -549,6 +612,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/word-to-pdf"
         ],
         isNew: true,
+        accept: ".ppt, .pptx, application/vnd.ms-powerpoint, application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        multiple: false,
         faq: [
             {
                 question: "Will animations from my presentation carry over?",
@@ -578,6 +643,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/code-to-pdf"
         ],
         isNew: true,
+        accept: "text/html",
+        multiple: false,
         faq: [
             {
                 question: "How does the website capture work?",
@@ -607,6 +674,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/word-to-pdf"
         ],
         isNew: true,
+        accept: ".md, text/markdown",
+        multiple: false,
         faq: [
             {
                 question: "Are markdown formatting styles like tables and code blocks supported?",
@@ -636,6 +705,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/url-to-pdf"
         ],
         isNew: true,
+        accept: "text/*, .js, .ts, .jsx, .tsx, .py, .java, .c, .cpp, .h, .hpp, .cs, .php, .rb, .go, .rs, .swift, .kt, .kts, .sh, .bat, .ps1, .pl, .pm, .sql, .json, .yaml, .yml, .ini, .conf, .toml, .xml, .md, .csv, .cfg, .log",
+        multiple: false,
         faq: [
             {
                 question: "Will my code's syntax highlighting be preserved?",
@@ -664,6 +735,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/lock-pdf",
             "/edit-metadata"
         ],
+        accept: ".pdf",
+        multiple: false,
         faq: [
             {
                 question: "Is the redacted text permanently removed?",
@@ -692,6 +765,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/studio",
             "/sign-pdf"
         ],
+        accept: ".pdf",
+        multiple: false,
         faq: [
             {
                 question: "Can I edit existing text in my PDF?",
@@ -720,6 +795,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/excel-to-pdf",
             "/pdf-to-word"
         ],
+        accept: ".pdf",
+        multiple: false,
         faq: [
             {
                 question: "Will it maintain my table columns and rows?",
@@ -727,7 +804,7 @@ export const NAV_TOOLS: ToolItem[] = [
             },
             {
                 question: "Can it extract data from scanned PDFs?",
-                answer: "If the PDF contains native vector text formatting, data is extracted flawlessly. Entirely flattened images require advanced OCR capability."
+                answer: "If the PDF contains a searchable text layer, it will be extracted perfectly. Scan documents require advanced configuration templates."
             }
         ]
     },
@@ -748,6 +825,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/word-to-pdf",
             "/pdf-to-text"
         ],
+        accept: ".pdf",
+        multiple: false,
         faq: [
             {
                 question: "Can I edit the converted Word document?",
@@ -776,6 +855,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/powerpoint-to-pdf",
             "/pdf-to-word"
         ],
+        accept: ".pdf",
+        multiple: false,
         faq: [
             {
                 question: "Can I edit the slides in PowerPoint after conversion?",
@@ -803,6 +884,8 @@ export const NAV_TOOLS: ToolItem[] = [
         related: [
             "/compress-pdf"
         ],
+        accept: ".pdf",
+        multiple: false,
         faq: [
             {
                 question: "What does converting to grayscale do?",
@@ -831,13 +914,15 @@ export const NAV_TOOLS: ToolItem[] = [
             "/compress-pdf",
             "/edit-metadata"
         ],
+        accept: ".pdf",
+        multiple: false,
         faq: [
             {
                 question: "What kind of PDF damage can be fixed?",
                 answer: "The tool attempts to rebuild cross-reference tables and fix corrupted dictionary layout trees that cause files to fail to open correctly."
             },
             {
-                question: "Will repairing the PDF recover all my lost data?",
+                question: "What will happen if my file data bytes are corrupted?",
                 answer: "While it actively recovers broken document structures, severely truncated or fully overwritten file data bytes might not be completely salvageable."
             }
         ]
@@ -859,6 +944,8 @@ export const NAV_TOOLS: ToolItem[] = [
             "/lock-pdf",
             "/edit-pdf"
         ],
+        accept: ".pdf",
+        multiple: false,
         faq: [
             {
                 question: "Is it secure to sign a PDF online?",
@@ -869,5 +956,77 @@ export const NAV_TOOLS: ToolItem[] = [
                 answer: "Yes, you can easily use your touchscreen, mouse, or trackpad to draw custom signature layers directly onto the page layout tracks."
             }
         ]
-    }
+    },
+    {
+        title: "Crop PDF",
+
+        description: "Crop PDF pages online by removing unwanted margins, whitespace, or page areas. Adjust page boundaries precisely while preserving document quality.",
+
+        href: "/crop-pdf",
+
+        category: "editing",
+
+        seoTitle: "Crop PDF Online Free | Remove Margins & White Space from PDFs",
+
+        seoDescription: "Crop PDF pages online for free. Remove white space, adjust margins, trim page boundaries, and customize PDF page dimensions securely in your browser.",
+
+        intent: "Users want to remove unwanted page areas, trim white margins, crop scanned documents, or adjust the visible boundaries of PDF pages.",
+
+        keywords: [
+            "crop pdf",
+            "crop pdf online",
+            "crop pdf free",
+            "crop pdf pages",
+            "remove pdf margins",
+            "crop pdf margins",
+            "remove white space pdf",
+            "crop scanned pdf",
+            "trim pdf pages",
+            "trim white borders pdf",
+            "pdf page crop",
+            "resize pdf page",
+            "adjust pdf margins",
+            "change pdf dimensions",
+            "crop pdf without adobe"
+        ],
+
+        related: [
+            "/split-pdf",
+            "/rotate-pdf",
+            "/delete-pages",
+            "/reorder-pages",
+            "/compress-pdf"
+        ],
+
+        accept: ".pdf",
+
+        multiple: false,
+
+        faq: [
+            {
+                question: "What does cropping a PDF do?",
+                answer: "Cropping changes the visible area of a PDF page by removing unwanted margins, whitespace, or page sections. The content outside the crop area is hidden from view in the output document."
+            },
+            {
+                question: "Can I crop all pages in a PDF at once?",
+                answer: "Yes. Most crop operations can be applied to a single page, selected pages, or every page in the document, depending on your chosen settings."
+            },
+            {
+                question: "Can I remove white borders from scanned PDFs?",
+                answer: "Yes. Cropping is commonly used to remove scanner borders, excess margins, and unwanted whitespace from scanned documents."
+            },
+            {
+                question: "Will cropping reduce the file size?",
+                answer: "Cropping may reduce file size slightly, but its primary purpose is to change the visible page area. The exact reduction depends on how the PDF is processed."
+            },
+            {
+                question: "Will cropping affect the quality of my PDF?",
+                answer: "No. Cropping changes the visible page boundaries without reducing the quality of text, images, or graphics contained within the document."
+            },
+            {
+                question: "Can I crop password-protected PDFs?",
+                answer: "Yes. If the PDF is password-protected, you can provide the correct password before applying crop adjustments."
+            }
+        ]
+    },
 ];

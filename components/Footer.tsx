@@ -1,15 +1,48 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { NAV_TOOLS } from "@/lib/toolsData";
+import { fetchJson } from "@/lib/api";
+
+interface BackendTool {
+    Title?: string;
+    title?: string;
+    Href?: string;
+    href?: string;
+    Category?: string;
+    category?: string;
+    IsNew?: boolean;
+    isNew?: boolean;
+}
 
 export default function Footer() {
-    const editingTools = NAV_TOOLS.filter((t) => t.category === "editing");
-    const convertTools = NAV_TOOLS.filter((t) => t.category === "convert");
-    const securityTools = NAV_TOOLS.filter((t) => t.category === "security");
+    const [toolsList, setToolsList] = useState<any[]>(NAV_TOOLS);
+
+    useEffect(() => {
+        fetchJson("/site-content/tools")
+            .then((data: unknown) => {
+                if (Array.isArray(data) && data.length > 0) {
+                    setToolsList(data);
+                } else {
+                    setToolsList(NAV_TOOLS);
+                }
+            })
+            .catch((err) => {
+                console.error("Failed fetching footer components layout from backend matrix, falling back:", err);
+                setToolsList(NAV_TOOLS);
+            });
+    }, []);
+
+    // Filter tools dynamically by property layer categories supporting both GORM case structures
+    const editingTools = toolsList.filter((t: BackendTool) => (t.Category || t.category) === "editing");
+    const convertTools = toolsList.filter((t: BackendTool) => (t.Category || t.category) === "convert");
+    const securityTools = toolsList.filter((t: BackendTool) => (t.Category || t.category) === "security");
 
     return (
         <footer className="mt-auto border-t border-border bg-(--card)/50 backdrop-blur-md relative z-10">
             <div className="mx-auto max-w-7xl px-6 py-12">
-                <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-4">
+                <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-5">
                     <div className="space-y-3">
                         <h3 className="text-md font-black tracking-tight bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent select-none">
                             PDFNest Engine
@@ -19,7 +52,7 @@ export default function Footer() {
                         </p>
                         <Link
                             href="/privacy"
-                            className="text-xs text-[color:var(--muted)] hover:text-indigo-500 transition-colors font-medium"
+                            className="text-xs text-[color:var(--muted)] hover:text-indigo-500 transition-colors font-medium inline-block"
                         >
                             Privacy Policy
                         </Link>
@@ -28,47 +61,66 @@ export default function Footer() {
                     <div>
                         <h4 className="font-bold text-xs uppercase tracking-widest text-foreground mb-3">Structure Layers</h4>
                         <div className="flex flex-col gap-2 text-xs font-medium text-muted">
-                            {editingTools.slice(0, 6).map((tool) => (
-                                <Link
-                                    key={tool.href}
-                                    href={tool.href}
-                                    className={`hover:text-indigo-500 transition-colors py-0.5 ${
-                                        tool.isNew ? "font-bold text-indigo-500" : ""
-                                    }`}
-                                >
-                                    {tool.title}
-                                </Link>
-                            ))}
+                            {editingTools.slice(0, 6).map((tool: BackendTool, idx) => {
+                                const href = tool.Href || tool.href || "#";
+                                const title = tool.Title || tool.title || "";
+                                const isNew = tool.IsNew !== undefined ? tool.IsNew : tool.isNew;
+                                return (
+                                    <Link
+                                        key={href + idx}
+                                        href={href}
+                                        className={`hover:text-indigo-500 transition-colors py-0.5 ${
+                                            isNew ? "font-bold text-indigo-500" : ""
+                                        }`}
+                                    >
+                                        {title}
+                                    </Link>
+                                );
+                            })}
                         </div>
                     </div>
 
                     <div>
-                        <h4 className="font-bold text-xs uppercase tracking-widest text-foreground mb-3">Convert & Secure</h4>
+                        <h4 className="font-bold text-xs uppercase tracking-widest text-foreground mb-3">Convert Layers</h4>
                         <div className="flex flex-col gap-2 text-xs font-medium text-muted">
-                            {convertTools.slice(0, 6).map((tool) => (
-                                <Link
-                                    key={tool.href}
-                                    href={tool.href}
-                                    className="hover:text-indigo-500 transition-colors py-0.5"
-                                >
-                                    {tool.title}
-                                </Link>
-                            ))}
+                            {convertTools.slice(0, 6).map((tool: BackendTool, idx) => {
+                                const href = tool.Href || tool.href || "#";
+                                const title = tool.Title || tool.title || "";
+                                const isNew = tool.IsNew !== undefined ? tool.IsNew : tool.isNew;
+                                return (
+                                    <Link
+                                        key={href + idx}
+                                        href={href}
+                                        className={`hover:text-indigo-500 transition-colors py-0.5 ${
+                                            isNew ? "font-bold text-indigo-500" : ""
+                                        }`}
+                                    >
+                                        {title}
+                                    </Link>
+                                );
+                            })}
                         </div>
                     </div>
 
                     <div>
-                        <h4 className="font-bold text-xs uppercase tracking-widest text-[color:var(--foreground)] mb-3">Convert & Secure</h4>
+                        <h4 className="font-bold text-xs uppercase tracking-widest text-[color:var(--foreground)] mb-3">Security Layers</h4>
                         <div className="flex flex-col gap-2 text-xs font-medium text-[color:var(--muted)]">
-                            {securityTools.slice(0, 6).map((tool) => (
-                                <Link
-                                    key={tool.href}
-                                    href={tool.href}
-                                    className="hover:text-indigo-500 transition-colors py-0.5"
-                                >
-                                    {tool.title}
-                                </Link>
-                            ))}
+                            {securityTools.slice(0, 6).map((tool: BackendTool, idx) => {
+                                const href = tool.Href || tool.href || "#";
+                                const title = tool.Title || tool.title || "";
+                                const isNew = tool.IsNew !== undefined ? tool.IsNew : tool.isNew;
+                                return (
+                                    <Link
+                                        key={href + idx}
+                                        href={href}
+                                        className={`hover:text-indigo-500 transition-colors py-0.5 ${
+                                            isNew ? "font-bold text-indigo-500" : ""
+                                        }`}
+                                    >
+                                        {title}
+                                    </Link>
+                                );
+                            })}
                         </div>
                     </div>
 

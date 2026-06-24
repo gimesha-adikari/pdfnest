@@ -53,8 +53,7 @@ export default function RootLayout({
             suppressHydrationWarning
             className={`${geistSans.variable} ${geistMono.variable} h-full antialiased selection:bg-indigo-500/30`}
         >
-        <body className="min-h-full bg-[var(--background)] text-[var(--foreground)] font-sans transition-colors duration-200">
-        <ThemeProvider>
+        <body className="min-h-full overflow-x-hidden bg-[var(--background)] text-[var(--foreground)] font-sans transition-colors duration-200">        <ThemeProvider>
             <GoogleOAuthProvider clientId={googleClientId}>
                 <AuthProvider>
 
