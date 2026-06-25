@@ -6,7 +6,15 @@ import { Search } from "lucide-react";
 import { NAV_TOOLS } from "@/lib/toolsData";
 import Stat from "./Stat";
 
-type Category = "all" | "editing" | "convert" | "security";
+type Category =
+    | "all"
+    | "organize"
+    | "edit"
+    | "convert"
+    | "create"
+    | "security"
+    | "optimize"
+    | "studio";
 
 export default function ToolsDirectory() {
     const [search, setSearch] = useState("");
@@ -27,17 +35,13 @@ export default function ToolsDirectory() {
         });
     }, [search, category]);
 
-    const editingCount = NAV_TOOLS.filter(
-        (t) => t.category === "editing"
-    ).length;
-
-    const convertCount = NAV_TOOLS.filter(
-        (t) => t.category === "convert"
-    ).length;
-
-    const securityCount = NAV_TOOLS.filter(
-        (t) => t.category === "security"
-    ).length;
+    const editingCount = NAV_TOOLS.filter((t) => t.category === "edit").length;
+    const organizeCount = NAV_TOOLS.filter((t) => t.category === "organize").length;
+    const convertCount = NAV_TOOLS.filter((t) => t.category === "convert").length;
+    const createCount = NAV_TOOLS.filter((t) => t.category === "create").length;
+    const securityCount = NAV_TOOLS.filter((t) => t.category === "security").length;
+    const optimizeCount = NAV_TOOLS.filter((t) => t.category === "optimize").length;
+    const studioCount = NAV_TOOLS.filter((t) => t.category === "studio").length;
 
     return (
         <main className="mx-auto max-w-7xl px-6 py-16">
@@ -59,9 +63,13 @@ export default function ToolsDirectory() {
 
             {/* Stats */}
             <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <Stat title="Editing" value={editingCount} />
-                <Stat title="Convert" value={convertCount} />
-                <Stat title="Security" value={securityCount} />
+                <Stat title="organize" value={organizeCount} />
+                <Stat title="edit" value={editingCount} />
+                <Stat title="convert" value={convertCount} />
+                <Stat title="create" value={createCount} />
+                <Stat title="security" value={securityCount} />
+                <Stat title="optimize" value={optimizeCount} />
+                <Stat title="studio" value={studioCount} />
             </div>
 
             {/* Search */}
@@ -93,32 +101,36 @@ export default function ToolsDirectory() {
 
             {/* Filters */}
             <div className="mt-8 flex flex-wrap justify-center gap-3">
-                <CategoryButton
-                    active={category === "all"}
-                    onClick={() => setCategory("all")}
-                >
+                <CategoryButton active={category === "all"} onClick={() => setCategory("all")}>
                     All
                 </CategoryButton>
 
-                <CategoryButton
-                    active={category === "editing"}
-                    onClick={() => setCategory("editing")}
-                >
-                    ✏️ Editing
+                <CategoryButton active={category === "organize"} onClick={() => setCategory("organize")}>
+                    Organize
                 </CategoryButton>
 
-                <CategoryButton
-                    active={category === "convert"}
-                    onClick={() => setCategory("convert")}
-                >
-                    🔄 Convert
+                <CategoryButton active={category === "edit"} onClick={() => setCategory("edit")}>
+                    Edit
                 </CategoryButton>
 
-                <CategoryButton
-                    active={category === "security"}
-                    onClick={() => setCategory("security")}
-                >
-                    🔒 Security
+                <CategoryButton active={category === "convert"} onClick={() => setCategory("convert")}>
+                    Convert
+                </CategoryButton>
+
+                <CategoryButton active={category === "create"} onClick={() => setCategory("create")}>
+                    Create
+                </CategoryButton>
+
+                <CategoryButton active={category === "security"} onClick={() => setCategory("security")}>
+                    Security
+                </CategoryButton>
+
+                <CategoryButton active={category === "optimize"} onClick={() => setCategory("optimize")}>
+                    Optimize
+                </CategoryButton>
+
+                <CategoryButton active={category === "studio"} onClick={() => setCategory("studio")}>
+                    Studio
                 </CategoryButton>
             </div>
 

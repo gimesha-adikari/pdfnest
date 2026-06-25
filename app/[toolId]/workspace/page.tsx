@@ -34,6 +34,11 @@ import UrlToPdfWorkspace from "@/components/tools/UrlToPdfWorkspace";
 import WatermarkPdfWorkspace from "@/components/tools/WatermarkPdfWorkspace";
 import WordToPdfWorkspace from "@/components/tools/WordToPdfWorkspace";
 import CropPdfWorkspace from "@/components/tools/CropPdfWorkspace";
+import DuplicatePagesWorkspace from "@/components/tools/DuplicatePagesWorkspace";
+import InsertBlankWorkspace from "@/components/tools/InsertBlankWorkspace";
+import AddTextWorkspace from "@/components/tools/AddTextWorkspace";
+import HighlightPdfWorkspace from "@/components/tools/HighlightPdfWorkspace";
+import UnderlinePdfWorkspace from "@/components/tools/UnderlinePdfWorkspace";
 
 export default function SharedWorkspacePage() {
     const router = useRouter();
@@ -89,6 +94,11 @@ export default function SharedWorkspacePage() {
             {toolId === "watermark-pdf" && <WatermarkPdfWorkspace />}
             {toolId === "word-to-pdf" && <WordToPdfWorkspace />}
             {toolId === "crop-pdf" && <CropPdfWorkspace />}
+            {toolId === "duplicate-pages" && <DuplicatePagesWorkspace />}
+            {toolId === "insert-blank-pages" && <InsertBlankWorkspace />}
+            {toolId === "add-text" && <AddTextWorkspace />}
+            {toolId === "highlight-pdf" && <HighlightPdfWorkspace />}
+            {toolId === "underline-pdf" && <UnderlinePdfWorkspace />}
         </PdfToolLayout>
     );
 }

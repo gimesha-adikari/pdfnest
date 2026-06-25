@@ -1,4 +1,3 @@
-// file: lib/api.ts
 import axios from "axios";
 
 export interface BackendError {
@@ -38,8 +37,6 @@ async function handleAxiosError(error: unknown): Promise<never> {
         throw new Error(error.message || "Network transport failure.");
     }
 
-    // --- GLOBAL 401 UNAUTHORIZED INTERCEPTOR ---
-    // Prevent redirect loop for background auth checks
     const isAuthEndpoint = configUrl.includes("/status") || configUrl.includes("/auth");
     if (response.status === 401 && !isAuthEndpoint) {
         if (typeof window !== "undefined") {
@@ -87,7 +84,7 @@ async function handleAxiosError(error: unknown): Promise<never> {
     }
 }
 
-function getBaseUrl(): string {
+export function getBaseUrl(): string {
     return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 }
 

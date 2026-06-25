@@ -48,10 +48,65 @@ export default function Home() {
         const description = (tool.Description || tool.description || "").toLowerCase();
         return title.includes(query) || description.includes(query);
     });
+    const organizeTools = filteredTools.filter(
+        (tool) => (tool.Category || tool.category) === "organize"
+    );
+    const editTools = filteredTools.filter(
+        (tool) => (tool.Category || tool.category) === "edit"
+    );
+    const convertTools = filteredTools.filter(
+        (tool) => (tool.Category || tool.category) === "convert"
+    );
+    const createTools = filteredTools.filter(
+        (tool) => (tool.Category || tool.category) === "create"
+    );
+    const securityTools = filteredTools.filter(
+        (tool) => (tool.Category || tool.category) === "security"
+    );
+    const optimizeTools = filteredTools.filter(
+        (tool) => (tool.Category || tool.category) === "optimize"
+    );
+    const studioTools = filteredTools.filter(
+        (tool) => (tool.Category || tool.category) === "studio"
+    );
 
-    const editingTools = filteredTools.filter((tool) => (tool.Category || tool.category) === "editing");
-    const convertTools = filteredTools.filter((tool) => (tool.Category || tool.category) === "convert");
-    const securityTools = filteredTools.filter((tool) => (tool.Category || tool.category) === "security");
+    const toolGroups = [
+        {
+            title: content.categoryOrganizeTitle || "Organize",
+            desc: content.categoryOrganizeDesc || "Split, merge, rotate, crop, and rearrange pages.",
+            tools: organizeTools,
+        },
+        {
+            title: content.categoryEditingTitle || "Edit",
+            desc: content.categoryEditingDesc || "Edit content, annotate, sign, and add text.",
+            tools: editTools,
+        },
+        {
+            title: content.categoryConvertTitle || "Convert",
+            desc: content.categoryConvertDesc || "Convert PDFs to other formats.",
+            tools: convertTools,
+        },
+        {
+            title: content.categoryCreateTitle || "Create",
+            desc: content.categoryCreateDesc || "Create PDFs from images, office files, web pages, code, and markdown.",
+            tools: createTools,
+        },
+        {
+            title: content.categorySecurityTitle || "Security",
+            desc: content.categorySecurityDesc || "Protect, unlock, and redact files.",
+            tools: securityTools,
+        },
+        {
+            title: content.categoryOptimizeTitle || "Optimize",
+            desc: content.categoryOptimizeDesc || "Compress, grayscale, and repair PDFs.",
+            tools: optimizeTools,
+        },
+        {
+            title: content.categoryStudioTitle || "Studio",
+            desc: content.categoryStudioDesc || "Advanced all-in-one PDF workspace.",
+            tools: studioTools,
+        },
+    ];
 
     return (
         <main className="relative min-h-screen overflow-hidden bg-[var(--background)] text-[var(--foreground)] pb-24">
@@ -197,62 +252,33 @@ export default function Home() {
                     </div>
                 )}
 
-                {editingTools.length > 0 && (
-                    <section className="mt-20 border-t border-[color:var(--border)] pt-16">
-                        <div className="mb-8">
-                            <h2 className="text-2xl font-black text-[color:var(--foreground)] tracking-tight">{content.categoryEditingTitle}</h2>
-                            <p className="mt-1 text-sm text-[color:var(--muted)] font-medium">{content.categoryEditingDesc}</p>
-                        </div>
-                        <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3">
-                            {editingTools.map((tool, idx) => (
-                                <ToolCard
-                                    key={tool.Href || tool.href || idx}
-                                    title={tool.Title || tool.title}
-                                    description={tool.Description || tool.description}
-                                    href={tool.Href || tool.href}
-                                />
-                            ))}
-                        </div>
-                    </section>
+                {toolGroups.map(
+                    (group) =>
+                        group.tools.length > 0 && (
+                            <section key={group.title} className="mt-20 border-t border-[color:var(--border)] pt-16">
+                                <div className="mb-8">
+                                    <h2 className="text-2xl font-black text-[color:var(--foreground)] tracking-tight">
+                                        {group.title}
+                                    </h2>
+                                    <p className="mt-1 text-sm text-[color:var(--muted)] font-medium">
+                                        {group.desc}
+                                    </p>
+                                </div>
+
+                                <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3">
+                                    {group.tools.map((tool, idx) => (
+                                        <ToolCard
+                                            key={tool.Href || tool.href || idx}
+                                            title={tool.Title || tool.title}
+                                            description={tool.Description || tool.description}
+                                            href={tool.Href || tool.href}
+                                        />
+                                    ))}
+                                </div>
+                            </section>
+                        )
                 )}
 
-                {convertTools.length > 0 && (
-                    <section className="mt-20 border-t border-[color:var(--border)] pt-16">
-                        <div className="mb-8">
-                            <h2 className="text-2xl font-black text-[color:var(--foreground)] tracking-tight">{content.categoryConvertTitle}</h2>
-                            <p className="mt-1 text-sm text-[color:var(--muted)] font-medium">{content.categoryConvertDesc}</p>
-                        </div>
-                        <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3">
-                            {convertTools.map((tool, idx) => (
-                                <ToolCard
-                                    key={tool.Href || tool.href || idx}
-                                    title={tool.Title || tool.title}
-                                    description={tool.Description || tool.description}
-                                    href={tool.Href || tool.href}
-                                />
-                            ))}
-                        </div>
-                    </section>
-                )}
-
-                {securityTools.length > 0 && (
-                    <section className="mt-20 border-t border-[color:var(--border)] pt-16">
-                        <div className="mb-8">
-                            <h2 className="text-2xl font-black text-[color:var(--foreground)] tracking-tight">{content.categorySecurityTitle}</h2>
-                            <p className="mt-1 text-sm text-[color:var(--muted)] font-medium">{content.categorySecurityDesc}</p>
-                        </div>
-                        <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3">
-                            {securityTools.map((tool, idx) => (
-                                <ToolCard
-                                    key={tool.Href || tool.href || idx}
-                                    title={tool.Title || tool.title}
-                                    description={tool.Description || tool.description}
-                                    href={tool.Href || tool.href}
-                                />
-                            ))}
-                        </div>
-                    </section>
-                )}
             </section>
         </main>
     );

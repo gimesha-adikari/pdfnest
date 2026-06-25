@@ -1,6 +1,16 @@
 import Link from "next/link";
 import {NAV_TOOLS} from "@/lib/toolsData";
 
+type Category =
+    | "all"
+    | "organize"
+    | "edit"
+    | "convert"
+    | "create"
+    | "security"
+    | "optimize"
+    | "studio";
+
 export function MobileLink({
                                href,
                                icon,
@@ -53,7 +63,7 @@ export function ToolGroup({
                           }: {
     title: string;
     icon: React.ReactNode;
-    category: "editing" | "convert" | "security";
+    category: Category;
     close: () => void;
 }) {
 

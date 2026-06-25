@@ -1,3 +1,12 @@
+export type ToolCategory =
+    | "organize"
+    | "edit"
+    | "convert"
+    | "create"
+    | "security"
+    | "optimize"
+    | "studio";
+
 export interface ToolFAQ {
     question: string;
     answer: string;
@@ -8,7 +17,7 @@ export interface ToolItem {
     title: string;
     description: string;
     href: string;
-    category: "editing" | "convert" | "security";
+    category: ToolCategory;
     keywords?: string[];
     seoTitle?: string;
     seoDescription?: string;
@@ -26,7 +35,7 @@ export const NAV_TOOLS: ToolItem[] = [
         title: "Merge PDF",
         description: "Combine multiple PDF files into one document quickly and easily.",
         href: "/merge-pdf",
-        category: "editing",
+        category: "organize",
         seoTitle: "Merge PDF Online Free - Combine PDF Files",
         seoDescription: "Merge multiple PDF files into one document online. Arrange pages and create a single PDF quickly with PDFNest.",
         intent: "Users want to combine multiple PDF documents into one file.",
@@ -58,7 +67,7 @@ export const NAV_TOOLS: ToolItem[] = [
         title: "Split PDF",
         description: "Extract specific pages from a PDF or separate files into individual sheets.",
         href: "/split-pdf",
-        category: "editing",
+        category: "organize",
         seoTitle: "Split PDF Online Free - Extract Pages",
         seoDescription: "Extract specific pages or separate a large PDF into multiple smaller files instantly online.",
         intent: "Users want to separate a PDF into multiple files or extract specific pages.",
@@ -88,7 +97,7 @@ export const NAV_TOOLS: ToolItem[] = [
         title: "Rotate PDF",
         description: "Rotate PDF pages easily and permanently change document orientations layout grids.",
         href: "/rotate-pdf",
-        category: "editing",
+        category: "organize",
         seoTitle: "Rotate PDF Pages Online Free",
         seoDescription: "Permanently rotate individual PDF pages or entire documents online quickly and easily.",
         intent: "Users want to fix the orientation of PDF pages.",
@@ -118,7 +127,7 @@ export const NAV_TOOLS: ToolItem[] = [
         title: "Delete Pages",
         description: "Remove specific unneeded pages from a PDF document stream instantly.",
         href: "/delete-pages",
-        category: "editing",
+        category: "organize",
         seoTitle: "Delete Pages from PDF Online Free",
         seoDescription: "Remove unwanted pages from your PDF documents instantly. Fast, secure, and free online tool.",
         intent: "Users want to remove unwanted pages from a PDF document.",
@@ -148,7 +157,7 @@ export const NAV_TOOLS: ToolItem[] = [
         title: "Reorder Pages",
         description: "Change the order of PDF pages visually using an interactive sorting grid sequence layout.",
         href: "/reorder-pages",
-        category: "editing",
+        category: "organize",
         seoTitle: "Reorder PDF Pages Online Free",
         seoDescription: "Drag and drop to rearrange PDF pages easily. Organize your document exactly how you need it.",
         intent: "Users want to change the sequence of pages within a PDF.",
@@ -178,7 +187,7 @@ export const NAV_TOOLS: ToolItem[] = [
         title: "Watermark PDF",
         description: "Add custom text watermarks or image stamps securely to PDF layout backgrounds.",
         href: "/watermark-pdf",
-        category: "editing",
+        category: "edit",
         seoTitle: "Add Watermark to PDF Online Free",
         seoDescription: "Stamp your documents by adding customizable text or image watermarks to your PDF files securely.",
         intent: "Users want to brand or protect their PDFs with a visual watermark.",
@@ -208,7 +217,7 @@ export const NAV_TOOLS: ToolItem[] = [
         title: "Compress PDF",
         description: "Reduce PDF file sizes instantly by stripping object redundancy and unneeded systems metadata.",
         href: "/compress-pdf",
-        category: "editing",
+        category: "optimize",
         seoTitle: "Compress PDF Files Online Free",
         seoDescription: "Reduce the size of your PDF files without losing quality. Fast and secure online PDF optimizer.",
         intent: "Users want to make a PDF file smaller for emailing or uploading.",
@@ -238,7 +247,7 @@ export const NAV_TOOLS: ToolItem[] = [
         title: "Add Page Numbers",
         description: "Easily add sequential page numbers to your PDF document. Choose positions, dimensions, and styling elements.",
         href: "/add-page-numbers",
-        category: "editing",
+        category: "edit",
         seoTitle: "Add Page Numbers to PDF Online Free",
         seoDescription: "Insert page numbers into your PDF documents. Customize position, font, and starting number easily.",
         intent: "Users want to number the pages of a PDF document.",
@@ -269,7 +278,7 @@ export const NAV_TOOLS: ToolItem[] = [
         title: "Edit PDF Metadata",
         description: "Modify document property values like Title, Author, Subject description and system Keywords tags.",
         href: "/edit-metadata",
-        category: "editing",
+        category: "edit",
         seoTitle: "Edit PDF Metadata Online Free",
         seoDescription: "View and change hidden PDF properties, including author, title, keywords, and subject data.",
         intent: "Users want to change the hidden property fields of a PDF.",
@@ -359,7 +368,7 @@ export const NAV_TOOLS: ToolItem[] = [
         title: "Images to PDF",
         description: "Convert graphic image files (PNG, JPG, WebP) into organized, optimized PDF files easily.",
         href: "/images-to-pdf",
-        category: "convert",
+        category: "create",
         seoTitle: "Convert Images to PDF Online Free",
         seoDescription: "Combine JPG, PNG, and WebP images into a single PDF document easily. High-quality image conversion.",
         intent: "Users want to turn picture files into a single PDF document.",
@@ -449,7 +458,7 @@ export const NAV_TOOLS: ToolItem[] = [
         title: "Image to Searchable PDF",
         description: "Convert scanned images into searchable PDFs while preserving the original layout, colors, logos, formatting, and design.",
         href: "/image-to-searchable-pdf",
-        category: "convert",
+        category: "create",
 
         seoTitle: "Image to Searchable PDF Online Free | OCR Image to PDF",
         seoDescription: "Convert images, screenshots, and scanned documents into searchable PDFs online for free. Preserve the original appearance while adding selectable and searchable text with OCR.",
@@ -506,7 +515,7 @@ export const NAV_TOOLS: ToolItem[] = [
         title: "PDF Studio",
         description: "Edit, chain operations, process, reorganize layout topologies, and configure your PDF in one tool.",
         href: "/studio",
-        category: "editing",
+        category: "studio",
         seoTitle: "Advanced PDF Studio - All-in-One Editor",
         seoDescription: "A powerful all-in-one workspace to edit, merge, process, and completely manage your PDF documents online.",
         intent: "Users need a comprehensive workspace to do multiple operations on a PDF.",
@@ -536,7 +545,7 @@ export const NAV_TOOLS: ToolItem[] = [
         title: "Word to PDF",
         description: "Convert Word (.docx, .doc) documents into standard printable vector PDFs instantly.",
         href: "/word-to-pdf",
-        category: "convert",
+        category: "create",
         seoTitle: "Convert Word to PDF Online Free",
         seoDescription: "Turn Microsoft Word documents into PDF files securely while preserving all original formatting.",
         intent: "Users want to securely share a Word document by converting it to PDF format.",
@@ -567,7 +576,7 @@ export const NAV_TOOLS: ToolItem[] = [
         title: "Excel to PDF",
         description: "Convert Excel (.xlsx, .xls) sheets and grid data directly into standard printable vector PDFs.",
         href: "/excel-to-pdf",
-        category: "convert",
+        category: "create",
         seoTitle: "Convert Excel to PDF Online Free",
         seoDescription: "Transform Excel spreadsheets into easily readable and printable PDF documents instantly.",
         intent: "Users want to lock spreadsheet data into a fixed PDF view.",
@@ -598,7 +607,7 @@ export const NAV_TOOLS: ToolItem[] = [
         title: "PowerPoint to PDF",
         description: "Convert PowerPoint (.pptx, .ppt) pitch slide decks into standard vector PDF presentation frames.",
         href: "/powerpoint-to-pdf",
-        category: "convert",
+        category: "create",
         seoTitle: "Convert PowerPoint to PDF Online Free",
         seoDescription: "Save your PPT and PPTX presentation slides as static PDF files easily and securely.",
         intent: "Users want to share presentations in a universally viewable PDF format.",
@@ -629,7 +638,7 @@ export const NAV_TOOLS: ToolItem[] = [
         title: "URL to PDF Website Capture",
         description: "Input a live webpage link to render, scrape, and capture the DOM viewport directly into a printable vector PDF template document.",
         href: "/url-to-pdf",
-        category: "convert",
+        category: "create",
         seoTitle: "Convert URL Website to PDF Online Free",
         seoDescription: "Capture any live webpage and save it as a high-quality, printable PDF document instantly.",
         intent: "Users want to save a web page as a PDF for offline viewing or archiving.",
@@ -660,7 +669,7 @@ export const NAV_TOOLS: ToolItem[] = [
         title: "Markdown to PDF",
         description: "Convert documentation markdown files (.md) into clean, typography-focused stylized portrait vector PDFs.",
         href: "/markdown-to-pdf",
-        category: "convert",
+        category: "create",
         seoTitle: "Convert Markdown to PDF Online Free",
         seoDescription: "Render MD files into beautiful, formatted PDF documents with proper typography and layouts.",
         intent: "Users want to turn plain text markdown into a visually appealing document.",
@@ -691,7 +700,7 @@ export const NAV_TOOLS: ToolItem[] = [
         title: "Source Code to PDF",
         description: "Convert development script source files into clean syntax-highlighted printable vector layout sheets.",
         href: "/code-to-pdf",
-        category: "convert",
+        category: "create",
         seoTitle: "Convert Source Code to PDF Online Free",
         seoDescription: "Format programming code files into beautiful PDFs with full syntax highlighting and line numbers.",
         intent: "Users want to print or share code snippets in a readable, formatted way.",
@@ -752,7 +761,7 @@ export const NAV_TOOLS: ToolItem[] = [
         title: "PDF Editor",
         description: "Modify explicit text components inline coordinates matrices while preserving format matrix loops seamlessly.",
         href: "/edit-pdf",
-        category: "editing",
+        category: "edit",
         seoTitle: "Edit PDF Online Free - Full Document Editor",
         seoDescription: "Edit text, add shapes, insert images, and modify your PDF directly in your browser.",
         intent: "Users want to make direct text or layout changes to an existing PDF.",
@@ -872,7 +881,7 @@ export const NAV_TOOLS: ToolItem[] = [
         title: "Grayscale PDF",
         description: "Remove color tracks from your files to optimize printing consumption parameters and drop server weights paths.",
         href: "/grayscale-pdf",
-        category: "convert",
+        category: "optimize",
         seoTitle: "Convert PDF to Grayscale Online Free",
         seoDescription: "Easily convert color PDF documents to black and white or grayscale to save ink and reduce file size.",
         intent: "Users want to remove color from a PDF to save printer ink.",
@@ -901,7 +910,7 @@ export const NAV_TOOLS: ToolItem[] = [
         title: "Repair PDF",
         description: "Rebuild cross reference tables and fix damaged dictionary tree layouts components so they open without corruption warnings.",
         href: "/repair-pdf",
-        category: "editing",
+        category: "optimize",
         seoTitle: "Repair Corrupted PDF Online Free",
         seoDescription: "Repair damaged PDF files and restore documents that fail to open.",
         intent: "Users need to recover broken PDF files.",
@@ -931,7 +940,7 @@ export const NAV_TOOLS: ToolItem[] = [
         title: "Sign On PDF",
         description: "Add signatures to PDF documents with a simple online signing tool.",
         href: "/sign-pdf",
-        category: "editing",
+        category: "edit",
         seoTitle: "Sign PDF Online Free",
         seoDescription: "Add electronic signatures to PDF documents quickly and securely.",
         intent: "Users want to sign PDF documents digitally.",
@@ -964,7 +973,7 @@ export const NAV_TOOLS: ToolItem[] = [
 
         href: "/crop-pdf",
 
-        category: "editing",
+        category: "organize",
 
         seoTitle: "Crop PDF Online Free | Remove Margins & White Space from PDFs",
 
@@ -1026,6 +1035,362 @@ export const NAV_TOOLS: ToolItem[] = [
             {
                 question: "Can I crop password-protected PDFs?",
                 answer: "Yes. If the PDF is password-protected, you can provide the correct password before applying crop adjustments."
+            }
+        ]
+    },
+    {
+        title: "Duplicate PDF Pages",
+
+        description: "Duplicate PDF pages online by copying selected pages multiple times. Clone individual pages or page ranges while preserving the original document quality and layout.",
+
+        href: "/duplicate-pages",
+
+        category: "organize",
+
+        seoTitle: "Duplicate PDF Pages Online Free | Copy PDF Pages Instantly",
+
+        seoDescription: "Duplicate PDF pages online for free. Copy individual pages or page ranges multiple times while preserving formatting, layout, images, and document quality.",
+
+        intent: "Users want to duplicate one or more pages in a PDF document for printing, templates, forms, repeated sections, worksheets, or document organization.",
+
+        keywords: [
+            "duplicate pdf pages",
+            "copy pdf pages",
+            "duplicate pages in pdf",
+            "clone pdf pages",
+            "repeat pdf pages",
+            "duplicate page pdf online",
+            "copy page in pdf",
+            "duplicate pdf free",
+            "repeat pages in pdf",
+            "duplicate multiple pdf pages",
+            "copy pdf page online",
+            "duplicate page range pdf",
+            "clone pages pdf",
+            "duplicate pdf without adobe",
+            "duplicate document pages"
+        ],
+
+        related: [
+            "/reorder-pages",
+            "/delete-pages",
+            "/split-pdf",
+            "/rotate-pdf",
+            "/merge-pdf"
+        ],
+
+        accept: ".pdf",
+
+        multiple: false,
+
+        faq: [
+            {
+                question: "What does duplicating PDF pages do?",
+                answer: "Duplicating PDF pages creates one or more exact copies of selected pages and inserts them into the PDF while preserving all text, images, formatting, and layout."
+            },
+            {
+                question: "Can I duplicate multiple pages at once?",
+                answer: "Yes. You can duplicate individual pages, multiple selected pages, or entire page ranges in a single operation."
+            },
+            {
+                question: "Can I create multiple copies of the same page?",
+                answer: "Yes. You can specify how many copies you want to create for each selected page, making it easy to repeat templates, worksheets, or forms."
+            },
+            {
+                question: "Will duplicated pages keep the original quality?",
+                answer: "Yes. Duplicated pages are exact copies of the originals, so text, images, graphics, and formatting remain unchanged."
+            },
+            {
+                question: "Can I duplicate pages in a password-protected PDF?",
+                answer: "Yes. If your PDF is password-protected, simply provide the correct password before duplicating the selected pages."
+            },
+            {
+                question: "Will duplicating pages increase the PDF file size?",
+                answer: "Yes. Since additional pages are added to the document, the output PDF will usually be larger depending on the number and complexity of the duplicated pages."
+            }
+        ]
+    },{
+        title: "Insert Blank PDF Pages",
+
+        description: "Insert blank pages into a PDF online at the beginning, end, or after any page. Add empty pages for notes, separators, printing, signatures, or document organization.",
+
+        href: "/insert-blank-pages",
+
+        category: "organize",
+
+        seoTitle: "Insert Blank Pages into PDF Online Free | Add Empty PDF Pages",
+
+        seoDescription: "Insert blank pages into PDF files for free. Add empty pages at the beginning, end, or anywhere in your document while preserving formatting and document quality.",
+
+        intent: "Users want to add one or more blank pages into an existing PDF document for note-taking, separators, signatures, printing, document organization, or future content.",
+
+        keywords: [
+            "insert blank pages pdf",
+            "add blank pages pdf",
+            "insert empty page pdf",
+            "add empty page to pdf",
+            "blank pdf page",
+            "insert page into pdf",
+            "add page pdf",
+            "pdf blank page",
+            "append blank page pdf",
+            "insert blank sheet pdf",
+            "pdf page insertion",
+            "add pages to pdf online",
+            "insert page after pdf",
+            "blank page pdf online",
+            "add blank pages without adobe"
+        ],
+
+        related: [
+            "/delete-pages",
+            "/duplicate-pages",
+            "/reorder-pages",
+            "/merge-pdf",
+            "/split-pdf"
+        ],
+
+        accept: ".pdf",
+
+        multiple: false,
+
+        faq: [
+            {
+                question: "What does inserting blank PDF pages do?",
+                answer: "It adds one or more empty pages into your PDF without changing the existing content. Blank pages can be inserted at the beginning, end, or after any selected page."
+            },
+            {
+                question: "Can I insert multiple blank pages at once?",
+                answer: "Yes. You can add one or several blank pages in a single operation wherever you need them within the document."
+            },
+            {
+                question: "Where can I insert blank pages?",
+                answer: "You can insert blank pages at the beginning of the PDF, at the end, or after any specific page in the document."
+            },
+            {
+                question: "Will adding blank pages affect my existing content?",
+                answer: "No. Existing pages remain unchanged. The selected blank pages are simply inserted into the document while preserving all formatting and quality."
+            },
+            {
+                question: "Can I insert blank pages into a password-protected PDF?",
+                answer: "Yes. If your PDF is password-protected, simply provide the correct password before inserting blank pages."
+            },
+            {
+                question: "Why would I add blank pages to a PDF?",
+                answer: "Blank pages are useful for adding notes, creating chapter separators, preparing printed documents, leaving space for signatures, or organizing large PDF files."
+            }
+        ]
+    },{
+        title: "Add Text to PDF",
+
+        description: "Add custom text to PDF pages online. Insert labels, annotations, dates, names, document references, or custom messages anywhere in your PDF while preserving the original layout.",
+
+        href: "/add-text",
+
+        category: "edit",
+
+        seoTitle: "Add Text to PDF Online Free | Insert Custom Text into PDFs",
+
+        seoDescription: "Add text to PDF files online for free. Insert custom text, annotations, labels, dates, names, and notes on selected PDF pages with adjustable font size, color, and placement.",
+
+        intent: "Users want to add custom text, labels, notes, names, dates, document numbers, comments, or annotations to one or more pages of a PDF document without editing the original content.",
+
+        keywords: [
+            "add text to pdf",
+            "insert text into pdf",
+            "write on pdf",
+            "pdf text editor",
+            "type on pdf",
+            "annotate pdf text",
+            "add custom text pdf",
+            "edit pdf text online",
+            "add notes to pdf",
+            "stamp text on pdf",
+            "pdf text annotation",
+            "fill pdf text",
+            "add labels to pdf",
+            "write text on pdf online",
+            "add text to pdf without adobe"
+        ],
+
+        related: [
+            "/add-signature",
+            "/watermark-pdf",
+            "/edit-pdf",
+            "/edit-metadata",
+            "/protect-pdf"
+        ],
+
+        accept: ".pdf",
+
+        multiple: false,
+
+        faq: [
+            {
+                question: "What does adding text to a PDF do?",
+                answer: "It allows you to place custom text anywhere on one or more PDF pages without changing the existing document content. You can add notes, names, labels, dates, or other information."
+            },
+            {
+                question: "Can I choose where the text appears?",
+                answer: "Yes. You can position the text at various locations on the page, such as the top, bottom, center, or any predefined anchor point."
+            },
+            {
+                question: "Can I customize the text appearance?",
+                answer: "Yes. You can adjust the font size, choose the text color, and select where the text should be placed on the page."
+            },
+            {
+                question: "Can I add text to only certain pages?",
+                answer: "Yes. You can apply text to all pages or specify individual pages or page ranges, such as page 1, pages 3-5, or any custom selection."
+            },
+            {
+                question: "Will adding text affect the existing PDF content?",
+                answer: "No. The original content remains unchanged. Your custom text is added as a new layer on top of the selected pages."
+            },
+            {
+                question: "Can I add text to a password-protected PDF?",
+                answer: "Yes. If your PDF is password-protected, simply provide the correct password before adding text."
+            }
+        ]
+    },{
+        title: "Highlight PDF",
+
+        description: "Highlight text and important sections in PDF files online. Add colored highlight markers to emphasize key content while preserving the original document layout and quality.",
+
+        href: "/highlight-pdf",
+
+        category: "edit",
+
+        seoTitle: "Highlight PDF Online Free | Add Highlight Markers to PDF",
+
+        seoDescription: "Highlight PDF documents online for free. Mark important text and document sections using customizable highlight colors without changing the original PDF content.",
+
+        intent: "Users want to highlight important text, paragraphs, sentences, or document sections in PDF files for reviewing, studying, collaboration, or document annotation.",
+
+        keywords: [
+            "highlight pdf",
+            "highlight text in pdf",
+            "pdf highlighter",
+            "highlight pdf online",
+            "highlight pdf free",
+            "mark text in pdf",
+            "annotate pdf",
+            "pdf annotation",
+            "highlight document pdf",
+            "highlight important text pdf",
+            "pdf markup",
+            "highlight paragraphs pdf",
+            "add highlights to pdf",
+            "pdf review tool",
+            "highlight pdf without adobe"
+        ],
+
+        related: [
+            "/add-text",
+            "/draw-on-pdf",
+            "/add-signature",
+            "/edit-pdf",
+            "/watermark-pdf"
+        ],
+
+        accept: ".pdf",
+
+        multiple: false,
+
+        faq: [
+            {
+                question: "What does highlighting a PDF do?",
+                answer: "Highlighting adds colored translucent markers over important text or document areas, making key information easier to find while keeping the original content unchanged."
+            },
+            {
+                question: "Can I choose different highlight colors?",
+                answer: "Yes. You can select from multiple highlight colors such as yellow, green, blue, pink, and orange before applying highlights."
+            },
+            {
+                question: "Can I highlight multiple sections in one PDF?",
+                answer: "Yes. You can add multiple highlight markers across one or more pages before saving the edited document."
+            },
+            {
+                question: "Will highlighting change or erase the original text?",
+                answer: "No. Highlights are added as annotations over the document and do not modify or remove the underlying text or graphics."
+            },
+            {
+                question: "Can I highlight password-protected PDFs?",
+                answer: "Yes. If your PDF is password-protected, simply provide the correct password before adding highlights."
+            },
+            {
+                question: "Will the highlights be visible in other PDF readers?",
+                answer: "Yes. The highlights are embedded into the output PDF and can be viewed in most modern PDF readers and browsers."
+            }
+        ]
+    },{
+        title: "Underline PDF",
+
+        description: "Underline text and important content in PDF files online. Add colored underline annotations to emphasize words, sentences, or document sections while preserving the original layout and formatting.",
+
+        href: "/underline-pdf",
+
+        category: "edit",
+
+        seoTitle: "Underline PDF Online Free | Add Underlines to PDF Documents",
+
+        seoDescription: "Underline text in PDF files for free. Draw colored underline annotations on selected text and document sections while preserving the original PDF quality and formatting.",
+
+        intent: "Users want to underline important words, sentences, paragraphs, or document sections in PDF files for studying, reviewing, proofreading, collaboration, or document annotation.",
+
+        keywords: [
+            "underline pdf",
+            "underline text in pdf",
+            "pdf underline",
+            "underline pdf online",
+            "underline pdf free",
+            "draw underline on pdf",
+            "annotate pdf",
+            "mark text in pdf",
+            "pdf annotation",
+            "underline document pdf",
+            "underline words pdf",
+            "underline sentences pdf",
+            "edit pdf online",
+            "pdf markup tool",
+            "underline pdf without adobe"
+        ],
+
+        related: [
+            "/highlight-pdf",
+            "/draw-on-pdf",
+            "/add-text",
+            "/edit-pdf",
+            "/add-signature"
+        ],
+
+        accept: ".pdf",
+
+        multiple: false,
+
+        faq: [
+            {
+                question: "What does underlining a PDF do?",
+                answer: "Underlining adds colored lines beneath selected text or document areas to emphasize important information without changing the original PDF content."
+            },
+            {
+                question: "Can I choose different underline colors?",
+                answer: "Yes. You can select from multiple underline colors before applying your annotations to the PDF."
+            },
+            {
+                question: "Can I underline multiple sections in the same PDF?",
+                answer: "Yes. You can add as many underline annotations as needed across one or more pages before saving the final document."
+            },
+            {
+                question: "Will underlining modify the original text?",
+                answer: "No. Underlines are added as annotations on top of the document while leaving the original text, images, and formatting unchanged."
+            },
+            {
+                question: "Can I underline text in password-protected PDFs?",
+                answer: "Yes. If your PDF is password-protected, simply provide the correct password before adding underline annotations."
+            },
+            {
+                question: "Will underlines appear in other PDF readers?",
+                answer: "Yes. The underlines are permanently embedded into the output PDF and can be viewed in most modern PDF readers and web browsers."
             }
         ]
     },

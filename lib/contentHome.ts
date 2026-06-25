@@ -23,12 +23,27 @@ export interface HomeContent {
     popularToolTitle: string;
     popularToolDescription: string;
     popularToolAction: string;
+
+    categoryOrganizeTitle: string;
+    categoryOrganizeDesc: string;
+
     categoryEditingTitle: string;
     categoryEditingDesc: string;
+
     categoryConvertTitle: string;
     categoryConvertDesc: string;
+
+    categoryCreateTitle: string;
+    categoryCreateDesc: string;
+
     categorySecurityTitle: string;
     categorySecurityDesc: string;
+
+    categoryOptimizeTitle: string;
+    categoryOptimizeDesc: string;
+
+    categoryStudioTitle: string;
+    categoryStudioDesc: string;
 }
 
 export const fallbackHomeContent: HomeContent = {
@@ -56,10 +71,25 @@ export const fallbackHomeContent: HomeContent = {
     popularToolTitle: "Merge PDF Documents Collectively",
     popularToolDescription: "Combine separate structural files into a clean compound container setup natively in seconds without data compression loss.",
     popularToolAction: "Open Tool Module",
-    categoryEditingTitle: "PDF Document Architecture Editing",
-    categoryEditingDesc: "Modify structural parameters and compile native document elements layout grids.",
-    categoryConvertTitle: "Conversion Modules",
-    categoryConvertDesc: "Change container formats.",
-    categorySecurityTitle: "High-Grade Security",
-    categorySecurityDesc: "Attach high-fidelity cipher authorization signatures securely.",
+
+    categoryOrganizeTitle: "Page Organization",
+    categoryOrganizeDesc: "Merge, split, rotate, crop, and organize PDF pages effortlessly.",
+
+    categoryEditingTitle: "Document Editing",
+    categoryEditingDesc: "Edit content, add annotations, signatures, watermarks, and page elements.",
+
+    categoryConvertTitle: "PDF Conversion",
+    categoryConvertDesc: "Convert PDFs to and from documents, images, text, and other formats.",
+
+    categoryCreateTitle: "PDF Creation",
+    categoryCreateDesc: "Create PDFs from Office files, images, websites, code, and markdown.",
+
+    categorySecurityTitle: "Document Security",
+    categorySecurityDesc: "Protect, unlock, and permanently remove sensitive information from PDFs.",
+
+    categoryOptimizeTitle: "Optimization & Repair",
+    categoryOptimizeDesc: "Compress, repair, and optimize PDFs for sharing, storage, and printing.",
+
+    categoryStudioTitle: "PDF Studio",
+    categoryStudioDesc: "An advanced workspace for complete PDF editing and document management.",
 };

@@ -11,7 +11,7 @@ import {
     RefreshCw,
     Shield,
     Search,
-    Menu,
+    Menu, Zap, Sparkles,
 } from "lucide-react";
 
 import { MobileLink, ToolGroup } from "@/components/MobileComponents";
@@ -246,9 +246,13 @@ export default function MobileNav() {
                         </div>
 
                         <div className="mt-4 pt-4 border-t border-slate-200/60 dark:border-white/10 space-y-4">
-                            <ToolGroup title="Editing" icon={<PenTool size={16}/>} category="editing" close={closeSidebar}  />
-                            <ToolGroup title="Convert" icon={<RefreshCw size={16}/>} category="convert" close={closeSidebar}  />
-                            <ToolGroup title="Security" icon={<Shield size={16}/>} category="security" close={closeSidebar} />
+                            <ToolGroup title="Organize" icon={<RefreshCw size={16} />} category="organize" close={closeSidebar} />
+                            <ToolGroup title="Edit" icon={<PenTool size={16} />} category="edit" close={closeSidebar} />
+                            <ToolGroup title="Convert" icon={<RefreshCw size={16} />} category="convert" close={closeSidebar} />
+                            <ToolGroup title="Create" icon={<FileText size={16} />} category="create" close={closeSidebar} />
+                            <ToolGroup title="Security" icon={<Shield size={16} />} category="security" close={closeSidebar} />
+                            <ToolGroup title="Optimize" icon={<Zap size={16} />} category="optimize" close={closeSidebar} />
+                            <ToolGroup title="Studio" icon={<Sparkles size={16} />} category="studio" close={closeSidebar} />
                         </div>
                     </aside>
                 </div>

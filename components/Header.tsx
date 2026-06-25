@@ -1,18 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import {useEffect, useState} from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import {usePathname} from "next/navigation";
 import ThemeToggle from "./ThemeToggle";
 import ToolSearch from "./ui/ToolSearch";
-import { NAV_TOOLS } from "@/lib/toolsData";
-import { ChevronDown, LogOut, Zap, ShieldAlert, Sparkles } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
-import { fetchJson } from "@/lib/api";
+import {NAV_TOOLS} from "@/lib/toolsData";
+import {ChevronDown, LogOut, ShieldAlert, Sparkles, Zap} from "lucide-react";
+import {useAuth} from "@/context/AuthContext";
+import {fetchJson} from "@/lib/api";
 
 export default function Header() {
-    const { subscription, isAuthenticated, logout, user } = useAuth();
+    const {subscription, isAuthenticated, logout, user} = useAuth();
     const pathname = usePathname();
     const [forceHide, setForceHide] = useState(false);
     const [toolsList, setToolsList] = useState<any[]>([]);
@@ -37,9 +37,13 @@ export default function Header() {
         setTimeout(() => setForceHide(false), 150);
     };
 
-    const editingTools = toolsList.filter((tool) => (tool.Category || tool.category) === "editing");
+    const organizeTools = toolsList.filter((tool) => (tool.Category || tool.category) === "organize");
+    const editTools = toolsList.filter((tool) => (tool.Category || tool.category) === "edit");
     const convertTools = toolsList.filter((tool) => (tool.Category || tool.category) === "convert");
+    const createTools = toolsList.filter((tool) => (tool.Category || tool.category) === "create");
     const securityTools = toolsList.filter((tool) => (tool.Category || tool.category) === "security");
+    const optimizeTools = toolsList.filter((tool) => (tool.Category || tool.category) === "optimize");
+    const studioTools = toolsList.filter((tool) => (tool.Category || tool.category) === "studio");
 
     const isPro = subscription?.tier === "pro";
 
@@ -156,7 +160,7 @@ export default function Header() {
                             </button>
 
                             <div
-                                style={forceHide ? { display: "none" } : undefined}
+                                style={forceHide ? {display: "none"} : undefined}
                                 className="
                                     invisible
                                     absolute
@@ -188,113 +192,42 @@ export default function Header() {
                                     </p>
                                 </div>
 
-                                <div className="grid grid-cols-3 gap-8">
-                                    <div>
-                                        <h4 className="mb-3 font-bold">
-                                            ✏️ Editing
-                                        </h4>
+                                <div className="grid grid-cols-4 gap-8">
+                                    {[
+                                        {icon: "📄", title: "Organize", tools: organizeTools},
+                                        {icon: "✏️", title: "Edit", tools: editTools},
+                                        {icon: "🔄", title: "Convert", tools: convertTools},
+                                        {icon: "➕", title: "Create", tools: createTools},
+                                        {icon: "🔒", title: "Security", tools: securityTools},
+                                        {icon: "⚡", title: "Optimize", tools: optimizeTools},
+                                        {icon: "🛠️", title: "Studio", tools: studioTools},
+                                    ].map((group) => (
+                                        <div key={group.title}>
+                                            <h4 className="mb-3 font-bold">
+                                                {group.icon} {group.title}
+                                            </h4>
 
-                                        <div className="space-y-1">
-                                            {editingTools.map((tool, idx) => (
-                                                <Link
-                                                    key={tool.Href || tool.href || idx}
-                                                    href={tool.Href || tool.href}
-                                                    onClick={closeMenu}
-                                                    className="
-                                                        flex items-center justify-between
-                                                        rounded-xl
-                                                        px-3 py-2
-                                                        text-sm
-                                                        hover:bg-[color:var(--background)]
-                                                    "
-                                                >
-                                                    <span>{tool.Title || tool.title}</span>
+                                            <div className="space-y-1">
+                                                {group.tools.map((tool, idx) => (
+                                                    <Link
+                                                        key={tool.Href || tool.href || idx}
+                                                        href={tool.Href || tool.href}
+                                                        onClick={closeMenu}
+                                                        className="flex items-center justify-between rounded-xl px-3 py-2 text-sm hover:bg-[color:var(--background)]"
+                                                    >
+                                                        <span>{tool.Title || tool.title}</span>
 
-                                                    {(tool.IsNew || tool.isNew) && (
-                                                        <span
-                                                            className="
-                                                                rounded-md
-                                                                bg-indigo-500
-                                                                px-1.5 py-0.5
-                                                                text-[9px]
-                                                                font-black
-                                                                uppercase
-                                                                text-white
-                                                            "
-                                                        >
-                                                            New
-                                                        </span>
-                                                    )}
-                                                </Link>
-                                            ))}
+                                                        {(tool.IsNew || tool.isNew) && (
+                                                            <span
+                                                                className="rounded-md bg-indigo-500 px-1.5 py-0.5 text-[9px] font-black uppercase text-white">
+                                New
+                            </span>
+                                                        )}
+                                                    </Link>
+                                                ))}
+                                            </div>
                                         </div>
-                                    </div>
-
-                                    <div>
-                                        <h4 className="mb-3 font-bold">
-                                            🔄 Convert
-                                        </h4>
-
-                                        <div className="space-y-1">
-                                            {convertTools.map((tool, idx) => (
-                                                <Link
-                                                    key={tool.Href || tool.href || idx}
-                                                    href={tool.Href || tool.href}
-                                                    onClick={closeMenu}
-                                                    className="
-                                                        flex items-center justify-between
-                                                        rounded-xl
-                                                        px-3 py-2
-                                                        text-sm
-                                                        hover:bg-[color:var(--background)]
-                                                    "
-                                                >
-                                                    <span>{tool.Title || tool.title}</span>
-
-                                                    {(tool.IsNew || tool.isNew) && (
-                                                        <span
-                                                            className="
-                                                                rounded-md
-                                                                bg-indigo-500
-                                                                px-1.5 py-0.5
-                                                                text-[9px]
-                                                                font-black
-                                                                uppercase
-                                                                text-white
-                                                            "
-                                                        >
-                                                            New
-                                                        </span>
-                                                    )}
-                                                </Link>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <h4 className="mb-3 font-bold">
-                                            🔒 Security
-                                        </h4>
-
-                                        <div className="space-y-1">
-                                            {securityTools.map((tool, idx) => (
-                                                <Link
-                                                    key={tool.Href || tool.href || idx}
-                                                    href={tool.Href || tool.href}
-                                                    onClick={closeMenu}
-                                                    className="
-                                                        flex items-center justify-between
-                                                        rounded-xl
-                                                        px-3 py-2
-                                                        text-sm
-                                                        hover:bg-[color:var(--background)]
-                                                    "
-                                                >
-                                                    <span>{tool.Title || tool.title}</span>
-                                                </Link>
-                                            ))}
-                                        </div>
-                                    </div>
+                                    ))}
                                 </div>
 
                                 <div
@@ -320,14 +253,14 @@ export default function Header() {
                             </div>
                         </div>
 
-                        <ToolSearch />
+                        <ToolSearch/>
 
                         {isAuthenticated && !isPro && (
                             <Link
                                 href="/subscribe"
                                 className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold border border-amber-500/20 bg-amber-500/5 text-amber-500 hover:bg-amber-500/10 transition shadow-sm"
                             >
-                                <Sparkles size={12} className="animate-pulse" />
+                                <Sparkles size={12} className="animate-pulse"/>
                                 Go Pro
                             </Link>
                         )}
@@ -360,7 +293,7 @@ export default function Header() {
                                     transition flex items-center gap-1.5
                                 "
                             >
-                                <ShieldAlert size={14} />
+                                <ShieldAlert size={14}/>
                                 Admin Panel
                             </Link>
                         )}
@@ -392,7 +325,8 @@ export default function Header() {
                             </div>
                         ) : (
                             <div className="flex items-center gap-3">
-                                <Link href="/subscribe" className="text-xs font-bold text-indigo-500 hover:underline md:hidden">
+                                <Link href="/subscribe"
+                                      className="text-xs font-bold text-indigo-500 hover:underline md:hidden">
                                     Upgrade
                                 </Link>
                                 {/* UPDATED TO INJECT CALLBACK URL HERE */}
@@ -403,7 +337,7 @@ export default function Header() {
                             </div>
                         )}
 
-                        <ThemeToggle />
+                        <ThemeToggle/>
                     </div>
                 </div>
             </div>
