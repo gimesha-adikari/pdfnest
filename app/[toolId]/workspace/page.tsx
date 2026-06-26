@@ -39,6 +39,7 @@ import InsertBlankWorkspace from "@/components/tools/InsertBlankWorkspace";
 import AddTextWorkspace from "@/components/tools/AddTextWorkspace";
 import HighlightPdfWorkspace from "@/components/tools/HighlightPdfWorkspace";
 import UnderlinePdfWorkspace from "@/components/tools/UnderlinePdfWorkspace";
+import StrikeoutPdfWorkspace from "@/components/tools/StrikeoutPdfWorkspace";
 
 export default function SharedWorkspacePage() {
     const router = useRouter();
@@ -99,6 +100,7 @@ export default function SharedWorkspacePage() {
             {toolId === "add-text" && <AddTextWorkspace />}
             {toolId === "highlight-pdf" && <HighlightPdfWorkspace />}
             {toolId === "underline-pdf" && <UnderlinePdfWorkspace />}
+            {toolId === "strikeout-pdf" && <StrikeoutPdfWorkspace />}
         </PdfToolLayout>
     );
 }

@@ -9,17 +9,22 @@ import { ArrowLeft, CheckCircle2, Mail, Lock, Loader2 } from "lucide-react";
 import { fetchJson } from "@/lib/api";
 
 function RegisterContent() {
-    const { isAuthenticated, isLoading: isAuthLoading, refreshSession } = useAuth();
+    const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
 
-    // Safely parse the callback route
     const callbackUrl = searchParams.get("callbackUrl") || "/";
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+
     const [error, setError] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const [registrationComplete, setRegistrationComplete] = useState(false);
+    const [registeredEmail, setRegisteredEmail] = useState("");
+    const [isResending, setIsResending] = useState(false);
+    const [resendSuccess, setResendSuccess] = useState("");
 
     useEffect(() => {
         if (!isAuthLoading && isAuthenticated) {
@@ -38,16 +43,52 @@ function RegisterContent() {
                 body: JSON.stringify({ email, password }),
             });
 
-            await fetchJson("/auth/login", {
-                method: "POST",
-                body: JSON.stringify({ email, password }),
-            });
+            router.push(
+                `/verify-email?email=${encodeURIComponent(email)}`
+            );
 
-            await refreshSession();
         } catch (err: any) {
-            setError(err.message || "Failed to create account. Email may already be in use.");
+            setError(err.message || "Failed to create account.");
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const handleResendEmail = async () => {
+        setError("");
+        setResendSuccess("");
+        setIsResending(true);
+
+        try {
+            await fetchJson("/auth/resend-verification", {
+                method: "POST",
+                body: JSON.stringify({
+                    email: registeredEmail,
+                }),
+            });
+
+            setResendSuccess("Verification email sent again.");
+        } catch (err: any) {
+            setError(err.message || "Failed to resend verification email.");
+        } finally {
+            setIsResending(false);
+        }
+    };
+
+    const getMailProvider = (email: string) => {
+        const domain = email.split("@")[1]?.toLowerCase();
+
+        switch (domain) {
+            case "gmail.com":
+                return "https://mail.google.com";
+            case "outlook.com":
+            case "hotmail.com":
+            case "live.com":
+                return "https://outlook.live.com/mail";
+            case "yahoo.com":
+                return "https://mail.yahoo.com";
+            default:
+                return null;
         }
     };
 
@@ -103,38 +144,107 @@ function RegisterContent() {
                         </div>
                     )}
 
-                    <form onSubmit={handleManualRegister} className="space-y-4 mb-6">
-                        <div className="relative">
-                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--muted-foreground)]" size={18} />
-                            <input
-                                type="email"
-                                placeholder="Email address"
-                                required
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2.5 bg-[var(--card)] border border-[color:var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                            />
+                    {registrationComplete ? (
+                        <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-8 text-center">
+
+                            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10">
+                                <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+                            </div>
+
+                            <h3 className="text-2xl font-bold mb-3">
+                                Account Created!
+                            </h3>
+
+                            <p className="text-[color:var(--muted-foreground)]">
+                                We&#39;ve sent a verification email to
+                            </p>
+
+                            <p className="font-bold text-lg mt-2 break-all">
+                                {registeredEmail}
+                            </p>
+
+                            <p className="mt-6 text-sm text-[color:var(--muted-foreground)]">
+                                Click the verification link in the email before signing in.
+                            </p>
+
+                            {resendSuccess && (
+                                <div className="mt-5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-600">
+                                    {resendSuccess}
+                                </div>
+                            )}
+
+                            <div className="mt-8 flex flex-col gap-3">
+
+                                {getMailProvider(registeredEmail) && (
+                                    <a
+                                        href={getMailProvider(registeredEmail)!}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="rounded-xl bg-indigo-500 py-3 font-semibold text-white hover:bg-indigo-600 transition"
+                                    >
+                                        Open Email Inbox
+                                    </a>
+                                )}
+
+                                <button
+                                    type="button"
+                                    onClick={handleResendEmail}
+                                    disabled={isResending}
+                                    className="rounded-xl border border-[color:var(--border)] py-3 font-semibold hover:bg-[var(--background)] transition disabled:opacity-60"
+                                >
+                                    {isResending ? (
+                                        <Loader2 className="mx-auto animate-spin" size={18} />
+                                    ) : (
+                                        "Resend Verification Email"
+                                    )}
+                                </button>
+
+                                <Link
+                                    href="/login"
+                                    className="rounded-xl border border-[color:var(--border)] py-3 font-semibold hover:bg-[var(--background)] transition"
+                                >
+                                    Back to Login
+                                </Link>
+
+                            </div>
+
                         </div>
-                        <div className="relative">
-                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--muted-foreground)]" size={18} />
-                            <input
-                                type="password"
-                                placeholder="Create a password"
-                                minLength={6}
-                                required
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2.5 bg-[var(--card)] border border-[color:var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                            />
-                        </div>
-                        <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className="w-full py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl text-sm font-bold flex justify-center items-center gap-2 disabled:opacity-70 transition-colors"
-                        >
-                            {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : "Sign Up"}
-                        </button>
-                    </form>
+                    ) : (
+
+                        <form onSubmit={handleManualRegister} className="space-y-4 mb-6">
+                            <div className="relative">
+                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--muted-foreground)]" size={18} />
+                                <input
+                                    type="email"
+                                    placeholder="Email address"
+                                    required
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    className="w-full pl-10 pr-4 py-2.5 bg-[var(--card)] border border-[color:var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                />
+                            </div>
+                            <div className="relative">
+                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--muted-foreground)]" size={18} />
+                                <input
+                                    type="password"
+                                    placeholder="Create a password"
+                                    minLength={6}
+                                    required
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="w-full pl-10 pr-4 py-2.5 bg-[var(--card)] border border-[color:var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                />
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className="w-full py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl text-sm font-bold flex justify-center items-center gap-2 disabled:opacity-70 transition-colors"
+                            >
+                                {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : "Sign Up"}
+                            </button>
+                        </form>
+                    )}
+
 
                     <div className="relative flex items-center justify-center mb-6">
                         <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-[color:var(--border)]"></div></div>

@@ -14,12 +14,25 @@ function LoginContent() {
     const searchParams = useSearchParams();
 
     const callbackUrl = searchParams.get("callbackUrl") || "/";
+    const verified = searchParams.get("verified");
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
+    const [success, setSuccess] = useState("");
+    const [isResending, setIsResending] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    useEffect(() => {
+        if (verified === "1") {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setSuccess("✅ Email verified successfully. You can now sign in.");
+        }
+
+        if (verified === "0") {
+            setError("Verification link is invalid or has expired.");
+        }
+    }, [verified]);
     useEffect(() => {
         if (!isAuthLoading && isAuthenticated) {
             router.push(callbackUrl);
@@ -39,9 +52,44 @@ function LoginContent() {
 
             await refreshSession();
         } catch (err: any) {
-            setError(err.message || "Failed to log in. Please check your credentials.");
+            const msg = err.message || "";
+
+            if (msg.toLowerCase().includes("verify")) {
+                setError(
+                    "Please verify your email before signing in."
+                );
+            } else {
+                setError(msg || "Failed to log in.");
+            }
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const handleResend = async () => {
+        if (!email) {
+            setError("Enter your email first.");
+            return;
+        }
+
+        setIsResending(true);
+
+        try {
+            await fetchJson("/auth/resend-verification", {
+                method: "POST",
+                body: JSON.stringify({
+                    email,
+                }),
+            });
+
+            setSuccess(
+                "Verification email has been sent again."
+            );
+            setError("");
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setIsResending(false);
         }
     };
 
@@ -76,6 +124,12 @@ function LoginContent() {
                         Sign in to lift your daily PDF limits.
                     </p>
                 </div>
+
+                {success && (
+                    <div className="mb-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-center text-sm text-emerald-600">
+                        {success}
+                    </div>
+                )}
 
                 {error && (
                     <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm text-center font-medium">
@@ -113,6 +167,19 @@ function LoginContent() {
                     >
                         {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : "Sign In"}
                     </button>
+
+                    <div className="mt-4 text-center">
+                        <button
+                            type="button"
+                            onClick={handleResend}
+                            disabled={isResending}
+                            className="text-sm font-medium text-indigo-500 hover:underline"
+                        >
+                            {isResending
+                                ? "Sending..."
+                                : "Resend verification email"}
+                        </button>
+                    </div>
                 </form>
 
                 <div className="relative flex items-center justify-center mb-6">

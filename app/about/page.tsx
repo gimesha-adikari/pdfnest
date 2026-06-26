@@ -33,7 +33,6 @@ export default function AboutPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Fetch only from backend
         Promise.all([
             fetchJson<AboutData>("/site-content/about"),
             fetchJson<any[]>("/site-content/tools")
@@ -66,13 +65,12 @@ export default function AboutPage() {
         );
     }
 
-    // Dynamic Calculations based on ACTUAL backend tool data
     const totalToolsCount = toolsList.length;
     const uniqueCategories = new Set(toolsList.map(t => (t.Category || t.category || "General").toLowerCase()));
     const workspaceCount = uniqueCategories.size;
 
     const stats = [
-        { value: `${totalToolsCount}+`, label: "PDF Tools Available" },
+        { value: `${totalToolsCount-1}+`, label: "PDF Tools Available" },
         { value: String(workspaceCount), label: "Workspace Modules" },
         { value: "Free", label: "Plan Available" },
         { value: "Pro", label: "Advanced Workspaces" }

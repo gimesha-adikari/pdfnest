@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect, useRef, type PointerEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
-    Underline,
+    Strikethrough,
     Loader2,
     ShieldCheck,
     ChevronLeft,
@@ -16,8 +16,7 @@ import {
     MousePointer2,
     Sparkles,
 } from "lucide-react";
-import { getBaseUrl } from "@/lib/api";
-import { uploadAndDownloadFile } from "@/lib/api";
+import { getBaseUrl, uploadAndDownloadFile } from "@/lib/api";
 import { getFriendlyErrorMessage } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
@@ -45,7 +44,7 @@ interface PdfJsDocument {
     getPage: (pageNumber: number) => Promise<PdfJsPage>;
 }
 
-interface UnderlineBox {
+interface StrikeoutBox {
     id: string;
     x: number;
     y: number;
@@ -55,7 +54,7 @@ interface UnderlineBox {
     color: string;
 }
 
-type UnderlineMode = "smart" | "manual" | "ocr";
+type StrikeoutMode = "smart" | "manual" | "ocr";
 type PageKind = "text" | "scanned" | "mixed" | "blank" | "unknown";
 
 interface PageAnalysis {
@@ -74,12 +73,11 @@ interface PDFAnalysis {
     pages: PageAnalysis[];
 }
 
-const UNDERLINE_COLORS = [
-    { name: "Red", hex: "#FF4D4D" },
-    { name: "Blue", hex: "#4D7CFF" },
-    { name: "Green", hex: "#22C55E" },
-    { name: "Orange", hex: "#F97316" },
-    { name: "Purple", hex: "#A855F7" },
+const STRIKE_COLORS = [
+    { name: "Red", hex: "#FF0000" },
+    { name: "Black", hex: "#000000" },
+    { name: "Blue", hex: "#0066FF" },
+    { name: "Green", hex: "#00AA00" },
 ];
 
 function formatMB(bytes: number) {
@@ -101,7 +99,7 @@ function prettyKind(kind: PageKind | undefined) {
     }
 }
 
-export default function UnderlinePdfWorkspace() {
+export default function StrikeoutPdfWorkspace() {
     const { requireAuth } = useAuth();
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
@@ -116,15 +114,16 @@ export default function UnderlinePdfWorkspace() {
     const [pdfDimensions, setPdfDimensions] = useState({ width: 0, height: 0 });
     const [displayDimensions, setDisplayDimensions] = useState({ width: 0, height: 0 });
 
-    const [boxes, setBoxes] = useState<UnderlineBox[]>([]);
-    const [selectedColor, setSelectedColor] = useState<string>("#FF4D4D");
+    const [boxes, setBoxes] = useState<StrikeoutBox[]>([]);
+    const [selectedColor, setSelectedColor] = useState<string>("#000000");
     const [activeId, setActiveId] = useState<string | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
-    const [underlineMode, setUnderlineMode] = useState<UnderlineMode>("smart");
 
-    const [historyPast, setHistoryPast] = useState<UnderlineBox[][]>([]);
-    const [historyFuture, setHistoryFuture] = useState<UnderlineBox[][]>([]);
+    const [strikeoutMode, setStrikeoutMode] = useState<StrikeoutMode>("smart");
+
+    const [historyPast, setHistoryPast] = useState<StrikeoutBox[][]>([]);
+    const [historyFuture, setHistoryFuture] = useState<StrikeoutBox[][]>([]);
 
     const [pageAnalysisMap, setPageAnalysisMap] = useState<Record<number, PageAnalysis>>({});
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -157,8 +156,14 @@ export default function UnderlinePdfWorkspace() {
         return pageAnalysisMap[currentPage] ?? null;
     }, [pageAnalysisMap, currentPage]);
 
+    const pageKind = currentPageAnalysis?.kind ?? (analysisLoaded ? "unknown" : null);
+    const isScannedPage = pageKind === "scanned";
+    const isTextPage = pageKind === "text";
+    const isMixedPage = pageKind === "mixed";
+    const canUseSmartMode = pageKind !== "scanned" && pageKind !== "blank";
+
     const updateBoxesStateWithHistory = (
-        nextState: UnderlineBox[] | ((prev: UnderlineBox[]) => UnderlineBox[])
+        nextState: StrikeoutBox[] | ((prev: StrikeoutBox[]) => StrikeoutBox[])
     ) => {
         setBoxes(prev => {
             const computedNext = typeof nextState === "function" ? nextState(prev) : nextState;
@@ -191,10 +196,154 @@ export default function UnderlinePdfWorkspace() {
     };
 
     useEffect(() => {
-        if (!file || !pdfDocument) return;
-        if (currentPageAnalysis?.kind !== "scanned") {
+        const handleKeyboardShortcuts = (e: KeyboardEvent) => {
+            const isMeta = e.metaKey || e.ctrlKey;
+            const keyLower = e.key.toLowerCase();
+
+            if (isMeta && keyLower === "z") {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    handleRedoAction();
+                } else {
+                    handleUndoAction();
+                }
+            } else if (isMeta && keyLower === "y") {
+                e.preventDefault();
+                handleRedoAction();
+            }
+        };
+
+        window.addEventListener("keydown", handleKeyboardShortcuts);
+        return () => window.removeEventListener("keydown", handleKeyboardShortcuts);
+    }, [historyPast, historyFuture, boxes]);
+
+    useEffect(() => {
+        if (!file) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setPdfDocument(null);
+            setTotalPages(0);
+            setCurrentPage(1);
+            setBoxes([]);
+            setHistoryPast([]);
+            setHistoryFuture([]);
+            setActiveId(null);
+            setSuccess(false);
+            setStrikeoutMode("smart");
+            setPageAnalysisMap({});
+            setAnalysisLoaded(false);
+            setAnalysisError(null);
+            setIsAnalyzing(false);
+            if (previewImageSrc) URL.revokeObjectURL(previewImageSrc);
+            setPreviewImageSrc("");
+            setPreviewCacheToken("");
             return;
         }
+
+        const loadPdf = async () => {
+            try {
+                setIsRenderingCanvas(true);
+                const pdfjsLib = await import("pdfjs-dist");
+                pdfjsLib.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
+
+                const arrayBuffer = await file.arrayBuffer();
+                const typedArray = new Uint8Array(arrayBuffer);
+                const loadingTask = pdfjsLib.getDocument({ data: typedArray });
+                const pdf = await loadingTask.promise;
+
+                setPdfDocument(pdf as unknown as PdfJsDocument);
+                setTotalPages(pdf.numPages);
+                setCurrentPage(1);
+                setPreviewCacheToken(Math.random().toString(36).slice(2));
+            } catch (err) {
+                console.error("Failed to parse document context framework:", err);
+            } finally {
+                setIsRenderingCanvas(false);
+            }
+        };
+
+        loadPdf();
+    }, [file]);
+
+    useEffect(() => {
+        if (!file) return;
+
+        if (analysisAbortRef.current) {
+            analysisAbortRef.current.abort();
+        }
+
+        const controller = new AbortController();
+        analysisAbortRef.current = controller;
+
+        const analyze = async () => {
+            try {
+                setIsAnalyzing(true);
+                setAnalysisLoaded(false);
+                setAnalysisError(null);
+
+                const formData = new FormData();
+                formData.append("file", file);
+
+                const maybePassword = (file as CustomPdfFile).originalPassword;
+                if (maybePassword) {
+                    formData.append("file_password", maybePassword);
+                }
+
+                const response = await fetch(`${baseUrl}/api/structure/analyze`, {
+                    method: "POST",
+                    body: formData,
+                    signal: controller.signal,
+                });
+
+                const raw = await response.text();
+
+                if (!response.ok) {
+                    let message = raw || `Server rejected request with status ${response.status}`;
+                    try {
+                        const parsed = JSON.parse(raw);
+                        message = parsed.message || parsed.error || message;
+                    } catch {
+                        // keep raw text
+                    }
+                    throw new Error(message);
+                }
+
+                const parsed = JSON.parse(raw) as PDFAnalysis;
+                const map: Record<number, PageAnalysis> = {};
+                for (const page of parsed.pages ?? []) {
+                    map[page.page] = page;
+                }
+
+                setPageAnalysisMap(map);
+                setAnalysisLoaded(true);
+            } catch (err) {
+                if ((err as Error)?.name !== "AbortError") {
+                    console.error("Failed to analyze PDF:", err);
+                    setAnalysisError((err as Error)?.message || "Failed to analyze PDF.");
+                    setPageAnalysisMap({});
+                    setAnalysisLoaded(false);
+                }
+            } finally {
+                if (!controller.signal.aborted) {
+                    setIsAnalyzing(false);
+                }
+            }
+        };
+
+        analyze();
+
+        return () => controller.abort();
+    }, [file, baseUrl]);
+
+    useEffect(() => {
+        if (!currentPageAnalysis) return;
+        if (currentPageAnalysis.kind === "scanned" && strikeoutMode === "smart") {
+            setStrikeoutMode("manual");
+        }
+    }, [currentPageAnalysis, strikeoutMode]);
+
+    useEffect(() => {
+        if (!file || !pdfDocument) return;
+
         const isScanned = currentPageAnalysis?.kind === "scanned";
 
         if (!isScanned) {
@@ -237,7 +386,6 @@ export default function UnderlinePdfWorkspace() {
                 }
 
                 const imgBlob = await response.blob();
-
                 setPreviewImageSrc(prev => {
                     if (prev) URL.revokeObjectURL(prev);
                     return URL.createObjectURL(imgBlob);
@@ -255,9 +403,7 @@ export default function UnderlinePdfWorkspace() {
 
         fetchScannedPreview();
 
-        return () => {
-            abortController.abort();
-        };
+        return () => abortController.abort();
     }, [file, pdfDocument, currentPage, currentPageAnalysis?.kind, previewCacheToken, baseUrl]);
 
     useEffect(() => {
@@ -265,150 +411,6 @@ export default function UnderlinePdfWorkspace() {
             if (previewImageSrc) URL.revokeObjectURL(previewImageSrc);
         };
     }, [previewImageSrc]);
-
-    useEffect(() => {
-        const handleKeyboardShortcuts = (e: KeyboardEvent) => {
-            const isMeta = e.metaKey || e.ctrlKey;
-            const keyLower = e.key.toLowerCase();
-
-            if (isMeta && keyLower === "z") {
-                e.preventDefault();
-                if (e.shiftKey) {
-                    handleRedoAction();
-                } else {
-                    handleUndoAction();
-                }
-            } else if (isMeta && keyLower === "y") {
-                e.preventDefault();
-                handleRedoAction();
-            }
-        };
-
-        window.addEventListener("keydown", handleKeyboardShortcuts);
-        return () => window.removeEventListener("keydown", handleKeyboardShortcuts);
-    }, [historyPast, historyFuture, boxes]);
-
-    useEffect(() => {
-        if (!file) {
-            setPdfDocument(null);
-            setTotalPages(0);
-            setCurrentPage(1);
-            setBoxes([]);
-            setHistoryPast([]);
-            setHistoryFuture([]);
-            setActiveId(null);
-            setSuccess(false);
-            setAnalysisLoaded(false);
-            setIsAnalyzing(false);
-            setAnalysisError(null);
-            setPageAnalysisMap({});
-            setUnderlineMode("smart");
-            return;
-        }
-
-        const loadPdf = async () => {
-            try {
-                setIsRenderingCanvas(true);
-                const pdfjsLib = await import("pdfjs-dist");
-                pdfjsLib.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
-
-                const arrayBuffer = await file.arrayBuffer();
-                const typedArray = new Uint8Array(arrayBuffer);
-                const loadingTask = pdfjsLib.getDocument({ data: typedArray });
-                const pdf = await loadingTask.promise;
-
-                setPdfDocument(pdf as unknown as PdfJsDocument);
-                setTotalPages(pdf.numPages);
-                setCurrentPage(1);
-            } catch (err) {
-                console.error("Failed to parse document context:", err);
-            } finally {
-                setIsRenderingCanvas(false);
-            }
-        };
-
-        loadPdf();
-    }, [file]);
-
-    useEffect(() => {
-        if (!file) return;
-
-        if (analysisAbortRef.current) {
-            analysisAbortRef.current.abort();
-        }
-
-        const controller = new AbortController();
-        analysisAbortRef.current = controller;
-
-        const analyze = async () => {
-
-            try {
-                setIsAnalyzing(true);
-                setAnalysisLoaded(false);
-                setAnalysisError(null);
-
-                const formData = new FormData();
-                formData.append("file", file);
-
-                const maybePassword = (file as CustomPdfFile).originalPassword;
-                if (maybePassword) {
-                    formData.append("file_password", maybePassword);
-                }
-
-                const response = await fetch(`${baseUrl}/api/structure/analyze`, {
-                    method: "POST",
-                    body: formData,
-                });
-
-                const raw = await response.text();
-
-                if (!response.ok) {
-                    let message = raw || `Server rejected request with status ${response.status}`;
-                    try {
-                        const parsed = JSON.parse(raw);
-                        message = parsed.message || parsed.error || message;
-                    } catch {
-                        // keep raw text
-                    }
-                    throw new Error(message);
-                }
-
-                const parsed = JSON.parse(raw) as PDFAnalysis;
-                const map: Record<number, PageAnalysis> = {};
-                for (const page of parsed.pages ?? []) {
-                    map[page.page] = page;
-                }
-
-                setPageAnalysisMap(map);
-                setAnalysisLoaded(true);
-            } catch (err) {
-                if ((err as Error)?.name !== "AbortError") {
-                    console.error("Failed to analyze PDF:", err);
-                    setAnalysisError((err as Error)?.message || "Failed to analyze PDF.");
-                    setPageAnalysisMap({});
-                    setAnalysisLoaded(false);
-                }
-            } finally {
-                if (!controller.signal.aborted) {
-                    setIsAnalyzing(false);
-                }
-            }
-        };
-
-        analyze();
-
-        return () => {
-            controller.abort();
-        };
-    }, [file]);
-
-    useEffect(() => {
-        if (!currentPageAnalysis) return;
-
-        if (currentPageAnalysis.kind === "scanned" && underlineMode === "smart") {
-            setUnderlineMode("manual");
-        }
-    }, [currentPageAnalysis, underlineMode]);
 
     useEffect(() => {
         if (!pdfDocument || !canvasRef.current) return;
@@ -490,7 +492,7 @@ export default function UnderlinePdfWorkspace() {
         drawStartRef.current = { x: clickPdfX, y: clickPdfY, id: boxId };
         setActiveId(boxId);
 
-        const newBox: UnderlineBox = {
+        const newBox: StrikeoutBox = {
             id: boxId,
             x: clickPdfX,
             y: clickPdfY,
@@ -544,19 +546,14 @@ export default function UnderlinePdfWorkspace() {
         setActiveId(null);
     };
 
-    const handleUnderlineProcessing = async () => {
+    const handleStrikeoutProcessing = async () => {
         const activeFile = file;
         if (!activeFile) return;
 
         const validBoxes = boxes.filter(b => b.width > 2 && b.height > 2);
 
         if (validBoxes.length === 0) {
-            notify("Please draw at least one underline box on the document.");
-            return;
-        }
-
-        if (currentPageAnalysis?.kind === "scanned" && underlineMode === "smart") {
-            notify("This page is scanned. Please choose Manual line or Recognize Text.");
+            notify("Please draw at least one strikeout area on the document.");
             return;
         }
 
@@ -570,15 +567,15 @@ export default function UnderlinePdfWorkspace() {
                 const formData = new FormData();
                 formData.append("file", validFile);
                 formData.append("boxes", JSON.stringify(validBoxes));
-                formData.append("mode", underlineMode);
+                formData.append("mode", strikeoutMode);
 
                 if (validFile.originalPassword) formData.append("file_password", validFile.originalPassword);
 
-                const responseBlob = await uploadAndDownloadFile("/api/structure/underline", formData);
+                const responseBlob = await uploadAndDownloadFile("/api/structure/strikeout", formData);
 
                 setDownloadData({
                     blob: responseBlob,
-                    fileName: `${validFile.name.replace(/\.pdf$/i, "")}-underlined.pdf`,
+                    fileName: `${validFile.name.replace(/\.pdf$/i, "")}-strikeout.pdf`,
                 });
 
                 setSuccess(true);
@@ -592,20 +589,14 @@ export default function UnderlinePdfWorkspace() {
         });
     };
 
-    const pageKind = currentPageAnalysis?.kind ?? (analysisLoaded ? "unknown" : null);
-    const isScannedPage = pageKind === "scanned";
-    const isTextPage = pageKind === "text";
-    const isMixedPage = pageKind === "mixed";
-    const canUseSmartMode = pageKind !== "scanned" && pageKind !== "blank";
-
     if (!file) return null;
     const activeFile = file;
 
     return (
         <>
             <PdfToolHero
-                title="Underline PDF Text"
-                description="Select text-like regions, choose Smart / Manual / OCR, and bake the underline into the PDF."
+                title="Strikeout PDF Text"
+                description="Select text-like regions, choose Smart / Manual / OCR, and permanently strike through the selected text."
             />
 
             <div className="mt-12 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8 shadow-lg w-full">
@@ -622,8 +613,8 @@ export default function UnderlinePdfWorkspace() {
                         <div className="rounded-2xl border border-[color:var(--border)] p-5 bg-[color:var(--background)]/50 space-y-4">
                             <div className="flex items-center justify-between gap-3">
                                 <h3 className="text-sm font-semibold flex items-center gap-2">
-                                    <Underline size={16} className="text-indigo-500" />
-                                    Underline Configuration
+                                    <Strikethrough size={16} className="text-indigo-500" />
+                                    Strikeout Configuration
                                 </h3>
 
                                 <div className="flex items-center gap-1 bg-[color:var(--card)] border border-[color:var(--border)] p-1 rounded-xl">
@@ -652,22 +643,22 @@ export default function UnderlinePdfWorkspace() {
                                 <div className="flex flex-col gap-1.5">
                                     <label className="text-[10px] text-[color:var(--muted)] font-bold uppercase">Mode</label>
                                     <select
-                                        value={underlineMode}
-                                        onChange={(e) => setUnderlineMode(e.target.value as UnderlineMode)}
+                                        value={strikeoutMode}
+                                        onChange={(e) => setStrikeoutMode(e.target.value as StrikeoutMode)}
                                         className="w-full px-4 py-2 text-sm border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl text-[color:var(--foreground)] outline-none font-medium transition focus:border-indigo-500"
                                     >
                                         <option value="smart" disabled={!canUseSmartMode}>
                                             Smart (text first, OCR fallback)
                                         </option>
-                                        <option value="manual">Manual line</option>
+                                        <option value="manual">Manual strikeout</option>
                                         <option value="ocr">OCR page</option>
                                     </select>
                                 </div>
 
                                 <div className="flex flex-col gap-1.5">
-                                    <label className="text-[10px] text-[color:var(--muted)] font-bold uppercase">Active Line Color</label>
+                                    <label className="text-[10px] text-[color:var(--muted)] font-bold uppercase">Active Marker Color</label>
                                     <div className="flex items-center gap-2 flex-wrap">
-                                        {UNDERLINE_COLORS.map(c => (
+                                        {STRIKE_COLORS.map(c => (
                                             <button
                                                 key={c.hex}
                                                 type="button"
@@ -690,7 +681,7 @@ export default function UnderlinePdfWorkspace() {
                                     <Loader2 className="animate-spin text-indigo-500 mt-0.5" size={16} />
                                     <div className="text-xs text-[color:var(--foreground)]/90">
                                         <p className="font-semibold">Analyzing page structure...</p>
-                                        <p className="mt-0.5 text-[color:var(--muted)]">Detecting text pages before underline processing.</p>
+                                        <p className="mt-0.5 text-[color:var(--muted)]">Detecting text pages before highlight processing.</p>
                                     </div>
                                 </div>
                             )}
@@ -741,21 +732,21 @@ export default function UnderlinePdfWorkspace() {
                                         <div className="mt-4 grid grid-cols-2 gap-2">
                                             <button
                                                 type="button"
-                                                onClick={() => setUnderlineMode("manual")}
+                                                onClick={() => setStrikeoutMode("manual")}
                                                 className={`rounded-lg px-3 py-2 text-xs font-semibold border transition flex items-center justify-center gap-1.5 ${
-                                                    underlineMode === "manual"
+                                                    strikeoutMode === "manual"
                                                         ? "bg-indigo-500 text-white border-indigo-500"
                                                         : "bg-white/60 dark:bg-black/10 border-[color:var(--border)] hover:border-indigo-500"
                                                 }`}
                                             >
                                                 <MousePointer2 size={14} />
-                                                Manual line
+                                                Manual highlight
                                             </button>
                                             <button
                                                 type="button"
-                                                onClick={() => setUnderlineMode("ocr")}
+                                                onClick={() => setStrikeoutMode("ocr")}
                                                 className={`rounded-lg px-3 py-2 text-xs font-semibold border transition flex items-center justify-center gap-1.5 ${
-                                                    underlineMode === "ocr"
+                                                    strikeoutMode === "ocr"
                                                         ? "bg-indigo-500 text-white border-indigo-500"
                                                         : "bg-white/60 dark:bg-black/10 border-[color:var(--border)] hover:border-indigo-500"
                                                 }`}
@@ -770,21 +761,21 @@ export default function UnderlinePdfWorkspace() {
                                         <div className="mt-4 grid grid-cols-2 gap-2">
                                             <button
                                                 type="button"
-                                                onClick={() => setUnderlineMode("manual")}
+                                                onClick={() => setStrikeoutMode("manual")}
                                                 className={`rounded-lg px-3 py-2 text-xs font-semibold border transition flex items-center justify-center gap-1.5 ${
-                                                    underlineMode === "manual"
+                                                    strikeoutMode === "manual"
                                                         ? "bg-indigo-500 text-white border-indigo-500"
                                                         : "bg-white/60 dark:bg-black/10 border-[color:var(--border)] hover:border-indigo-500"
                                                 }`}
                                             >
                                                 <MousePointer2 size={14} />
-                                                Manual line
+                                                Manual highlight
                                             </button>
                                             <button
                                                 type="button"
-                                                onClick={() => setUnderlineMode("ocr")}
+                                                onClick={() => setStrikeoutMode("ocr")}
                                                 className={`rounded-lg px-3 py-2 text-xs font-semibold border transition flex items-center justify-center gap-1.5 ${
-                                                    underlineMode === "ocr"
+                                                    strikeoutMode === "ocr"
                                                         ? "bg-indigo-500 text-white border-indigo-500"
                                                         : "bg-white/60 dark:bg-black/10 border-[color:var(--border)] hover:border-indigo-500"
                                                 }`}
@@ -805,7 +796,7 @@ export default function UnderlinePdfWorkspace() {
 
                             {activeId && (
                                 <div className="pt-3 border-t border-[color:var(--border)] flex justify-between items-center animate-fadeIn">
-                                    <span className="text-xs font-semibold text-[color:var(--muted)]">Underline selected</span>
+                                    <span className="text-xs font-semibold text-[color:var(--muted)]">Marker selected</span>
                                     <button
                                         onClick={deleteActiveBox}
                                         className="text-xs flex items-center gap-1.5 text-red-500 hover:text-red-600 font-semibold transition bg-red-500/10 hover:bg-red-500/20 px-3 py-1.5 rounded-lg"
@@ -828,25 +819,25 @@ export default function UnderlinePdfWorkspace() {
                         </div>
 
                         <PdfActionButton
-                            text="Save Underline Markers"
-                            loadingText="Baking Underlines..."
+                            text="Save Strikeouts"
+                            loadingText="Applying Strikeouts..."
                             loading={isProcessing}
                             disabled={isProcessing || isRenderingCanvas || boxes.length === 0}
-                            onClick={handleUnderlineProcessing}
+                            onClick={handleStrikeoutProcessing}
                         />
                     </div>
 
                     <div className="lg:col-span-7 flex flex-col bg-[color:var(--background)]/30 border border-[color:var(--border)] rounded-2xl p-6 relative w-full">
-                        {isRenderingCanvas && (
+                        {(isRenderingCanvas || isRenderingPreview) && (
                             <div className="absolute inset-0 bg-[color:var(--background)]/40 backdrop-blur-sm rounded-2xl z-20 flex flex-col items-center justify-center text-xs font-medium text-[color:var(--muted)]">
                                 <Loader2 className="animate-spin text-indigo-500 mb-2" size={24} />
-                                Synchronizing view matrix framework...
+                                {isScannedPage ? "Loading scanned preview..." : "Synchronizing view matrix framework..."}
                             </div>
                         )}
 
                         <div className="w-full flex items-center justify-between border-b border-[color:var(--border)] pb-3 text-[color:var(--foreground)] text-sm font-bold mb-4">
                             <span className="flex items-center gap-2">
-                                <Eye size={16} className="text-indigo-500" /> Underline Canvas
+                                <Eye size={16} className="text-indigo-500" /> Strikeout Canvas
                             </span>
 
                             {totalPages > 0 && (
@@ -886,33 +877,31 @@ export default function UnderlinePdfWorkspace() {
                         >
                             <div
                                 ref={containerRef}
-                                className="relative shadow-xl rounded border border-gray-400/20 bg-white max-w-full h-auto cursor-crosshair select-none touch-none"
+                                className="relative shadow-xl rounded border border-gray-400/20 bg-white max-w-full h-auto cursor-crosshair select-none touch-none overflow-hidden"
                                 onPointerDown={handleContainerPointerDown}
                                 onPointerMove={handleContainerPointerMove}
                                 onPointerUp={handleContainerPointerUp}
                                 onClick={e => e.stopPropagation()}
                             >
-                                {isScannedPage ? (
-                                    isRenderingPreview ? (
-                                        <div className="flex items-center justify-center p-10">
-                                            <Loader2 className="animate-spin text-indigo-500" size={24} />
-                                        </div>
-                                    ) : (
-                                        previewImageSrc ? (
-                                            <img
-                                                src={previewImageSrc}
-                                                alt=""
-                                                className="..."
-                                            />
-                                        ) : (
-                                            <Loader2 className="animate-spin" />
-                                        )
-                                    )
-                                ) : (
-                                    <canvas
-                                        ref={canvasRef}
-                                        className="max-w-full h-auto block rounded pointer-events-none"
+                                <canvas
+                                    ref={canvasRef}
+                                    className={`max-w-full h-auto block rounded pointer-events-none ${
+                                        isScannedPage ? "opacity-0" : "opacity-100"
+                                    }`}
+                                />
+
+                                {isScannedPage && previewImageSrc && (
+                                    <img
+                                        src={previewImageSrc}
+                                        alt={`Scanned page preview ${currentPage}`}
+                                        className="absolute inset-0 w-full h-full object-contain rounded pointer-events-none"
                                     />
+                                )}
+
+                                {isScannedPage && !previewImageSrc && (
+                                    <div className="absolute inset-0 flex items-center justify-center text-xs text-[color:var(--muted)]">
+                                        Preparing scanned preview...
+                                    </div>
                                 )}
 
                                 {boxes.filter(box => box.page === currentPage).map(box => {
@@ -930,26 +919,12 @@ export default function UnderlinePdfWorkspace() {
                                                 top: `${box.y * scaleFactor}px`,
                                                 width: `${box.width * scaleFactor}px`,
                                                 height: `${box.height * scaleFactor}px`,
+                                                backgroundColor: box.color,
                                             }}
-                                            className={`transition-all ${
-                                                isActive
-                                                    ? "ring-2 ring-indigo-600 bg-indigo-500/10 rounded shadow-md z-20"
-                                                    : "hover:opacity-50 z-10"
+                                            className={`opacity-40 transition-all ${
+                                                isActive ? "ring-2 ring-indigo-600 opacity-60 z-20 shadow-md" : "hover:opacity-50 z-10"
                                             }`}
-                                        >
-                                            <div
-                                                style={{
-                                                    position: "absolute",
-                                                    left: 0,
-                                                    right: 0,
-                                                    bottom: "10%",
-                                                    height: "3px",
-                                                    backgroundColor: box.color,
-                                                    opacity: 0.95,
-                                                    borderRadius: "9999px",
-                                                }}
-                                            />
-                                        </div>
+                                        />
                                     );
                                 })}
                             </div>
@@ -959,9 +934,9 @@ export default function UnderlinePdfWorkspace() {
                             <div className="w-full mt-6 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-900 dark:text-emerald-200 flex items-start gap-3">
                                 <ShieldCheck className="text-emerald-500 mt-0.5 shrink-0" size={16} />
                                 <div className="text-xs">
-                                    <p className="font-semibold">Underlines baked successfully!</p>
+                                    <p className="font-semibold">Strikeouts applied successfully!</p>
                                     <p className="mt-0.5 text-emerald-800/80 dark:text-emerald-200/70">
-                                        The underline marks have been permanently applied to your PDF.
+                                        The document layer transformations have been permanently generated over the document layout.
                                     </p>
                                 </div>
                             </div>

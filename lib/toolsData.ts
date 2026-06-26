@@ -558,7 +558,7 @@ export const NAV_TOOLS: ToolItem[] = [
             "/pdf-to-word",
             "/excel-to-pdf"
         ],
-        isNew: true,
+        isNew: false,
         accept: ".doc, .docx, application/msword, application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         multiple: false,
         faq: [
@@ -589,7 +589,7 @@ export const NAV_TOOLS: ToolItem[] = [
             "/pdf-to-excel",
             "/word-to-pdf"
         ],
-        isNew: true,
+        isNew: false,
         accept: ".xls, .xlsx, application/vnd.ms-excel, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         multiple: false,
         faq: [
@@ -620,7 +620,7 @@ export const NAV_TOOLS: ToolItem[] = [
             "/pdf-to-powerpoint",
             "/word-to-pdf"
         ],
-        isNew: true,
+        isNew: false,
         accept: ".ppt, .pptx, application/vnd.ms-powerpoint, application/vnd.openxmlformats-officedocument.presentationml.presentation",
         multiple: false,
         faq: [
@@ -651,7 +651,7 @@ export const NAV_TOOLS: ToolItem[] = [
             "/markdown-to-pdf",
             "/code-to-pdf"
         ],
-        isNew: true,
+        isNew: false,
         accept: "text/html",
         multiple: false,
         faq: [
@@ -682,7 +682,7 @@ export const NAV_TOOLS: ToolItem[] = [
             "/code-to-pdf",
             "/word-to-pdf"
         ],
-        isNew: true,
+        isNew: false,
         accept: ".md, text/markdown",
         multiple: false,
         faq: [
@@ -713,7 +713,7 @@ export const NAV_TOOLS: ToolItem[] = [
             "/markdown-to-pdf",
             "/url-to-pdf"
         ],
-        isNew: true,
+        isNew: false,
         accept: "text/*, .js, .ts, .jsx, .tsx, .py, .java, .c, .cpp, .h, .hpp, .cs, .php, .rb, .go, .rs, .swift, .kt, .kts, .sh, .bat, .ps1, .pl, .pm, .sql, .json, .yaml, .yml, .ini, .conf, .toml, .xml, .md, .csv, .cfg, .log",
         multiple: false,
         faq: [
@@ -1391,6 +1391,77 @@ export const NAV_TOOLS: ToolItem[] = [
             {
                 question: "Will underlines appear in other PDF readers?",
                 answer: "Yes. The underlines are permanently embedded into the output PDF and can be viewed in most modern PDF readers and web browsers."
+            }
+        ]
+    },{
+        title: "Strikeout PDF",
+
+        description: "Strike through text and content in PDF files online. Add colored strikeout annotations to words, sentences, or document sections while preserving the original document layout and formatting.",
+
+        href: "/strikeout-pdf",
+
+        category: "edit",
+
+        seoTitle: "Strikeout PDF Online Free | Add Strikethrough to PDF Text",
+
+        seoDescription: "Strike through text in PDF files for free. Add strikethrough annotations to words, sentences, and document sections while preserving the original PDF quality and formatting.",
+
+        intent: "Users want to cross out text, words, sentences, paragraphs, or document sections in PDF files for proofreading, reviewing, editing, redaction preparation, document revisions, or collaboration.",
+
+        keywords: [
+            "strikeout pdf",
+            "strikethrough pdf",
+            "cross out text in pdf",
+            "strike through pdf",
+            "pdf strikeout",
+            "pdf strikethrough",
+            "strikeout pdf online",
+            "strikeout pdf free",
+            "cross out words pdf",
+            "annotate pdf",
+            "pdf annotation",
+            "mark text in pdf",
+            "edit pdf online",
+            "strike text pdf without adobe",
+            "pdf markup tool"
+        ],
+
+        related: [
+            "/underline-pdf",
+            "/highlight-pdf",
+            "/draw-on-pdf",
+            "/add-text",
+            "/edit-pdf"
+        ],
+
+        accept: ".pdf",
+
+        multiple: false,
+
+        faq: [
+            {
+                question: "What does striking out text in a PDF do?",
+                answer: "Strikeout adds a line through selected text or document areas to indicate deleted, replaced, or obsolete content while keeping the original text visible."
+            },
+            {
+                question: "Can I strike through multiple sections in the same PDF?",
+                answer: "Yes. You can add multiple strikeout annotations across one or more pages before saving the edited PDF."
+            },
+            {
+                question: "Can I choose the strikeout color?",
+                answer: "Yes. You can select different strikeout colors such as red, black, blue, or green before applying them to your document."
+            },
+            {
+                question: "Will striking out text delete it from the PDF?",
+                answer: "No. Strikeout only adds a visual annotation over the selected text. The original content remains in the document unless you permanently redact or edit it."
+            },
+            {
+                question: "Can I strike through text in scanned PDFs?",
+                answer: "Yes. For scanned documents, OCR or manual selection can be used to apply strikeout annotations to image-based text."
+            },
+            {
+                question: "Can I strike through text in password-protected PDFs?",
+                answer: "Yes. If your PDF is password-protected, simply provide the correct password before applying strikeout annotations."
             }
         ]
     },

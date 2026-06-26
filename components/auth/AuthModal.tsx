@@ -32,30 +32,39 @@ export default function AuthModal() {
 
         try {
             if (!isLoginView) {
-                // 1. REGISTRATION FLOW
                 await fetchJson("/auth/register", {
                     method: "POST",
                     body: JSON.stringify({ email, password }),
                 });
 
-                // Switch to login view and pause the flow
-                setIsLoginView(true);
-                setSuccessMessage("Account created successfully! Please sign in to continue.");
+                setSuccessMessage(
+                    `We've sent a verification email to ${email}. Please verify your email before signing in.`
+                );
 
+                setPassword("");
+
+                setTimeout(() => {
+                    setIsLoginView(true);
+                }, 1500);
             } else {
-                // 2. LOGIN FLOW
                 await fetchJson("/auth/login", {
                     method: "POST",
                     body: JSON.stringify({ email, password }),
                 });
 
-                // Sync context and trigger the saved backend action!
                 await refreshSession();
                 handleAuthModalSuccess();
             }
         } catch (err: any) {
-            setError(err.message || `Failed to ${isLoginView ? 'log in' : 'sign up'}.`);
-        } finally {
+            const msg = err.message || "";
+
+            if (msg.toLowerCase().includes("verify")) {
+                setError(
+                    "Please verify your email first. Check your inbox or request another verification email."
+                );
+            } else {
+                setError(msg || `Failed to ${isLoginView ? "log in" : "sign up"}.`);
+            }        } finally {
             setIsSubmitting(false);
         }
     };
