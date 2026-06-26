@@ -290,6 +290,7 @@ export default function UnderlinePdfWorkspace() {
 
     useEffect(() => {
         if (!file) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setPdfDocument(null);
             setTotalPages(0);
             setCurrentPage(1);
@@ -406,6 +407,7 @@ export default function UnderlinePdfWorkspace() {
         if (!currentPageAnalysis) return;
 
         if (currentPageAnalysis.kind === "scanned" && underlineMode === "smart") {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setUnderlineMode("manual");
         }
     }, [currentPageAnalysis, underlineMode]);
