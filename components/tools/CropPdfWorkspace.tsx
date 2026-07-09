@@ -7,7 +7,7 @@ import { uploadAndDownloadFile } from "@/lib/api";
 import { getFriendlyErrorMessage } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
-import { useSharedTool } from "@/app/[toolId]/layout";
+import { useSharedTool } from "@/app/(site)/[toolId]/layout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
@@ -280,7 +280,6 @@ export default function CropPdfWorkspace() {
         };
     }, [dragType, pdfDimensions, scaleFactor]);
 
-    // FIX 3 & 4: Invert Y axes to match pdfcpu bottom-origin metrics and rearrange sequence variables
     const compiledBoxString = useMemo(() => {
         const pdfBottom = pdfDimensions.height - ymax;
         const pdfTop = pdfDimensions.height - ymin;

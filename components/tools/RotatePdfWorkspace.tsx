@@ -7,7 +7,7 @@ import { uploadAndDownloadFile } from "@/lib/api";
 import { getFriendlyErrorMessage } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
-import { useSharedTool } from "@/app/[toolId]/layout";
+import { useSharedTool } from "@/app/(site)/[toolId]/layout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
@@ -30,7 +30,9 @@ export default function RotatePdfWorkspace() {
     const [isGeneratingPreviews, setIsGeneratingPreviews] = useState(false);
     const [success, setSuccess] = useState(false);
 
-    const generateThumbnails = useCallback(async (pdf: any, totalPages: number) => {
+    const generateThumbnails =
+        useCallback(
+            async (pdf: any, totalPages: number) => {
         setIsGeneratingPreviews(true);
         const loadedThumbnails: string[] = [];
 

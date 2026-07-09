@@ -100,7 +100,7 @@ export async function uploadAndDownloadFile(
 
     const fileEntry = formData.get("file");
 
-    if (fileEntry instanceof File && fileEntry.size > 15 * 1024 * 1024) {
+    if (fileEntry instanceof File && fileEntry.size > 50 * 1024 * 1024) {
         throw new Error("File payload exceeds maximum platform allowance of 15MB.");
     }
 

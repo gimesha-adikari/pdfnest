@@ -7,7 +7,7 @@ import { uploadAndDownloadFile } from "@/lib/api";
 import { getFriendlyErrorMessage } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
-import { useSharedTool } from "@/app/[toolId]/layout";
+import { useSharedTool } from "@/app/(site)/[toolId]/layout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
@@ -180,6 +180,27 @@ export default function DuplicatePagesWorkspace() {
         }
     };
 
+    function getSelectedPageCount(selection: string): number {
+        let count = 0;
+
+        for (const part of selection.split(",")) {
+            const item = part.trim();
+            if (!item) continue;
+
+            if (item.includes("-")) {
+                const [start, end] = item.split("-").map(Number);
+
+                if (!Number.isNaN(start) && !Number.isNaN(end) && end >= start) {
+                    count += end - start + 1;
+                }
+            } else if (!Number.isNaN(Number(item))) {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
     const handleDuplicateProcessing = async () => {
         if (!file) return;
         if (!pageSelection.trim()) {
@@ -191,6 +212,17 @@ export default function DuplicatePagesWorkspace() {
             return;
         }
 
+        const selectedPageCount = getSelectedPageCount(pageSelection);
+
+        if (selectedPageCount > 5) {
+            notify("You can duplicate a maximum of 5 pages at one time.");
+            return;
+        }
+
+        if (numCopies > 2) {
+            notify("Maximum allowed copies per page is 2.");
+            return;
+        }
         const validFile = file as CustomPdfFile;
 
         requireAuth(async () => {
@@ -284,21 +316,25 @@ export default function DuplicatePagesWorkspace() {
                                     </span>
                                 ) : (
                                     <span className="text-[10px] text-[color:var(--muted)]">
-                                        Specify discrete numbers or intervals using commas or hyphens.
+                                        Specify discrete numbers or intervals using commas or hyphens. Maximum 5 selected pages.
                                     </span>
                                 )}
                             </div>
 
                             <div className="flex flex-col gap-1.5">
                                 <label className="text-[10px] text-[color:var(--muted)] font-bold uppercase">
-                                    Number of Clones / Copies per Page
+                                    Number of Clones / Copies per Page (Max 2)
                                 </label>
                                 <input
                                     type="number"
                                     min={1}
                                     max={50}
                                     value={numCopies}
-                                    onChange={(e) => setNumCopies(Math.max(1, parseInt(e.target.value) || 1))}
+                                    onChange={(e) =>
+                                        setNumCopies(
+                                            Math.min(2, Math.max(1, parseInt(e.target.value, 10) || 1))
+                                        )
+                                    }
                                     className="w-full px-4 py-2.5 text-sm border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl text-[color:var(--foreground)] outline-none font-medium transition focus:border-indigo-500"
                                 />
                             </div>

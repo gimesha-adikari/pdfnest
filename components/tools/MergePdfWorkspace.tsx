@@ -7,7 +7,7 @@ import { getFriendlyErrorMessage } from "@/lib/errorHandler";
 import { uploadAndDownloadFile } from "@/lib/api";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
-import { useSharedTool } from "@/app/[toolId]/layout";
+import { useSharedTool } from "@/app/(site)/[toolId]/layout";
 import PdfFileList from "@/components/pdf/PdfFileList";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
@@ -22,7 +22,7 @@ export default function MergePdfWorkspace() {
     const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
     const [isMerging, setIsMerging] = useState(false);
     const [isGeneratingPreviews, setIsGeneratingPreviews] = useState(false);
-    const [fileMeta, setFileMeta] = useState<Record<string, { originalPassword?: string }>>({});
+    const [fileMeta] = useState<Record<string, { originalPassword?: string }>>({});
 
     // Automatically ingest the initial full files collection matrix
     useEffect(() => {

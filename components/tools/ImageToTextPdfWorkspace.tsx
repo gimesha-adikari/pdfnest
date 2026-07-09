@@ -7,7 +7,7 @@ import { uploadAndDownloadFile } from "@/lib/api";
 import { getFriendlyErrorMessage } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
-import { useSharedTool } from "@/app/[toolId]/layout";
+import { useSharedTool } from "@/app/(site)/[toolId]/layout";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import { PdfProgressTracker } from "@/components/pdf/PdfProgressTracker";
 import PdfToolHero from "@/components/pdf/PdfToolHero";

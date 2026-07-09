@@ -9,7 +9,7 @@ import { useAuth } from "@/context/AuthContext";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
-import { useSharedTool } from "@/app/[toolId]/layout";
+import { useSharedTool } from "@/app/(site)/[toolId]/layout";
 
 export default function CodeToPdfWorkspace() {
     const { requireAuth } = useAuth();

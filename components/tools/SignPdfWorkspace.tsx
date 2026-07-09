@@ -6,14 +6,22 @@ import { PenTool, ShieldCheck, FileText, Loader2, Plus, ChevronLeft, ChevronRigh
 import { uploadAndDownloadFile } from "@/lib/api";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
-import { useSharedTool } from "@/app/[toolId]/layout";
+import { useSharedTool } from "@/app/(site)/[toolId]/layout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import SignaturePad from "@/components/pdf/SignaturePad";
-import DraggableSignature from "@/components/pdf/DraggableSignature";
+import { Rnd } from "react-rnd";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
+import {DraggableSignaturePlaceholder} from "@/components/pdf/DraggableSignaturePlaceholder";
 
-type Stamp = { id: number; page: number; x: number; y: number; w: number; h: number };
+type Stamp = {
+    id: number;
+    page: number;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+};
 
 export default function SignPdfWorkspace() {
     const { requireAuth } = useAuth();
@@ -119,11 +127,59 @@ export default function SignPdfWorkspace() {
 
     const handleAddStamp = () => {
         if (!signatureUrl) return;
-        setStamps([...stamps, { id: Date.now(), page: currentPage, x: 50, y: 50, w: 150, h: 50 }]);
+
+        const page = previewContainerRef.current;
+
+        const x = page
+            ? page.clientWidth / 2 - 75
+            : 50;
+
+        const y = page
+            ? page.clientHeight / 2 - 25
+            : 50;
+
+        setStamps(prev => [
+            ...prev,
+            {
+                id: Date.now(),
+                page: currentPage,
+                x,
+                y,
+                w: 150,
+                h: 50,
+            },
+        ]);
     };
 
-    const updateStampPosition = (id: number, x: number, y: number, w: number, h: number) => {
-        setStamps(prevStamps => prevStamps.map(s => s.id === id ? { ...s, x, y, w, h } : s));
+    const updateStampPosition = (
+        id: number,
+        x: number,
+        y: number,
+        w: number,
+        h: number,
+    ) => {
+        setStamps(prev =>
+            prev.map(s => {
+                if (s.id !== id) return s;
+
+                if (
+                    s.x === x &&
+                    s.y === y &&
+                    s.w === w &&
+                    s.h === h
+                ) {
+                    return s;
+                }
+
+                return {
+                    ...s,
+                    x,
+                    y,
+                    w,
+                    h,
+                };
+            }),
+        );
     };
 
     const removeStamp = (id: number) => {
@@ -150,6 +206,8 @@ export default function SignPdfWorkspace() {
                     throw new Error("Preview image missing");
                 }
 
+                const rect = img.getBoundingClientRect();
+
                 const backendStamps = stamps.map(stamp => {
                     const pageDim = pageDimensions[stamp.page];
 
@@ -157,33 +215,15 @@ export default function SignPdfWorkspace() {
                         throw new Error(`Missing dimensions for page ${stamp.page}`);
                     }
 
-                    const scaleX = pageDim.width / img.clientWidth;
-                    const scaleY = pageDim.height / img.clientHeight;
-
-                    const pdfX = stamp.x * scaleX;
-
-                    const flippedY =
-                        img.clientHeight - stamp.y - stamp.h;
-
-                    const pdfY = flippedY * scaleY;
-
-                    console.log({
-                        page: stamp.page,
-                        pageDim,
-                        imgWidth: img.clientWidth,
-                        imgHeight: img.clientHeight,
-                        scaleX,
-                        scaleY,
-                        stampX: stamp.x,
-                        stampY: stamp.y,
-                        pdfX,
-                        pdfY,
-                    });
+                    const scaleX = pageDim.width / rect.width;
+                    const scaleY = pageDim.height / rect.height;
 
                     return {
                         page: stamp.page,
-                        x: Math.round(pdfX),
-                        y: Math.round(pdfY),
+                        x: stamp.x * scaleX,
+                        y: stamp.y * scaleY,
+                        width: stamp.w * scaleX,
+                        height: stamp.h * scaleY,
                     };
                 });
 
@@ -294,13 +334,16 @@ export default function SignPdfWorkspace() {
                                 <img src={pagePreviewUrl} alt={`Page ${currentPage}`} className="max-w-full max-h-[700px] object-contain pointer-events-none" />
 
                                 {currentPageStamps.map((stamp) => (
-                                    <DraggableSignature
+                                    <DraggableSignaturePlaceholder
                                         key={stamp.id}
                                         signatureUrl={signatureUrl!}
-                                        containerRef={previewContainerRef}
                                         initialX={stamp.x}
                                         initialY={stamp.y}
-                                        onPositionChange={(x, y, w, h) => updateStampPosition(stamp.id, x, y, w, h)}
+                                        initialWidth={stamp.w}
+                                        initialHeight={stamp.h}
+                                        onPositionChange={(x, y, w, h) =>
+                                            updateStampPosition(stamp.id, x, y, w, h)
+                                        }
                                         onRemove={() => removeStamp(stamp.id)}
                                     />
                                 ))}

@@ -7,7 +7,7 @@ import { uploadAndDownloadFile } from "@/lib/api";
 import { getFriendlyErrorMessage } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
-import { useSharedTool } from "@/app/[toolId]/layout";
+import { useSharedTool } from "@/app/(site)/[toolId]/layout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
@@ -145,6 +145,11 @@ export default function InsertBlankWorkspace() {
 
         const validFile = file as CustomPdfFile;
 
+        if (numPages > 10) {
+            notify("You can insert a maximum of 10 blank pages at one time.");
+            return;
+        }
+
         requireAuth(async () => {
             try {
                 setIsProcessing(true);
@@ -242,13 +247,17 @@ export default function InsertBlankWorkspace() {
                             )}
 
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-[10px] text-[color:var(--muted)] font-bold uppercase">Number of Blank Sheets to Add</label>
+                                <label className="text-[10px] text-[color:var(--muted)] font-bold uppercase">Number of Blank Sheets to Add (Max 10)</label>
                                 <input
                                     type="number"
                                     min={1}
-                                    max={30}
+                                    max={10}
                                     value={numPages}
-                                    onChange={(e) => setNumPages(Math.max(1, parseInt(e.target.value) || 1))}
+                                    onChange={(e) =>
+                                        setNumPages(
+                                            Math.min(10, Math.max(1, parseInt(e.target.value, 10) || 1))
+                                        )
+                                    }
                                     className="w-full px-4 py-2.5 text-sm border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl text-[color:var(--foreground)] font-medium outline-none transition focus:border-indigo-500"
                                 />
                             </div>

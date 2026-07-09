@@ -1,21 +1,16 @@
-import { getToolMetadata } from "@/lib/seo";
-import ToolSEO from "@/components/SEO/ToolSEO";
-import ToolFAQ from "@/components/SEO/ToolFAQ";
+import GlobalNotifications from "@/components/ui/GlobalNotifications";
+import AuthModal from "@/components/auth/AuthModal";
 
-export const metadata = getToolMetadata("/studio");
-
-export default function Layout({
-    children,
-}: {
+export default function StudioLayout({
+                                         children,
+                                     }: {
     children: React.ReactNode;
 }) {
     return (
-        <>
-            <ToolSEO href="/studio" />
-
-            {children}
-
-            <ToolFAQ toolHref="/studio" />
-        </>
+        <div className="relative h-[100dvh] w-full overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
+            <GlobalNotifications />
+            <AuthModal />
+            <div className="h-full w-full overflow-hidden">{children}</div>
+        </div>
     );
 }

@@ -7,7 +7,7 @@ import { Download, FileEdit, Loader2, RefreshCw, RotateCw, AlertTriangle } from 
 import { notify } from "@/lib/notify";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { useAuth } from "@/context/AuthContext";
-import { useSharedTool } from "@/app/[toolId]/layout";
+import { useSharedTool } from "@/app/(site)/[toolId]/layout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 
 interface LayoutElement {

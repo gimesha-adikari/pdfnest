@@ -5,7 +5,7 @@ import {useRouter} from "next/navigation";
 import {FileText, Loader2, ShieldCheck} from "lucide-react";
 import {uploadAndDownloadFile} from "@/lib/api";
 import {getFriendlyErrorMessage} from "@/lib/errorHandler";
-import {useSharedTool} from "@/app/[toolId]/layout";
+import {useSharedTool} from "@/app/(site)/[toolId]/layout";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import {notify} from "@/lib/notify";

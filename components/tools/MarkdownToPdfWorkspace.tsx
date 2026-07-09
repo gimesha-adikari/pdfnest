@@ -7,7 +7,7 @@ import { uploadAndDownloadFile } from "@/lib/api";
 import { notify } from "@/lib/notify";
 import { PdfProgressTracker } from "@/components/pdf/PdfProgressTracker";
 import { useAuth } from "@/context/AuthContext";
-import { useSharedTool } from "@/app/[toolId]/layout";
+import { useSharedTool } from "@/app/(site)/[toolId]/layout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
