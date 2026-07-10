@@ -101,6 +101,7 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
 
     useEffect(() => {
         if (!baseFile) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setPages([]);
             setSourceTracker("");
             setUprightTracker("");

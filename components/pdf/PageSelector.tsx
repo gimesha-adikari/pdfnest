@@ -26,7 +26,7 @@ export default function PageSelector({
                         className="
                             rounded-lg
                             border
-                            border-[color:var(--border)]
+                            border-border
                             px-4
                             py-2
                         "
@@ -39,7 +39,7 @@ export default function PageSelector({
                         className="
                             rounded-lg
                             border
-                            border-[color:var(--border)]
+                            border-border
                             px-4
                             py-2
                         "
@@ -49,11 +49,11 @@ export default function PageSelector({
                 </div>
             </div>
 
-            <p className="mt-2 text-sm text-[color:var(--muted)]">
+            <p className="mt-2 text-sm text-muted">
                 Selected: {selectedPages.length} page(s)
             </p>
 
-            <p className="mt-1 text-sm text-[color:var(--muted)]">
+            <p className="mt-1 text-sm text-muted">
                 PDF contains {numPages} pages
             </p>
 
@@ -95,7 +95,7 @@ export default function PageSelector({
                                         ${
                                         selected
                                             ? "border-indigo-500 bg-indigo-600 text-white"
-                                            : "border-[color:var(--border)] hover:border-indigo-400"
+                                            : "border-border hover:border-indigo-400"
                                     }
                                     `}
                                 >

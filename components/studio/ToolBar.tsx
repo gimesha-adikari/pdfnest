@@ -13,7 +13,9 @@ import {
     Undo2,
     Redo2,
     CopyPlus,
-    FilePlus, Blend, FileDigit, ShieldQuestionMark, TextInitial, Signature,
+    FilePlus, Blend, FileDigit, ShieldQuestionMark, TextInitial, Signature, SquareDashedText, Highlighter, Underline,
+    Strikethrough,
+    FileArchive, Paintbrush, Wrench, Droplet, Eraser,
 } from "lucide-react";
 
 export type StudioToolId =
@@ -31,6 +33,14 @@ export type StudioToolId =
     | "metadata"
     | "edit-pdf"
     | "sign"
+    | "add-text"
+    | "highlight"
+    | "underline"
+    | "strikeout"
+    | "compress"
+    | "grayscale"
+    | "repair"
+    | "redact"
     ;
 
 interface StudioToolBarProps {
@@ -113,6 +123,46 @@ const TOOLS = [
         id: "sign",
         label: "Sign",
         icon: <Signature size={15} />,
+    },
+    {
+        id: "add-text",
+        label: "Add Text",
+        icon: <SquareDashedText size={15} />,
+    },
+    {
+        id: "highlight",
+        label: "Highlight",
+        icon: <Highlighter size={15} />,
+    },
+    {
+        id: "underline",
+        label: "Underline",
+        icon: <Underline size={15} />,
+    },
+    {
+        id: "strikeout",
+        label: "Strikeout",
+        icon: <Strikethrough size={15} />,
+    },
+    {
+        id: "compress",
+        label: "Compress",
+        icon: <FileArchive size={15} />,
+    },
+    {
+        id: "grayscale",
+        label: "Grayscale",
+        icon: <Droplet size={15} />,
+    },
+    {
+        id: "repair",
+        label: "Repair",
+        icon: <Wrench size={15} />,
+    },
+    {
+        id: "redact",
+        label: "Redact",
+        icon: <Eraser size={15} />,
     },
 ] satisfies {
     id: StudioToolId;

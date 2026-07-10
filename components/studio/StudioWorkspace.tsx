@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, {useState} from "react";
 import StudioSidebar, { StudioPage } from "./StudioSidebar";
 import StudioToolBar, { StudioToolId } from "./ToolBar";
 import { StudioCanvasPreview } from "./Preview";
@@ -17,6 +17,14 @@ import PageNumbersStudioTool from "@/components/studio/tools/PageNumbersStudioTo
 import EditMetadataTool from "@/components/studio/tools/EditMetadataTool";
 import EditPdfTool from "@/components/studio/tools/EditPdfTool";
 import SignPdfTool from "@/components/studio/tools/SignPdfTool";
+import AddTextTool from "@/components/studio/tools/AddTextTool";
+import HighlightTool from "@/components/studio/tools/HighlightTool";
+import UnderlineTool from "@/components/studio/tools/UnderlineTool";
+import StrikeoutTool from "@/components/studio/tools/StrikeoutTool";
+import CompressTool from "@/components/studio/tools/CompressTool";
+import GrayscaleTool from "@/components/studio/tools/GrayscaleTool";
+import RepairTool from "@/components/studio/tools/RepairTool";
+import RedactTool from "@/components/studio/tools/RedactTool";
 
 interface StudioWorkspaceProps {
     activeFile: File;
@@ -45,6 +53,7 @@ interface StudioWorkspaceProps {
     onUndo: () => void;
     onRedo: () => void;
     commitDocument: (file: File) => Promise<void>;
+
 }
 
 export default function StudioWorkspace({
@@ -104,6 +113,11 @@ export default function StudioWorkspace({
                 activeTool === "watermark" ||
                 activeTool === "edit-pdf" ||
                 activeTool === "sign" ||
+                activeTool === "add-text" ||
+                activeTool === "highlight" ||
+                activeTool === "underline" ||
+                activeTool === "strikeout" ||
+                activeTool === "redact" ||
                 activeTool === "page-number" ? (
                     <div className="min-w-0 flex-1 overflow-hidden">
                         {activeTool === "crop" ? (
@@ -127,6 +141,32 @@ export default function StudioWorkspace({
                             <SignPdfTool
                                 baseFile={activeFile}
                                 onSignedFile={commitDocument}
+                            />
+                        ) : activeTool === "add-text" ? (
+                            <AddTextTool
+                                baseFile={activeFile}
+                                onTextApplied={commitDocument}
+                            />
+                        ) : activeTool === "highlight" ? (
+                            <HighlightTool
+                                baseFile={activeFile}
+                                onHighlightedFile={commitDocument}
+                            />
+                        ) : activeTool === "underline" ? (
+                            <UnderlineTool
+                                baseFile={activeFile}
+                                onUnderlinedFile={commitDocument}
+                            />
+                        ) : activeTool === "strikeout" ? (
+                            <StrikeoutTool
+                                baseFile={activeFile}
+                                onStrikeoutFile={commitDocument}
+                            />
+
+                        ) : activeTool === "redact" ? (
+                            <RedactTool
+                                baseFile={activeFile}
+                                onRedactedFile={commitDocument}
                             />
                         ) : (
                             <PageNumbersStudioTool
@@ -214,6 +254,33 @@ export default function StudioWorkspace({
                                 <EditMetadataTool
                                     baseFile={activeFile}
                                     onMetadataUpdated={commitDocument}
+                                />
+                            </aside>
+                        )}
+
+                        {activeTool === "compress" && (
+                            <aside className="hidden h-full w-[440px] shrink-0 overflow-y-auto xl:block">
+                                <CompressTool
+                                    baseFile={activeFile}
+                                    onCompressedFile={commitDocument}
+                                />
+                            </aside>
+                        )}
+
+                        {activeTool === "grayscale" && (
+                            <aside className="hidden h-full w-[440px] shrink-0 overflow-y-auto xl:block">
+                                <GrayscaleTool
+                                    baseFile={activeFile}
+                                    onProcessedFile={commitDocument}
+                                />
+                            </aside>
+                        )}
+
+                        {activeTool === "repair" && (
+                            <aside className="hidden h-full w-[440px] shrink-0 overflow-y-auto xl:block">
+                                <RepairTool
+                                    baseFile={activeFile}
+                                    onProcessedFile={commitDocument}
                                 />
                             </aside>
                         )}

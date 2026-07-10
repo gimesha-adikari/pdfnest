@@ -88,7 +88,7 @@ export default function StudioSidebar({
                 <input
                     ref={uploadInputRef}
                     type="file"
-                    accept=".pdf"
+                    accept=".pdf,.pns"
                     className="hidden"
                     onChange={(e) => {
                         const files = Array.from(
@@ -135,7 +135,7 @@ export default function StudioSidebar({
                             onFilesAccepted={onFilesAccepted}
                             title="Drop PDF here"
                             description="Or use upload button"
-                            accept=".pdf"
+                            accept=".pdf,.pns"
                             multiple={false}
                         />
                     </div>

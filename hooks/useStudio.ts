@@ -5,6 +5,8 @@ import { useStudioPreview } from "./useStudioPreview";
 import { useStudioZoom } from "./useStudioZoom";
 import { useStudioSidebar } from "./useStudioSidebar";
 import { useStudioTools } from "./useStudioTools";
+import { saveStudioSession } from "@/lib/studio/autosave";
+import { saveProject } from "@/lib/studio/saveProject";
 
 export function useStudio() {
     const document = useStudioDocument();
@@ -18,11 +20,37 @@ export function useStudio() {
     const tools = useStudioTools();
 
     const commitDocument = async (file: File) => {
-        const committed = await document.replaceCurrentDocument(file);
+        const result = await document.replaceCurrentDocument(file);
 
-        if (!committed) {
+        if (!result) {
             throw new Error("Document could not be loaded into Studio.");
         }
+
+        await saveStudioSession({
+            version: 1,
+            savedAt: Date.now(),
+            activeTool: tools.activeTool,
+            zoom: zoom.zoom,
+            current: result.snapshot,
+            past: result.past,
+            future: result.future,
+        });
+    };
+
+    const saveCurrentProject = async () => {
+        const snapshot = document.captureSnapshot();
+
+        if (!snapshot) return;
+
+        await saveProject({
+            version: 1,
+            savedAt: Date.now(),
+            activeTool: tools.activeTool,
+            zoom: zoom.zoom,
+            current: snapshot,
+            past: document.past,
+            future: document.future,
+        });
     };
 
     const resetStudio = () => {
@@ -40,5 +68,6 @@ export function useStudio() {
         tools,
         commitDocument,
         resetStudio,
+        saveCurrentProject,
     };
 }

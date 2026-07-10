@@ -1,17 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { StudioProject } from "@/lib/studio/project";
 
 export interface StudioPage {
     id: string;
     pageNumber: number;
 }
 
-interface DocumentSnapshot {
+export interface DocumentSnapshot {
     file: File;
     pages: StudioPage[];
     currentPageIndex: number;
     fingerprint: string;
+}
+
+export interface LoadFileResult {
+    snapshot: DocumentSnapshot;
+    past: DocumentSnapshot[];
+    future: DocumentSnapshot[];
 }
 
 const MAX_HISTORY = 50;
@@ -79,6 +86,26 @@ export function useStudioDocument() {
         setIsScanning(false);
     }, []);
 
+    const restoreProject = useCallback((project: StudioProject) => {
+        setActiveFile(project.current.file);
+        setPages(clonePages(project.current.pages));
+        setCurrentPageIndex(project.current.currentPageIndex);
+        setPast(project.past.map((s) => ({
+            file: s.file,
+            pages: clonePages(s.pages),
+            currentPageIndex: s.currentPageIndex,
+            fingerprint: s.fingerprint,
+        })));
+        setFuture(project.future.map((s) => ({
+            file: s.file,
+            pages: clonePages(s.pages),
+            currentPageIndex: s.currentPageIndex,
+            fingerprint: s.fingerprint,
+        })));
+        setErrorMessage(null);
+        setIsScanning(false);
+    }, []);
+
     const scanPages = useCallback(async (file: Blob): Promise<StudioPage[]> => {
         const pdfjs = await import("pdfjs-dist");
 
@@ -97,7 +124,10 @@ export function useStudioDocument() {
     }, []);
 
     const loadFile = useCallback(
-        async (file: File, pushHistory: boolean): Promise<boolean> => {
+        async (
+            file: File,
+            pushHistory: boolean
+        ): Promise<LoadFileResult | null> => {
             const snapshotBeforeChange = pushHistory ? captureSnapshot() : null;
 
             setErrorMessage(null);
@@ -106,39 +136,53 @@ export function useStudioDocument() {
             try {
                 const scanned = await scanPages(file);
 
-                if (snapshotBeforeChange) {
-                    setPast((prev) => appendSnapshot(prev, snapshotBeforeChange));
-                }
+                const nextPast = snapshotBeforeChange
+                    ? appendSnapshot(past, snapshotBeforeChange)
+                    : past;
 
-                setFuture([]);
+                const nextFuture: DocumentSnapshot[] = [];
+
+                const snapshot: DocumentSnapshot = {
+                    file,
+                    pages: clonePages(scanned),
+                    currentPageIndex: 0,
+                    fingerprint: getSnapshotFingerprint(file, scanned, 0),
+                };
+
+                setPast(nextPast);
+                setFuture(nextFuture);
                 setActiveFile(file);
-                setPages(scanned);
-                setCurrentPageIndex(0);
+                setPages(snapshot.pages);
+                setCurrentPageIndex(snapshot.currentPageIndex);
 
-                return true;
+                return {
+                    snapshot,
+                    past: nextPast,
+                    future: nextFuture,
+                };
             } catch (err: unknown) {
                 const message =
                     err instanceof Error ? err.message : "Failed to read PDF pages.";
                 setErrorMessage(message);
                 console.error(err);
-                return false;
+                return null;
             } finally {
                 setIsScanning(false);
             }
         },
-        [captureSnapshot, scanPages]
+        [captureSnapshot, scanPages, past]
     );
 
     const handleFilesAccepted = useCallback(
-        async (files: File[]): Promise<boolean> => {
-            if (!files.length) return false;
+        async (files: File[]): Promise<LoadFileResult | null> => {
+            if (!files.length) return null;
             return loadFile(files[0], !!activeFile);
         },
         [activeFile, loadFile]
     );
 
     const replaceCurrentDocument = useCallback(
-        async (file: File): Promise<boolean> => {
+        async (file: File): Promise<LoadFileResult | null> => {
             return loadFile(file, true);
         },
         [loadFile]
@@ -167,7 +211,7 @@ export function useStudioDocument() {
         }
 
         restoreSnapshot(previousSnapshot);
-    }, [appendSnapshot, captureSnapshot, past, restoreSnapshot]);
+    }, [captureSnapshot, past, restoreSnapshot]);
 
     const redo = useCallback(() => {
         if (!future.length) return;
@@ -182,7 +226,7 @@ export function useStudioDocument() {
         }
 
         restoreSnapshot(nextSnapshot);
-    }, [appendSnapshot, captureSnapshot, future, restoreSnapshot]);
+    }, [captureSnapshot, future, restoreSnapshot]);
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -244,5 +288,9 @@ export function useStudioDocument() {
         undo,
         redo,
         resetDocument,
+        captureSnapshot,
+        restoreProject,
+        past,
+        future,
     };
 }

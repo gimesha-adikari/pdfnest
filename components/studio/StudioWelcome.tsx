@@ -18,7 +18,7 @@ export default function StudioWelcome({
                 onFilesAccepted={onFilesAccepted}
                 title="Upload a PDF to start the Studio"
                 description="This Studio handles upload and preview as the base editing shell."
-                accept=".pdf"
+                accept=".pdf,.pns"
                 multiple={false}
             />
 

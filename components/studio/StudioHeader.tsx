@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useAuth } from "@/context/AuthContext";
+import HeaderDropdown from "@/components/studio/ui/HeaderDropdown";
 
 type StudioHeaderProps = {
     documentName?: string;
@@ -96,7 +97,7 @@ export default function StudioHeader({
                     </Link>
 
                     <div className="hidden md:flex items-center gap-2">
-                        <details className="group relative">
+                        <HeaderDropdown title="File">
                             <summary className="list-none cursor-pointer rounded-xl px-3 py-2 text-sm font-semibold hover:bg-[color:var(--border)]/30">
                                 File <ChevronDown size={14} className="inline-block align-middle transition group-open:rotate-180" />
                             </summary>
@@ -108,10 +109,17 @@ export default function StudioHeader({
                                 <MenuItem icon={<LayoutPanelLeft size={14} />} onClick={onToggleSidebar}>
                                     {sidebarOpen ? "Hide sidebar" : "Show sidebar"}
                                 </MenuItem>
-                            </div>
-                        </details>
 
-                        <details className="group relative">
+                                <MenuItem
+                                    icon={<Download size={14} />}
+                                    onClick={onExport}
+                                >
+                                    Export
+                                </MenuItem>
+                            </div>
+                        </HeaderDropdown>
+
+                        <HeaderDropdown title="File">
                             <summary className="list-none cursor-pointer rounded-xl px-3 py-2 text-sm font-semibold hover:bg-[color:var(--border)]/30">
                                 Edit <ChevronDown size={14} className="inline-block align-middle transition group-open:rotate-180" />
                             </summary>
@@ -119,9 +127,9 @@ export default function StudioHeader({
                                 <MenuItem icon={<Undo2 size={14} />} onClick={onUndo}>Undo</MenuItem>
                                 <MenuItem icon={<Redo2 size={14} />} onClick={onRedo}>Redo</MenuItem>
                             </div>
-                        </details>
+                        </HeaderDropdown>
 
-                        <details className="group relative">
+                        <HeaderDropdown title="File">
                             <summary className="list-none cursor-pointer rounded-xl px-3 py-2 text-sm font-semibold hover:bg-[color:var(--border)]/30">
                                 View <ChevronDown size={14} className="inline-block align-middle transition group-open:rotate-180" />
                             </summary>
@@ -132,9 +140,9 @@ export default function StudioHeader({
                                     {sidebarOpen ? "Hide sidebar" : "Show sidebar"}
                                 </MenuItem>
                             </div>
-                        </details>
+                        </HeaderDropdown>
 
-                        <details className="group relative">
+                        <HeaderDropdown title="File">
                             <summary className="list-none cursor-pointer rounded-xl px-3 py-2 text-sm font-semibold hover:bg-[color:var(--border)]/30">
                                 Help <ChevronDown size={14} className="inline-block align-middle transition group-open:rotate-180" />
                             </summary>
@@ -149,7 +157,7 @@ export default function StudioHeader({
                                     Keyboard shortcuts
                                 </button>
                             </div>
-                        </details>
+                        </HeaderDropdown>
                     </div>
 
                     <div className="flex items-center gap-2">

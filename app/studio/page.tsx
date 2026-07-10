@@ -5,6 +5,11 @@ import StudioBanner from "@/components/studio/StudioBanner";
 import StudioWelcome from "@/components/studio/StudioWelcome";
 import StudioWorkspace from "@/components/studio/StudioWorkspace";
 import { useStudio } from "@/hooks/useStudio";
+import { useEffect, useState } from "react";
+import ExportDialog from "@/components/studio/export/ExportDialog";
+import { deleteStudioSession, loadStudioSession } from "@/lib/studio/autosave";
+import RecoveryDialog from "@/components/studio/recovery/RecoveryDialog";
+import { openProject } from "@/lib/studio/openProject";
 
 if (typeof window !== "undefined") {
     import("pdfjs-dist").then((pdfjs) => {
@@ -14,6 +19,10 @@ if (typeof window !== "undefined") {
 }
 
 export default function StudioPageBase() {
+    const [recoveryOpen, setRecoveryOpen] = useState(false);
+    const [recovery, setRecovery] = useState<any>(null);
+    const [exportOpen, setExportOpen] = useState(false);
+
     const {
         document,
         preview,
@@ -22,10 +31,52 @@ export default function StudioPageBase() {
         tools,
         commitDocument,
         resetStudio,
+        saveCurrentProject,
     } = useStudio();
 
+    useEffect(() => {
+        (async () => {
+            const save = await loadStudioSession();
+            if (!save) return;
+
+            setRecovery(save);
+            setRecoveryOpen(true);
+        })();
+    }, []);
+
+    const resumeRecovery = async () => {
+        if (!recovery) return;
+
+        document.restoreProject(recovery);
+        zoom.setZoom(recovery.zoom);
+        tools.setActiveTool(recovery.activeTool);
+
+        setRecoveryOpen(false);
+    };
+
+    const discardRecovery = async () => {
+        await deleteStudioSession();
+        setRecovery(null);
+        setRecoveryOpen(false);
+    };
+
     const handleFilesAccepted = async (files: File[]) => {
-        await document.handleFilesAccepted(files);
+        if (!files.length) return;
+
+        const file = files[0];
+        const lower = file.name.toLowerCase();
+
+        if (lower.endsWith(".pns")) {
+            const project = await openProject(file);
+
+            document.restoreProject(project);
+            zoom.setZoom(project.zoom);
+            tools.setActiveTool(project.activeTool);
+
+            return;
+        }
+
+        await document.handleFilesAccepted([file]);
     };
 
     return (
@@ -39,6 +90,8 @@ export default function StudioPageBase() {
                 onZoomOut={zoom.zoomOut}
                 onToggleSidebar={sidebar.toggleSidebar}
                 sidebarOpen={sidebar.isSidebarOpen}
+                onExport={() => setExportOpen(true)}
+                onSave={saveCurrentProject}
             />
 
             <div className="h-4" />
@@ -92,6 +145,18 @@ export default function StudioPageBase() {
                     {document.errorMessage}
                 </div>
             )}
+
+            <ExportDialog
+                open={exportOpen}
+                file={document.activeFile}
+                onClose={() => setExportOpen(false)}
+            />
+
+            <RecoveryDialog
+                open={recoveryOpen}
+                onResume={resumeRecovery}
+                onDiscard={discardRecovery}
+            />
         </div>
     );
 }
