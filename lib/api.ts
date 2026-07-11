@@ -85,7 +85,7 @@ async function handleAxiosError(error: unknown): Promise<never> {
 }
 
 export function getBaseUrl(): string {
-    return process.env.NEXT_PUBLIC_API_URL || "https://pdfnest-backend-mm9q.onrender.com/api";
+    return process.env.NEXT_PUBLIC_API_URL || "https://pdfnest-backend-mm9q.onrender.com";
 }
 
 export async function uploadAndDownloadFile(
@@ -93,10 +93,10 @@ export async function uploadAndDownloadFile(
     formData: FormData,
     onProgress?: (percentage: number) => void
 ): Promise<Blob> {
-    const baseUrl = getBaseUrl();
+    const apiUrl = getBaseUrl()+"/api";
     const targetUrl = endpoint.startsWith("http")
         ? endpoint
-        : `${baseUrl}${endpoint}`;
+        : `${apiUrl}${endpoint}`;
 
     const fileEntry = formData.get("file");
 
@@ -163,11 +163,11 @@ export async function uploadAndDownloadFile(
             lockForm.append("password", passwordToRestore);
 
             const lockResponse = await axios.post(
-                `${baseUrl}/api/security/lock`,
+                `${getBaseUrl()}/api/security/lock`,
                 lockForm,
                 {
                     responseType: "blob",
-                    withCredentials: true, // Maintain session during re-lock
+                    withCredentials: true,
                 }
             );
 
@@ -181,8 +181,8 @@ export async function uploadAndDownloadFile(
 }
 
 export async function fetchJson<T = unknown>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
-    const url = `${BASE_URL}${endpoint}`;
+    const API_URL = getBaseUrl()+"api";
+    const url = `${API_URL}${endpoint}`;
 
     const config: RequestInit = {
         ...options,
