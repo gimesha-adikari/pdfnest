@@ -17,7 +17,7 @@ export function useStudioPreview({
     const [isRendering, setIsRendering] = useState(false);
 
     const baseUrl = useMemo(
-        () => process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080",
+        () => process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api",
         []
     );
 
@@ -54,7 +54,7 @@ export function useStudioPreview({
                 formData.append("scale", "2.0");
 
                 const response = await fetch(
-                    `${baseUrl}/api/conversion/preview/page`,
+                    `${baseUrl}/conversion/preview/page`,
                     {
                         method: "POST",
                         body: formData,
