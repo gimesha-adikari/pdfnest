@@ -85,7 +85,7 @@ async function handleAxiosError(error: unknown): Promise<never> {
 }
 
 export function getBaseUrl(): string {
-    return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+    return process.env.NEXT_PUBLIC_API_URL || "https://pdfnest-backend-mm9q.onrender.com";
 }
 
 export async function uploadAndDownloadFile(
