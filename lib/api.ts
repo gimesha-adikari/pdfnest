@@ -93,7 +93,7 @@ export async function uploadAndDownloadFile(
     formData: FormData,
     onProgress?: (percentage: number) => void
 ): Promise<Blob> {
-    const apiUrl = getBaseUrl()+"/api";
+    const apiUrl = getBaseUrl();
     const targetUrl = endpoint.startsWith("http")
         ? endpoint
         : `${apiUrl}${endpoint}`;
