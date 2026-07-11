@@ -181,7 +181,7 @@ export async function uploadAndDownloadFile(
 }
 
 export async function fetchJson<T = unknown>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const API_URL = getBaseUrl()+"api";
+    const API_URL = getBaseUrl()+"/api";
     const url = `${API_URL}${endpoint}`;
 
     const config: RequestInit = {
