@@ -16,7 +16,7 @@ import {
     Undo2,
 } from "lucide-react";
 import { getBaseUrl, uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import { handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 
@@ -526,12 +526,12 @@ export default function UnderlineTool({ baseFile, onUnderlinedFile }: UnderlineT
 
         const validBoxes = boxes.filter((b) => b.width > 2 && b.height > 2);
         if (validBoxes.length === 0) {
-            notify("Please draw at least one underline box on the document.");
+            notify("Please draw at least one underline box on the document.", "warning");
             return;
         }
 
         if (currentPageAnalysis?.kind === "scanned" && underlineMode === "smart") {
-            notify("This page is scanned. Please choose Manual line or Recognize Text.");
+            notify("This page is scanned. Please choose Manual line or Recognize Text.","warning");
             return;
         }
 
@@ -563,10 +563,10 @@ export default function UnderlineTool({ baseFile, onUnderlinedFile }: UnderlineT
                 setActiveId(null);
                 setCurrentPage(1);
                 setSuccess(true);
-                notify("Underlined PDF loaded back into Studio.");
+                notify("Underlined PDF loaded back into Studio.","success");
             } catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err);
             } finally {
                 setIsProcessing(false);
             }
@@ -574,8 +574,6 @@ export default function UnderlineTool({ baseFile, onUnderlinedFile }: UnderlineT
     };
 
     if (!baseFile) return null;
-
-    const activeFile = baseFile as CustomPdfFile;
 
     return (
         <div className="grid h-full min-h-0 grid-cols-1 gap-6 overflow-hidden p-4 lg:grid-cols-12">

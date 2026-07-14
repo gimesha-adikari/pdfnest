@@ -4,7 +4,7 @@ import React, {useState} from "react";
 import StudioSidebar, { StudioPage } from "./StudioSidebar";
 import StudioToolBar, { StudioToolId } from "./ToolBar";
 import { StudioCanvasPreview } from "./Preview";
-import MergeTool from "./tools/MergeTool";
+import {MergeTool} from "./tools/MergeTool";
 import SplitTool from "@/components/studio/tools/SplitTool";
 import DeletePagesTool from "@/components/studio/tools/DeletePagesTool";
 import RotateTool from "@/components/studio/tools/RotateTool";

@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 
 interface CustomPdfFile extends File {
@@ -25,10 +25,7 @@ interface PdfJsRenderTask {
 
 interface PdfJsPage {
     getViewport: (options: { scale: number }) => { width: number; height: number };
-    render: (options: {
-        canvasContext: CanvasRenderingContext2D;
-        viewport: { width: number; height: number };
-    }) => PdfJsRenderTask;
+    render: (options: unknown) => PdfJsRenderTask;
 }
 
 interface PdfJsDocument {
@@ -149,7 +146,7 @@ export default function CropTool({ baseFile, onCroppedFile }: CropToolProps) {
                 setCurrentPage(1);
             } catch (err) {
                 console.error("Failed to parse document:", err);
-                notify("Could not load document preview.");
+                notify("Could not load document preview.","error");
             } finally {
                 if (!cancelled) {
                     setIsLoading(false);
@@ -185,7 +182,6 @@ export default function CropTool({ baseFile, onCroppedFile }: CropToolProps) {
                 if (!ctx) return;
 
                 const baseViewport = page.getViewport({ scale: 1.0 });
-                // Reduced internal high-res scaling slightly for snappier rendering
                 const renderViewport = page.getViewport({ scale: 1.2 });
 
                 canvas.width = renderViewport.width;
@@ -194,7 +190,7 @@ export default function CropTool({ baseFile, onCroppedFile }: CropToolProps) {
                 const renderTask = page.render({
                     canvasContext: ctx,
                     viewport: renderViewport,
-                } as any);
+                } as unknown);
 
                 renderTaskRef.current = renderTask;
                 await renderTask.promise;
@@ -377,10 +373,10 @@ export default function CropTool({ baseFile, onCroppedFile }: CropToolProps) {
 
                 await onCroppedFile(croppedFile);
                 setSuccess(true);
-                notify("Document successfully cropped!");
+                notify("Document successfully cropped!","success");
             } catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err)
             } finally {
                 setIsProcessing(false);
             }

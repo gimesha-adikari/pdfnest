@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Hash, Loader2, FileText } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import { handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 
 interface PdfJsRenderTask {
@@ -201,10 +201,10 @@ export default function PageNumbersStudioTool({
 
                 await onPageNumberedFile(outputFile);
                 setSuccess(true);
-                notify("Page numbers loaded into Studio.");
+                notify("Page numbers loaded into Studio.", "success");
             } catch (err) {
                 console.error(err);
-                setError(getFriendlyErrorMessage(err));
+                handleClientError(err);
             } finally {
                 setIsProcessing(false);
             }
@@ -221,7 +221,7 @@ export default function PageNumbersStudioTool({
 
     if (!baseFile) {
         return (
-            <div className="flex h-full w-full items-center justify-center p-8 text-[color:var(--muted)]">
+            <div className="flex h-full w-full items-center justify-center p-8 text-muted">
                 <p>Select or upload a document in Studio first.</p>
             </div>
         );
@@ -231,14 +231,14 @@ export default function PageNumbersStudioTool({
         <div className="grid h-full min-h-0 grid-cols-1 gap-6 overflow-hidden p-4 lg:grid-cols-12">
             <div className="flex min-h-0 flex-col lg:col-span-5">
                 <div className="flex-1 space-y-4 overflow-y-auto pr-2">
-                    <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--card)] p-6 space-y-4">
-                        <h3 className="flex items-center gap-2 text-sm font-semibold text-[color:var(--foreground)]">
+                    <div className="rounded-2xl border border-border bg-card p-6 space-y-4">
+                        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
                             <Hash size={16} className="text-blue-500" />
                             Page Number Settings
                         </h3>
 
                         <div className="space-y-3">
-                            <p className="text-xs text-[color:var(--muted)]">
+                            <p className="text-xs text-muted">
                                 Choose a typeface, scale, and placement for the page numbers.
                             </p>
 
@@ -251,7 +251,7 @@ export default function PageNumbersStudioTool({
                                         className={`flex w-full items-center justify-between rounded-xl border p-4 text-left transition-all ${
                                             fontFamily === font.id
                                                 ? "border-blue-500 bg-blue-500/5 text-blue-600 dark:bg-blue-500/10"
-                                                : "border-[color:var(--border)] bg-[color:var(--background)]/50 text-[color:var(--foreground)] hover:bg-[color:var(--background)]"
+                                                : "border-border bg-(--background)/50 text-foreground hover:bg-background"
                                         }`}
                                     >
                                         <span className={font.cssClass}>{font.name}</span>
@@ -263,22 +263,24 @@ export default function PageNumbersStudioTool({
 
                         <div className="grid gap-4 sm:grid-cols-2">
                             <div>
-                                <label className="text-xs font-semibold text-[color:var(--muted)]">Font Scale (Points)</label>
+                                <label className="text-xs font-semibold text-muted">Font Scale (Points)</label>
                                 <input
                                     type="number"
                                     min={6}
                                     max={72}
                                     value={fontSize}
                                     onChange={(e) => setFontSize(Number(e.target.value))}
-                                    className="mt-2 w-full rounded-xl border border-[color:var(--border)] bg-transparent px-4 py-3 text-sm text-[color:var(--foreground)] outline-none focus:border-blue-500"
+                                    className="mt-2 w-full rounded-xl border border-border bg-transparent px-4
+                                    py-3 text-sm text-foreground outline-none focus:border-blue-500"
                                 />
                             </div>
                             <div>
-                                <label className="text-xs font-semibold text-[color:var(--muted)]">Vector Coordinates</label>
+                                <label className="text-xs font-semibold text-muted">Vector Coordinates</label>
                                 <select
                                     value={position}
                                     onChange={(e) => setPosition(e.target.value)}
-                                    className="mt-2 w-full rounded-xl border border-[color:var(--border)] bg-[var(--card)] px-4 py-3 text-sm text-[color:var(--foreground)] outline-none focus:border-blue-500"
+                                    className="mt-2 w-full rounded-xl border border-border bg-card px-4 py-3 text-sm
+                                    text-foreground outline-none focus:border-blue-500"
                                 >
                                     <option value="bc">Bottom Center (Standard)</option>
                                     <option value="bl">Bottom Left</option>
@@ -319,13 +321,13 @@ export default function PageNumbersStudioTool({
                         </button>
 
                         <div className="grid gap-4 sm:grid-cols-2">
-                            <div className="rounded-2xl border border-[color:var(--border)] p-4">
-                                <p className="text-sm text-[color:var(--muted)]">Current page</p>
-                                <p className="mt-1 text-xl font-bold text-[color:var(--foreground)]">{previewPageNumber}</p>
+                            <div className="rounded-2xl border border-border p-4">
+                                <p className="text-sm text-muted">Current page</p>
+                                <p className="mt-1 text-xl font-bold text-foreground">{previewPageNumber}</p>
                             </div>
-                            <div className="rounded-2xl border border-[color:var(--border)] p-4">
-                                <p className="text-sm text-[color:var(--muted)]">Document size</p>
-                                <p className="mt-1 text-xl font-bold text-[color:var(--foreground)]">{fileSizeMB} MB</p>
+                            <div className="rounded-2xl border border-border p-4">
+                                <p className="text-sm text-muted">Document size</p>
+                                <p className="mt-1 text-xl font-bold text-foreground">{fileSizeMB} MB</p>
                             </div>
                         </div>
                     </div>
@@ -333,13 +335,16 @@ export default function PageNumbersStudioTool({
             </div>
 
             <div className="flex min-h-0 flex-col lg:col-span-7">
-                <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[color:var(--border)] bg-[color:var(--background)]/30 p-4">
-                    <div className="mb-4 flex items-center justify-between border-b border-[color:var(--border)] pb-3 text-sm font-bold text-[color:var(--foreground)]">
+                <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border
+                border-border bg-(--background)/30 p-4">
+                    <div className="mb-4 flex items-center justify-between border-b border-border pb-3 text-sm font-bold
+                     text-foreground">
                         <span className="flex items-center gap-2">
                             <FileText size={16} className="text-blue-500" />
                             Page Number Preview
                         </span>
-                        <div className="flex items-center gap-2 rounded-lg border border-[color:var(--border)] bg-[var(--card)] px-2 py-0.5 font-mono text-xs text-[color:var(--muted)] select-none">
+                        <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-2 py-0.5
+                        font-mono text-xs text-muted select-none">
                             <span>
                                 Page {previewPageNumber} of {totalPages}
                             </span>
@@ -347,14 +352,17 @@ export default function PageNumbersStudioTool({
                     </div>
 
                     {(isRenderingCanvas || !pdfDocument) && (
-                        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-2xl bg-[color:var(--background)]/40 text-xs font-medium text-[color:var(--muted)] backdrop-blur-sm">
+                        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-2xl
+                        bg-(--background)/40 text-xs font-medium text-muted backdrop-blur-sm">
                             <Loader2 className="mb-2 animate-spin text-blue-500" size={24} />
                             Rendering preview...
                         </div>
                     )}
 
-                    <div className="flex flex-1 items-center justify-center overflow-hidden rounded-xl border border-[color:var(--border)] bg-gray-500/5 p-4 dark:bg-black/20">
-                        <div className="relative max-h-full max-w-full rounded border border-gray-400/20 bg-white shadow-xl">
+                    <div className="flex flex-1 items-center justify-center overflow-hidden rounded-xl border
+                    border-border bg-gray-500/5 p-4 dark:bg-black/20">
+                        <div className="relative max-h-full max-w-full rounded border border-gray-400/20 bg-white
+                        shadow-xl">
                             <canvas ref={canvasRef} className="block max-h-[52vh] max-w-full rounded object-contain" />
 
                             <div

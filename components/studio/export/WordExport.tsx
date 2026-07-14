@@ -4,7 +4,7 @@ import { useState } from "react";
 import { FileText, Loader2, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import { handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { FileWithPassword } from "@/lib/types";
 import type { StudioExportProps, StudioExportResult } from "./PdfExport";
@@ -59,18 +59,18 @@ export default function WordExport({ file, onExportedFile }: StudioExportProps) 
                 }
 
                 setSuccess(true);
-                notify("Word export ready.");
+                notify("Word export ready.","error");
             } catch (err) {
                 if (err instanceof Error) {
                     if (err.message === "Network Error") {
-                        notify("Unsupported file or network error");
+                        notify("Unsupported file or network error","error");
                     } else {
                         console.error(err);
-                        notify(getFriendlyErrorMessage(err));
+                        handleClientError(err);
                     }
                 } else {
                     console.error(err);
-                    notify(getFriendlyErrorMessage(err));
+                    handleClientError(err);
                 }
             } finally {
                 setIsProcessing(false);
@@ -80,12 +80,13 @@ export default function WordExport({ file, onExportedFile }: StudioExportProps) 
 
     return (
         <div className="space-y-4">
-            <div className="flex items-start justify-between gap-3 rounded-2xl border border-[color:var(--border)] bg-[color:var(--background)]/40 p-4">
+            <div className="flex items-start justify-between gap-3 rounded-2xl border border-border
+            bg-(--background)/40 p-4">
                 <div>
-                    <p className="text-sm font-semibold text-[color:var(--foreground)]">
+                    <p className="text-sm font-semibold text-foreground">
                         Word (.docx)
                     </p>
-                    <p className="mt-1 text-xs text-[color:var(--muted)]">
+                    <p className="mt-1 text-xs text-muted">
                         Export the edited PDF as a Microsoft Word document.
                     </p>
                 </div>
@@ -93,7 +94,8 @@ export default function WordExport({ file, onExportedFile }: StudioExportProps) 
             </div>
 
             {success && (
-                <div className="flex items-start gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-900 dark:text-emerald-200">
+                <div className="flex items-start gap-3 rounded-2xl border border-emerald-500/30
+                bg-emerald-500/10 p-4 text-emerald-900 dark:text-emerald-200">
                     <ShieldCheck className="mt-0.5 shrink-0 text-emerald-500" size={18} />
                     <div>
                         <p className="text-sm font-semibold">Word export complete!</p>
@@ -108,7 +110,9 @@ export default function WordExport({ file, onExportedFile }: StudioExportProps) 
                 type="button"
                 onClick={handleExport}
                 disabled={isProcessing}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl
+                bg-indigo-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-indigo-700
+                disabled:cursor-not-allowed disabled:opacity-50"
             >
                 {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
                 {isProcessing ? "Exporting..." : "Export Word (.docx)"}

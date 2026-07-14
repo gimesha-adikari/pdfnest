@@ -8,14 +8,11 @@ import {
     ShieldCheck,
     Trash2,
     X,
-    ChevronLeft,
-    ChevronRight,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import {handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
-import PdfUploader from "@/components/pdf/PdfUploader";
 import type { MouseEvent } from "react";
 
 type FileMeta = {
@@ -68,10 +65,8 @@ async function inspectPdf(file: File): Promise<FileMeta> {
 
                 thumbnail = canvas.toDataURL("image/jpeg", 0.65);
             }
-
             canvas.remove();
         }
-
         return { pageCount, thumbnail };
     } catch (error) {
         console.error("Failed to inspect PDF:", error);
@@ -100,10 +95,11 @@ function PageCard({
                 "relative flex flex-col overflow-hidden rounded-2xl border-2 p-2 text-left transition-all aspect-[1/1.35]",
                 selected
                     ? "border-red-500 bg-red-500/10 shadow-md"
-                    : "border-[color:var(--border)] bg-[color:var(--card)] hover:border-red-400/50",
+                    : "border-border bg-card hover:border-red-400/50",
             ].join(" ")}
         >
             {meta?.thumbnail ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                     src={meta.thumbnail}
                     alt={`Page ${pageNum}`}
@@ -113,7 +109,7 @@ function PageCard({
                     ].join(" ")}
                 />
             ) : (
-                <div className="flex h-full w-full flex-col items-center justify-center text-[color:var(--muted)] opacity-50">
+                <div className="flex h-full w-full flex-col items-center justify-center text-muted opacity-50">
                     <FileText size={24} className="mb-2" />
                     <Loader2 size={14} className="animate-spin mt-1" />
                 </div>
@@ -194,6 +190,7 @@ export default function DeletePagesTool({ baseFile, onDeletedFile }: DeletePages
 
     useEffect(() => {
         if (!baseFile) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setPageCount(0);
             setThumbnails([]);
             setMetadata({});
@@ -229,10 +226,10 @@ export default function DeletePagesTool({ baseFile, onDeletedFile }: DeletePages
                 setPageCount(totalPages);
                 setIsReadingTotal(false);
 
-                generateThumbnails(pdf, totalPages);
+                await generateThumbnails(pdf, totalPages);
             } catch (error) {
                 console.error(error);
-                notify("Could not read the structural metadata of this document.");
+                notify("Could not read the structural metadata of this document.","error");
                 setIsReadingTotal(false);
             }
         };
@@ -297,7 +294,7 @@ export default function DeletePagesTool({ baseFile, onDeletedFile }: DeletePages
         requireAuth(async () => {
             if (!baseFile || pagesToDelete.size === 0) return;
             if (pagesToDelete.size === pageCount) {
-                notify("Cannot remove every single page from the document.");
+                notify("Cannot remove every single page from the document.","warning");
                 return;
             }
 
@@ -323,10 +320,10 @@ export default function DeletePagesTool({ baseFile, onDeletedFile }: DeletePages
                 setSuccess(true);
                 setPagesToDelete(new Set());
                 setLastSelectedIndex(null);
-                notify("Deleted pages loaded into Studio.");
+                notify("Deleted pages loaded into Studio.","success");
             } catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err)
             } finally {
                 setIsProcessing(false);
             }
@@ -336,14 +333,14 @@ export default function DeletePagesTool({ baseFile, onDeletedFile }: DeletePages
     if (!baseFile) return null;
 
     return (
-        <section className="flex h-full w-[340px] flex-col overflow-hidden rounded-3xl border border-[color:var(--border)] bg-[var(--card)] shadow-sm">
-            <div className="flex items-center justify-between border-b border-[color:var(--border)] px-4 py-3">
+        <section className="flex h-full w-85 flex-col overflow-hidden rounded-3xl border border-border bg-[var(--card)] shadow-sm">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
                 <div className="min-w-0">
-                    <h3 className="flex items-center gap-2 text-sm font-bold text-[color:var(--foreground)]">
+                    <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
                         <Trash2 size={16} />
                         Delete PDF Pages
                     </h3>
-                    <p className="text-xs text-[color:var(--muted)]">
+                    <p className="text-xs text-muted">
                         Mark pages in the open document and remove them from the current Studio file.
                     </p>
                 </div>
@@ -352,7 +349,7 @@ export default function DeletePagesTool({ baseFile, onDeletedFile }: DeletePages
                     type="button"
                     onClick={clearSelection}
                     disabled={pagesToDelete.size === 0 || isProcessing}
-                    className="rounded-xl border border-[color:var(--border)] bg-[var(--background)] p-2 text-[color:var(--muted)] transition hover:bg-[var(--card)] hover:text-[color:var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="rounded-xl border border-border bg-background p-2 text-muted transition hover:bg-card hover:text-[color:var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"
                     title="Clear selection"
                 >
                     <X size={16} />
@@ -361,13 +358,13 @@ export default function DeletePagesTool({ baseFile, onDeletedFile }: DeletePages
 
             <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
                 <div className="space-y-4">
-                    <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--background)]/40 p-3">
+                    <div className="rounded-2xl border border-border bg-(--background)/40 p-3">
                         <div className="flex items-center justify-between gap-3">
                             <div>
-                                <p className="text-sm font-semibold text-[color:var(--foreground)]">
+                                <p className="text-sm font-semibold text-foreground">
                                     Current document
                                 </p>
-                                <p className="text-xs text-[color:var(--muted)]">
+                                <p className="text-xs text-muted">
                                     The open PDF is the removal base.
                                 </p>
                             </div>
@@ -377,8 +374,8 @@ export default function DeletePagesTool({ baseFile, onDeletedFile }: DeletePages
                             </span>
                         </div>
 
-                        <div className="mt-3 flex items-center gap-3 rounded-2xl border border-[color:var(--border)] bg-[var(--card)] p-2.5">
-                            <div className="relative h-16 w-12 shrink-0 overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--background)]">
+                        <div className="mt-3 flex items-center gap-3 rounded-2xl border border-border bg-card p-2.5">
+                            <div className="relative h-16 w-12 shrink-0 overflow-hidden rounded-xl border border-border bg-[var(--background)]">
                                 {metadata[getFileKey(baseFile)]?.thumbnail ? (
                                     <img
                                         src={metadata[getFileKey(baseFile)]?.thumbnail}
@@ -386,17 +383,17 @@ export default function DeletePagesTool({ baseFile, onDeletedFile }: DeletePages
                                         className="h-full w-full object-cover"
                                     />
                                 ) : (
-                                    <div className="flex h-full w-full items-center justify-center text-[color:var(--muted)]">
+                                    <div className="flex h-full w-full items-center justify-center text-muted">
                                         <FileText size={16} />
                                     </div>
                                 )}
                             </div>
 
                             <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-semibold text-[color:var(--foreground)]">
+                                <p className="truncate text-sm font-semibold text-foreground">
                                     {baseFile.name}
                                 </p>
-                                <p className="text-xs text-[color:var(--muted)]">
+                                <p className="text-xs text-muted">
                                     {pageCount > 0 ? `${pageCount} pages` : "Reading pages..."}
                                 </p>
                             </div>
@@ -419,13 +416,13 @@ export default function DeletePagesTool({ baseFile, onDeletedFile }: DeletePages
                 </div>
 
                 <div className="space-y-4">
-                    <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--background)]/40 p-3">
+                    <div className="rounded-2xl border border-border bg-(--background)/40 p-3">
                         <div className="mb-3 flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-semibold text-[color:var(--foreground)]">
+                                <p className="text-sm font-semibold text-foreground">
                                     Page removal grid
                                 </p>
-                                <p className="text-xs text-[color:var(--muted)]">
+                                <p className="text-xs text-muted">
                                     Click pages to mark them for deletion. Hold Shift to select ranges.
                                 </p>
                             </div>
@@ -440,7 +437,7 @@ export default function DeletePagesTool({ baseFile, onDeletedFile }: DeletePages
                                     </button>
                                     <button
                                         onClick={clearSelection}
-                                        className="font-medium text-[color:var(--muted)] transition hover:text-red-500"
+                                        className="font-medium text-muted transition hover:text-red-500"
                                     >
                                         Clear
                                     </button>
@@ -449,12 +446,12 @@ export default function DeletePagesTool({ baseFile, onDeletedFile }: DeletePages
                         </div>
 
                         {isReadingTotal ? (
-                            <div className="flex flex-col items-center justify-center py-12 text-[color:var(--muted)]">
+                            <div className="flex flex-col items-center justify-center py-12 text-muted">
                                 <Loader2 size={32} className="mb-4 animate-spin text-indigo-500" />
                                 <p>Scanning document page indices...</p>
                             </div>
                         ) : (
-                            <div className="grid max-h-[500px] grid-cols-2 gap-3 overflow-y-auto p-1 sm:grid-cols-3 lg:grid-cols-4">
+                            <div className="grid max-h-125 grid-cols-2 gap-3 overflow-y-auto p-1 sm:grid-cols-3 lg:grid-cols-4">
                                 {Array.from({ length: pageCount }).map((_, idx) => {
                                     const pageNum = idx + 1;
                                     const selected = pagesToDelete.has(pageNum);
@@ -478,8 +475,8 @@ export default function DeletePagesTool({ baseFile, onDeletedFile }: DeletePages
                         )}
                     </div>
 
-                    <div className="rounded-xl border border-[color:var(--border)] p-3">
-                        <p className="text-xs text-[color:var(--muted)]">
+                    <div className="rounded-xl border border-border p-3">
+                        <p className="text-xs text-muted">
                             Selected pages
                         </p>
 

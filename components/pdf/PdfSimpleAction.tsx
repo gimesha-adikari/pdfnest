@@ -4,11 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import {handleClientError} from "@/lib/errorHandler";
 import { useSharedTool } from "@/app/(site)/[toolId]/layout";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
-import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 
 interface PdfSimpleActionProps {
@@ -61,7 +60,7 @@ export default function PdfSimpleAction({
                 router.push(`/${toolId}/download`);
             } catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err);
             } finally {
                 setIsProcessing(false);
             }

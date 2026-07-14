@@ -4,8 +4,7 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { FileText, ShieldCheck, Loader2 } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
-import { notify } from "@/lib/notify";
+import {handleClientError} from "@/lib/errorHandler";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/layout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
@@ -85,7 +84,7 @@ export default function OfficeToPdfConverter({
                 router.push(`/${toolId}/download`);
             } catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err);
             } finally {
                 setIsProcessing(false);
             }

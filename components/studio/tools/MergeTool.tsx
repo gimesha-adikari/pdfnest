@@ -1,4 +1,3 @@
-// components/studio/tools/MergeTool.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -98,8 +97,8 @@ function MiniFileCard({
     disableMoveDown: boolean;
 }) {
     return (
-        <div className="flex items-center gap-3 rounded-2xl border border-[color:var(--border)] bg-[var(--card)] p-3">
-            <div className="relative h-14 w-11 shrink-0 overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--background)]">
+        <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3">
+            <div className="relative h-14 w-11 shrink-0 overflow-hidden rounded-xl border border-border bg-background">
                 {meta?.thumbnail ? (
                     <img
                         src={meta.thumbnail}
@@ -107,7 +106,7 @@ function MiniFileCard({
                         className="h-full w-full object-cover"
                     />
                 ) : (
-                    <div className="flex h-full w-full items-center justify-center text-[color:var(--muted)]">
+                    <div className="flex h-full w-full items-center justify-center text-muted">
                         <FileText size={16} />
                     </div>
                 )}
@@ -118,11 +117,11 @@ function MiniFileCard({
                     <span className="rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-bold text-indigo-500">
                         #{index + 1}
                     </span>
-                    <p className="truncate text-sm font-semibold text-[color:var(--foreground)]">
+                    <p className="truncate text-sm font-semibold text-foreground">
                         {file.name}
                     </p>
                 </div>
-                <p className="text-xs text-[color:var(--muted)]">
+                <p className="text-xs text-muted">
                     {meta?.pageCount ? `${meta.pageCount} pages` : "Reading pages..."}
                     {" · "}
                     {(file.size / 1024 / 1024).toFixed(2)} MB
@@ -134,7 +133,8 @@ function MiniFileCard({
                     type="button"
                     onClick={onMoveUp}
                     disabled={disableMoveUp}
-                    className="rounded-lg border border-[color:var(--border)] bg-[var(--background)] p-1.5 text-[color:var(--muted)] transition hover:text-[color:var(--foreground)] disabled:cursor-not-allowed disabled:opacity-30"
+                    className="rounded-lg border border-border bg-background p-1.5 text-muted transition
+                    hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
                     title="Move up"
                 >
                     <ArrowUp size={14} />
@@ -144,7 +144,8 @@ function MiniFileCard({
                     type="button"
                     onClick={onMoveDown}
                     disabled={disableMoveDown}
-                    className="rounded-lg border border-[color:var(--border)] bg-[var(--background)] p-1.5 text-[color:var(--muted)] transition hover:text-[color:var(--foreground)] disabled:cursor-not-allowed disabled:opacity-30"
+                    className="rounded-lg border border-border bg-background p-1.5 text-muted transition
+                    hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
                     title="Move down"
                 >
                     <ArrowDown size={14} />
@@ -153,7 +154,7 @@ function MiniFileCard({
                 <button
                     type="button"
                     onClick={onRemove}
-                    className="rounded-lg border border-[color:var(--border)] bg-[var(--background)] p-1.5 text-[color:var(--muted)] transition hover:text-red-500"
+                    className="rounded-lg border border-border bg-background p-1.5 text-muted transition hover:text-red-500"
                     title="Remove"
                 >
                     <Trash2 size={14} />
@@ -163,8 +164,8 @@ function MiniFileCard({
     );
 }
 
-export default function MergeTool({ baseFile, onMergedFile }: MergeToolProps) {
-    const { requireAuth } = useAuth();
+export function MergeTool({baseFile, onMergedFile}: MergeToolProps) {
+    const {requireAuth} = useAuth();
 
     const [stagedFiles, setStagedFiles] = useState<File[]>([]);
     const [metadata, setMetadata] = useState<MetaMap>({});
@@ -241,7 +242,7 @@ export default function MergeTool({ baseFile, onMergedFile }: MergeToolProps) {
 
         const validFiles = newFiles.filter((item) => {
             if (item.size > MAX_FILE_SIZE) {
-                notify(`${item.name} exceeds 50MB limit`);
+                notify(`${item.name} exceeds 50MB limit`, "error");
                 return false;
             }
             return true;
@@ -268,7 +269,7 @@ export default function MergeTool({ baseFile, onMergedFile }: MergeToolProps) {
                 const key = getFileKey(removed);
 
                 setMetadata((current) => {
-                    const next = { ...current };
+                    const next = {...current};
                     delete next[key];
                     return next;
                 });
@@ -280,7 +281,7 @@ export default function MergeTool({ baseFile, onMergedFile }: MergeToolProps) {
 
     const clearStagedFiles = () => {
         setMetadata((current) => {
-            const next = { ...current };
+            const next = {...current};
 
             stagedFiles.forEach((file) => {
                 delete next[getFileKey(file)];
@@ -315,12 +316,12 @@ export default function MergeTool({ baseFile, onMergedFile }: MergeToolProps) {
     const mergePdfs = () => {
         requireAuth(async () => {
             if (!baseFile) {
-                notify("Open a PDF in Studio first.");
+                notify("Open a PDF in Studio first.", "warning");
                 return;
             }
 
             if (stagedFiles.length < 1) {
-                notify("Add at least one PDF to merge.");
+                notify("Add at least one PDF to merge.", "warning");
                 return;
             }
 
@@ -344,10 +345,10 @@ export default function MergeTool({ baseFile, onMergedFile }: MergeToolProps) {
 
                 await onMergedFile(mergedFile);
 
-                notify("Merged PDF loaded into Studio.");
+                notify("Merged PDF loaded into Studio.", 'success');
             } catch (error) {
                 console.error(error);
-                notify(`Failed to merge PDFs.\n\n${getFriendlyErrorMessage(error)}`);
+                notify(`Failed to merge PDFs.\n\n${getFriendlyErrorMessage(error)}`, "error");
             } finally {
                 setIsMerging(false);
             }
@@ -357,14 +358,14 @@ export default function MergeTool({ baseFile, onMergedFile }: MergeToolProps) {
     const canMerge = Boolean(baseFile) && stagedFiles.length > 0;
 
     return (
-        <section className="w-full overflow-hidden rounded-3xl border border-[color:var(--border)] bg-[var(--card)] shadow-sm">
-            <div className="flex items-center justify-between border-b border-[color:var(--border)] px-4 py-3">
+        <section className="w-full overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
                 <div className="min-w-0">
-                    <h3 className="flex items-center gap-2 text-sm font-bold text-[color:var(--foreground)]">
-                        <Layers3 size={16} />
+                    <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
+                        <Layers3 size={16}/>
                         Merge PDFs
                     </h3>
-                    <p className="text-xs text-[color:var(--muted)]">
+                    <p className="text-xs text-muted">
                         Keep the current document as the base and append more PDFs.
                     </p>
                 </div>
@@ -373,10 +374,11 @@ export default function MergeTool({ baseFile, onMergedFile }: MergeToolProps) {
                     type="button"
                     onClick={clearStagedFiles}
                     disabled={stagedFiles.length === 0 || isMerging}
-                    className="rounded-xl border border-[color:var(--border)] bg-[var(--background)] p-2 text-[color:var(--muted)] transition hover:bg-[var(--card)] hover:text-[color:var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="rounded-xl border border-border bg-background p-2 text-muted transition hover:bg-card
+                     hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                     title="Clear added files"
                 >
-                    <X size={16} />
+                    <X size={16}/>
                 </button>
             </div>
 
@@ -389,25 +391,27 @@ export default function MergeTool({ baseFile, onMergedFile }: MergeToolProps) {
                     accept=".pdf"
                 />
 
-                <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--background)]/40 p-3">
+                <div className="rounded-2xl border border-border bg-(--background)/40 p-3">
                     <div className="mb-3 flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-semibold text-[color:var(--foreground)]">
+                            <p className="text-sm font-semibold text-foreground">
                                 Current document
                             </p>
-                            <p className="text-xs text-[color:var(--muted)]">
+                            <p className="text-xs text-muted">
                                 Base PDF stays fixed until you press Merge.
                             </p>
                         </div>
 
-                        <span className="rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-500">
+                        <span
+                            className="rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-500">
                             Base
                         </span>
                     </div>
 
                     {baseFile ? (
-                        <div className="flex items-center gap-3 rounded-2xl border border-[color:var(--border)] bg-[var(--card)] p-2.5">
-                            <div className="relative h-16 w-12 shrink-0 overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--background)]">
+                        <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-2.5">
+                            <div className="relative h-16 w-12 shrink-0 overflow-hidden rounded-xl border border-border
+                            bg-background">
                                 {baseMeta?.thumbnail ? (
                                     <img
                                         src={baseMeta.thumbnail}
@@ -415,17 +419,17 @@ export default function MergeTool({ baseFile, onMergedFile }: MergeToolProps) {
                                         className="h-full w-full object-cover"
                                     />
                                 ) : (
-                                    <div className="flex h-full w-full items-center justify-center text-[color:var(--muted)]">
-                                        <FileText size={16} />
+                                    <div className="flex h-full w-full items-center justify-center text-muted">
+                                        <FileText size={16}/>
                                     </div>
                                 )}
                             </div>
 
                             <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-semibold text-[color:var(--foreground)]">
+                                <p className="truncate text-sm font-semibold text-foreground">
                                     {baseFile.name}
                                 </p>
-                                <p className="text-xs text-[color:var(--muted)]">
+                                <p className="text-xs text-muted">
                                     {baseMeta?.pageCount
                                         ? `${baseMeta.pageCount} pages`
                                         : "Reading pages..."}
@@ -433,31 +437,33 @@ export default function MergeTool({ baseFile, onMergedFile }: MergeToolProps) {
                             </div>
                         </div>
                     ) : (
-                        <div className="rounded-xl border border-dashed border-[color:var(--border)] bg-[var(--card)] p-4 text-center text-xs text-[color:var(--muted)]">
+                        <div className="rounded-xl border border-dashed border-border bg-card p-4 text-center
+                        text-xs text-muted">
                             Open a PDF in Studio first.
                         </div>
                     )}
                 </div>
 
-                <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--background)]/40 p-3">
+                <div className="rounded-2xl border border-border bg-(--background)/40 p-3">
                     <div className="mb-3 flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-semibold text-[color:var(--foreground)]">
+                            <p className="text-sm font-semibold text-foreground">
                                 Added files
                             </p>
-                            <p className="text-xs text-[color:var(--muted)]">
+                            <p className="text-xs text-muted">
                                 {stagedFiles.length} file{stagedFiles.length === 1 ? "" : "s"}
                             </p>
                         </div>
 
                         {(isGeneratingPreviews || isMerging) && (
-                            <Loader2 className="animate-spin text-indigo-500" size={16} />
+                            <Loader2 className="animate-spin text-indigo-500" size={16}/>
                         )}
                     </div>
 
                     <div className="space-y-2">
                         {stagedFiles.length === 0 ? (
-                            <div className="rounded-xl border border-dashed border-[color:var(--border)] bg-[var(--card)] p-4 text-center text-xs text-[color:var(--muted)]">
+                            <div className="rounded-xl border border-dashed border-border bg-card p-4
+                            text-center text-xs text-muted">
                                 Add a PDF here before merging.
                             </div>
                         ) : (
@@ -485,28 +491,29 @@ export default function MergeTool({ baseFile, onMergedFile }: MergeToolProps) {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 rounded-2xl border border-[color:var(--border)] bg-[var(--background)]/40 p-3 text-sm">
+                <div className="grid grid-cols-3 gap-2 rounded-2xl border border-border bg-(--background)/40
+                p-3 text-sm">
                     <div>
-                        <p className="text-[10px] uppercase tracking-wider text-[color:var(--muted)]">
+                        <p className="text-[10px] uppercase tracking-wider text-muted">
                             Files
                         </p>
-                        <p className="mt-1 font-semibold text-[color:var(--foreground)]">
+                        <p className="mt-1 font-semibold text-foreground">
                             {allFiles.length}
                         </p>
                     </div>
                     <div>
-                        <p className="text-[10px] uppercase tracking-wider text-[color:var(--muted)]">
+                        <p className="text-[10px] uppercase tracking-wider text-muted">
                             Size
                         </p>
-                        <p className="mt-1 font-semibold text-[color:var(--foreground)]">
+                        <p className="mt-1 font-semibold text-foreground">
                             {totalSizeMB} MB
                         </p>
                     </div>
                     <div>
-                        <p className="text-[10px] uppercase tracking-wider text-[color:var(--muted)]">
+                        <p className="text-[10px] uppercase tracking-wider text-muted">
                             Pages
                         </p>
-                        <p className="mt-1 font-semibold text-[color:var(--foreground)]">
+                        <p className="mt-1 font-semibold text-foreground">
                             {totalPagesInQueue > 0 ? totalPagesInQueue : "Loading..."}
                         </p>
                     </div>
@@ -516,16 +523,18 @@ export default function MergeTool({ baseFile, onMergedFile }: MergeToolProps) {
                     type="button"
                     onClick={mergePdfs}
                     disabled={!canMerge || isMerging || isGeneratingPreviews}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4
+                    py-3 text-sm font-bold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed
+                    disabled:opacity-50"
                 >
                     {isMerging ? (
                         <>
-                            <Loader2 size={16} className="animate-spin" />
+                            <Loader2 size={16} className="animate-spin"/>
                             Merging...
                         </>
                     ) : (
                         <>
-                            <Layers3 size={16} />
+                            <Layers3 size={16}/>
                             Merge into current document
                         </>
                     )}

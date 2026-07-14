@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AlertTriangle, Download, FileEdit, Loader2, RefreshCw, RotateCw } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/lib/notify";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 
 interface LayoutElement {
     text: string;
@@ -206,19 +206,21 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                 }
 
                 if (foundRotation) {
-                    notify("Warning: This PDF contains rotated pages. For best editing results, use Rotate Tool first.");
+                    notify("Warning: This PDF contains rotated pages. For best editing results, " +
+                        "use Rotate Tool first.","warning");
                 } else {
-                    notify("Document layout mapped successfully.");
+                    notify("Document layout mapped successfully.","success");
                 }
 
                 if (!cancelled && scannedPages.length > 0) {
-                    notify("Warning: This looks like a scanned or image-based PDF. This editor works best with selectable text PDFs.");
+                    notify("Warning: This looks like a scanned or image-based PDF. " +
+                        "This editor works best with selectable text PDFs.","warning");
                 }
             } catch (e) {
                 console.error(e);
                 if (!cancelled) {
                     setError(getFriendlyErrorMessage(e));
-                    notify("Failed to parse structural layout grids.");
+                    notify("Failed to parse structural layout grids.","error");
                 }
             } finally {
                 if (!cancelled) {
@@ -329,11 +331,11 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
 
                 await onEditedFile(editedFile);
                 setSuccess(true);
-                notify("Edited PDF loaded back into Studio.");
+                notify("Edited PDF loaded back into Studio.","success");
             } catch (e) {
                 console.error(e);
-                setError(getFriendlyErrorMessage(e));
-                notify("Compilation failure occurred.");
+                notify("Compilation failure occurred.","error");
+                handleClientError(e)
             } finally {
                 setIsCompiling(false);
             }
@@ -342,7 +344,7 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
 
     if (!baseFile) {
         return (
-            <div className="flex h-full w-full items-center justify-center p-8 text-[color:var(--muted)]">
+            <div className="flex h-full w-full items-center justify-center p-8 text-muted">
                 <p>Select or upload a document in Studio first.</p>
             </div>
         );
@@ -352,14 +354,14 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
         <div className="grid h-full min-h-0 grid-cols-1 gap-6 overflow-hidden p-4 lg:grid-cols-12">
             <div className="flex min-h-0 flex-col lg:col-span-12">
                 <div className="flex-1 space-y-4 overflow-y-auto pr-2">
-                    <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--card)] p-6">
-                        <div className="flex items-center justify-between gap-4 border-b border-[color:var(--border)] pb-3">
+                    <div className="rounded-2xl border border-border bg-card p-6">
+                        <div className="flex items-center justify-between gap-4 border-b border-border pb-3">
                             <div>
-                                <h3 className="flex items-center gap-2 text-sm font-semibold text-[color:var(--foreground)]">
+                                <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
                                     <FileEdit size={16} className="text-indigo-500" />
                                     Precision PDF Layout Editor
                                 </h3>
-                                <p className="mt-1 text-xs text-[color:var(--muted)]">
+                                <p className="mt-1 text-xs text-muted">
                                     Edit text elements directly on the mapped page canvases.
                                 </p>
                             </div>
@@ -374,16 +376,17 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                                     setScannedPages([]);
                                     setSuccess(false);
                                     setError(null);
-                                    notify("Workspace reset.");
+                                    notify("Workspace reset.","info");
                                 }}
-                                className="inline-flex items-center gap-1 rounded-xl border border-[color:var(--border)] px-3 py-2 text-sm font-medium text-[color:var(--foreground)] transition hover:bg-[color:var(--background)]"
+                                className="inline-flex items-center gap-1 rounded-xl border border-border
+                                px-3 py-2 text-sm font-medium text-foreground transition hover:bg-background"
                             >
                                 <RefreshCw size={13} /> Reset Workspace
                             </button>
                         </div>
 
                         {isExtracting && (
-                            <div className="flex flex-col items-center justify-center py-20 text-[color:var(--muted)]">
+                            <div className="flex flex-col items-center justify-center py-20 text-muted">
                                 <Loader2 className="mb-4 animate-spin" size={32} />
                                 <p>Deconstructing text lines and tracking alignment grids across all pages...</p>
                             </div>
@@ -392,7 +395,7 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                         {!isExtracting && scannedPages.length > 0 && (
                             <div className="mb-6 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-rose-600 shadow-sm dark:text-rose-300">
                                 <div className="flex items-start gap-3">
-                                    <AlertTriangle className="mt-0.5 flex-shrink-0 text-rose-500" size={20} />
+                                    <AlertTriangle className="mt-0.5 shrink-0 text-rose-500" size={20} />
                                     <div>
                                         <h4 className="text-sm font-bold">Scanned / Image-based PDF detected</h4>
                                         <p className="mt-0.5 text-xs opacity-90">
@@ -407,9 +410,11 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                         )}
 
                         {!isExtracting && isDocumentRotated && (
-                            <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-600 shadow-sm dark:text-amber-400 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-amber-500/30
+                            bg-amber-500/10 p-4 text-amber-600 shadow-sm dark:text-amber-400 sm:flex-row
+                            sm:items-center sm:justify-between">
                                 <div className="flex items-start gap-3">
-                                    <AlertTriangle className="mt-0.5 flex-shrink-0 text-amber-500" size={20} />
+                                    <AlertTriangle className="mt-0.5 shrink-0 text-amber-500" size={20} />
                                     <div>
                                         <h4 className="text-sm font-bold">Rotated Document Detected</h4>
                                         <p className="mt-0.5 text-xs opacity-90">
@@ -419,7 +424,9 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                                 </div>
                                 <Link
                                     href="/rotate-pdf"
-                                    className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-amber-600"
+                                    className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4
+                                    py-2 text-xs font-bold text-white shadow-sm transition
+                                    hover:bg-amber-600"
                                 >
                                     <RotateCw size={14} /> Fix with Rotate Tool
                                 </Link>
@@ -427,7 +434,8 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                         )}
 
                         {error && (
-                            <div className="mb-6 rounded-2xl border border-red-500/20 bg-red-50/50 p-4 text-xs text-red-600 dark:bg-red-500/10 dark:text-red-400">
+                            <div className="mb-6 rounded-2xl border border-red-500/20 bg-red-50/50 p-4
+                            text-xs text-red-600 dark:bg-red-500/10 dark:text-red-400">
                                 {error}
                             </div>
                         )}
@@ -435,41 +443,52 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                         {!isExtracting && pages.length > 0 && pdfDocument && (
                             <div className="space-y-6">
                                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                                    <div className="rounded-2xl border border-[color:var(--border)] p-4">
-                                        <p className="text-sm text-[color:var(--muted)]">Pages mapped</p>
-                                        <p className="mt-1 text-xl font-bold text-[color:var(--foreground)]">{pages.length}</p>
+                                    <div className="rounded-2xl border border-border p-4">
+                                        <p className="text-sm text-muted">Pages mapped</p>
+                                        <p className="mt-1 text-xl font-bold text-foreground">{pages.length}</p>
                                     </div>
-                                    <div className="rounded-2xl border border-[color:var(--border)] p-4">
-                                        <p className="text-sm text-[color:var(--muted)]">Source tracker</p>
-                                        <p className="mt-1 truncate text-xs font-mono text-[color:var(--foreground)]">{sourceTracker || "-"}</p>
+                                    <div className="rounded-2xl border border-border p-4">
+                                        <p className="text-sm text-muted">Source tracker</p>
+                                        <p className="mt-1 truncate text-xs font-mono text-foreground">
+                                            {sourceTracker || "-"}
+                                        </p>
                                     </div>
-                                    <div className="rounded-2xl border border-[color:var(--border)] p-4">
-                                        <p className="text-sm text-[color:var(--muted)]">Upright tracker</p>
-                                        <p className="mt-1 truncate text-xs font-mono text-[color:var(--foreground)]">{uprightTracker || "-"}</p>
+                                    <div className="rounded-2xl border border-border p-4">
+                                        <p className="text-sm text-muted">Upright tracker</p>
+                                        <p className="mt-1 truncate text-xs font-mono text-foreground">
+                                            {uprightTracker || "-"}
+                                        </p>
                                     </div>
-                                    <div className="rounded-2xl border border-[color:var(--border)] p-4">
-                                        <p className="text-sm text-[color:var(--muted)]">State</p>
-                                        <p className="mt-1 text-xl font-bold text-indigo-500">{success ? "Updated" : "Editing"}</p>
+                                    <div className="rounded-2xl border border-border p-4">
+                                        <p className="text-sm text-muted">State</p>
+                                        <p className="mt-1 text-xl font-bold text-indigo-500">
+                                            {success ? "Updated" : "Editing"}
+                                        </p>
                                     </div>
                                 </div>
 
-                                <div className="space-y-8 rounded-2xl border border-[color:var(--border)] bg-[color:var(--background)]/30 p-4 sm:p-6">
+                                <div className="space-y-8 rounded-2xl border border-border bg-(--background)/30
+                                p-4 sm:p-6">
                                     {pages.map((page, pageIdx) => (
                                         <div
                                             key={page.page_num}
-                                            className="relative mx-auto flex w-full max-w-full flex-shrink-0 flex-col items-center rounded-2xl border border-[color:var(--border)] bg-white p-4 shadow-xl"
+                                            className="relative mx-auto flex w-full max-w-full shrink-0
+                                            flex-col items-center rounded-2xl border border-border bg-white
+                                            p-4 shadow-xl"
                                             style={{ minHeight: page.height + 100 }}
                                         >
                                             <div className="mb-3 flex w-full items-center justify-between">
-                                                <span className="rounded-lg border border-[color:var(--border)] bg-[var(--card)] px-2 py-1 text-xs font-bold text-[color:var(--foreground)]">
+                                                <span className="rounded-lg border border-border bg-card
+                                                px-2 py-1 text-xs font-bold text-foreground">
                                                     Page {page.page_num}
                                                 </span>
-                                                <span className="text-xs text-[color:var(--muted)]">
+                                                <span className="text-xs text-muted">
                                                     Edit text directly on the page canvas
                                                 </span>
                                             </div>
 
-                                            <div className="relative overflow-hidden rounded border border-gray-200 shadow-sm">
+                                            <div className="relative overflow-hidden rounded border
+                                            border-gray-200 shadow-sm">
                                                 <canvas
                                                     ref={(node) => {
                                                         if (node) {
@@ -518,12 +537,18 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                                     type="button"
                                     onClick={handleCompileSubmit}
                                     disabled={isCompiling || pages.length === 0}
-                                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl
+                                    bg-indigo-600 px-4 py-3 text-sm font-bold text-white transition
+                                    hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                     {isCompiling ? (
-                                        <><Loader2 className="animate-spin" size={16} /> Assembling Layers Across All Pages...</>
+                                        <><Loader2 className="animate-spin" size={16} />
+                                            Assembling Layers Across All Pages...
+                                        </>
                                     ) : (
-                                        <><Download size={16} /> Export Precision Vector Document Changes</>
+                                        <><Download size={16} />
+                                            Export Precision Vector Document Changes
+                                        </>
                                     )}
                                 </button>
                             </div>

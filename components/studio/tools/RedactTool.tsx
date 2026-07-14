@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import {getBaseUrl, uploadAndDownloadFile} from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { FileWithPassword } from "@/lib/types";
 
@@ -306,7 +306,7 @@ export default function RedactTool({ baseFile, onRedactedFile }: RedactToolProps
 
         void analyze();
         return () => controller.abort();
-    }, [baseFile]);
+    }, [baseFile, baseUrl]);
 
     useEffect(() => {
         if (!currentPageAnalysis) return;
@@ -438,11 +438,11 @@ export default function RedactTool({ baseFile, onRedactedFile }: RedactToolProps
 
         const validBoxes = drawnBoxes.filter((box) => box.width > 0.01 && box.height > 0.01);
         if (mode === "draw" && validBoxes.length === 0) {
-            notify("Please draw at least one redaction area on the document.");
+            notify("Please draw at least one redaction area on the document.", "warning");
             return;
         }
         if (mode === "text" && !keywords.trim()) {
-            notify("Please enter at least one keyword to redact.");
+            notify("Please enter at least one keyword to redact.", "warning");
             return;
         }
 
@@ -475,10 +475,10 @@ export default function RedactTool({ baseFile, onRedactedFile }: RedactToolProps
                 setActiveId(null);
                 setCurrentBox(null);
                 setSuccess(true);
-                notify("Redacted PDF loaded back into Studio.");
+                notify("Redacted PDF loaded back into Studio.","success");
             } catch (error) {
                 console.error(error);
-                notify(getFriendlyErrorMessage(error));
+                handleClientError(error);
             } finally {
                 setIsProcessing(false);
             }
@@ -487,7 +487,7 @@ export default function RedactTool({ baseFile, onRedactedFile }: RedactToolProps
 
     if (!baseFile) {
         return (
-            <div className="flex h-full w-full items-center justify-center p-6 text-sm text-[color:var(--muted)]">
+            <div className="flex h-full w-full items-center justify-center p-6 text-sm text-muted">
                 <p>Select or upload a PDF to start.</p>
             </div>
         );
@@ -497,19 +497,20 @@ export default function RedactTool({ baseFile, onRedactedFile }: RedactToolProps
         <div className="grid h-full min-h-0 grid-cols-1 gap-6 overflow-hidden p-4 lg:grid-cols-12">
             <div className="flex min-h-0 flex-col lg:col-span-5">
                 <div className="flex-1 space-y-4 overflow-y-auto pr-2">
-                    <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--card)] p-6 space-y-5">
-                        <h3 className="flex items-center gap-2 text-sm font-semibold text-[color:var(--foreground)]">
+                    <div className="rounded-2xl border border-border bg-card p-6 space-y-5">
+                        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
                             <ShieldAlert size={16} className="text-amber-500" />
                             Redaction Controls
                         </h3>
 
                         <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-1 rounded-xl border border-[color:var(--border)] bg-[color:var(--background)]/40 p-1">
+                            <div className="flex items-center gap-1 rounded-xl border border-border bg-(--background)/40 p-1">
                                 <button
                                     type="button"
                                     disabled={historyPast.length === 0}
                                     onClick={handleUndoAction}
-                                    className="rounded-lg p-1.5 text-[color:var(--foreground)] transition hover:bg-[color:var(--background)] disabled:opacity-30"
+                                    className="rounded-lg p-1.5 text-foreground transition hover:bg-background
+                                    disabled:opacity-30"
                                     title="Undo"
                                 >
                                     <Undo2 size={14} />
@@ -518,14 +519,16 @@ export default function RedactTool({ baseFile, onRedactedFile }: RedactToolProps
                                     type="button"
                                     disabled={historyFuture.length === 0}
                                     onClick={handleRedoAction}
-                                    className="rounded-lg p-1.5 text-[color:var(--foreground)] transition hover:bg-[color:var(--background)] disabled:opacity-30"
+                                    className="rounded-lg p-1.5 text-foreground transition hover:bg-background
+                                    disabled:opacity-30"
                                     title="Redo"
                                 >
                                     <Redo2 size={14} />
                                 </button>
                             </div>
 
-                            <div className="rounded-xl border border-[color:var(--border)] bg-[color:var(--background)]/40 px-3 py-2 text-xs font-medium text-[color:var(--muted)]">
+                            <div className="rounded-xl border border-border bg-(--background)/40 px-3 py-2 text-xs
+                            font-medium text-muted">
                                 Page {currentPage} / {totalPages || "?"}
                             </div>
                         </div>
@@ -536,7 +539,7 @@ export default function RedactTool({ baseFile, onRedactedFile }: RedactToolProps
                                 onClick={() => setMode("text")}
                                 className={`flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-medium transition ${
                                     mode === "text"
-                                        ? "bg-white text-[color:var(--foreground)] shadow dark:bg-zinc-700"
+                                        ? "bg-white text-foreground shadow dark:bg-zinc-700"
                                         : "text-zinc-500"
                                 }`}
                             >
@@ -547,7 +550,7 @@ export default function RedactTool({ baseFile, onRedactedFile }: RedactToolProps
                                 onClick={() => setMode("draw")}
                                 className={`flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-medium transition ${
                                     mode === "draw"
-                                        ? "bg-white text-[color:var(--foreground)] shadow dark:bg-zinc-700"
+                                        ? "bg-white text-foreground shadow dark:bg-zinc-700"
                                         : "text-zinc-500"
                                 }`}
                             >
@@ -557,14 +560,15 @@ export default function RedactTool({ baseFile, onRedactedFile }: RedactToolProps
 
                         {mode === "text" ? (
                             <div>
-                                <label className="text-xs font-medium text-[color:var(--muted)]">
+                                <label className="text-xs font-medium text-muted">
                                     Target Keywords (Comma Separated)
                                 </label>
                                 <textarea
                                     value={keywords}
                                     onChange={(e) => setKeywords(e.target.value)}
                                     placeholder="e.g. Passport, John Doe"
-                                    className="mt-1.5 h-24 w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--card)] p-3 text-sm text-[color:var(--foreground)] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    className="mt-1.5 h-24 w-full rounded-xl border border-border bg-card p-3 text-sm
+                                    text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
                         ) : (
@@ -578,7 +582,8 @@ export default function RedactTool({ baseFile, onRedactedFile }: RedactToolProps
                                         {drawnBoxes.map((box, idx) => (
                                             <div
                                                 key={box.id}
-                                                className="flex items-center justify-between rounded-lg bg-zinc-100 px-3 py-1.5 text-xs text-[color:var(--foreground)] dark:bg-zinc-800"
+                                                className="flex items-center justify-between rounded-lg bg-zinc-100 px-3 py-1.5 text-xs
+                                                text-foreground dark:bg-zinc-800"
                                             >
                                                 <span>Area {idx + 1} (Page {box.page})</span>
                                                 <button
@@ -598,15 +603,16 @@ export default function RedactTool({ baseFile, onRedactedFile }: RedactToolProps
                         {isAnalyzing && (
                             <div className="flex items-start gap-3 rounded-xl border border-indigo-500/20 bg-indigo-500/10 p-4">
                                 <Loader2 className="mt-0.5 animate-spin text-indigo-500" size={16} />
-                                <div className="text-xs text-[color:var(--foreground)]/90">
+                                <div className="text-xs text-(--foreground)/90">
                                     <p className="font-semibold">Analyzing page structure...</p>
-                                    <p className="mt-0.5 text-[color:var(--muted)]">Detecting text pages before redaction processing.</p>
+                                    <p className="mt-0.5 text-muted">Detecting text pages before redaction processing.</p>
                                 </div>
                             </div>
                         )}
 
                         {analysisError && (
-                            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-xs text-amber-900 dark:text-amber-200">
+                            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-xs
+                            text-amber-900 dark:text-amber-200">
                                 <p className="font-semibold">Analysis unavailable</p>
                                 <p className="mt-0.5 opacity-80">{analysisError}</p>
                             </div>
@@ -615,7 +621,9 @@ export default function RedactTool({ baseFile, onRedactedFile }: RedactToolProps
                         {analysisLoaded && currentPageAnalysis && (
                             <div
                                 className={`rounded-xl border p-4 ${
-                                    isScannedPage ? "border-amber-500/20 bg-amber-500/10" : "border-emerald-500/20 bg-emerald-500/10"
+                                    isScannedPage 
+                                        ? "border-amber-500/20 bg-amber-500/10" 
+                                        : "border-emerald-500/20 bg-emerald-500/10"
                                 }`}
                             >
                                 <div className="flex items-start justify-between gap-3">
@@ -640,7 +648,7 @@ export default function RedactTool({ baseFile, onRedactedFile }: RedactToolProps
                                             </p>
                                         </div>
                                     </div>
-                                    <div className="text-[10px] font-bold uppercase tracking-wider text-[color:var(--muted)]">
+                                    <div className="text-[10px] font-bold uppercase tracking-wider text-muted">
                                         {currentPageAnalysis.wordCount} words
                                     </div>
                                 </div>
@@ -653,7 +661,7 @@ export default function RedactTool({ baseFile, onRedactedFile }: RedactToolProps
                                             className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
                                                 mode === "draw"
                                                     ? "border-indigo-500 bg-indigo-500 text-white"
-                                                    : "border-[color:var(--border)] bg-white/60 dark:bg-black/10"
+                                                    : "border-border bg-white/60 dark:bg-black/10"
                                             }`}
                                         >
                                             <MousePointerSquareDashed size={14} />
@@ -665,7 +673,7 @@ export default function RedactTool({ baseFile, onRedactedFile }: RedactToolProps
                                             className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
                                                 mode === "text"
                                                     ? "border-indigo-500 bg-indigo-500 text-white"
-                                                    : "border-[color:var(--border)] bg-white/60 dark:bg-black/10"
+                                                    : "border-border bg-white/60 dark:bg-black/10"
                                             }`}
                                         >
                                             <Type size={14} />
@@ -675,7 +683,7 @@ export default function RedactTool({ baseFile, onRedactedFile }: RedactToolProps
                                 )}
 
                                 {isTextPage && (
-                                    <div className="mt-3 text-[10px] text-[color:var(--muted)]">
+                                    <div className="mt-3 text-[10px] text-muted">
                                         Smart mode will use keywords first before any manual redaction.
                                     </div>
                                 )}
@@ -683,12 +691,13 @@ export default function RedactTool({ baseFile, onRedactedFile }: RedactToolProps
                         )}
 
                         {activeId && (
-                            <div className="flex items-center justify-between border-t border-[color:var(--border)] pt-3">
-                                <span className="text-xs font-semibold text-[color:var(--muted)]">Selected area</span>
+                            <div className="flex items-center justify-between border-t border-border pt-3">
+                                <span className="text-xs font-semibold text-muted">Selected area</span>
                                 <button
                                     type="button"
                                     onClick={() => removeBox(activeId)}
-                                    className="inline-flex items-center gap-1.5 rounded-lg bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-500 transition hover:bg-red-500/20 hover:text-red-600"
+                                    className="inline-flex items-center gap-1.5 rounded-lg bg-red-500/10 px-3 py-1.5
+                                    text-xs font-semibold text-red-500 transition hover:bg-red-500/20 hover:text-red-600"
                                 >
                                     <Trash2 size={14} /> Remove Box
                                 </button>
@@ -721,14 +730,17 @@ export default function RedactTool({ baseFile, onRedactedFile }: RedactToolProps
             </div>
 
             <div className="flex min-h-0 flex-col lg:col-span-7">
-                <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[color:var(--border)] bg-[color:var(--background)]/30 p-4">
-                    <div className="mb-4 flex items-center justify-between border-b border-[color:var(--border)] pb-3 text-sm font-bold text-[color:var(--foreground)]">
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border
+                bg-(--background)/30 p-4">
+                    <div className="mb-4 flex items-center justify-between border-b border-border pb-3 text-sm font-bold
+                     text-foreground">
                         <span className="flex items-center gap-2">
                             <Eye size={16} className="text-indigo-500" /> Redaction Canvas
                         </span>
 
                         {totalPages > 0 && (
-                            <div className="flex select-none items-center gap-2 rounded-lg border border-[color:var(--border)] bg-[var(--card)] px-2 py-0.5 font-mono text-xs text-[color:var(--muted)]">
+                            <div className="flex select-none items-center gap-2 rounded-lg border border-border
+                            bg-card px-2 py-0.5 font-mono text-xs text-muted">
                                 <button
                                     type="button"
                                     disabled={currentPage <= 1}
@@ -736,7 +748,7 @@ export default function RedactTool({ baseFile, onRedactedFile }: RedactToolProps
                                         setCurrentPage((p) => p - 1);
                                         setActiveId(null);
                                     }}
-                                    className="transition hover:text-[color:var(--foreground)] disabled:opacity-20"
+                                    className="transition hover:text-foreground disabled:opacity-20"
                                 >
                                     <ChevronLeft size={14} />
                                 </button>
@@ -750,7 +762,7 @@ export default function RedactTool({ baseFile, onRedactedFile }: RedactToolProps
                                         setCurrentPage((p) => p + 1);
                                         setActiveId(null);
                                     }}
-                                    className="transition hover:text-[color:var(--foreground)] disabled:opacity-20"
+                                    className="transition hover:text-foreground disabled:opacity-20"
                                 >
                                     <ChevronRight size={14} />
                                 </button>
@@ -759,11 +771,13 @@ export default function RedactTool({ baseFile, onRedactedFile }: RedactToolProps
                     </div>
 
                     <div
-                        className="relative flex min-h-[420px] w-full items-start justify-start overflow-auto rounded-xl border border-[color:var(--border)] bg-gray-500/5 p-4 dark:bg-black/20"
+                        className="relative flex min-h-105 w-full items-start justify-start overflow-auto rounded-xl
+                        border border-border bg-gray-500/5 p-4 dark:bg-black/20"
                         onClick={() => setActiveId(null)}
                     >
                         {isRenderingCanvas && (
-                            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-xl bg-[color:var(--background)]/40 text-xs font-medium text-[color:var(--muted)] backdrop-blur-sm">
+                            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-xl
+                            bg-(--background)/40 text-xs font-medium text-muted backdrop-blur-sm">
                                 <Loader2 className="mb-2 animate-spin text-indigo-500" size={24} />
                                 Rendering document preview...
                             </div>
@@ -771,7 +785,8 @@ export default function RedactTool({ baseFile, onRedactedFile }: RedactToolProps
 
                         <div
                             ref={containerRef}
-                            className="relative inline-block max-w-none cursor-crosshair overflow-hidden rounded border border-gray-400/20 bg-white shadow-xl select-none touch-none"
+                            className="relative inline-block max-w-none cursor-crosshair overflow-hidden rounded border
+                             border-gray-400/20 bg-white shadow-xl select-none touch-none"
                             onMouseDown={(e) => handleMouseDown(e, currentPage)}
                             onMouseMove={(e) => handleMouseMove(e, currentPage)}
                             onMouseUp={() => handleMouseUp()}

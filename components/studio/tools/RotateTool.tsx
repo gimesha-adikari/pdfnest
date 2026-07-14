@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 
@@ -231,6 +231,7 @@ export default function RotateTool({ baseFile, onRotatedFile }: RotateToolProps)
 
     useEffect(() => {
         if (!baseFile) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setPageCount(0);
             setThumbnails([]);
             setMetadata({});
@@ -267,7 +268,7 @@ export default function RotateTool({ baseFile, onRotatedFile }: RotateToolProps)
                 void generateThumbnails(pdf, totalPages);
             } catch (error) {
                 console.error(error);
-                notify("Could not read the structural metadata of this document.");
+                notify("Could not read the structural metadata of this document.","error");
                 setIsReadingTotal(false);
             }
         };
@@ -317,7 +318,7 @@ export default function RotateTool({ baseFile, onRotatedFile }: RotateToolProps)
                 });
 
                 if (Object.keys(groupedRotations).length === 0) {
-                    notify("Rotate at least one page first.");
+                    notify("Rotate at least one page first.","error");
                     return;
                 }
 
@@ -338,10 +339,10 @@ export default function RotateTool({ baseFile, onRotatedFile }: RotateToolProps)
 
                 setSuccess(true);
                 setPageRotations({});
-                notify("Rotated PDF loaded into Studio.");
-            } catch (err) {
+                notify("Rotated PDF loaded into Studio.","success");
+            }catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err);
             } finally {
                 setIsProcessing(false);
             }
@@ -351,14 +352,14 @@ export default function RotateTool({ baseFile, onRotatedFile }: RotateToolProps)
     if (!baseFile) return null;
 
     return (
-        <section className="flex h-full w-full flex-col overflow-hidden rounded-3xl border border-[color:var(--border)] bg-[var(--card)] shadow-sm">
-            <div className="flex items-center justify-between border-b border-[color:var(--border)] px-4 py-3">
+        <section className="flex h-full w-full flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
                 <div className="min-w-0">
-                    <h3 className="flex items-center gap-2 text-sm font-bold text-[color:var(--foreground)]">
+                    <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
                         <RotateCw size={16} />
                         Rotate PDF
                     </h3>
-                    <p className="text-xs text-[color:var(--muted)]">
+                    <p className="text-xs text-muted">
                         Rotate pages in the current document, then save the result back into Studio.
                     </p>
                 </div>
@@ -367,7 +368,8 @@ export default function RotateTool({ baseFile, onRotatedFile }: RotateToolProps)
                     type="button"
                     onClick={clearAllRotations}
                     disabled={isProcessing}
-                    className="rounded-xl border border-[color:var(--border)] bg-[var(--background)] p-2 text-[color:var(--muted)] transition hover:bg-[var(--card)] hover:text-[color:var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="rounded-xl border border-border bg-background p-2 text-muted transition hover:bg-card
+                    hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                     title="Reset rotations"
                 >
                     <X size={16} />
@@ -375,13 +377,13 @@ export default function RotateTool({ baseFile, onRotatedFile }: RotateToolProps)
             </div>
 
             <div className="flex flex-1 min-h-0 flex-col gap-4 overflow-y-auto p-4">
-                <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--background)]/40 p-3">
+                <div className="rounded-2xl border border-border bg-(--background)/40 p-3">
                     <div className="flex items-center justify-between gap-3">
                         <div>
-                            <p className="text-sm font-semibold text-[color:var(--foreground)]">
+                            <p className="text-sm font-semibold text-foreground">
                                 Current document
                             </p>
-                            <p className="text-xs text-[color:var(--muted)]">
+                            <p className="text-xs text-muted">
                                 The open PDF is the base document.
                             </p>
                         </div>
@@ -391,8 +393,9 @@ export default function RotateTool({ baseFile, onRotatedFile }: RotateToolProps)
                         </span>
                     </div>
 
-                    <div className="mt-3 flex items-center gap-3 rounded-2xl border border-[color:var(--border)] bg-[var(--card)] p-2.5">
-                        <div className="relative h-16 w-12 shrink-0 overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--background)]">
+                    <div className="mt-3 flex items-center gap-3 rounded-2xl border border-border bg-card p-2.5">
+                        <div className="relative h-16 w-12 shrink-0 overflow-hidden rounded-xl border border-border
+                        bg-background">
                             {metadata[getFileKey(baseFile)]?.thumbnail ? (
                                 <img
                                     src={metadata[getFileKey(baseFile)]?.thumbnail}
@@ -400,17 +403,17 @@ export default function RotateTool({ baseFile, onRotatedFile }: RotateToolProps)
                                     className="h-full w-full object-cover"
                                 />
                             ) : (
-                                <div className="flex h-full w-full items-center justify-center text-[color:var(--muted)]">
+                                <div className="flex h-full w-full items-center justify-center text-muted">
                                     <FileText size={16} />
                                 </div>
                             )}
                         </div>
 
                         <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-semibold text-[color:var(--foreground)]">
+                            <p className="truncate text-sm font-semibold text-foreground">
                                 {baseFile.name}
                             </p>
-                            <p className="text-xs text-[color:var(--muted)]">
+                            <p className="text-xs text-muted">
                                 {pageCount > 0 ? `${pageCount} pages` : "Reading pages..."}
                             </p>
                         </div>
@@ -418,17 +421,17 @@ export default function RotateTool({ baseFile, onRotatedFile }: RotateToolProps)
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-2xl border border-[color:var(--border)] p-4">
-                        <p className="text-xs uppercase tracking-wider text-[color:var(--muted)]">
+                    <div className="rounded-2xl border border-border p-4">
+                        <p className="text-xs uppercase tracking-wider text-muted">
                             Source document size
                         </p>
-                        <p className="mt-1 text-2xl font-bold text-[color:var(--foreground)]">
+                        <p className="mt-1 text-2xl font-bold text-foreground">
                             {totalSizeMB} MB
                         </p>
                     </div>
 
-                    <div className="rounded-2xl border border-[color:var(--border)] p-4">
-                        <p className="text-xs uppercase tracking-wider text-[color:var(--muted)]">
+                    <div className="rounded-2xl border border-border p-4">
+                        <p className="text-xs uppercase tracking-wider text-muted">
                             Rotated pages
                         </p>
                         <p className="mt-1 text-2xl font-bold text-indigo-500">
@@ -438,7 +441,8 @@ export default function RotateTool({ baseFile, onRotatedFile }: RotateToolProps)
                 </div>
 
                 {success && (
-                    <div className="flex items-start gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-900 dark:text-emerald-200">
+                    <div className="flex items-start gap-3 rounded-2xl border border-emerald-500/30
+                    bg-emerald-500/10 p-4 text-emerald-900 dark:text-emerald-200">
                         <ShieldCheck className="mt-0.5 shrink-0 text-emerald-500" size={18} />
                         <div>
                             <p className="text-sm font-semibold">Rotation loaded into Studio.</p>
@@ -449,13 +453,13 @@ export default function RotateTool({ baseFile, onRotatedFile }: RotateToolProps)
                     </div>
                 )}
 
-                <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--background)]/40 p-3">
+                <div className="rounded-2xl border border-border bg-(--background)/40 p-3">
                     <div className="mb-3 flex items-center justify-between gap-3">
                         <div>
-                            <p className="text-sm font-semibold text-[color:var(--foreground)]">
+                            <p className="text-sm font-semibold text-foreground">
                                 Page rotation grid
                             </p>
-                            <p className="text-xs text-[color:var(--muted)]">
+                            <p className="text-xs text-muted">
                                 Rotate each page independently or rotate all pages together.
                             </p>
                         </div>
@@ -481,12 +485,12 @@ export default function RotateTool({ baseFile, onRotatedFile }: RotateToolProps)
                     </div>
 
                     {isReadingTotal ? (
-                        <div className="flex flex-col items-center justify-center py-12 text-[color:var(--muted)]">
+                        <div className="flex flex-col items-center justify-center py-12 text-muted">
                             <Loader2 size={32} className="mb-4 animate-spin text-indigo-500" />
                             <p>Parsing document geometry grids...</p>
                         </div>
                     ) : (
-                        <div className="grid max-h-[460px] grid-cols-2 gap-3 overflow-y-auto p-1 sm:grid-cols-3 xl:grid-cols-4">
+                        <div className="grid max-h-115 grid-cols-2 gap-3 overflow-y-auto p-1 sm:grid-cols-3 xl:grid-cols-4">
                             {Array.from({ length: pageCount }).map((_, idx) => {
                                 const pageNum = idx + 1;
                                 const rotation = pageRotations[pageNum] || 0;

@@ -3,7 +3,7 @@
 import {useEffect, useMemo, useState} from "react";
 import {useAuth} from "@/context/AuthContext";
 import {uploadAndDownloadFile} from "@/lib/api";
-import {getFriendlyErrorMessage} from "@/lib/errorHandler";
+import {handleClientError} from "@/lib/errorHandler";
 import {notify} from "@/lib/notify";
 import {AlertCircle, CopyPlus, Layers3, ShieldCheck, Sparkles,} from "lucide-react";
 
@@ -77,6 +77,7 @@ export default function DuplicatePagesTool({
 
     useEffect(() => {
         if (!baseFile) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setPageSelection("1");
             setNumCopies(1);
             setSuccess(false);
@@ -144,24 +145,24 @@ export default function DuplicatePagesTool({
         if (!baseFile) return;
 
         if (!pageSelection.trim()) {
-            notify("Please provide the page number(s) you wish to duplicate.");
+            notify("Please provide the page number(s) you wish to duplicate.", "info");
             return;
         }
 
         if (validationError) {
-            notify(validationError);
+            notify(validationError,"error");
             return;
         }
 
         const selectedPageCount = getSelectedPageCount(pageSelection);
 
         if (selectedPageCount > 50) {
-            notify("You can duplicate a maximum of 50 pages at one time.");
+            notify("You can duplicate a maximum of 50 pages at one time.", "warning");
             return;
         }
 
         if (numCopies > 10) {
-            notify("Maximum allowed copies per page is 10.");
+            notify("Maximum allowed copies per page is 10.", "warning");
             return;
         }
 
@@ -189,10 +190,10 @@ export default function DuplicatePagesTool({
 
                 await onDuplicatedFile(duplicatedFile);
                 setSuccess(true);
-                notify("Duplicated pages loaded into Studio.");
+                notify("Duplicated pages loaded into Studio.", "success");
             } catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err);
             } finally {
                 setIsProcessing(false);
             }
@@ -201,7 +202,7 @@ export default function DuplicatePagesTool({
 
     if (!baseFile) {
         return (
-            <div className="flex h-full w-full items-center justify-center p-8 text-[color:var(--muted)]">
+            <div className="flex h-full w-full items-center justify-center p-8 text-muted">
                 <p>Select or upload a document in Studio first.</p>
             </div>
         );
@@ -214,8 +215,8 @@ export default function DuplicatePagesTool({
         <div className="grid h-full min-h-0 grid-cols-1 gap-6 overflow-hidden p-4 lg:grid-cols-12">
             <div className="flex min-h-0 flex-col col-span-full">
                 <div className="flex-1 space-y-4 overflow-y-auto pr-2">
-                    <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--card)] p-6">
-                        <h3 className="flex items-center gap-2 text-sm font-semibold text-[color:var(--foreground)]">
+                    <div className="rounded-2xl border border-border bg-card p-6">
+                        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
                             <CopyPlus size={16} className="text-indigo-500"/>
                             Duplicate Pages
                         </h3>
@@ -233,7 +234,7 @@ export default function DuplicatePagesTool({
                                 type="button"
                                 onClick={() => applyPreset("all")}
                                 disabled={totalPages === 0}
-                                className="rounded-lg border border-[color:var(--border)] px-2.5 py-1 text-[10px] font-semibold text-[color:var(--muted)] transition hover:bg-[color:var(--background)] disabled:cursor-not-allowed disabled:opacity-40"
+                                className="rounded-lg border border-border px-2.5 py-1 text-[10px] font-semibold text-muted transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-40"
                             >
                                 All Pages
                             </button>
@@ -241,7 +242,18 @@ export default function DuplicatePagesTool({
                                 type="button"
                                 onClick={() => applyPreset("even")}
                                 disabled={totalPages === 0}
-                                className="rounded-lg border border-[color:var(--border)] px-2.5 py-1 text-[10px] font-semibold text-[color:var(--muted)] transition hover:bg-[color:var(--background)] disabled:cursor-not-allowed disabled:opacity-40"
+                                className="
+                                rounded-lg
+                                border
+                                border-border
+                                px-2.5 py-1
+                                text-[10px]
+                                font-semibold
+                                text-muted
+                                transition
+                                hover:bg-background
+                                disabled:cursor-not-allowed
+                                disabled:opacity-40"
                             >
                                 Evens
                             </button>
@@ -249,14 +261,26 @@ export default function DuplicatePagesTool({
                                 type="button"
                                 onClick={() => applyPreset("odd")}
                                 disabled={totalPages === 0}
-                                className="rounded-lg border border-[color:var(--border)] px-2.5 py-1 text-[10px] font-semibold text-[color:var(--muted)] transition hover:bg-[color:var(--background)] disabled:cursor-not-allowed disabled:opacity-40"
+                                className="
+                                rounded-lg
+                                border
+                                border-border
+                                px-2.5
+                                py-1
+                                text-[10px]
+                                font-semibold
+                                text-muted
+                                transition
+                                hover:bg-background
+                                disabled:cursor-not-allowed
+                                disabled:opacity-40"
                             >
                                 Odds
                             </button>
                         </div>
 
                         <div className="flex flex-col gap-1.5">
-                            <label className="text-[10px] font-bold uppercase text-[color:var(--muted)]">
+                            <label className="text-[10px] font-bold uppercase text-muted">
                                 Target Page Numbers
                             </label>
                             <input
@@ -264,7 +288,22 @@ export default function DuplicatePagesTool({
                                 value={pageSelection}
                                 onChange={(e) => setPageSelection(e.target.value)}
                                 placeholder="e.g. 1, 3, 5-7"
-                                className={`w-full rounded-xl border bg-[color:var(--background)] px-4 py-2.5 text-sm font-medium text-[color:var(--foreground)] outline-none transition focus:border-indigo-500 ${validationError ? "border-red-500/50" : "border-[color:var(--border)]"}`}
+                                className={`
+                                w-full 
+                                rounded-xl 
+                                border 
+                                bg-background 
+                                px-4 py-2.5 
+                                text-sm 
+                                font-medium 
+                                text-foreground 
+                                outline-none 
+                                transition 
+                                focus:border-indigo-500 
+                                ${validationError 
+                                    ? "border-red-500/50" 
+                                    : "border-border" +
+                                    ""}`}
                             />
                             {validationError ? (
                                 <span
@@ -273,14 +312,14 @@ export default function DuplicatePagesTool({
                                     {validationError}
                                 </span>
                             ) : (
-                                <span className="text-[10px] text-[color:var(--muted)]">
+                                <span className="text-[10px] text-muted">
                                     Use commas for separate pages and hyphens for ranges. Maximum 50 selected pages.
                                 </span>
                             )}
                         </div>
 
                         <div className="flex flex-col gap-1.5">
-                            <label className="text-[10px] font-bold uppercase text-[color:var(--muted)]">
+                            <label className="text-[10px] font-bold uppercase text-muted">
                                 Number of Copies per Page (Max 10)
                             </label>
                             <input
@@ -293,18 +332,18 @@ export default function DuplicatePagesTool({
                                         Math.min(10, Math.max(1, parseInt(e.target.value, 10) || 1))
                                     )
                                 }
-                                className="w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--background)] px-4 py-2.5 text-sm font-medium text-[color:var(--foreground)] outline-none transition focus:border-indigo-500"
+                                className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground outline-none transition focus:border-indigo-500"
                             />
                         </div>
                     </div>
 
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="rounded-2xl border border-[color:var(--border)] p-4">
-                            <p className="text-sm text-[color:var(--muted)]">Document size</p>
-                            <p className="mt-1 text-xl font-bold text-[color:var(--foreground)]">{fileSizeMB} MB</p>
+                        <div className="rounded-2xl border border-border p-4">
+                            <p className="text-sm text-muted">Document size</p>
+                            <p className="mt-1 text-xl font-bold text-foreground">{fileSizeMB} MB</p>
                         </div>
-                        <div className="rounded-2xl border border-[color:var(--border)] p-4">
-                            <p className="text-sm text-[color:var(--muted)]">Pages</p>
+                        <div className="rounded-2xl border border-border p-4">
+                            <p className="text-sm text-muted">Pages</p>
                             <p className="mt-1 text-xl font-bold text-indigo-500">{totalPages}</p>
                         </div>
                     </div>

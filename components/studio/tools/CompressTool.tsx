@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { ShieldCheck, FileBox } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { FileWithPassword } from "@/lib/types";
 
@@ -53,10 +53,10 @@ export default function CompressTool({ baseFile, onCompressedFile }: CompressToo
 
                 await onCompressedFile(compressedFile);
                 setSuccess(true);
-                notify("Compressed PDF loaded back into Studio.");
+                notify("Compressed PDF loaded back into Studio.","success");
             } catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err)
             } finally {
                 setIsProcessing(false);
             }

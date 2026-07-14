@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 
 type CustomPdfFile = File & {
@@ -128,7 +128,7 @@ export default function WatermarkStudioTool({
                 setPdfDocument(pdf as unknown as PdfJsDocument);
             } catch (err) {
                 console.error("Failed to parse visual document framework:", err);
-                notify("Could not load document preview.");
+                notify("Could not load document preview.", "error");
             } finally {
                 if (!cancelled) {
                     setIsRenderingCanvas(false);
@@ -261,10 +261,10 @@ export default function WatermarkStudioTool({
 
                 await onWatermarkedFile(outputFile);
                 setSuccess(true);
-                notify("Watermark loaded into Studio.");
+                notify("Watermark loaded into Studio.", "success");
             } catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err)
             } finally {
                 setIsProcessing(false);
             }

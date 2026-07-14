@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { PlusSquare, Loader2, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 
 type CustomPdfFile = File & {
@@ -62,7 +62,7 @@ export default function InsertBlankTool({
         const validFile = baseFile as CustomPdfFile;
 
         if (numPages > 10) {
-            notify("You can insert a maximum of 10 blank pages at one time.");
+            notify("You can insert a maximum of 10 blank pages at one time.","warning");
             return;
         }
 
@@ -94,10 +94,10 @@ export default function InsertBlankTool({
 
                 await onInsertedFile(outputFile);
                 setSuccess(true);
-                notify("Blank pages loaded into Studio.");
+                notify("Blank pages loaded into Studio.","success");
             } catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err);
             } finally {
                 setIsProcessing(false);
             }
@@ -106,7 +106,7 @@ export default function InsertBlankTool({
 
     if (!baseFile) {
         return (
-            <div className="flex h-full w-full items-center justify-center p-8 text-[color:var(--muted)]">
+            <div className="flex h-full w-full items-center justify-center p-8 text-muted">
                 <p>Select or upload a document in Studio first.</p>
             </div>
         );
@@ -116,8 +116,8 @@ export default function InsertBlankTool({
         <div className="grid h-full min-h-0 grid-cols-1 gap-6 overflow-hidden p-4 lg:grid-cols-12">
             <div className="flex min-h-0 flex-col col-span-full">
                 <div className="flex-1 space-y-4 overflow-y-auto pr-2">
-                    <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--card)] p-6">
-                        <h3 className="flex items-center gap-2 text-sm font-semibold text-[color:var(--foreground)]">
+                    <div className="rounded-2xl border border-border bg-card p-6">
+                        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
                             <PlusSquare size={16} className="text-indigo-500" />
                             Insert Blank Pages
                         </h3>
@@ -125,13 +125,15 @@ export default function InsertBlankTool({
                         <div className="mt-5 grid gap-4 lg:grid-cols-2">
                             <div className="space-y-4">
                                 <div className="flex flex-col gap-1.5">
-                                    <label className="text-[10px] font-bold uppercase text-[color:var(--muted)]">
+                                    <label className="text-[10px] font-bold uppercase text-muted">
                                         Insert Strategy
                                     </label>
                                     <select
                                         value={insertAt}
                                         onChange={(e) => setInsertAt(e.target.value as "start" | "end" | "after")}
-                                        className="w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--background)] px-4 py-2.5 text-sm font-medium text-[color:var(--foreground)] outline-none transition focus:border-indigo-500"
+                                        className="w-full rounded-xl border border-border bg-background px-4 py-2.5
+                                        text-sm font-medium text-foreground outline-none transition
+                                        focus:border-indigo-500"
                                     >
                                         <option value="start">At the absolute beginning</option>
                                         <option value="end">At the absolute end</option>
@@ -141,7 +143,7 @@ export default function InsertBlankTool({
 
                                 {insertAt === "after" && (
                                     <div className="flex flex-col gap-1.5">
-                                        <label className="text-[10px] font-bold uppercase text-[color:var(--muted)]">
+                                        <label className="text-[10px] font-bold uppercase text-muted">
                                             Insert After Page Number
                                         </label>
                                         <input
@@ -160,7 +162,9 @@ export default function InsertBlankTool({
                                                     )
                                                 )
                                             }
-                                            className="w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--background)] px-4 py-2.5 text-sm font-medium text-[color:var(--foreground)] outline-none transition focus:border-indigo-500"
+                                            className="w-full rounded-xl border border-border bg-background px-4 py-2.5
+                                            text-sm font-medium text-foreground outline-none transition
+                                            focus:border-indigo-500"
                                         />
                                         <button
                                             type="button"
@@ -182,7 +186,7 @@ export default function InsertBlankTool({
                                 )}
 
                                 <div className="flex flex-col gap-1.5">
-                                    <label className="text-[10px] font-bold uppercase text-[color:var(--muted)]">
+                                    <label className="text-[10px] font-bold uppercase text-muted">
                                         Number of Blank Sheets to Add (Max 10)
                                     </label>
                                     <input
@@ -195,30 +199,32 @@ export default function InsertBlankTool({
                                                 Math.min(10, Math.max(1, parseInt(e.target.value, 10) || 1))
                                             )
                                         }
-                                        className="w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--background)] px-4 py-2.5 text-sm font-medium text-[color:var(--foreground)] outline-none transition focus:border-indigo-500"
+                                        className="w-full rounded-xl border border-border bg-background px-4 py-2.5
+                                        text-sm font-medium text-foreground outline-none transition
+                                        focus:border-indigo-500"
                                     />
                                 </div>
                             </div>
 
                             <div className="space-y-4">
                                 <div className="grid gap-4 sm:grid-cols-2">
-                                    <div className="rounded-2xl border border-[color:var(--border)] p-4">
-                                        <p className="text-sm text-[color:var(--muted)]">Current page</p>
-                                        <p className="mt-1 text-xl font-bold text-[color:var(--foreground)]">
+                                    <div className="rounded-2xl border border-border p-4">
+                                        <p className="text-sm text-muted">Current page</p>
+                                        <p className="mt-1 text-xl font-bold text-foreground">
                                             {Number.isFinite(currentPageIndex) ? currentPageIndex + 1 : 1}
                                         </p>
                                     </div>
-                                    <div className="rounded-2xl border border-[color:var(--border)] p-4">
-                                        <p className="text-sm text-[color:var(--muted)]">Total pages</p>
+                                    <div className="rounded-2xl border border-border p-4">
+                                        <p className="text-sm text-muted">Total pages</p>
                                         <p className="mt-1 text-xl font-bold text-indigo-500">{totalPages}</p>
                                     </div>
-                                    <div className="rounded-2xl border border-[color:var(--border)] p-4">
-                                        <p className="text-sm text-[color:var(--muted)]">Blank pages</p>
-                                        <p className="mt-1 text-xl font-bold text-[color:var(--foreground)]">{numPages}</p>
+                                    <div className="rounded-2xl border border-border p-4">
+                                        <p className="text-sm text-muted">Blank pages</p>
+                                        <p className="mt-1 text-xl font-bold text-foreground">{numPages}</p>
                                     </div>
-                                    <div className="rounded-2xl border border-[color:var(--border)] p-4">
-                                        <p className="text-sm text-[color:var(--muted)]">Source size</p>
-                                        <p className="mt-1 text-xl font-bold text-[color:var(--foreground)]">
+                                    <div className="rounded-2xl border border-border p-4">
+                                        <p className="text-sm text-muted">Source size</p>
+                                        <p className="mt-1 text-xl font-bold text-foreground">
                                             {fileExtractedSize} MB
                                         </p>
                                     </div>
@@ -240,9 +246,13 @@ export default function InsertBlankTool({
                                     type="button"
                                     onClick={handleInsertProcessing}
                                     disabled={isProcessing}
-                                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl
+                                    bg-indigo-600 px-4 py-3 text-sm font-bold text-white transition
+                                    hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
-                                    {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <PlusSquare size={16} />}
+                                    {isProcessing
+                                        ? <Loader2 size={16} className="animate-spin" />
+                                        : <PlusSquare size={16} />}
                                     Insert Blank Pages
                                 </button>
                             </div>

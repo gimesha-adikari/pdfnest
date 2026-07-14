@@ -16,7 +16,7 @@ import {
     Undo2,
 } from "lucide-react";
 import { getBaseUrl, uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 
@@ -525,12 +525,12 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
 
         const validBoxes = boxes.filter((b) => b.width > 2 && b.height > 2);
         if (validBoxes.length === 0) {
-            notify("Please draw at least one strikeout area on the document.");
+            notify("Please draw at least one strikeout area on the document.","warning");
             return;
         }
 
         if (currentPageAnalysis?.kind === "scanned" && strikeoutMode === "smart") {
-            notify("This page is scanned. Please choose Manual strikeout or Recognize Text.");
+            notify("This page is scanned. Please choose Manual strikeout or Recognize Text.","warning");
             return;
         }
 
@@ -562,10 +562,10 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                 setActiveId(null);
                 setCurrentPage(1);
                 setSuccess(true);
-                notify("Strikeout PDF loaded back into Studio.");
+                notify("Strikeout PDF loaded back into Studio.","success");
             } catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err);
             } finally {
                 setIsProcessing(false);
             }
@@ -574,25 +574,23 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
 
     if (!baseFile) return null;
 
-    const activeFile = baseFile as CustomPdfFile;
-
     return (
         <div className="grid h-full min-h-0 grid-cols-1 gap-6 overflow-hidden p-4 lg:grid-cols-12">
             <div className="flex min-h-0 flex-col lg:col-span-5">
                 <div className="flex-1 space-y-4 overflow-y-auto pr-2">
-                    <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--card)] p-6 space-y-5">
-                        <h3 className="flex items-center gap-2 text-sm font-semibold text-[color:var(--foreground)]">
+                    <div className="rounded-2xl border border-border bg-card p-6 space-y-5">
+                        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
                             <Strikethrough size={16} className="text-indigo-500" />
                             Strikeout Configuration
                         </h3>
 
                         <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-1 rounded-xl border border-[color:var(--border)] bg-[color:var(--background)]/40 p-1">
+                            <div className="flex items-center gap-1 rounded-xl border border-border bg-(--background)/40 p-1">
                                 <button
                                     type="button"
                                     disabled={historyPast.length === 0}
                                     onClick={handleUndoAction}
-                                    className="rounded-lg p-1.5 text-[color:var(--foreground)] transition hover:bg-[color:var(--background)] disabled:opacity-30"
+                                    className="rounded-lg p-1.5 text-foreground transition hover:bg-background disabled:opacity-30"
                                     title="Undo"
                                 >
                                     <Undo2 size={14} />
@@ -601,24 +599,27 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                                     type="button"
                                     disabled={historyFuture.length === 0}
                                     onClick={handleRedoAction}
-                                    className="rounded-lg p-1.5 text-[color:var(--foreground)] transition hover:bg-[color:var(--background)] disabled:opacity-30"
+                                    className="rounded-lg p-1.5 text-foreground transition hover:bg-background
+                                    disabled:opacity-30"
                                     title="Redo"
                                 >
                                     <Redo2 size={14} />
                                 </button>
                             </div>
-                            <div className="rounded-xl border border-[color:var(--border)] bg-[color:var(--background)]/40 px-3 py-2 text-xs font-medium text-[color:var(--muted)]">
+                            <div className="rounded-xl border border-border bg-(--background)/40 px-3 py-2 text-xs
+                            font-medium text-muted">
                                 Page {currentPage} / {totalPages || "?"}
                             </div>
                         </div>
 
-                        <div className="space-y-3 rounded-2xl border border-[color:var(--border)] bg-[color:var(--background)]/40 p-4">
+                        <div className="space-y-3 rounded-2xl border border-border bg-(--background)/40 p-4">
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-[10px] font-bold uppercase text-[color:var(--muted)]">Mode</label>
+                                <label className="text-[10px] font-bold uppercase text-muted">Mode</label>
                                 <select
                                     value={strikeoutMode}
                                     onChange={(e) => setStrikeoutMode(e.target.value as StrikeoutMode)}
-                                    className="w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--background)] px-4 py-2 text-sm font-medium text-[color:var(--foreground)] outline-none transition focus:border-indigo-500"
+                                    className="w-full rounded-xl border border-border bg-background px-4 py-2 text-sm
+                                    font-medium text-foreground outline-none transition focus:border-indigo-500"
                                 >
                                     <option value="smart" disabled={!canUseSmartMode}>
                                         Smart (text first, OCR fallback)
@@ -629,7 +630,7 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                             </div>
 
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-[10px] font-bold uppercase text-[color:var(--muted)]">Active Marker Color</label>
+                                <label className="text-[10px] font-bold uppercase text-muted">Active Marker Color</label>
                                 <div className="flex flex-wrap items-center gap-2">
                                     {STRIKE_COLORS.map((c) => (
                                         <button
@@ -652,9 +653,9 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                         {isAnalyzing && (
                             <div className="flex items-start gap-3 rounded-xl border border-indigo-500/20 bg-indigo-500/10 p-4">
                                 <Loader2 className="mt-0.5 animate-spin text-indigo-500" size={16} />
-                                <div className="text-xs text-[color:var(--foreground)]/90">
+                                <div className="text-xs text-(--foreground)/90">
                                     <p className="font-semibold">Analyzing page structure...</p>
-                                    <p className="mt-0.5 text-[color:var(--muted)]">Detecting text pages before strikeout processing.</p>
+                                    <p className="mt-0.5 text-muted">Detecting text pages before strikeout processing.</p>
                                 </div>
                             </div>
                         )}
@@ -692,7 +693,7 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                                             </p>
                                         </div>
                                     </div>
-                                    <div className="text-[10px] font-bold uppercase tracking-wider text-[color:var(--muted)]">
+                                    <div className="text-[10px] font-bold uppercase tracking-wider text-muted">
                                         {currentPageAnalysis.wordCount} words
                                     </div>
                                 </div>
@@ -705,7 +706,7 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                                             className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
                                                 strikeoutMode === "manual"
                                                     ? "border-indigo-500 bg-indigo-500 text-white"
-                                                    : "border-[color:var(--border)] bg-white/60 dark:bg-black/10"
+                                                    : "border-border bg-white/60 dark:bg-black/10"
                                             }`}
                                         >
                                             <MousePointer2 size={14} />
@@ -717,7 +718,7 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                                             className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
                                                 strikeoutMode === "ocr"
                                                     ? "border-indigo-500 bg-indigo-500 text-white"
-                                                    : "border-[color:var(--border)] bg-white/60 dark:bg-black/10"
+                                                    : "border-border bg-white/60 dark:bg-black/10"
                                             }`}
                                         >
                                             <ScanText size={14} />
@@ -727,7 +728,7 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                                 )}
 
                                 {isTextPage && (
-                                    <div className="mt-3 text-[10px] text-[color:var(--muted)]">
+                                    <div className="mt-3 text-[10px] text-muted">
                                         Smart mode will use native text before any fallback behavior.
                                     </div>
                                 )}
@@ -735,8 +736,8 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                         )}
 
                         {activeId && (
-                            <div className="flex items-center justify-between border-t border-[color:var(--border)] pt-3">
-                                <span className="text-xs font-semibold text-[color:var(--muted)]">Marker selected</span>
+                            <div className="flex items-center justify-between border-t border-border pt-3">
+                                <span className="text-xs font-semibold text-muted">Marker selected</span>
                                 <button
                                     type="button"
                                     onClick={deleteActiveBox}
@@ -773,14 +774,14 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
             </div>
 
             <div className="flex min-h-0 flex-col lg:col-span-7">
-                <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[color:var(--border)] bg-[color:var(--background)]/30 p-4">
-                    <div className="mb-4 flex items-center justify-between border-b border-[color:var(--border)] pb-3 text-sm font-bold text-[color:var(--foreground)]">
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-[color:var(--background)]/30 p-4">
+                    <div className="mb-4 flex items-center justify-between border-b border-border pb-3 text-sm font-bold text-[color:var(--foreground)]">
                         <span className="flex items-center gap-2">
                             <Eye size={16} className="text-indigo-500" /> Strikeout Canvas
                         </span>
 
                         {totalPages > 0 && (
-                            <div className="flex select-none items-center gap-2 rounded-lg border border-[color:var(--border)] bg-[var(--card)] px-2 py-0.5 font-mono text-xs text-[color:var(--muted)]">
+                            <div className="flex select-none items-center gap-2 rounded-lg border border-border bg-[var(--card)] px-2 py-0.5 font-mono text-xs text-[color:var(--muted)]">
                                 <button
                                     type="button"
                                     disabled={currentPage <= 1}
@@ -788,7 +789,7 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                                         setCurrentPage((p) => p - 1);
                                         setActiveId(null);
                                     }}
-                                    className="transition hover:text-[color:var(--foreground)] disabled:opacity-20"
+                                    className="transition hover:text-foreground disabled:opacity-20"
                                 >
                                     <ChevronLeft size={14} />
                                 </button>
@@ -802,7 +803,7 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                                         setCurrentPage((p) => p + 1);
                                         setActiveId(null);
                                     }}
-                                    className="transition hover:text-[color:var(--foreground)] disabled:opacity-20"
+                                    className="transition hover:text-foreground disabled:opacity-20"
                                 >
                                     <ChevronRight size={14} />
                                 </button>
@@ -811,7 +812,7 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                     </div>
 
                     <div
-                        className="relative flex min-h-[420px] w-full items-start justify-start overflow-auto rounded-xl border border-[color:var(--border)] bg-gray-500/5 p-4 dark:bg-black/20"
+                        className="relative flex min-h-105 w-full items-start justify-start overflow-auto rounded-xl border border-[color:var(--border)] bg-gray-500/5 p-4 dark:bg-black/20"
                         onClick={() => setActiveId(null)}
                     >
                         {(isRenderingCanvas || isRenderingPreview) && (
@@ -831,7 +832,9 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                         >
                             <canvas
                                 ref={canvasRef}
-                                className={`block max-w-full h-auto rounded pointer-events-none ${isScannedPage ? "opacity-0" : "opacity-100"}`}
+                                className={`block max-w-full h-auto rounded pointer-events-none ${isScannedPage 
+                                    ? "opacity-0" 
+                                    : "opacity-100"}`}
                             />
 
                             {isScannedPage && previewImageSrc && (
@@ -843,7 +846,7 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                             )}
 
                             {isScannedPage && !previewImageSrc && (
-                                <div className="absolute inset-0 flex items-center justify-center text-xs text-[color:var(--muted)]">
+                                <div className="absolute inset-0 flex items-center justify-center text-xs text-muted">
                                     Preparing scanned preview...
                                 </div>
                             )}

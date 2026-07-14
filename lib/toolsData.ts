@@ -1109,7 +1109,8 @@ export const NAV_TOOLS: ToolItem[] = [
                 answer: "Yes. Since additional pages are added to the document, the output PDF will usually be larger depending on the number and complexity of the duplicated pages."
             }
         ]
-    },{
+    },
+    {
         title: "Insert Blank PDF Pages",
 
         description: "Insert blank pages into a PDF online at the beginning, end, or after any page. Add empty pages for notes, separators, printing, signatures, or document organization.",
@@ -1180,7 +1181,8 @@ export const NAV_TOOLS: ToolItem[] = [
                 answer: "Blank pages are useful for adding notes, creating chapter separators, preparing printed documents, leaving space for signatures, or organizing large PDF files."
             }
         ]
-    },{
+    },
+    {
         title: "Add Text to PDF",
 
         description: "Add custom text to PDF pages online. Insert labels, annotations, dates, names, document references, or custom messages anywhere in your PDF while preserving the original layout.",
@@ -1251,7 +1253,8 @@ export const NAV_TOOLS: ToolItem[] = [
                 answer: "Yes. If your PDF is password-protected, simply provide the correct password before adding text."
             }
         ]
-    },{
+    },
+    {
         title: "Highlight PDF",
 
         description: "Highlight text and important sections in PDF files online. Add colored highlight markers to emphasize key content while preserving the original document layout and quality.",
@@ -1322,7 +1325,8 @@ export const NAV_TOOLS: ToolItem[] = [
                 answer: "Yes. The highlights are embedded into the output PDF and can be viewed in most modern PDF readers and browsers."
             }
         ]
-    },{
+    },
+    {
         title: "Underline PDF",
 
         description: "Underline text and important content in PDF files online. Add colored underline annotations to emphasize words, sentences, or document sections while preserving the original layout and formatting.",
@@ -1393,7 +1397,8 @@ export const NAV_TOOLS: ToolItem[] = [
                 answer: "Yes. The underlines are permanently embedded into the output PDF and can be viewed in most modern PDF readers and web browsers."
             }
         ]
-    },{
+    },
+    {
         title: "Strikeout PDF",
 
         description: "Strike through text and content in PDF files online. Add colored strikeout annotations to words, sentences, or document sections while preserving the original document layout and formatting.",

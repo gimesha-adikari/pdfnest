@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/lib/notify";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import {getBaseUrl, uploadAndDownloadFile} from "@/lib/api";
 
 interface CustomPdfFile extends File {
@@ -528,7 +528,7 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
 
         const validBoxes = boxes.filter((b) => b.width > 2 && b.height > 2);
         if (validBoxes.length === 0) {
-            notify("Please draw at least one highlighting box on the document.");
+            notify("Please draw at least one highlighting box on the document.","warning");
             return;
         }
 
@@ -562,10 +562,10 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
                 setCurrentPage(1);
 
                 setSuccess(true);
-                notify("Highlighted PDF loaded back into Studio.");
+                notify("Highlighted PDF loaded back into Studio.","success");
             } catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err);
             } finally {
                 setIsProcessing(false);
             }

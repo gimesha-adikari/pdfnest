@@ -4,7 +4,7 @@ import {useMemo, useState} from "react";
 import {useRouter} from "next/navigation";
 import {FileText, Loader2, ShieldCheck} from "lucide-react";
 import {uploadAndDownloadFile} from "@/lib/api";
-import {getFriendlyErrorMessage} from "@/lib/errorHandler";
+import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import {useSharedTool} from "@/app/(site)/[toolId]/layout";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
@@ -78,14 +78,14 @@ export default function OfficeConverter({targetFormat, title, description, icon}
                 if (err instanceof Error){
                     const error = (err as Error)
                     if (error.message == "Network Error") {
-                        notify("Unsupported File or Network Error")
+                        notify("Unsupported File or Network Error","error")
                     }else {
-                        console.error(err)
-                        notify(getFriendlyErrorMessage(err));
+                        console.error(err);
+                        handleClientError(err);
                     }
                 }else{
                     console.error(err)
-                    notify(getFriendlyErrorMessage(err));
+                    handleClientError(err);
                 }
             } finally {
                 setIsProcessing(false);
@@ -106,12 +106,12 @@ export default function OfficeConverter({targetFormat, title, description, icon}
                 }}/>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="rounded-2xl border border-[color:var(--border)] p-4 bg-transparent">
-                        <p className="text-sm text-[color:var(--muted)]">Source document weight</p>
+                    <div className="rounded-2xl border border-border p-4 bg-transparent">
+                        <p className="text-sm text-muted">Source document weight</p>
                         <p className="mt-1 text-2xl font-bold">{fileExtractedSize} MB</p>
                     </div>
-                    <div className="rounded-2xl border border-[color:var(--border)] p-4 bg-transparent">
-                        <p className="text-sm text-[color:var(--muted)]">Target office syntax</p>
+                    <div className="rounded-2xl border border-border p-4 bg-transparent">
+                        <p className="text-sm text-muted">Target office syntax</p>
                         <p className="mt-1 text-md font-bold text-indigo-500">{formatLabel}</p>
                     </div>
                 </div>
@@ -140,23 +140,24 @@ export default function OfficeConverter({targetFormat, title, description, icon}
 
             {/* Status Visualization Block */}
             <div
-                className="lg:col-span-7 flex flex-col items-center justify-center bg-[color:var(--background)]/30 border border-[color:var(--border)] rounded-2xl p-8 text-center min-h-[260px] relative overflow-hidden">
+                className="lg:col-span-7 flex flex-col items-center justify-center bg-(--background)/30 border
+                border-border rounded-2xl p-8 text-center min-h-65 relative overflow-hidden">
                 {isProcessing ? (
                     <div
-                        className="space-y-3 flex flex-col items-center justify-center text-[color:var(--muted)] animate-pulse">
+                        className="space-y-3 flex flex-col items-center justify-center text-muted animate-pulse">
                         <Loader2 className="animate-spin text-indigo-500 mb-1" size={32}/>
-                        <p className="text-sm font-bold text-[color:var(--foreground)]">Invoking Formatting
+                        <p className="text-sm font-bold text-foreground">Invoking Formatting
                             Subprocesses...</p>
                         <p className="text-xs max-w-xs mx-auto">Rebuilding paragraphs, calculating grid bounds, and
                             compiling structural object tracks.</p>
                     </div>
                 ) : (
-                    <div className="space-y-4 text-[color:var(--muted)] flex flex-col items-center">
+                    <div className="space-y-4 text-muted flex flex-col items-center">
                         <div className="p-4 rounded-full bg-indigo-500/10 text-indigo-500">
                             <FileText size={32}/>
                         </div>
                         <div>
-                            <h4 className="text-md font-bold text-[color:var(--foreground)]">Ready for Extraction
+                            <h4 className="text-md font-bold text-foreground">Ready for Extraction
                                 Pipeline</h4>
                             <p className="text-xs mt-1 max-w-sm mx-auto">
                                 Executing this module maps visual tables and multi-font flow channels safely into native

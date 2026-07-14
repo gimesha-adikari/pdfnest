@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { ShieldCheck, Droplet } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import {handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { FileWithPassword } from "@/lib/types";
 
@@ -57,10 +57,10 @@ export default function GrayscaleTool({
 
                 await onProcessedFile(processedFile);
                 setSuccess(true);
-                notify("Grayscale PDF loaded back into Studio.");
+                notify("Grayscale PDF loaded back into Studio.","success");
             } catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err)
             } finally {
                 setIsProcessing(false);
             }
@@ -69,7 +69,7 @@ export default function GrayscaleTool({
 
     if (!baseFile) {
         return (
-            <div className="flex h-full w-full items-center justify-center p-6 text-sm text-[color:var(--muted)]">
+            <div className="flex h-full w-full items-center justify-center p-6 text-sm text-muted">
                 <p>Select or upload a PDF to start.</p>
             </div>
         );
@@ -77,12 +77,12 @@ export default function GrayscaleTool({
 
     return (
         <div className="flex h-full min-h-0 w-full flex-col overflow-y-auto p-4">
-            <div className="space-y-4 rounded-2xl border border-[color:var(--border)] bg-[var(--card)] p-4 shadow-sm">
+            <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
                 <div className="space-y-1">
-                    <h3 className="text-sm font-semibold text-[color:var(--foreground)]">
+                    <h3 className="text-sm font-semibold text-foreground">
                         Convert PDF to Grayscale
                     </h3>
-                    <p className="text-xs text-[color:var(--muted)]">
+                    <p className="text-xs text-muted">
                         Remove all color from your document to save printer ink and simplify the output.
                     </p>
                 </div>

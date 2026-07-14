@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { BookOpen, FileText, Loader2, ShieldCheck, Tags, User } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 
 type CustomPdfFile = File & {
@@ -65,7 +65,7 @@ export default function EditMetadataTool({
             } catch (err) {
                 if (cancelled) return;
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err);
                 setTitle(baseFile.name.replace(/\.pdf$/i, ""));
             } finally {
                 if (!cancelled) {
@@ -112,10 +112,10 @@ export default function EditMetadataTool({
 
                 await onMetadataUpdated(updatedFile);
                 setSuccess(true);
-                notify("Metadata loaded into Studio.");
+                notify("Metadata loaded into Studio.","success");
             } catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err);
             } finally {
                 setIsProcessing(false);
             }
@@ -124,7 +124,7 @@ export default function EditMetadataTool({
 
     if (!baseFile) {
         return (
-            <div className="flex h-full w-full items-center justify-center p-8 text-[color:var(--muted)]">
+            <div className="flex h-full w-full items-center justify-center p-8 text-muted">
                 <p>Select or upload a document in Studio first.</p>
             </div>
         );
@@ -136,23 +136,23 @@ export default function EditMetadataTool({
         <div className="grid h-full min-h-0 grid-cols-1 gap-6 overflow-hidden p-4 lg:grid-cols-12">
             <div className="flex min-h-0 flex-col lg:col-span-12">
                 <div className="flex-1 space-y-4 overflow-y-auto pr-2">
-                    <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--card)] p-6">
-                        <h3 className="flex items-center gap-2 text-sm font-semibold text-[color:var(--foreground)]">
+                    <div className="rounded-2xl border border-border bg-card p-6">
+                        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
                             <Tags size={16} className="text-indigo-500" />
                             Edit Metadata
                         </h3>
 
-                        <p className="mt-2 text-xs text-[color:var(--muted)]">
+                        <p className="mt-2 text-xs text-muted">
                             Update hidden document properties like title, author, subject, and keywords.
                         </p>
 
                         <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                            <div className="rounded-2xl border border-[color:var(--border)] p-4">
-                                <p className="text-sm text-[color:var(--muted)]">Document size</p>
-                                <p className="mt-1 text-xl font-bold text-[color:var(--foreground)]">{fileSizeMB} MB</p>
+                            <div className="rounded-2xl border border-border p-4">
+                                <p className="text-sm text-muted">Document size</p>
+                                <p className="mt-1 text-xl font-bold text-foreground">{fileSizeMB} MB</p>
                             </div>
-                            <div className="rounded-2xl border border-[color:var(--border)] p-4">
-                                <p className="text-sm text-[color:var(--muted)]">Status</p>
+                            <div className="rounded-2xl border border-border p-4">
+                                <p className="text-sm text-muted">Status</p>
                                 <p className="mt-1 text-xl font-bold text-indigo-500">
                                     {isReadingFile ? "Reading" : "Ready"}
                                 </p>
@@ -161,7 +161,7 @@ export default function EditMetadataTool({
 
                         <div className="mt-5 space-y-4">
                             <div className="space-y-2">
-                                <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[color:var(--muted)]">
+                                <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">
                                     <FileText size={12} /> Document Title
                                 </label>
                                 <input
@@ -169,12 +169,12 @@ export default function EditMetadataTool({
                                     value={title}
                                     onChange={(e) => setTitle(e.target.value)}
                                     placeholder="e.g., Q3 Financial Report"
-                                    className="w-full rounded-xl border border-[color:var(--border)] bg-[var(--background)] px-4 py-3 text-sm font-medium text-[color:var(--foreground)] outline-none transition focus:border-indigo-500"
+                                    className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm font-medium text-foreground outline-none transition focus:border-indigo-500"
                                 />
                             </div>
 
                             <div className="space-y-2">
-                                <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[color:var(--muted)]">
+                                <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">
                                     <User size={12} /> Author / Creator
                                 </label>
                                 <input
@@ -182,12 +182,12 @@ export default function EditMetadataTool({
                                     value={author}
                                     onChange={(e) => setAuthor(e.target.value)}
                                     placeholder="e.g., Jane Doe, Acme Corp"
-                                    className="w-full rounded-xl border border-[color:var(--border)] bg-[var(--background)] px-4 py-3 text-sm font-medium text-[color:var(--foreground)] outline-none transition focus:border-indigo-500"
+                                    className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm font-medium text-foreground outline-none transition focus:border-indigo-500"
                                 />
                             </div>
 
                             <div className="space-y-2">
-                                <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[color:var(--muted)]">
+                                <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">
                                     <BookOpen size={12} /> Subject Matter
                                 </label>
                                 <input
@@ -195,12 +195,12 @@ export default function EditMetadataTool({
                                     value={subject}
                                     onChange={(e) => setSubject(e.target.value)}
                                     placeholder="e.g., Quarterly Earnings Summary"
-                                    className="w-full rounded-xl border border-[color:var(--border)] bg-[var(--background)] px-4 py-3 text-sm font-medium text-[color:var(--foreground)] outline-none transition focus:border-indigo-500"
+                                    className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm font-medium text-foreground outline-none transition focus:border-indigo-500"
                                 />
                             </div>
 
                             <div className="space-y-2">
-                                <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[color:var(--muted)]">
+                                <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">
                                     <Tags size={12} /> Search Keywords (Comma separated)
                                 </label>
                                 <input
@@ -208,13 +208,13 @@ export default function EditMetadataTool({
                                     value={keywords}
                                     onChange={(e) => setKeywords(e.target.value)}
                                     placeholder="finance, q3, report, earnings"
-                                    className="w-full rounded-xl border border-[color:var(--border)] bg-[var(--background)] px-4 py-3 text-sm font-medium text-[color:var(--foreground)] outline-none transition focus:border-indigo-500"
+                                    className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm font-medium text-foreground outline-none transition focus:border-indigo-500"
                                 />
                             </div>
                         </div>
 
                         {isReadingFile && (
-                            <div className="mt-5 flex items-center gap-2 rounded-xl border border-[color:var(--border)] bg-[var(--background)]/40 p-3 text-xs text-[color:var(--muted)]">
+                            <div className="mt-5 flex items-center gap-2 rounded-xl border border-border bg-(--background)/40 p-3 text-xs text-muted">
                                 <Loader2 size={14} className="animate-spin text-indigo-500" />
                                 Reading metadata from the current document...
                             </div>

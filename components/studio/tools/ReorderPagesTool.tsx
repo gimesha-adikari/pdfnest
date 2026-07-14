@@ -13,7 +13,7 @@ import {
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { useAuth } from "@/context/AuthContext";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 
 interface ReorderPagesToolProps {
@@ -233,7 +233,7 @@ export default function ReorderPagesTool({ baseFile, onReorderedFile }: ReorderP
                 await loadingTask.destroy();
             } catch (error) {
                 console.error("Root document processing exception:", error);
-                notify("Could not load document preview grids.");
+                notify("Could not load document preview grids.", "error");
             } finally {
                 if (!cancelled) {
                     setIsLoadingElements(false);
@@ -277,10 +277,10 @@ export default function ReorderPagesTool({ baseFile, onReorderedFile }: ReorderP
                 await onReorderedFile(reorderedFile);
 
                 setSuccess(true);
-                notify("Reordered PDF loaded into Studio.");
+                notify("Reordered PDF loaded into Studio.","success");
             } catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err);
             } finally {
                 setIsProcessing(false);
             }

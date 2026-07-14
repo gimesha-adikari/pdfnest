@@ -1,4 +1,3 @@
-// file: components/studio/tools/SplitTool.tsx
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -11,7 +10,7 @@ import {
     X,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import {handleClientError} from "@/lib/errorHandler";
 import { uploadAndDownloadFile } from "@/lib/api";
 import { notify } from "@/lib/notify";
 
@@ -111,7 +110,7 @@ export default function SplitTool({
                 await generateThumbnails(pdf, totalPages);
             } catch (error) {
                 console.error(error);
-                notify("Could not read the structure of this document.");
+                notify("Could not read the structure of this document.","error");
             } finally {
                 setIsReadingTotal(false);
             }
@@ -198,10 +197,10 @@ export default function SplitTool({
                 });
 
                 await onSplitFile(outputFile);
-                notify("Selected pages loaded into Studio.");
+                notify("Selected pages loaded into Studio.","success");
             } catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err);
             } finally {
                 setIsProcessing(false);
             }
@@ -211,14 +210,14 @@ export default function SplitTool({
     if (!baseFile) return null;
 
     return (
-        <section className="w-full overflow-hidden rounded-3xl border border-[color:var(--border)] bg-[var(--card)] shadow-sm">
-            <div className="flex items-center justify-between border-b border-[color:var(--border)] px-4 py-3">
+        <section className="w-full overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
                 <div className="min-w-0">
-                    <h3 className="flex items-center gap-2 text-sm font-bold text-[color:var(--foreground)]">
+                    <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
                         <Scissors size={16} />
                         Split PDF
                     </h3>
-                    <p className="text-xs text-[color:var(--muted)]">
+                    <p className="text-xs text-muted">
                         Select pages from the current document and load the extracted PDF back into Studio.
                     </p>
                 </div>
@@ -227,7 +226,8 @@ export default function SplitTool({
                     type="button"
                     onClick={clearSelection}
                     disabled={selectedPages.size === 0 || isProcessing}
-                    className="rounded-xl border border-[color:var(--border)] bg-[var(--background)] p-2 text-[color:var(--muted)] transition hover:bg-[var(--card)] hover:text-[color:var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="rounded-xl border border-border bg-background p-2 text-muted transition hover:bg-card
+                    hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                     title="Clear selection"
                 >
                     <X size={16} />
@@ -235,13 +235,13 @@ export default function SplitTool({
             </div>
 
             <div className="space-y-4 p-4">
-                <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--background)]/40 p-3">
+                <div className="rounded-2xl border border-border bg-(--background)/40 p-3">
                     <div className="mb-3 flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-semibold text-[color:var(--foreground)]">
+                            <p className="text-sm font-semibold text-foreground">
                                 Current document
                             </p>
-                            <p className="text-xs text-[color:var(--muted)]">
+                            <p className="text-xs text-muted">
                                 This is the source PDF you are splitting.
                             </p>
                         </div>
@@ -251,16 +251,17 @@ export default function SplitTool({
                         </span>
                     </div>
 
-                    <div className="flex items-center gap-3 rounded-2xl border border-[color:var(--border)] bg-[var(--card)] p-2.5">
-                        <div className="flex h-16 w-12 shrink-0 items-center justify-center rounded-xl border border-[color:var(--border)] bg-[var(--background)] text-[color:var(--muted)]">
+                    <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-2.5">
+                        <div className="flex h-16 w-12 shrink-0 items-center justify-center rounded-xl border
+                        border-border bg-background text-muted">
                             <FileText size={16} />
                         </div>
 
                         <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-semibold text-[color:var(--foreground)]">
+                            <p className="truncate text-sm font-semibold text-foreground">
                                 {baseFile.name}
                             </p>
-                            <p className="text-xs text-[color:var(--muted)]">
+                            <p className="text-xs text-muted">
                                 {pageCount > 0 ? `${pageCount} pages` : "Reading pages..."}
                                 {" · "}
                                 {fileSizeMB} MB
@@ -269,13 +270,13 @@ export default function SplitTool({
                     </div>
                 </div>
 
-                <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--background)]/40 p-3">
+                <div className="rounded-2xl border border-border bg-(--background)/40 p-3">
                     <div className="mb-3 flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-semibold text-[color:var(--foreground)]">
+                            <p className="text-sm font-semibold text-foreground">
                                 Visual Page Selector
                             </p>
-                            <p className="text-xs text-[color:var(--muted)]">
+                            <p className="text-xs text-muted">
                                 Choose the pages you want to extract.
                             </p>
                         </div>
@@ -290,7 +291,7 @@ export default function SplitTool({
                                 </button>
                                 <button
                                     onClick={clearSelection}
-                                    className="font-medium text-[color:var(--muted)] transition hover:text-red-500"
+                                    className="font-medium text-muted transition hover:text-red-500"
                                 >
                                     Clear
                                 </button>
@@ -299,13 +300,13 @@ export default function SplitTool({
                     </div>
 
                     {isReadingTotal ? (
-                        <div className="flex flex-col items-center justify-center py-12 text-[color:var(--muted)]">
+                        <div className="flex flex-col items-center justify-center py-12 text-muted">
                             <Loader2 size={30} className="mb-4 animate-spin text-indigo-500" />
                             <p>Scanning current document...</p>
                         </div>
                     ) : (
                         <>
-                            <div className="grid max-h-[360px] grid-cols-2 gap-3 overflow-y-auto pr-1">
+                            <div className="grid max-h-90 grid-cols-2 gap-3 overflow-y-auto pr-1">
                                 {Array.from({ length: pageCount }).map((_, idx) => {
                                     const pageNum = idx + 1;
                                     const isSelected = selectedPages.has(pageNum);
@@ -320,7 +321,7 @@ export default function SplitTool({
                                                 "relative flex aspect-[1/1.35] flex-col overflow-hidden rounded-2xl border-2 transition-all select-none",
                                                 isSelected
                                                     ? "border-indigo-500 bg-indigo-500/10 shadow-md"
-                                                    : "border-[color:var(--border)] bg-[var(--card)] hover:border-indigo-400/50",
+                                                    : "border-border bg-card hover:border-indigo-400/50",
                                             ].join(" ")}
                                         >
                                             {thumbnailSrc ? (
@@ -353,8 +354,8 @@ export default function SplitTool({
                                 })}
                             </div>
 
-                            <div className="mt-4 flex items-center justify-between border-t border-[color:var(--border)] pt-4">
-                                <p className="text-sm text-[color:var(--muted)]">
+                            <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
+                                <p className="text-sm text-muted">
                                     Selected pages
                                 </p>
                                 <p className="font-mono text-sm font-semibold text-indigo-500">
@@ -365,20 +366,20 @@ export default function SplitTool({
                     )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 rounded-2xl border border-[color:var(--border)] bg-[var(--background)]/40 p-3 text-sm">
+                <div className="grid grid-cols-2 gap-2 rounded-2xl border border-border bg-(--background)/40 p-3 text-sm">
                     <div>
-                        <p className="text-[10px] uppercase tracking-wider text-[color:var(--muted)]">
+                        <p className="text-[10px] uppercase tracking-wider text-muted">
                             Source size
                         </p>
-                        <p className="mt-1 font-semibold text-[color:var(--foreground)]">
+                        <p className="mt-1 font-semibold text-foreground">
                             {fileSizeMB} MB
                         </p>
                     </div>
                     <div>
-                        <p className="text-[10px] uppercase tracking-wider text-[color:var(--muted)]">
+                        <p className="text-[10px] uppercase tracking-wider text-muted">
                             Selected
                         </p>
-                        <p className="mt-1 font-semibold text-[color:var(--foreground)]">
+                        <p className="mt-1 font-semibold text-foreground">
                             {selectedCount} / {pageCount}
                         </p>
                     </div>
