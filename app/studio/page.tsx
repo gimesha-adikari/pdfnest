@@ -47,6 +47,7 @@ export default function StudioPageBase() {
     const resumeRecovery = async () => {
         if (!recovery) return;
 
+        preview.clearPreviewCache();
         document.restoreProject(recovery);
         zoom.setZoom(recovery.zoom);
         tools.setActiveTool(recovery.activeTool);
@@ -67,6 +68,8 @@ export default function StudioPageBase() {
         const lower = file.name.toLowerCase();
 
         if (lower.endsWith(".pns")) {
+            preview.clearPreviewCache();
+
             const project = await openProject(file);
 
             document.restoreProject(project);

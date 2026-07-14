@@ -20,6 +20,8 @@ export function useStudio() {
     const tools = useStudioTools();
 
     const commitDocument = async (file: File) => {
+        preview.clearPreviewCache();
+
         const result = await document.replaceCurrentDocument(file);
 
         if (!result) {
@@ -37,6 +39,13 @@ export function useStudio() {
         });
     };
 
+    const resetStudio = () => {
+        document.resetDocument();
+        preview.resetPreview();
+        zoom.zoomReset();
+        tools.setActiveTool("select");
+    };
+
     const saveCurrentProject = async () => {
         const snapshot = document.captureSnapshot();
 
@@ -51,13 +60,6 @@ export function useStudio() {
             past: document.past,
             future: document.future,
         });
-    };
-
-    const resetStudio = () => {
-        document.resetDocument();
-        preview.resetPreview();
-        zoom.zoomReset();
-        tools.setActiveTool("select");
     };
 
     return {

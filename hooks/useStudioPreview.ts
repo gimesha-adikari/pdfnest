@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 interface PreviewOptions {
     activeFile: File | null;
     pageNumber: number;
     onError: (message: string) => void;
+}
+
+function getPreviewKey(file: File, pageNumber: number, scale: string) {
+    return [file.name, file.size, file.lastModified, pageNumber, scale].join("|");
 }
 
 export function useStudioPreview({
@@ -16,33 +20,46 @@ export function useStudioPreview({
     const [previewSrc, setPreviewSrc] = useState("");
     const [isRendering, setIsRendering] = useState(false);
 
+    const cacheRef = useRef<Map<string, string>>(new Map());
+
     const baseUrl = useMemo(
         () => process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080",
         []
     );
 
     const clearPreview = () => {
-        setPreviewSrc((previous) => {
-            if (previous) {
-                URL.revokeObjectURL(previous);
-            }
-            return "";
-        });
+        setPreviewSrc("");
+    };
+
+    const clearPreviewCache = () => {
+        for (const url of cacheRef.current.values()) {
+            URL.revokeObjectURL(url);
+        }
+        cacheRef.current.clear();
+        setPreviewSrc("");
     };
 
     const resetPreview = () => {
-        clearPreview();
+        clearPreviewCache();
     };
 
     useEffect(() => {
         if (!activeFile) {
-            clearPreview();
+            clearPreviewCache();
             return;
         }
 
         let cancelled = false;
+        const file = activeFile;
+        const scale = "2.0";
+        const cacheKey = getPreviewKey(file, pageNumber, scale);
 
-        const file =activeFile;
+        const cached = cacheRef.current.get(cacheKey);
+        if (cached) {
+            setPreviewSrc(cached);
+            setIsRendering(false);
+            return;
+        }
 
         async function renderPreview() {
             setIsRendering(true);
@@ -51,7 +68,7 @@ export function useStudioPreview({
                 const formData = new FormData();
                 formData.append("file", file);
                 formData.append("page", String(pageNumber));
-                formData.append("scale", "2.0");
+                formData.append("scale", scale);
 
                 const response = await fetch(
                     `${baseUrl}/api/conversion/preview/page`,
@@ -67,15 +84,11 @@ export function useStudioPreview({
                 }
 
                 const blob = await response.blob();
-
                 if (cancelled) return;
 
-                setPreviewSrc((previous) => {
-                    if (previous) {
-                        URL.revokeObjectURL(previous);
-                    }
-                    return URL.createObjectURL(blob);
-                });
+                const objectUrl = URL.createObjectURL(blob);
+                cacheRef.current.set(cacheKey, objectUrl);
+                setPreviewSrc(objectUrl);
             } catch (err) {
                 if (!cancelled) {
                     console.error(err);
@@ -97,16 +110,15 @@ export function useStudioPreview({
 
     useEffect(() => {
         return () => {
-            if (previewSrc) {
-                URL.revokeObjectURL(previewSrc);
-            }
+            clearPreviewCache();
         };
-    }, [previewSrc]);
+    }, []);
 
     return {
         previewSrc,
         isRendering,
         clearPreview,
         resetPreview,
+        clearPreviewCache,
     };
 }
