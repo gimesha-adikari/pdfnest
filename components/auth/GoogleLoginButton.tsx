@@ -4,6 +4,7 @@ import React from "react";
 import { GoogleLogin } from "@react-oauth/google";
 import { fetchJson } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import {notify} from "@/lib/notify";
 
 interface GoogleLoginButtonProps {
     onSuccessCallback?: () => void;
@@ -31,7 +32,7 @@ export default function GoogleLoginButton({ onSuccessCallback }: GoogleLoginButt
                 // window.location.href = callbackUrl;
             }
         } catch (err: any) {
-            alert(`Authentication pipeline rejection layout: ${err.message}`);
+            notify(`Authentication pipeline rejection layout: ${err.message}`,"error");
         }
     };
 

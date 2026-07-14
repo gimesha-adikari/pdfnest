@@ -25,6 +25,7 @@ import {
     FileText
 } from "lucide-react";
 import { createPortal } from "react-dom";
+import {notify} from "@/lib/notify";
 
 export default function AdminPage() {
     const { isAuthenticated, isLoading, user } = useAuth();
@@ -97,7 +98,7 @@ export default function AdminPage() {
             }
             setEditDays(0);
         } catch (err) {
-            alert("Failed to load full user target metrics.");
+            notify("Failed to load full user target metrics.");
         } finally {
             setIsInspecting(false);
         }
@@ -105,7 +106,7 @@ export default function AdminPage() {
 
     const handleBanToggle = async (id: string, email: string) => {
         if (email === MASTER_EMAIL) {
-            alert("Action Prevented: Master admin accounts cannot be suspended.");
+            notify("Action Prevented: Master admin accounts cannot be suspended.","warning");
             return;
         }
         try {
@@ -118,13 +119,13 @@ export default function AdminPage() {
                 });
             }
         } catch (err) {
-            alert("Failed to update user status.");
+            notify("Failed to update user status.","error");
         }
     };
 
     const handleRoleChange = async (id: string, email: string, currentRole: string) => {
         if (email === MASTER_EMAIL) {
-            alert("Action Prevented: Master admin roles are unalterable.");
+            notify("Action Prevented: Master admin roles are unalterable.","warning");
             return;
         }
         const newRole = currentRole === "admin" ? "user" : "admin";
@@ -143,13 +144,13 @@ export default function AdminPage() {
                 });
             }
         } catch (err) {
-            alert("Failed to update user role.");
+            notify("Failed to update user role.","error");
         }
     };
 
     const handleSaveSubscription = async (userId: string, email: string) => {
         if (email === MASTER_EMAIL) {
-            alert("Action Prevented: Master admin subscriptions are unalterable.");
+            notify("Action Prevented: Master admin subscriptions are unalterable.","warning");
             return;
         }
         try {
@@ -162,14 +163,14 @@ export default function AdminPage() {
                     days_to_plus: Number(editDays)
                 })
             });
-            alert("Subscription parameter updates deployed successfully.");
+            notify("Subscription parameter updates deployed successfully.","success");
             setEditingSubId(null);
             fetchData();
             if (selectedUserDetail && selectedUserDetail.user.ID === userId) {
                 handleInspectUser(userId);
             }
         } catch (err) {
-            alert("Failed saving package configuration changes.");
+            notify("Failed saving package configuration changes.","error");
         }
     };
 

@@ -12,6 +12,7 @@ import LandingPageContexts from "@/components/admin/LandingPageContexts";
 import PricingSubscriptionMatrices from "@/components/admin/PricingSubscriptionMatrices";
 import WorkspaceConfigurations from "@/components/admin/WorkspaceConfigurations";
 import AboutPageContexts from "@/components/admin/AboutPageContexts";
+import {notify} from "@/lib/notify";
 
 type ActiveTabSection = "home" | "subscribe" | "about" | "tools";
 
@@ -113,19 +114,19 @@ export default function AdminContentEditor() {
                     method: "PUT",
                     body: JSON.stringify(homeData),
                 });
-                alert("All Landing Page Content deployed successfully.");
+                notify("All Landing Page Content deployed successfully.","success");
             } else if (activeSection === "subscribe") {
                 await fetchJson("/admin/site-content/subscribe", {
                     method: "PUT",
                     body: JSON.stringify(subData),
                 });
-                alert("All Plan Matrix parameters deployed successfully.");
+                notify("All Plan Matrix parameters deployed successfully.","success");
             } else if (activeSection === "about") {
                 await fetchJson("/admin/site-content/about", {
                     method: "PUT",
                     body: JSON.stringify(aboutData),
                 });
-                alert("About Page content properties published live successfully.");
+                notify("About Page content properties published live successfully.","success");
             } else if (activeSection === "tools") {
                 const savedToolsPromises = toolsList.map((toolItem) => {
                     const cleanToolPayload = { ...toolItem };
@@ -140,10 +141,10 @@ export default function AdminContentEditor() {
 
                 const structuralUpdatedResponses = await Promise.all(savedToolsPromises);
                 setToolsList(structuralUpdatedResponses);
-                alert(`Successfully deployed updates across all (${toolsList.length}) application tools.`);
+                notify(`Successfully deployed updates across all (${toolsList.length}) application tools.`,"success");
             }
         } catch (err) {
-            alert("Failed executing config master commit workflow.");
+            notify("Failed executing config master commit workflow.","error");
         } finally {
             setIsSavingAll(false);
         }
