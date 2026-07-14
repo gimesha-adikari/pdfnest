@@ -45,6 +45,7 @@ export function useStudioPreview({
 
     useEffect(() => {
         if (!activeFile) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             clearPreviewCache();
             return;
         }
