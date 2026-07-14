@@ -4,6 +4,7 @@ import GlobalNotifications from "@/components/ui/GlobalNotifications";
 import CommandSystem from "@/components/CommandSystem";
 import MobileNav from "@/components/ui/MobileNav";
 import AuthModal from "@/components/auth/AuthModal";
+import PaddleTransactionBridge from "@/components/paddle/PaddleTransactionBridge";
 
 export default function SiteLayout({
                                        children,
@@ -16,6 +17,7 @@ export default function SiteLayout({
             <main className="flex-1 w-full relative z-10 pb-20 md:pb-0">
                 <GlobalNotifications />
                 <AuthModal />
+                <PaddleTransactionBridge />
                 {children}
                 <CommandSystem />
             </main>
