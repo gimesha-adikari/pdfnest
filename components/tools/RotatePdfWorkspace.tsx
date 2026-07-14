@@ -94,7 +94,7 @@ export default function RotatePdfWorkspace() {
                 generateThumbnails(pdf, totalPages);
             } catch (error) {
                 console.error(error);
-                notify("Could not read the structural metadata of this document.");
+                notify("Could not read the structural metadata of this document.","error");
                 setIsReadingTotal(false);
             }
         };

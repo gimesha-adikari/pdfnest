@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Tags, ShieldCheck, FileText, User, BookOpen, Loader2 } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/layout";
@@ -45,7 +45,7 @@ export default function EditMetadataWorkspace() {
                 setKeywords(properties["keywords"] || "");
             } catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err);
                 setTitle(file.name.replace(/\.pdf$/i, ""));
             } finally {
                 setIsReadingFile(false);
@@ -84,7 +84,7 @@ export default function EditMetadataWorkspace() {
                 router.push(`/${toolId}/download`);
             } catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err);
             } finally {
                 setIsProcessing(false);
             }

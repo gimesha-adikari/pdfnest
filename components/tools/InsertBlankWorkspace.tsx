@@ -4,7 +4,7 @@ import { useMemo, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { PlusSquare, Loader2, ShieldCheck, ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/layout";
@@ -146,7 +146,7 @@ export default function InsertBlankWorkspace() {
         const validFile = file as CustomPdfFile;
 
         if (numPages > 10) {
-            notify("You can insert a maximum of 10 blank pages at one time.");
+            notify("You can insert a maximum of 10 blank pages at one time.", "warning");
             return;
         }
 
@@ -178,7 +178,7 @@ export default function InsertBlankWorkspace() {
                 router.push(`/${toolId}/download`);
             } catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err);
             } finally {
                 setIsProcessing(false);
             }

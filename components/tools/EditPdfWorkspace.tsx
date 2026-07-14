@@ -9,6 +9,7 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/layout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
+import {handleClientError} from "@/lib/errorHandler";
 
 interface LayoutElement {
     text: string;
@@ -98,16 +99,16 @@ export default function EditPdfWorkspace() {
                         setPdfDocument(pdf);
 
                         if (foundRotation) {
-                            notify("Warning: This PDF contains rotated pages. For best editing results, use our Rotate Tool.");
+                            notify("Warning: This PDF contains rotated pages. For best editing results, use our Rotate Tool.", "warning");
                         } else {
-                            notify("Document layout mapped successfully.");
+                            notify("Document layout mapped successfully.", "success");
                         }
                     } else {
                         throw new Error(data.error || "Malformed response payload.");
                     }
                 } catch (e) {
                     console.error(e);
-                    notify("Failed to parse structural layout grids.");
+                    notify("Failed to parse structural layout grids.","error");
                     setFile(null);
                     router.push(`/${toolId}`);
                 } finally {
@@ -159,11 +160,12 @@ export default function EditPdfWorkspace() {
                     fileName: `edited_${file.name}`
                 });
 
-                notify("Success! Patched PDF document compiled.");
+                notify("Success! Patched PDF document compiled.", "success");
                 router.push(`/${toolId}/download`);
             } catch (e) {
                 console.error(e);
-                notify("Compilation failure occurred.");
+                notify("Compilation failure occurred.","error");
+                handleClientError(e);
             } finally {
                 setIsCompiling(false);
             }

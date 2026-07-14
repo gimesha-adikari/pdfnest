@@ -53,7 +53,7 @@ export default function CodeToPdfWorkspace() {
                 setPreviewUrl(window.URL.createObjectURL(imageBlob));
             } catch (err) {
                 console.error(err);
-                notify("Could not compute syntax highlight document layout previews.");
+                notify("Could not compute syntax highlight document layout previews.", "error");
             } finally {
                 setIsPreviewLoading(false);
             }

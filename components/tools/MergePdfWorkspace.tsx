@@ -83,13 +83,12 @@ export default function MergePdfWorkspace() {
         const MAX_FILE_SIZE = 50 * 1024 * 1024;
         const validFiles = newFiles.filter(item => {
             if (item.size > MAX_FILE_SIZE) {
-                notify(`${item.name} exceeds 50MB limit`);
+                notify(`${item.name} exceeds 50MB limit`, "error");
                 return false;
             }
             return true;
         });
 
-        // Precompute matching incoming unique files clear of functional context loops
         const incomingUniqueFiles = validFiles.filter(item =>
             !files.some(p => p.name === item.name && p.size === item.size && p.lastModified === item.lastModified)
         );
@@ -147,7 +146,7 @@ export default function MergePdfWorkspace() {
     const mergePdfs = async () => {
         requireAuth(async () => {
             if (files.length < 2) {
-                notify("Please select at least 2 PDF files.");
+                notify("Please select at least 2 PDF files.","error");
                 return;
             }
 
@@ -176,7 +175,7 @@ export default function MergePdfWorkspace() {
                 router.push(`/${toolId}/download`);
             } catch (error) {
                 console.error(error);
-                notify(`Failed to merge PDFs.\n\n${getFriendlyErrorMessage(error)}`);
+                notify(`Failed to merge PDFs.\n\n${getFriendlyErrorMessage(error)}`, "error");
             } finally {
                 setIsMerging(false);
             }

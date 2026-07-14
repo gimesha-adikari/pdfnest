@@ -68,7 +68,7 @@ export default function UrlToPdfWorkspace() {
                 setTaskId(data.taskId);
             } catch (err: any) {
                 console.error(err);
-                notify(err.message || "Could not generate target viewport snapshot preview.");
+                notify(err.message || "Could not generate target viewport snapshot preview.","error");
                 setIsPreviewLoading(false);
             }
         });
@@ -91,7 +91,7 @@ export default function UrlToPdfWorkspace() {
             if (previewUrl) window.URL.revokeObjectURL(previewUrl);
             setPreviewUrl(window.URL.createObjectURL(imageBlob));
         } catch (err) {
-            notify("Failed to collect final generated binary asset stream from backend cluster nodes safely.");
+            notify("Failed to collect final generated binary asset stream from backend cluster nodes safely.","error");
         } finally {
             setIsPreviewLoading(false);
             setTaskId("");

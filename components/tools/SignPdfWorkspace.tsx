@@ -67,7 +67,7 @@ export default function SignPdfWorkspace() {
             const previewBlob = await uploadAndDownloadFile("/api/conversion/preview/page", formData);
             setPagePreviewUrl(URL.createObjectURL(previewBlob));
         } catch (err) {
-            notify("Could not load preview for page " + pageNum);
+            notify("Could not load preview for page " + pageNum,"error");
         } finally {
             setIsPreviewLoading(false);
         }
@@ -189,7 +189,7 @@ export default function SignPdfWorkspace() {
     const handleSignDocument = async () => {
         requireAuth(async () => {
             if (!file || !signatureBlob || stamps.length === 0) {
-                notify("Please place at least one signature on the document.");
+                notify("Please place at least one signature on the document.","warning");
                 return;
             }
 
@@ -244,7 +244,7 @@ export default function SignPdfWorkspace() {
                 setSuccess(true);
                 router.push(`/${toolId}/download`);
             } catch (err: any) {
-                notify(err.message || "Failed to sign document");
+                notify(err.message || "Failed to sign document", err);
             } finally {
                 setIsProcessing(false);
             }

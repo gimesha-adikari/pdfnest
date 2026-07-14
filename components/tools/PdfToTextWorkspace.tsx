@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck, Loader2, RefreshCw, Cpu } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/layout";
@@ -50,7 +50,7 @@ export default function PdfToTextWorkspace() {
                 }
             } catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err);
                 setIsProcessing(false);
                 setTaskId("");
             }
@@ -77,7 +77,7 @@ export default function PdfToTextWorkspace() {
             router.push(`/${toolId}/download`);
         } catch (err) {
             console.error(err);
-            notify("Failed to cache processed plain text asset locally.");
+            notify("Failed to cache processed plain text asset locally.", "error");
             setIsProcessing(false);
         }
     };
@@ -91,7 +91,7 @@ export default function PdfToTextWorkspace() {
                 description="Convert scanned PDFs, image-only files, and documents into fully searchable, editable plain-text files seamlessly."
             />
 
-            <div className="mt-12 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8 shadow-lg w-full">
+            <div className="mt-12 rounded-3xl border border-border bg-card p-8 shadow-lg w-full">
                 <div className="mt-4 grid grid-cols-1 lg:grid-cols-12 gap-8">
                     <div className="lg:col-span-5 space-y-6">
                         <PdfFileInfo file={file} onClear={() => {

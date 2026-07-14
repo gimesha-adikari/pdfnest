@@ -52,7 +52,7 @@ export default function MarkdownToPdfWorkspace() {
             }
         } catch (err) {
             console.error(err);
-            notify("Could not update document layout preview coordinates.");
+            notify("Could not update document layout preview coordinates.","error");
             setIsPreviewLoading(false);
         }
     };
@@ -74,7 +74,7 @@ export default function MarkdownToPdfWorkspace() {
             if (previewUrl) window.URL.revokeObjectURL(previewUrl);
             setPreviewUrl(window.URL.createObjectURL(imageBlob));
         } catch (err) {
-            notify("Failed to collect final compiled asset frames from cluster nodes.");
+            notify("Failed to collect final compiled asset frames from cluster nodes.", "error");
         } finally {
             setIsPreviewLoading(false);
             setTaskId("");

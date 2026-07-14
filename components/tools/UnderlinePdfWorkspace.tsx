@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { getBaseUrl } from "@/lib/api";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/layout";
@@ -553,12 +553,12 @@ export default function UnderlinePdfWorkspace() {
         const validBoxes = boxes.filter(b => b.width > 2 && b.height > 2);
 
         if (validBoxes.length === 0) {
-            notify("Please draw at least one underline box on the document.");
+            notify("Please draw at least one underline box on the document.","warning");
             return;
         }
 
         if (currentPageAnalysis?.kind === "scanned" && underlineMode === "smart") {
-            notify("This page is scanned. Please choose Manual line or Recognize Text.");
+            notify("This page is scanned. Please choose Manual line or Recognize Text.","warning");
             return;
         }
 
@@ -587,7 +587,7 @@ export default function UnderlinePdfWorkspace() {
                 router.push(`/${toolId}/download`);
             } catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err);
             } finally {
                 setIsProcessing(false);
             }

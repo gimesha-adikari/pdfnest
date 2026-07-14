@@ -4,7 +4,7 @@ import { useMemo, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { CopyPlus, Loader2, ShieldCheck, ChevronLeft, ChevronRight, Eye, AlertCircle, Sparkles } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/layout";
@@ -204,23 +204,23 @@ export default function DuplicatePagesWorkspace() {
     const handleDuplicateProcessing = async () => {
         if (!file) return;
         if (!pageSelection.trim()) {
-            notify("Please provide the page number(s) you wish to duplicate.");
+            notify("Please provide the page number(s) you wish to duplicate.","warning");
             return;
         }
         if (validationError) {
-            notify(validationError);
+            notify(validationError,"error");
             return;
         }
 
         const selectedPageCount = getSelectedPageCount(pageSelection);
 
         if (selectedPageCount > 5) {
-            notify("You can duplicate a maximum of 5 pages at one time.");
+            notify("You can duplicate a maximum of 5 pages at one time.","warning");
             return;
         }
 
         if (numCopies > 2) {
-            notify("Maximum allowed copies per page is 2.");
+            notify("Maximum allowed copies per page is 2.","warning");
             return;
         }
         const validFile = file as CustomPdfFile;
@@ -250,7 +250,7 @@ export default function DuplicatePagesWorkspace() {
                 router.push(`/${toolId}/download`);
             } catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err);
             } finally {
                 setIsProcessing(false);
             }

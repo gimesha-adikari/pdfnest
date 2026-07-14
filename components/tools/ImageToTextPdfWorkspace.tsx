@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck, Trash2, ArrowUp, ArrowDown, UploadCloud, FileType } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/layout";
@@ -68,7 +68,7 @@ export default function ImageToTextPdfWorkspace() {
         });
 
         if (visualFiles.length === 0) {
-            notify("Please upload valid graphic files (JPG, PNG, WebP).");
+            notify("Please upload valid graphic files (JPG, PNG, WebP).","warning");
             return;
         }
 
@@ -148,7 +148,7 @@ export default function ImageToTextPdfWorkspace() {
                 }
             } catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err);
                 setIsProcessing(false);
                 setTaskId("");
             }
@@ -175,7 +175,7 @@ export default function ImageToTextPdfWorkspace() {
             router.push(`/${toolId}/download`);
         } catch (err) {
             console.error(err);
-            notify("Failed to cache processed tracking asset locally.");
+            notify("Failed to cache processed tracking asset locally.", "error");
             setIsProcessing(false);
         }
     };

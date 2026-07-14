@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Layers, Loader2, ShieldCheck } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/layout";
@@ -84,7 +84,7 @@ export default function ReorderPagesWorkspace() {
                 await loadingTask.destroy();
             } catch (error) {
                 console.error("Root Document Processing Exception:", error);
-                notify("Could not load document preview grids.");
+                notify("Could not load document preview grids.", "error");
             } finally {
                 setIsLoadingElements(false);
             }
@@ -132,7 +132,7 @@ export default function ReorderPagesWorkspace() {
                 router.push(`/${toolId}/download`);
             } catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err);
             } finally {
                 setIsProcessing(false);
             }

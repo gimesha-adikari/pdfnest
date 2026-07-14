@@ -65,7 +65,7 @@ export default function RedactPdfWorkspace() {
                 setTotalPages(pdf.numPages);
             } catch (error) {
                 console.error(error);
-                notify("Failed to load PDF layers cleanly.");
+                notify("Failed to load PDF layers cleanly.","error");
             } finally {
                 setIsReading(false);
             }
@@ -209,11 +209,11 @@ export default function RedactPdfWorkspace() {
                     fileName: `redacted_${file.name}`
                 });
 
-                notify("All text matches and manual drawn areas completely scrubbed!");
+                notify("All text matches and manual drawn areas completely scrubbed!","success");
                 router.push(`/${toolId}/download`);
             } catch (error) {
                 console.error(error);
-                notify("Redaction processing pipeline failed.");
+                notify("Redaction processing pipeline failed.","error");
             } finally {
                 setIsProcessing(false);
             }

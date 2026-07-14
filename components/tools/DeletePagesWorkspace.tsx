@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2, ShieldCheck, Loader2, FileText } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage } from "@/lib/errorHandler";
+import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { PDFDocumentProxy } from "pdfjs-dist";
 import { FileWithPassword } from "@/lib/types";
@@ -94,7 +94,7 @@ export default function DeletePagesWorkspace() {
                 generateThumbnails(pdf, totalPages);
             } catch (error) {
                 console.error(error);
-                notify("Could not read the structural metadata of this document.");
+                notify("Could not read the structural metadata of this document.", "error");
                 setIsReadingTotal(false);
             }
         };
@@ -162,7 +162,7 @@ export default function DeletePagesWorkspace() {
         requireAuth(async () => {
             if (!file || pagesToDelete.size === 0) return;
             if (pagesToDelete.size === pageCount) {
-                notify("Cannot remove every single page from the document tree model container.");
+                notify("Cannot remove every single page from the document tree model container.","warning");
                 return;
             }
 
@@ -192,7 +192,7 @@ export default function DeletePagesWorkspace() {
                 router.push(`/${toolId}/download`);
             } catch (err) {
                 console.error(err);
-                notify(getFriendlyErrorMessage(err));
+                handleClientError(err);
             } finally {
                 setIsProcessing(false);
             }
