@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import {getBaseUrl} from "@/lib/api";
 
 export async function POST(req: NextRequest) {
     try {
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest) {
         const configurationDescription = `upw:${password}, opw:${password}, mode:encrypt, algo:aes256`;
         backendFormData.append("description", configurationDescription);
 
-        const response = await fetch("http://localhost:8080/api/security/lock", {
+        const response = await fetch(`${getBaseUrl()}/api/security/lock`, {
             method: "POST",
             body: backendFormData,
         });

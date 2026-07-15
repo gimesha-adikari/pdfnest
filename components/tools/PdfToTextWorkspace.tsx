@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck, Loader2, RefreshCw, Cpu } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/api";
+import {getBaseUrl, uploadAndDownloadFile} from "@/lib/api";
 import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
@@ -59,8 +59,7 @@ export default function PdfToTextWorkspace() {
 
     const handleTaskComplete = async (downloadUrl: string) => {
         try {
-            const baseApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-            const response = await fetch(`${baseApiUrl}${downloadUrl}`);
+            const response = await fetch(`${getBaseUrl()}${downloadUrl}`);
             if (!response.ok) throw new Error("Could not download compiled plaintext payload.");
 
             const responseBlob = await response.blob();

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FileCode, ShieldCheck, Loader2, Eye, Sliders } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/api";
+import {getBaseUrl, uploadAndDownloadFile} from "@/lib/api";
 import { notify } from "@/lib/notify";
 import { PdfProgressTracker } from "@/components/pdf/PdfProgressTracker";
 import { useAuth } from "@/context/AuthContext";
@@ -59,8 +59,7 @@ export default function MarkdownToPdfWorkspace() {
 
     const handleTaskComplete = async (downloadUrl: string) => {
         try {
-            const baseApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-            const response = await fetch(`${baseApiUrl}${downloadUrl}`);
+            const response = await fetch(`${getBaseUrl()}${downloadUrl}`);
             if (!response.ok) throw new Error("Re-download framework pipeline error.");
 
             const pdfBlob = await response.blob();

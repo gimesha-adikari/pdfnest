@@ -6,6 +6,7 @@ import { AlertTriangle, Download, FileEdit, Loader2, RefreshCw, RotateCw } from 
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/lib/notify";
 import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
+import {getBaseUrl} from "@/lib/api";
 
 interface LayoutElement {
     text: string;
@@ -137,7 +138,7 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                     analysisForm.append("file_password", typedFile.originalPassword);
                 }
 
-                const analysisResponse = await fetch("http://localhost:8080/api/structure/analyze", {
+                const analysisResponse = await fetch(`${getBaseUrl()}/api/structure/analyze`, {
                     method: "POST",
                     body: analysisForm,
                     credentials: "include",
@@ -158,7 +159,7 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                     formData.append("file_password", typedFile.originalPassword);
                 }
 
-                const response = await fetch("http://localhost:8080/api/edit/extract", {
+                const response = await fetch(`${getBaseUrl()}/api/edit/extract`, {
                     method: "POST",
                     body: formData,
                     credentials: "include",
@@ -195,7 +196,7 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                 }
 
                 const uprightResponse = await fetch(
-                    `http://localhost:8080/api/edit/file?path=${encodeURIComponent(data.upright_tracker)}`,
+                    `${getBaseUrl()}/api/edit/file?path=${encodeURIComponent(data.upright_tracker)}`,
                     { credentials: "include" }
                 );
 
@@ -309,7 +310,7 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                 setSuccess(false);
                 setError(null);
 
-                const response = await fetch("http://localhost:8080/api/edit/compile", {
+                const response = await fetch(`${getBaseUrl()}/api/edit/compile`, {
                     method: "POST",
                     credentials: "include",
                     headers: {

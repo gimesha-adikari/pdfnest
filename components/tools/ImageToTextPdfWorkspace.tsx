@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck, Trash2, ArrowUp, ArrowDown, UploadCloud, FileType } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/api";
+import {getBaseUrl, uploadAndDownloadFile} from "@/lib/api";
 import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
@@ -157,8 +157,7 @@ export default function ImageToTextPdfWorkspace() {
 
     const handleTaskComplete = async (downloadUrl: string) => {
         try {
-            const baseApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-            const response = await fetch(`${baseApiUrl}${downloadUrl}`);
+            const response = await fetch(`${getBaseUrl()}${downloadUrl}`);
             if (!response.ok) throw new Error("Could not download compiled async file payload.");
 
             const responseBlob = await response.blob();

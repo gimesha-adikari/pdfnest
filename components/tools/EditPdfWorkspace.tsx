@@ -10,6 +10,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/layout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import {handleClientError} from "@/lib/errorHandler";
+import {getBaseUrl} from "@/lib/api";
 
 interface LayoutElement {
     text: string;
@@ -62,7 +63,7 @@ export default function EditPdfWorkspace() {
                     formData.append("file", file);
 
                     const response = await fetch(
-                        "http://localhost:8080/api/edit/extract",
+                        `${getBaseUrl()}/api/edit/extract`,
                         {
                             method: "POST",
                             body: formData,
@@ -81,7 +82,7 @@ export default function EditPdfWorkspace() {
                         const pdfjsLib = await import("pdfjs-dist");
                         pdfjsLib.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
 
-                        const uprightResponse = await fetch(`http://localhost:8080/api/edit/file?path=${encodeURIComponent(data.upright_tracker)}`, { credentials: "include" });
+                        const uprightResponse = await fetch(`${getBaseUrl()}/api/edit/file?path=${encodeURIComponent(data.upright_tracker)}`, { credentials: "include" });
                         const arrayBuffer = await (uprightResponse.ok ? uprightResponse.arrayBuffer() : file.arrayBuffer());
 
                         const rawPdfTask = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
@@ -136,7 +137,7 @@ export default function EditPdfWorkspace() {
 
             try {
                 const response = await fetch(
-                    "http://localhost:8080/api/edit/compile",
+                    `${getBaseUrl()}/api/edit/compile`,
                     {
                         method: "POST",
                         credentials: "include",

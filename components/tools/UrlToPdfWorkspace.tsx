@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, Globe, Loader2, ShieldCheck, Sliders } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/api";
+import {getBaseUrl, uploadAndDownloadFile} from "@/lib/api";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/layout";
@@ -54,8 +54,7 @@ export default function UrlToPdfWorkspace() {
                 formData.append("marginLeft", margins.left.toString());
                 formData.append("marginRight", margins.right.toString());
 
-                const baseApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-                const response = await fetch(`${baseApiUrl}/api/conversion/html-to-pdf-async`, {
+                const response = await fetch(`${getBaseUrl()}/api/conversion/html-to-pdf-async`, {
                     method: "POST",
                     body: formData,
                     credentials: "include",
@@ -76,8 +75,7 @@ export default function UrlToPdfWorkspace() {
 
     const handleTaskComplete = async (downloadUrl: string) => {
         try {
-            const baseApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-            const response = await fetch(`${baseApiUrl}${downloadUrl}`);
+            const response = await fetch(`${getBaseUrl()}${downloadUrl}`);
             if (!response.ok) throw new Error("Re-download framework pipeline error.");
 
             const pdfBlob = await response.blob();
