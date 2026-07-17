@@ -1,12 +1,23 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import {useEffect, useRef, useState} from "react";
 import Link from "next/link";
-import { AlertTriangle, Download, FileEdit, Loader2, RefreshCw, RotateCw } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
-import { notify } from "@/lib/notify";
+import {AlertTriangle, Download, FileEdit, Loader2, RefreshCw, RotateCw} from "lucide-react";
+import {useAuth} from "@/context/AuthContext";
+import {notify} from "@/lib/notify";
 import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import {getBaseUrl} from "@/lib/api";
+
+
+import {
+    downloadEditorJob,
+    type EditorJobRecord,
+    submitEditorCompile,
+    submitEditorExtract,
+    waitForEditorJob,
+} from "@/lib/editorJobs";
+import JobProgressCard from "@/components/studio/ui/JobProgressCard";
+import {loadPdfJs} from "@/components/shared/LoadPdfJs";
 
 interface LayoutElement {
     text: string;
@@ -67,12 +78,6 @@ type CustomPdfFile = File & {
     originalPassword?: string;
 };
 
-async function loadPdfJs() {
-    const pdfjsLib = await import("pdfjs-dist");
-    pdfjsLib.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
-    return pdfjsLib;
-}
-
 function hasScannedLikePages(analysis: PDFAnalysis | null): number[] {
     if (!analysis?.pages?.length) return [];
 
@@ -80,6 +85,7 @@ function hasScannedLikePages(analysis: PDFAnalysis | null): number[] {
         .filter((page) => page.kind === "scanned" || page.kind === "blank" || !page.hasSelectableText)
         .map((page) => page.page);
 }
+
 
 export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps) {
     const { requireAuth } = useAuth();
@@ -99,6 +105,18 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
 
     const pageCanvasRefs = useRef<Map<number, HTMLCanvasElement>>(new Map());
     const renderTaskRefs = useRef<Map<number, { cancel: () => void }>>(new Map());
+
+    const [extractJobId, setExtractJobId] = useState<string>("");
+    const [compileJobId, setCompileJobId] = useState<string>("");
+    const [extractJob, setExtractJob] = useState<EditorJobRecord | null>(null);
+    const [compileJob, setCompileJob] = useState<EditorJobRecord | null>(null);
+
+    const onEditedFileRef = useRef(onEditedFile);
+    const compileSourceNameRef = useRef<string>("");
+
+    useEffect(() => {
+        onEditedFileRef.current = onEditedFile;
+    }, [onEditedFile]);
 
     useEffect(() => {
         if (!baseFile) {
@@ -159,69 +177,18 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                     formData.append("file_password", typedFile.originalPassword);
                 }
 
-                const response = await fetch(`${getBaseUrl()}/api/edit/extract`, {
-                    method: "POST",
-                    body: formData,
-                    credentials: "include",
-                });
-
-                if (!response.ok) {
-                    throw new Error(await response.text());
-                }
-
-                const data = await response.json();
-                if (!data.pages) {
-                    throw new Error(data.error || "Malformed response payload.");
-                }
+                const submission = await submitEditorExtract(formData);
 
                 if (cancelled) return;
 
-                setPages(data.pages);
-                setSourceTracker(data.source_tracker || "");
-                setUprightTracker(data.upright_tracker || "");
-
-                const pdfjsLib = await loadPdfJs();
-                const rawPdfTask = await pdfjsLib.getDocument({ data: new Uint8Array(await baseFile.arrayBuffer()) }).promise;
-
-                let foundRotation = false;
-                for (let i = 1; i <= rawPdfTask.numPages; i++) {
-                    const rawPage = await rawPdfTask.getPage(i);
-                    if (rawPage.rotate !== 0) {
-                        foundRotation = true;
-                        break;
-                    }
-                }
-                if (!cancelled) {
-                    setIsDocumentRotated(foundRotation);
-                }
-
-                const uprightResponse = await fetch(
-                    `${getBaseUrl()}/api/edit/file?path=${encodeURIComponent(data.upright_tracker)}`,
-                    { credentials: "include" }
-                );
-
-                const arrayBuffer = await (uprightResponse.ok ? uprightResponse.arrayBuffer() : baseFile.arrayBuffer());
-                const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
-                if (!cancelled) {
-                    setPdfDocument(pdf as unknown as PdfJsDocument);
-                }
-
-                if (foundRotation) {
-                    notify("Warning: This PDF contains rotated pages. For best editing results, " +
-                        "use Rotate Tool first.","warning");
-                } else {
-                    notify("Document layout mapped successfully.","success");
-                }
-
-                if (!cancelled && scannedPages.length > 0) {
-                    notify("Warning: This looks like a scanned or image-based PDF. " +
-                        "This editor works best with selectable text PDFs.","warning");
-                }
+                setExtractJobId(submission.job_id);
+                localStorage.setItem("pdfnest:edit:extractJobId", submission.job_id);
+                notify("Layout extraction queued. Waiting for worker...", "info");
             } catch (e) {
                 console.error(e);
                 if (!cancelled) {
                     setError(getFriendlyErrorMessage(e));
-                    notify("Failed to parse structural layout grids.","error");
+                    notify("Failed to queue layout extraction.", "error");
                 }
             } finally {
                 if (!cancelled) {
@@ -229,6 +196,8 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                 }
             }
         };
+
+
 
         void parsePdfLayout();
 
@@ -238,6 +207,109 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
             renderTaskRefs.current.clear();
         };
     }, [baseFile]);
+
+
+    useEffect(() => {
+        const saved = localStorage.getItem("pdfnest:edit:extractJobId");
+        if (saved && !extractJobId) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setExtractJobId(saved);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!extractJobId) return;
+
+        let cancelled = false;
+
+        void (async () => {
+            try {
+                const job = await waitForEditorJob(extractJobId, (nextJob) => {
+                    if (!cancelled) setExtractJob(nextJob);
+                });
+
+                if (cancelled) return;
+
+                setExtractJob(job);
+
+                if (job.status === "failed") {
+                    throw new Error(job.error || "Extraction failed");
+                }
+
+                if (job.status !== "succeeded") return;
+
+                const result = job.result as
+                    | {
+                    pages?: PageData[];
+                    source_tracker?: string;
+                    upright_tracker?: string;
+                }
+                    | null;
+
+                if (!result?.pages) {
+                    throw new Error("Malformed extraction result.");
+                }
+
+                setPages(result.pages);
+                setSourceTracker(result.source_tracker || "");
+                setUprightTracker(result.upright_tracker || result.source_tracker || "");
+
+                const pdfjsLib = await loadPdfJs();
+
+                if (baseFile == null) {
+                    notify("Compilation failed", "error");
+                    return;
+                }
+
+                const rawPdfTask = await pdfjsLib.getDocument({
+                    data: new Uint8Array(await baseFile.arrayBuffer()),
+                }).promise;
+
+                let foundRotation = false;
+                for (let i = 1; i <= rawPdfTask.numPages; i++) {
+                    const rawPage = await rawPdfTask.getPage(i);
+                    if (rawPage.rotate !== 0) {
+                        foundRotation = true;
+                        break;
+                    }
+                }
+
+                if (!cancelled) {
+                    setIsDocumentRotated(foundRotation);
+                }
+
+
+                const arrayBuffer = await ( baseFile.arrayBuffer());
+                const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+
+                if (!cancelled) {
+                    setPdfDocument(pdf as unknown as PdfJsDocument);
+                }
+
+                if (foundRotation) {
+                    notify(
+                        "Warning: This PDF contains rotated pages. For best editing results, use Rotate Tool first.",
+                        "warning"
+                    );
+                } else {
+                    notify("Document layout mapped successfully.", "success");
+                }
+
+                localStorage.removeItem("pdfnest:edit:extractJobId");
+                setExtractJobId("");
+            } catch (e) {
+                console.error(e);
+                if (!cancelled) {
+                    setError(getFriendlyErrorMessage(e));
+                    notify("Failed to parse structural layout grids.", "error");
+                }
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [extractJobId, baseFile]);
 
     useEffect(() => {
         if (!pdfDocument || pages.length === 0) return;
@@ -303,6 +375,9 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
 
     const handleCompileSubmit = () => {
         requireAuth(async () => {
+
+            console.log("Compile effect started", compileJobId);
+
             if (!baseFile || pages.length === 0) return;
 
             try {
@@ -310,38 +385,100 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                 setSuccess(false);
                 setError(null);
 
-                const response = await fetch(`${getBaseUrl()}/api/edit/compile`, {
-                    method: "POST",
-                    credentials: "include",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        pages,
-                        source_tracker: sourceTracker,
-                        upright_tracker: uprightTracker,
-                    }),
+                const submission = await submitEditorCompile({
+                    pages,
+                    source_tracker: sourceTracker,
+                    upright_tracker: uprightTracker,
                 });
 
-                if (!response.ok) {
-                    throw new Error(await response.text());
-                }
-
-                const blob = await response.blob();
-                const editedFile = new File([blob], `edited_${baseFile.name}`, { type: "application/pdf" });
-
-                await onEditedFile(editedFile);
-                setSuccess(true);
-                notify("Edited PDF loaded back into Studio.","success");
+                setCompileJobId(submission.job_id);
+                localStorage.setItem("pdfnest:edit:compileJobId", submission.job_id);
+                notify("Compilation queued. Waiting for worker...", "info");
             } catch (e) {
                 console.error(e);
-                notify("Compilation failure occurred.","error");
-                handleClientError(e)
+                notify("Compilation failed to queue.", "error");
+                handleClientError(e);
             } finally {
                 setIsCompiling(false);
             }
         });
     };
+
+    useEffect(() => {
+        const saved = localStorage.getItem("pdfnest:edit:compileJobId");
+        if (saved && !compileJobId) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setCompileJobId(saved);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!compileJobId) return;
+
+        let cancelled = false;
+
+        void (async () => {
+            try {
+                console.log("Waiting...");
+
+                const jobId = compileJobId;
+                const sourceName = compileSourceNameRef.current || "edited_document.pdf";
+
+                const job = await waitForEditorJob(jobId, (nextJob) => {
+                    if (!cancelled) setCompileJob(nextJob);
+                });
+
+                if (cancelled) return;
+
+                console.log("Job:", job.status);
+
+                setCompileJob(job);
+
+                if (job.status === "failed") {
+                    throw new Error(job.error || "Compilation failed");
+                }
+
+                if (job.status !== "succeeded") return;
+
+                console.log("Downloading...");
+
+                const blob = await downloadEditorJob(jobId);
+
+                console.log("Downloaded");
+
+                if (baseFile == null) {
+                    notify("Compilation failed", "error");
+                    return;
+                }
+
+                const editedFile = new File([blob], `edited_${sourceName}`, {
+                    type: "application/pdf",
+                });
+
+                localStorage.removeItem("pdfnest:edit:compileJobId");
+                setCompileJobId("");
+
+                await onEditedFileRef.current(editedFile);
+
+                console.log("onEditedFile finished");
+
+                setSuccess(true);
+                notify("Edited PDF loaded back into Studio.", "success");
+
+                console.log("Compile cleared");
+            } catch (e) {
+                console.error(e);
+                if (!cancelled) {
+                    notify("Compilation failure occurred.", "error");
+                    handleClientError(e);
+                }
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [compileJobId]);
 
     if (!baseFile) {
         return (
@@ -385,6 +522,38 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                                 <RefreshCw size={13} /> Reset Workspace
                             </button>
                         </div>
+
+                        <div className="mt-2"></div>
+
+                        {(isExtracting ||
+                            extractJobId ||
+                            (extractJob &&
+                                extractJob.status !== "succeeded" &&
+                                extractJob.status !== "failed" &&
+                                extractJob.status !== "cancelled")) && (
+                            <JobProgressCard
+                                title="Extracting layout"
+                                job={extractJob}
+                                active={Boolean(isExtracting || extractJobId)}
+                                description="The worker is analyzing the document and building the editable layout map."
+                                accent="indigo"
+                            />
+                        )}
+
+                        {(isCompiling ||
+                            compileJobId ||
+                            (compileJob &&
+                                compileJob.status !== "succeeded" &&
+                                compileJob.status !== "failed" &&
+                                compileJob.status !== "cancelled")) && (
+                            <JobProgressCard
+                                title="Compiling edited PDF"
+                                job={compileJob}
+                                active={Boolean(isCompiling || compileJobId)}
+                                description="The worker is rebuilding the PDF and preparing the final download."
+                                accent="emerald"
+                            />
+                        )}
 
                         {isExtracting && (
                             <div className="flex flex-col items-center justify-center py-20 text-muted">

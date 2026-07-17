@@ -119,7 +119,7 @@ export default function StudioHeader({
                             </div>
                         </HeaderDropdown>
 
-                        <HeaderDropdown title="File">
+                        <HeaderDropdown title="Edit">
                             <summary className="list-none cursor-pointer rounded-xl px-3 py-2 text-sm font-semibold hover:bg-[color:var(--border)]/30">
                                 Edit <ChevronDown size={14} className="inline-block align-middle transition group-open:rotate-180" />
                             </summary>
@@ -129,7 +129,7 @@ export default function StudioHeader({
                             </div>
                         </HeaderDropdown>
 
-                        <HeaderDropdown title="File">
+                        <HeaderDropdown title="View">
                             <summary className="list-none cursor-pointer rounded-xl px-3 py-2 text-sm font-semibold hover:bg-[color:var(--border)]/30">
                                 View <ChevronDown size={14} className="inline-block align-middle transition group-open:rotate-180" />
                             </summary>
@@ -142,17 +142,17 @@ export default function StudioHeader({
                             </div>
                         </HeaderDropdown>
 
-                        <HeaderDropdown title="File">
+                        <HeaderDropdown title="Help">
                             <summary className="list-none cursor-pointer rounded-xl px-3 py-2 text-sm font-semibold hover:bg-[color:var(--border)]/30">
                                 Help <ChevronDown size={14} className="inline-block align-middle transition group-open:rotate-180" />
                             </summary>
                             <div className="absolute left-0 top-full mt-2 w-64 rounded-2xl border border-[color:var(--border)] bg-[var(--card)] p-2 shadow-2xl">
-                                <a href="/about" className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[color:var(--background)]">
+                                <Link href="/about" className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[color:var(--background)]">
                                     About PDFNest Studio
-                                </a>
-                                <a href="/tools" className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[color:var(--background)]">
+                                </Link>
+                                <Link href="/tools" className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[color:var(--background)]">
                                     Browse tools
-                                </a>
+                                </Link>
                                 <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium hover:bg-[color:var(--background)]">
                                     Keyboard shortcuts
                                 </button>
