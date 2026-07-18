@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import {
     ChevronLeft,
     ChevronRight,
@@ -15,8 +15,8 @@ import {
     Underline,
     Undo2,
 } from "lucide-react";
-import { getBaseUrl, uploadAndDownloadFile } from "@/lib/api";
-import { handleClientError} from "@/lib/errorHandler";
+import { getBaseUrl } from "@/lib/api";
+import { getFriendlyErrorMessage, handleClientError } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 
@@ -73,6 +73,24 @@ interface UnderlineToolProps {
     onUnderlinedFile: (file: File) => Promise<void>;
 }
 
+interface JobSubmissionResponse {
+    success?: boolean;
+    job_id: string;
+    status: string;
+    queue_name: string;
+}
+
+interface JobRecord {
+    id: string;
+    job_type: string;
+    status: string;
+    progress: number;
+    message: string;
+    result: Record<string, unknown> | null;
+    error: string | null;
+    cancel_requested: boolean;
+}
+
 const UNDERLINE_COLORS = [
     { name: "Red", hex: "#FF4D4D" },
     { name: "Blue", hex: "#4D7CFF" },
@@ -102,9 +120,121 @@ async function loadPdfJs() {
     return pdfjsLib;
 }
 
+function buildApiUrl(path: string) {
+    const base = getBaseUrl().replace(/\/+$/, "");
+    return `${base}${path}`;
+}
+
+async function submitUnderlineJob(
+    file: File,
+    boxes: UnderlineBox[],
+    mode: UnderlineMode,
+    filePassword?: string
+): Promise<JobSubmissionResponse> {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("boxes", JSON.stringify(boxes));
+    formData.append("mode", mode);
+
+    if (filePassword?.trim()) {
+        formData.append("file_password", filePassword.trim());
+    }
+
+    const response = await fetch(buildApiUrl("/api/markup/underline"), {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+    });
+
+    const text = await response.text();
+    if (!response.ok) {
+        let message = text || `Request failed with status ${response.status}`;
+        try {
+            const parsed = JSON.parse(text);
+            message = parsed.message || parsed.error || message;
+        } catch {
+            // keep raw text
+        }
+        throw new Error(message);
+    }
+
+    return JSON.parse(text) as JobSubmissionResponse;
+}
+
+async function fetchJob(jobId: string): Promise<JobRecord> {
+    const response = await fetch(buildApiUrl(`/api/markup/jobs/${jobId}`), {
+        method: "GET",
+        credentials: "include",
+    });
+
+    const text = await response.text();
+    if (!response.ok) {
+        let message = text || `Request failed with status ${response.status}`;
+        try {
+            const parsed = JSON.parse(text);
+            message = parsed.message || parsed.error || message;
+        } catch {
+            // keep raw text
+        }
+        throw new Error(message);
+    }
+
+    return JSON.parse(text) as JobRecord;
+}
+
+async function waitForJob(jobId: string, onUpdate: (job: JobRecord) => void, signal?: AbortSignal): Promise<JobRecord> {
+    while (true) {
+        if (signal?.aborted) {
+            throw new DOMException("Aborted", "AbortError");
+        }
+
+        const job = await fetchJob(jobId);
+        onUpdate(job);
+
+        if (["succeeded", "failed", "cancelled"].includes(job.status)) {
+            return job;
+        }
+
+        await new Promise<void>((resolve, reject) => {
+            const timer = window.setTimeout(() => resolve(), 1000);
+
+            if (signal) {
+                signal.addEventListener(
+                    "abort",
+                    () => {
+                        window.clearTimeout(timer);
+                        reject(new DOMException("Aborted", "AbortError"));
+                    },
+                    { once: true }
+                );
+            }
+        });
+    }
+}
+
+async function downloadJobPdf(jobId: string): Promise<Blob> {
+    const response = await fetch(buildApiUrl(`/api/markup/jobs/${jobId}/download`), {
+        method: "GET",
+        credentials: "include",
+    });
+
+    if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        let message = text || `Download failed with status ${response.status}`;
+        try {
+            const parsed = JSON.parse(text);
+            message = parsed.message || parsed.error || message;
+        } catch {
+            // keep raw text
+        }
+        throw new Error(message);
+    }
+
+    return await response.blob();
+}
+
 export default function UnderlineTool({ baseFile, onUnderlinedFile }: UnderlineToolProps) {
     const { requireAuth } = useAuth();
-    const baseUrl = getBaseUrl();
 
     const [pdfDocument, setPdfDocument] = useState<PdfJsDocument | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
@@ -133,12 +263,19 @@ export default function UnderlineTool({ baseFile, onUnderlinedFile }: UnderlineT
     const [isRenderingPreview, setIsRenderingPreview] = useState(false);
     const [previewCacheToken, setPreviewCacheToken] = useState("");
 
+    const [jobId, setJobId] = useState<string>("");
+    const [job, setJob] = useState<JobRecord | null>(null);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [jobError, setJobError] = useState<string | null>(null);
+
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const renderTaskRef = useRef<PdfJsRenderTask | null>(null);
     const analysisAbortRef = useRef<AbortController | null>(null);
     const isDrawingRef = useRef(false);
     const drawStartRef = useRef<{ x: number; y: number; id: string } | null>(null);
+    const jobAbortRef = useRef<AbortController | null>(null);
+    const handledSuccessRef = useRef(false);
 
     const scaleFactor = useMemo(() => {
         if (pdfDimensions.width === 0 || displayDimensions.width === 0) return 1;
@@ -209,25 +346,31 @@ export default function UnderlineTool({ baseFile, onUnderlinedFile }: UnderlineT
     }, [handleRedoAction, handleUndoAction]);
 
     useEffect(() => {
-        if (!baseFile) {
-            setPdfDocument(null);
-            setTotalPages(0);
-            setCurrentPage(1);
-            setBoxes([]);
-            setHistoryPast([]);
-            setHistoryFuture([]);
-            setActiveId(null);
-            setSuccess(false);
-            setUnderlineMode("smart");
-            setPageAnalysisMap({});
-            setAnalysisLoaded(false);
-            setAnalysisError(null);
-            setIsAnalyzing(false);
-            if (previewImageSrc) URL.revokeObjectURL(previewImageSrc);
-            setPreviewImageSrc("");
-            setPreviewCacheToken("");
-            return;
-        }
+        setJobId("");
+        setJob(null);
+        setUploadProgress(0);
+        setJobError(null);
+        handledSuccessRef.current = false;
+
+        setPdfDocument(null);
+        setTotalPages(0);
+        setCurrentPage(1);
+        setBoxes([]);
+        setHistoryPast([]);
+        setHistoryFuture([]);
+        setActiveId(null);
+        setSuccess(false);
+        setUnderlineMode("smart");
+        setPageAnalysisMap({});
+        setAnalysisLoaded(false);
+        setAnalysisError(null);
+        setIsAnalyzing(false);
+
+        if (previewImageSrc) URL.revokeObjectURL(previewImageSrc);
+        setPreviewImageSrc("");
+        setPreviewCacheToken("");
+
+        if (!baseFile) return;
 
         let cancelled = false;
 
@@ -257,7 +400,7 @@ export default function UnderlineTool({ baseFile, onUnderlinedFile }: UnderlineT
             cancelled = true;
             if (renderTaskRef.current) renderTaskRef.current.cancel();
         };
-    }, [baseFile, previewImageSrc]);
+    }, [baseFile]);
 
     useEffect(() => {
         if (!baseFile) return;
@@ -281,10 +424,11 @@ export default function UnderlineTool({ baseFile, onUnderlinedFile }: UnderlineT
                 const maybePassword = (baseFile as CustomPdfFile).originalPassword;
                 if (maybePassword) formData.append("file_password", maybePassword);
 
-                const response = await fetch(`${baseUrl}/api/structure/analyze`, {
+                const response = await fetch(buildApiUrl("/api/structure/analyze"), {
                     method: "POST",
                     body: formData,
                     signal: controller.signal,
+                    credentials: "include",
                 });
 
                 const raw = await response.text();
@@ -319,7 +463,7 @@ export default function UnderlineTool({ baseFile, onUnderlinedFile }: UnderlineT
 
         void analyze();
         return () => controller.abort();
-    }, [baseFile, baseUrl]);
+    }, [baseFile]);
 
     useEffect(() => {
         if (!currentPageAnalysis) return;
@@ -354,7 +498,7 @@ export default function UnderlineTool({ baseFile, onUnderlinedFile }: UnderlineT
                 const password = (baseFile as CustomPdfFile).originalPassword;
                 if (password) formData.append("file_password", password);
 
-                const response = await fetch(`${baseUrl}/api/conversion/preview/page`, {
+                const response = await fetch(buildApiUrl("/api/conversion/preview/page"), {
                     method: "POST",
                     body: formData,
                     credentials: "include",
@@ -370,8 +514,8 @@ export default function UnderlineTool({ baseFile, onUnderlinedFile }: UnderlineT
                     if (prev) URL.revokeObjectURL(prev);
                     return URL.createObjectURL(imgBlob);
                 });
-            } catch (err: any) {
-                if (err?.name !== "AbortError") {
+            } catch (err: unknown) {
+                if ((err as Error)?.name !== "AbortError") {
                     console.error("Failed to render scanned page preview:", err);
                 }
             } finally {
@@ -381,7 +525,7 @@ export default function UnderlineTool({ baseFile, onUnderlinedFile }: UnderlineT
 
         void fetchScannedPreview();
         return () => abortController.abort();
-    }, [baseFile, baseUrl, currentPage, currentPageAnalysis?.kind, pdfDocument, previewCacheToken]);
+    }, [baseFile, currentPage, currentPageAnalysis?.kind, pdfDocument, previewCacheToken]);
 
     useEffect(() => {
         return () => {
@@ -454,7 +598,84 @@ export default function UnderlineTool({ baseFile, onUnderlinedFile }: UnderlineT
         };
     }, [currentPage, pdfDocument]);
 
-    const handleContainerPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    useEffect(() => {
+        if (!jobId) return;
+
+        const controller = new AbortController();
+        jobAbortRef.current = controller;
+        handledSuccessRef.current = false;
+
+        const run = async () => {
+            const currentJobId = jobId;
+
+            try {
+                const finalJob = await waitForJob(
+                    currentJobId,
+                    (nextJob) => {
+                        setJob(nextJob);
+                        setJobError(null);
+                    },
+                    controller.signal
+                );
+
+                if (controller.signal.aborted) return;
+
+                setJob(finalJob);
+
+                if (finalJob.status === "failed") {
+                    throw new Error(finalJob.error || "Underline processing failed");
+                }
+
+                if (finalJob.status !== "succeeded") {
+                    return;
+                }
+
+                if (handledSuccessRef.current) {
+                    return;
+                }
+                handledSuccessRef.current = true;
+
+                const blob = await downloadJobPdf(currentJobId);
+
+                const fileName = (baseFile?.name || "document.pdf").replace(/\.pdf$/i, "");
+                const underlinedFile = new File([blob], `${fileName}-underlined.pdf`, {
+                    type: "application/pdf",
+                });
+
+                await onUnderlinedFile(underlinedFile);
+
+                setBoxes([]);
+                setHistoryPast([]);
+                setHistoryFuture([]);
+                setActiveId(null);
+                setCurrentPage(1);
+                setSuccess(true);
+
+                setJob(null);
+                setJobId("");
+                setUploadProgress(0);
+                setJobError(null);
+
+                notify("Underlined PDF loaded back into Studio.", "success");
+                setUploadProgress(0);
+            } catch (err) {
+                if ((err as Error)?.name === "AbortError") return;
+                console.error(err);
+                setJobError(getFriendlyErrorMessage(err));
+                handleClientError(err);
+            } finally {
+                if (!controller.signal.aborted) {
+                    setIsProcessing(false);
+                }
+            }
+        };
+
+        void run();
+
+        return () => controller.abort();
+    }, [jobId]);
+
+    const handleContainerPointerDown = (e: PointerEvent<HTMLDivElement>) => {
         if (!containerRef.current || pdfDimensions.width === 0) return;
         e.preventDefault();
 
@@ -480,7 +701,7 @@ export default function UnderlineTool({ baseFile, onUnderlinedFile }: UnderlineT
         updateBoxesStateWithHistory((prev) => [...prev, newBox]);
     };
 
-    const handleContainerPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const handleContainerPointerMove = (e: PointerEvent<HTMLDivElement>) => {
         if (!isDrawingRef.current || !drawStartRef.current || !containerRef.current) return;
 
         const rect = containerRef.current.getBoundingClientRect();
@@ -531,7 +752,7 @@ export default function UnderlineTool({ baseFile, onUnderlinedFile }: UnderlineT
         }
 
         if (currentPageAnalysis?.kind === "scanned" && underlineMode === "smart") {
-            notify("This page is scanned. Please choose Manual line or Recognize Text.","warning");
+            notify("This page is scanned. Please choose Manual line or Recognize Text.", "warning");
             return;
         }
 
@@ -541,37 +762,40 @@ export default function UnderlineTool({ baseFile, onUnderlinedFile }: UnderlineT
             try {
                 setIsProcessing(true);
                 setSuccess(false);
+                setJobError(null);
+                setUploadProgress(0);
 
-                const formData = new FormData();
-                formData.append("file", validFile);
-                formData.append("boxes", JSON.stringify(validBoxes));
-                formData.append("mode", underlineMode);
-
-                if (validFile.originalPassword) formData.append("file_password", validFile.originalPassword);
-
-                const responseBlob = await uploadAndDownloadFile("/api/structure/underline", formData);
-                const underlinedFile = new File(
-                    [responseBlob],
-                    `${validFile.name.replace(/\.pdf$/i, "")}-underlined.pdf`,
-                    { type: "application/pdf" }
+                const submission = await submitUnderlineJob(
+                    validFile,
+                    validBoxes,
+                    underlineMode,
+                    validFile.originalPassword
                 );
 
-                await onUnderlinedFile(underlinedFile);
-                setBoxes([]);
-                setHistoryPast([]);
-                setHistoryFuture([]);
-                setActiveId(null);
-                setCurrentPage(1);
-                setSuccess(true);
-                notify("Underlined PDF loaded back into Studio.","success");
+                setJobId(submission.job_id);
+                setJob(null);
+                setUploadProgress(100);
+                notify("Underline job queued. Waiting for worker...", "info");
             } catch (err) {
                 console.error(err);
+                setJobError(getFriendlyErrorMessage(err));
                 handleClientError(err);
-            } finally {
                 setIsProcessing(false);
             }
         });
     };
+
+    const progress = Math.max(0, Math.min(100, job?.progress ?? uploadProgress));
+    const statusText =
+        jobError
+            ? "Failed"
+            : job?.status === "running" || job?.status === "queued"
+                ? "Processing"
+                : isProcessing
+                    ? "Uploading"
+                    : job?.status === "succeeded"
+                        ? "Completed"
+                        : "Idle";
 
     if (!baseFile) return null;
 
@@ -653,7 +877,9 @@ export default function UnderlineTool({ baseFile, onUnderlinedFile }: UnderlineT
                                 <Loader2 className="mt-0.5 animate-spin text-indigo-500" size={16} />
                                 <div className="text-xs text-[color:var(--foreground)]/90">
                                     <p className="font-semibold">Analyzing page structure...</p>
-                                    <p className="mt-0.5 text-[color:var(--muted)]">Detecting text pages before underline processing.</p>
+                                    <p className="mt-0.5 text-[color:var(--muted)]">
+                                        Detecting text pages before underline processing.
+                                    </p>
                                 </div>
                             </div>
                         )}
@@ -668,7 +894,9 @@ export default function UnderlineTool({ baseFile, onUnderlinedFile }: UnderlineT
                         {analysisLoaded && currentPageAnalysis && (
                             <div
                                 className={`rounded-xl border p-4 ${
-                                    isScannedPage ? "border-amber-500/20 bg-amber-500/10" : "border-emerald-500/20 bg-emerald-500/10"
+                                    isScannedPage
+                                        ? "border-amber-500/20 bg-amber-500/10"
+                                        : "border-emerald-500/20 bg-emerald-500/10"
                                 }`}
                             >
                                 <div className="flex items-start justify-between gap-3">
@@ -679,7 +907,9 @@ export default function UnderlineTool({ baseFile, onUnderlinedFile }: UnderlineT
                                             <Sparkles className="mt-0.5 text-emerald-500" size={18} />
                                         )}
                                         <div className="text-xs">
-                                            <p className="font-semibold">Page {currentPage} is {prettyKind(pageKind)}</p>
+                                            <p className="font-semibold">
+                                                Page {currentPage} is {prettyKind(pageKind)}
+                                            </p>
                                             <p className="mt-0.5 opacity-80">
                                                 {isScannedPage
                                                     ? "This page has no selectable text. Choose Manual line or Recognize Text."
@@ -758,6 +988,48 @@ export default function UnderlineTool({ baseFile, onUnderlinedFile }: UnderlineT
                             </div>
                         )}
 
+                        {!success && (job || jobError || jobId || isProcessing) && (
+                            <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--background)]/40 p-4">
+                                <div className="flex items-center justify-between text-xs text-[color:var(--muted)]">
+                                    <span className="inline-flex items-center gap-2">
+                                        {isProcessing ||
+                                        job?.status === "running" ||
+                                        job?.status === "queued" ||
+                                        (jobId && !job) ? (
+                                            <Loader2 size={14} className="animate-spin text-foreground" />
+                                        ) : null}
+                                        {jobError ? "Failed" : job?.status || (isProcessing ? "Uploading" : "Idle")}
+                                    </span>
+                                    <span>{Math.round(progress)}%</span>
+                                </div>
+
+                                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
+                                    <div
+                                        className={`h-full rounded-full transition-all ${
+                                            jobError || job?.status === "failed"
+                                                ? "bg-red-500"
+                                                : job?.status === "succeeded"
+                                                    ? "bg-emerald-500"
+                                                    : "bg-foreground"
+                                        }`}
+                                        style={{ width: `${progress}%` }}
+                                    />
+                                </div>
+
+                                <p className="mt-2 text-[11px] text-[color:var(--muted)]">
+                                    {jobError ||
+                                        job?.message ||
+                                        (isProcessing ? "Uploading file to worker..." : "Waiting for job update...")}
+                                </p>
+
+                                {jobId ? (
+                                    <p className="mt-2 text-[11px] text-[color:var(--muted)]">
+                                        Job ID: <span className="font-mono">{jobId}</span>
+                                    </p>
+                                ) : null}
+                            </div>
+                        )}
+
                         <button
                             type="button"
                             onClick={handleUnderlineProcessing}
@@ -830,7 +1102,9 @@ export default function UnderlineTool({ baseFile, onUnderlinedFile }: UnderlineT
                         >
                             <canvas
                                 ref={canvasRef}
-                                className={`block max-w-full h-auto rounded pointer-events-none ${isScannedPage ? "opacity-0" : "opacity-100"}`}
+                                className={`block max-w-full h-auto rounded pointer-events-none ${
+                                    isScannedPage ? "opacity-0" : "opacity-100"
+                                }`}
                             />
 
                             {isScannedPage && previewImageSrc && (
@@ -864,20 +1138,24 @@ export default function UnderlineTool({ baseFile, onUnderlinedFile }: UnderlineT
                                             height: `${box.height * scaleFactor}px`,
                                         }}
                                         className={`transition-all ${
-                                            isActive ? "z-20 rounded ring-2 ring-indigo-600 bg-indigo-500/10 shadow-md" : "z-10 hover:opacity-50"
+                                            isActive
+                                                ? "z-20 rounded ring-2 ring-indigo-600 bg-indigo-500/10 shadow-md"
+                                                : "z-10 hover:opacity-50"
                                         }`}
                                     >
                                         <div
-                                            style={{
-                                                position: "absolute",
-                                                left: 0,
-                                                right: 0,
-                                                bottom: "10%",
-                                                height: "3px",
-                                                backgroundColor: box.color,
-                                                opacity: 0.95,
-                                                borderRadius: "9999px",
-                                            }}
+                                            style={
+                                                {
+                                                    position: "absolute",
+                                                    left: 0,
+                                                    right: 0,
+                                                    bottom: "10%",
+                                                    height: "3px",
+                                                    backgroundColor: box.color,
+                                                    opacity: 0.95,
+                                                    borderRadius: "9999px",
+                                                } as CSSProperties
+                                            }
                                         />
                                     </div>
                                 );

@@ -16,8 +16,8 @@ import {
     MousePointer2,
     Sparkles,
 } from "lucide-react";
-import { getBaseUrl, uploadAndDownloadFile } from "@/lib/api";
-import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
+import { getBaseUrl } from "@/lib/api";
+import { getFriendlyErrorMessage, handleClientError } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/layout";
@@ -73,6 +73,24 @@ interface PDFAnalysis {
     pages: PageAnalysis[];
 }
 
+interface JobSubmissionResponse {
+    success?: boolean;
+    job_id: string;
+    status: string;
+    queue_name: string;
+}
+
+interface JobRecord {
+    id: string;
+    job_type: string;
+    status: string;
+    progress: number;
+    message: string;
+    result: Record<string, unknown> | null;
+    error: string | null;
+    cancel_requested: boolean;
+}
+
 const HIGHLIGHT_COLORS = [
     { name: "Yellow", hex: "#FFFF00" },
     { name: "Green", hex: "#00FF00" },
@@ -100,12 +118,133 @@ function prettyKind(kind: PageKind | undefined) {
     }
 }
 
+function buildApiUrl(path: string) {
+    const base = getBaseUrl().replace(/\/+$/, "");
+    return `${base}${path}`;
+}
+
+async function submitHighlightJob(
+    file: File,
+    boxes: HighlightBox[],
+    mode: HighlightMode,
+    filePassword?: string
+): Promise<JobSubmissionResponse> {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("boxes", JSON.stringify(boxes));
+    formData.append("mode", mode);
+
+    if (filePassword?.trim()) {
+        formData.append("file_password", filePassword.trim());
+    }
+
+    const response = await fetch(buildApiUrl("/api/markup/highlight"), {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+    });
+
+    const text = await response.text();
+    if (!response.ok) {
+        let message = text || `Request failed with status ${response.status}`;
+        try {
+            const parsed = JSON.parse(text);
+            message = parsed.message || parsed.error || message;
+        } catch {
+            // keep raw response text
+        }
+        throw new Error(message);
+    }
+
+    return JSON.parse(text) as JobSubmissionResponse;
+}
+
+async function fetchJob(jobId: string): Promise<JobRecord> {
+    const response = await fetch(buildApiUrl(`/api/markup/jobs/${jobId}`), {
+        method: "GET",
+        credentials: "include",
+    });
+
+    const text = await response.text();
+    if (!response.ok) {
+        let message = text || `Request failed with status ${response.status}`;
+        try {
+            const parsed = JSON.parse(text);
+            message = parsed.message || parsed.error || message;
+        } catch {
+            // keep raw response text
+        }
+        throw new Error(message);
+    }
+
+    return JSON.parse(text) as JobRecord;
+}
+
+async function waitForJob(
+    jobId: string,
+    onUpdate: (job: JobRecord) => void,
+    signal?: AbortSignal
+): Promise<JobRecord> {
+    while (true) {
+        if (signal?.aborted) {
+            throw new DOMException("Aborted", "AbortError");
+        }
+
+        const job = await fetchJob(jobId);
+        onUpdate(job);
+
+        if (["succeeded", "failed", "cancelled"].includes(job.status)) {
+            return job;
+        }
+
+        await new Promise<void>((resolve, reject) => {
+            const timer = window.setTimeout(() => resolve(), 1000);
+
+            if (signal) {
+                signal.addEventListener(
+                    "abort",
+                    () => {
+                        window.clearTimeout(timer);
+                        reject(new DOMException("Aborted", "AbortError"));
+                    },
+                    { once: true }
+                );
+            }
+        });
+    }
+}
+
+async function downloadJobPdf(jobId: string): Promise<Blob> {
+    const response = await fetch(buildApiUrl(`/api/markup/jobs/${jobId}/download`), {
+        method: "GET",
+        credentials: "include",
+    });
+
+    if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        let message = text || `Download failed with status ${response.status}`;
+        try {
+            const parsed = JSON.parse(text);
+            message = parsed.message || parsed.error || message;
+        } catch {
+            // keep raw text
+        }
+        throw new Error(message);
+    }
+
+    return await response.blob();
+}
+
+async function loadPdfJs() {
+    const pdfjsLib = await import("pdfjs-dist");
+    pdfjsLib.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
+    return pdfjsLib;
+}
+
 export default function HighlightPdfWorkspace() {
     const { requireAuth } = useAuth();
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
-
-    const baseUrl = getBaseUrl();
 
     const [pdfDocument, setPdfDocument] = useState<PdfJsDocument | null>(null);
     const [currentPage, setCurrentPage] = useState<number>(1);
@@ -118,8 +257,8 @@ export default function HighlightPdfWorkspace() {
     const [boxes, setBoxes] = useState<HighlightBox[]>([]);
     const [selectedColor, setSelectedColor] = useState<string>("#FFFF00");
     const [activeId, setActiveId] = useState<string | null>(null);
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [success, setSuccess] = useState(false);
+    const [isProcessing, setIsProcessing] = useState<boolean>(false);
+    const [success, setSuccess] = useState<boolean>(false);
 
     const [highlightMode, setHighlightMode] = useState<HighlightMode>("smart");
 
@@ -127,49 +266,52 @@ export default function HighlightPdfWorkspace() {
     const [historyFuture, setHistoryFuture] = useState<HighlightBox[][]>([]);
 
     const [pageAnalysisMap, setPageAnalysisMap] = useState<Record<number, PageAnalysis>>({});
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [analysisLoaded, setAnalysisLoaded] = useState(false);
+    const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
+    const [analysisLoaded, setAnalysisLoaded] = useState<boolean>(false);
     const [analysisError, setAnalysisError] = useState<string | null>(null);
 
     const [previewImageSrc, setPreviewImageSrc] = useState<string>("");
     const [isRenderingPreview, setIsRenderingPreview] = useState<boolean>(false);
     const [previewCacheToken, setPreviewCacheToken] = useState<string>("");
 
+    const [jobId, setJobId] = useState<string>("");
+    const [job, setJob] = useState<JobRecord | null>(null);
+    const [uploadProgress, setUploadProgress] = useState<number>(0);
+    const [jobError, setJobError] = useState<string | null>(null);
+
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const renderTaskRef = useRef<PdfJsRenderTask | null>(null);
     const analysisAbortRef = useRef<AbortController | null>(null);
-
+    const jobAbortRef = useRef<AbortController | null>(null);
     const isDrawingRef = useRef(false);
     const drawStartRef = useRef<{ x: number; y: number; id: string } | null>(null);
+    const handledSuccessRef = useRef(false);
 
     const scaleFactor = useMemo(() => {
         if (pdfDimensions.width === 0 || displayDimensions.width === 0) return 1;
         return displayDimensions.width / pdfDimensions.width;
-    }, [pdfDimensions, displayDimensions]);
+    }, [pdfDimensions.width, displayDimensions.width]);
 
     const fileExtractedSize = useMemo(() => {
         if (!file) return "0.00";
         return formatMB(file.size);
     }, [file]);
 
-    const currentPageAnalysis = useMemo(() => {
-        return pageAnalysisMap[currentPage] ?? null;
-    }, [pageAnalysisMap, currentPage]);
-
+    const currentPageAnalysis = useMemo(() => pageAnalysisMap[currentPage] ?? null, [pageAnalysisMap, currentPage]);
     const pageKind = currentPageAnalysis?.kind ?? (analysisLoaded ? "unknown" : null);
     const isScannedPage = pageKind === "scanned";
-
     const isTextPage = pageKind === "text";
     const isMixedPage = pageKind === "mixed";
     const canUseSmartMode = pageKind !== "scanned" && pageKind !== "blank";
+    const currentPageBoxes = useMemo(() => boxes.filter((b) => b.page === currentPage), [boxes, currentPage]);
 
     const updateBoxesStateWithHistory = (
         nextState: HighlightBox[] | ((prev: HighlightBox[]) => HighlightBox[])
     ) => {
-        setBoxes(prev => {
+        setBoxes((prev) => {
             const computedNext = typeof nextState === "function" ? nextState(prev) : nextState;
-            setHistoryPast(past => [...past, prev]);
+            setHistoryPast((past) => [...past, prev]);
             setHistoryFuture([]);
             return computedNext;
         });
@@ -181,7 +323,7 @@ export default function HighlightPdfWorkspace() {
         const updatedPast = historyPast.slice(0, -1);
 
         setHistoryPast(updatedPast);
-        setHistoryFuture(future => [boxes, ...future]);
+        setHistoryFuture((future) => [boxes, ...future]);
         setBoxes(previousState);
         setActiveId(null);
     };
@@ -192,7 +334,7 @@ export default function HighlightPdfWorkspace() {
         const updatedFuture = historyFuture.slice(1);
 
         setHistoryFuture(updatedFuture);
-        setHistoryPast(past => [...past, boxes]);
+        setHistoryPast((past) => [...past, boxes]);
         setBoxes(nextState);
         setActiveId(null);
     };
@@ -221,7 +363,6 @@ export default function HighlightPdfWorkspace() {
 
     useEffect(() => {
         if (!file) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
             setPdfDocument(null);
             setTotalPages(0);
             setCurrentPage(1);
@@ -238,19 +379,19 @@ export default function HighlightPdfWorkspace() {
             if (previewImageSrc) URL.revokeObjectURL(previewImageSrc);
             setPreviewImageSrc("");
             setPreviewCacheToken("");
+            setJobId("");
+            setJob(null);
+            setUploadProgress(0);
+            setJobError(null);
             return;
         }
 
         const loadPdf = async () => {
             try {
                 setIsRenderingCanvas(true);
-                const pdfjsLib = await import("pdfjs-dist");
-                pdfjsLib.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
-
+                const pdfjsLib = await loadPdfJs();
                 const arrayBuffer = await file.arrayBuffer();
-                const typedArray = new Uint8Array(arrayBuffer);
-                const loadingTask = pdfjsLib.getDocument({ data: typedArray });
-                const pdf = await loadingTask.promise;
+                const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
 
                 setPdfDocument(pdf as unknown as PdfJsDocument);
                 setTotalPages(pdf.numPages);
@@ -264,7 +405,7 @@ export default function HighlightPdfWorkspace() {
         };
 
         loadPdf();
-    }, [file]);
+    }, [file]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         if (!file) return;
@@ -290,10 +431,11 @@ export default function HighlightPdfWorkspace() {
                     formData.append("file_password", maybePassword);
                 }
 
-                const response = await fetch(`${baseUrl}/api/structure/analyze`, {
+                const response = await fetch(`${buildApiUrl("/api/structure/analyze")}`, {
                     method: "POST",
                     body: formData,
                     signal: controller.signal,
+                    credentials: "include",
                 });
 
                 const raw = await response.text();
@@ -334,12 +476,11 @@ export default function HighlightPdfWorkspace() {
         analyze();
 
         return () => controller.abort();
-    }, [file, baseUrl]);
+    }, [file]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         if (!currentPageAnalysis) return;
         if (currentPageAnalysis.kind === "scanned" && highlightMode === "smart") {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
             setHighlightMode("manual");
         }
     }, [currentPageAnalysis, highlightMode]);
@@ -352,7 +493,6 @@ export default function HighlightPdfWorkspace() {
         if (!isScanned) {
             if (previewImageSrc) {
                 URL.revokeObjectURL(previewImageSrc);
-                // eslint-disable-next-line react-hooks/set-state-in-effect
                 setPreviewImageSrc("");
             }
             return;
@@ -377,7 +517,7 @@ export default function HighlightPdfWorkspace() {
                     formData.append("file_password", password);
                 }
 
-                const response = await fetch(`${baseUrl}/api/conversion/preview/page`, {
+                const response = await fetch(`${buildApiUrl("/api/conversion/preview/page")}`, {
                     method: "POST",
                     body: formData,
                     credentials: "include",
@@ -389,7 +529,7 @@ export default function HighlightPdfWorkspace() {
                 }
 
                 const imgBlob = await response.blob();
-                setPreviewImageSrc(prev => {
+                setPreviewImageSrc((prev) => {
                     if (prev) URL.revokeObjectURL(prev);
                     return URL.createObjectURL(imgBlob);
                 });
@@ -407,7 +547,7 @@ export default function HighlightPdfWorkspace() {
         fetchScannedPreview();
 
         return () => abortController.abort();
-    }, [file, pdfDocument, currentPage, currentPageAnalysis?.kind, previewCacheToken, baseUrl]);
+    }, [file, pdfDocument, currentPage, currentPageAnalysis?.kind, previewCacheToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         return () => {
@@ -441,7 +581,6 @@ export default function HighlightPdfWorkspace() {
                     viewport: renderViewport,
                 });
                 renderTaskRef.current = renderTask;
-
                 await renderTask.promise;
                 renderTaskRef.current = null;
 
@@ -481,12 +620,107 @@ export default function HighlightPdfWorkspace() {
         };
     }, [pdfDocument, currentPage]);
 
+    useEffect(() => {
+        if (!jobId) return;
+
+        const controller = new AbortController();
+        jobAbortRef.current = controller;
+        handledSuccessRef.current = false;
+
+        const run = async () => {
+            try {
+                const finalJob = await waitForJob(
+                    jobId,
+                    (nextJob) => {
+                        setJob(nextJob);
+                        setJobError(null);
+                    },
+                    controller.signal
+                );
+
+                if (controller.signal.aborted) return;
+
+                setJob(finalJob);
+
+                if (finalJob.status === "failed") {
+                    throw new Error(finalJob.error || "Highlight processing failed");
+                }
+
+                if (finalJob.status !== "succeeded") {
+                    return;
+                }
+
+                if (handledSuccessRef.current) {
+                    return;
+                }
+                handledSuccessRef.current = true;
+
+                const blob = await downloadJobPdf(jobId);
+
+                const fileName = (file?.name || "document.pdf").replace(/\.pdf$/i, "");
+                const highlightedFile = new File([blob], `${fileName}-highlighted.pdf`, {
+                    type: "application/pdf",
+                });
+
+                setDownloadData({
+                    blob,
+                    fileName: `${fileName}-highlighted.pdf`,
+                });
+
+                await Promise.resolve();
+                router.push(`/${toolId}/download`);
+
+                await onJobFinished(highlightedFile);
+                setJobId("");
+                setUploadProgress(0);
+            } catch (err) {
+                if ((err as Error)?.name === "AbortError") return;
+                console.error(err);
+                setJobError(getFriendlyErrorMessage(err));
+                handleClientError(err);
+            } finally {
+                if (!controller.signal.aborted) {
+                    setIsProcessing(false);
+                }
+            }
+        };
+
+        void run();
+
+        return () => controller.abort();
+    }, [jobId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    async function onJobFinished(editedFile: File) {
+        await Promise.resolve();
+        setSuccess(true);
+
+        setJob(null);
+        setJobId("");
+        setUploadProgress(0);
+        setJobError(null);
+
+        await Promise.resolve();
+        await Promise.resolve();
+        notify("Highlighted PDF loaded back into Studio.", "success");
+        await Promise.resolve();
+        setBoxes([]);
+        setHistoryPast([]);
+        setHistoryFuture([]);
+        setActiveId(null);
+        setCurrentPage(1);
+        await onFinishedFile(editedFile);
+    }
+
+    async function onFinishedFile(editedFile: File) {
+        await Promise.resolve();
+        setFile?.(editedFile);
+    }
+
     const handleContainerPointerDown = (e: PointerEvent<HTMLDivElement>) => {
         if (!containerRef.current || pdfDimensions.width === 0) return;
-
         e.preventDefault();
-        const rect = containerRef.current.getBoundingClientRect();
 
+        const rect = containerRef.current.getBoundingClientRect();
         const clickPdfX = (e.clientX - rect.left) / scaleFactor;
         const clickPdfY = (e.clientY - rect.top) / scaleFactor;
 
@@ -505,7 +739,7 @@ export default function HighlightPdfWorkspace() {
             color: selectedColor,
         };
 
-        updateBoxesStateWithHistory(prev => [...prev, newBox]);
+        updateBoxesStateWithHistory((prev) => [...prev, newBox]);
     };
 
     const handleContainerPointerMove = (e: PointerEvent<HTMLDivElement>) => {
@@ -516,14 +750,13 @@ export default function HighlightPdfWorkspace() {
         const currentPdfY = (e.clientY - rect.top) / scaleFactor;
 
         const start = drawStartRef.current;
-
         const targetX = Math.min(start.x, currentPdfX);
         const targetY = Math.min(start.y, currentPdfY);
         const targetWidth = Math.abs(currentPdfX - start.x);
         const targetHeight = Math.abs(currentPdfY - start.y);
 
-        setBoxes(prev =>
-            prev.map(box => {
+        setBoxes((prev) =>
+            prev.map((box) => {
                 if (box.id === start.id) {
                     return {
                         ...box,
@@ -545,16 +778,15 @@ export default function HighlightPdfWorkspace() {
 
     const deleteActiveBox = () => {
         if (!activeId) return;
-        updateBoxesStateWithHistory(prev => prev.filter(b => b.id !== activeId));
+        updateBoxesStateWithHistory((prev) => prev.filter((b) => b.id !== activeId));
         setActiveId(null);
     };
 
-    const handleHighlightProcessing = async () => {
+    const handleHighlightProcessing = () => {
         const activeFile = file;
         if (!activeFile) return;
 
-        const validBoxes = boxes.filter(b => b.width > 2 && b.height > 2);
-
+        const validBoxes = boxes.filter((b) => b.width > 2 && b.height > 2);
         if (validBoxes.length === 0) {
             notify("Please draw at least one highlighting box on the document.", "warning");
             return;
@@ -566,33 +798,43 @@ export default function HighlightPdfWorkspace() {
             try {
                 setIsProcessing(true);
                 setSuccess(false);
+                setJobError(null);
+                setUploadProgress(0);
 
-                const formData = new FormData();
-                formData.append("file", validFile);
-                formData.append("boxes", JSON.stringify(validBoxes));
-                formData.append("mode", highlightMode);
+                const submission = await submitHighlightJob(
+                    validFile,
+                    validBoxes,
+                    highlightMode,
+                    validFile.originalPassword
+                );
 
-                if (validFile.originalPassword) formData.append("file_password", validFile.originalPassword);
-
-                const responseBlob = await uploadAndDownloadFile("/api/structure/highlight", formData);
-
-                setDownloadData({
-                    blob: responseBlob,
-                    fileName: `${validFile.name.replace(/\.pdf$/i, "")}-highlighted.pdf`,
-                });
-
-                setSuccess(true);
-                router.push(`/${toolId}/download`);
+                setJobId(submission.job_id);
+                setJob(null);
+                setUploadProgress(100);
+                notify("Highlight job queued. Waiting for worker...", "info");
             } catch (err) {
                 console.error(err);
+                setJobError(getFriendlyErrorMessage(err));
                 handleClientError(err);
-            } finally {
                 setIsProcessing(false);
             }
         });
     };
 
+    const progress = Math.max(0, Math.min(100, job?.progress ?? uploadProgress));
+    const statusText =
+        jobError
+            ? "Failed"
+            : job?.status === "running" || job?.status === "queued"
+                ? "Processing"
+                : isProcessing
+                    ? "Uploading"
+                    : job?.status === "succeeded"
+                        ? "Completed"
+                        : "Idle";
+
     if (!file) return null;
+
     const activeFile = file;
 
     return (
@@ -659,9 +901,11 @@ export default function HighlightPdfWorkspace() {
                                 </div>
 
                                 <div className="flex flex-col gap-1.5">
-                                    <label className="text-[10px] text-[color:var(--muted)] font-bold uppercase">Active Marker Color</label>
+                                    <label className="text-[10px] text-[color:var(--muted)] font-bold uppercase">
+                                        Active Marker Color
+                                    </label>
                                     <div className="flex items-center gap-2 flex-wrap">
-                                        {HIGHLIGHT_COLORS.map(c => (
+                                        {HIGHLIGHT_COLORS.map((c) => (
                                             <button
                                                 key={c.hex}
                                                 type="button"
@@ -684,7 +928,9 @@ export default function HighlightPdfWorkspace() {
                                     <Loader2 className="animate-spin text-indigo-500 mt-0.5" size={16} />
                                     <div className="text-xs text-[color:var(--foreground)]/90">
                                         <p className="font-semibold">Analyzing page structure...</p>
-                                        <p className="mt-0.5 text-[color:var(--muted)]">Detecting text pages before highlight processing.</p>
+                                        <p className="mt-0.5 text-[color:var(--muted)]">
+                                            Detecting text pages before highlight processing.
+                                        </p>
                                     </div>
                                 </div>
                             )}
@@ -720,7 +966,7 @@ export default function HighlightPdfWorkspace() {
                                                         ? "This page has no selectable text. Choose Manual highlight or Recognize Text."
                                                         : isMixedPage
                                                             ? "Could be scanned document. Manual highlight or Recognize Text is recommended."
-                                                            :isTextPage
+                                                            : isTextPage
                                                                 ? "Selectable text detected. Smart mode is recommended."
                                                                 : "No clear text structure detected on this page."}
                                                 </p>
@@ -731,36 +977,7 @@ export default function HighlightPdfWorkspace() {
                                         </div>
                                     </div>
 
-                                    {isScannedPage && (
-                                        <div className="mt-4 grid grid-cols-2 gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => setHighlightMode("manual")}
-                                                className={`rounded-lg px-3 py-2 text-xs font-semibold border transition flex items-center justify-center gap-1.5 ${
-                                                    highlightMode === "manual"
-                                                        ? "bg-indigo-500 text-white border-indigo-500"
-                                                        : "bg-white/60 dark:bg-black/10 border-[color:var(--border)] hover:border-indigo-500"
-                                                }`}
-                                            >
-                                                <MousePointer2 size={14} />
-                                                Manual highlight
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setHighlightMode("ocr")}
-                                                className={`rounded-lg px-3 py-2 text-xs font-semibold border transition flex items-center justify-center gap-1.5 ${
-                                                    highlightMode === "ocr"
-                                                        ? "bg-indigo-500 text-white border-indigo-500"
-                                                        : "bg-white/60 dark:bg-black/10 border-[color:var(--border)] hover:border-indigo-500"
-                                                }`}
-                                            >
-                                                <ScanText size={14} />
-                                                Recognize Text
-                                            </button>
-                                        </div>
-                                    )}
-
-                                    {isMixedPage && (
+                                    {(isScannedPage || isMixedPage) && (
                                         <div className="mt-4 grid grid-cols-2 gap-2">
                                             <button
                                                 type="button"
@@ -808,26 +1025,70 @@ export default function HighlightPdfWorkspace() {
                                     </button>
                                 </div>
                             )}
-                        </div>
 
-                        <div className="grid gap-4 sm:grid-cols-2">
-                            <div className="rounded-2xl border border-[color:var(--border)] p-4 bg-transparent">
-                                <p className="text-sm text-[color:var(--muted)]">Source document size</p>
-                                <p className="mt-1 text-xl font-bold text-[color:var(--foreground)]">{fileExtractedSize} MB</p>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <div className="rounded-2xl border border-[color:var(--border)] p-4 bg-transparent">
+                                    <p className="text-sm text-[color:var(--muted)]">Source document size</p>
+                                    <p className="mt-1 text-xl font-bold text-[color:var(--foreground)]">
+                                        {fileExtractedSize} MB
+                                    </p>
+                                </div>
+                                <div className="rounded-2xl border border-[color:var(--border)] p-4 bg-transparent">
+                                    <p className="text-sm text-[color:var(--muted)]">Total Sheets</p>
+                                    <p className="mt-1 text-xl font-bold text-indigo-500">{totalPages} Pages</p>
+                                </div>
                             </div>
-                            <div className="rounded-2xl border border-[color:var(--border)] p-4 bg-transparent">
-                                <p className="text-sm text-[color:var(--muted)]">Total Sheets</p>
-                                <p className="mt-1 text-xl font-bold text-indigo-500">{totalPages} Pages</p>
-                            </div>
-                        </div>
 
-                        <PdfActionButton
-                            text="Save Highlight Markers"
-                            loadingText="Baking Vector Blocks..."
-                            loading={isProcessing}
-                            disabled={isProcessing || isRenderingCanvas || boxes.length === 0}
-                            onClick={handleHighlightProcessing}
-                        />
+                            {!success && (job || jobError || jobId || isProcessing) && (
+                                <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--background)]/40 p-4">
+                                    <div className="flex items-center justify-between text-xs text-[color:var(--muted)]">
+                                        <span className="inline-flex items-center gap-2">
+                                            {isProcessing ||
+                                            job?.status === "running" ||
+                                            job?.status === "queued" ||
+                                            (jobId && !job) ? (
+                                                <Loader2 size={14} className="animate-spin text-foreground" />
+                                            ) : null}
+                                            {jobError ? "Failed" : job?.status || (isProcessing ? "Uploading" : "Idle")}
+                                        </span>
+                                        <span>{Math.round(progress)}%</span>
+                                    </div>
+
+                                    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
+                                        <div
+                                            className={`h-full rounded-full transition-all ${
+                                                jobError || job?.status === "failed"
+                                                    ? "bg-red-500"
+                                                    : job?.status === "succeeded"
+                                                        ? "bg-emerald-500"
+                                                        : "bg-foreground"
+                                            }`}
+                                            style={{ width: `${progress}%` }}
+                                        />
+                                    </div>
+
+                                    <p className="mt-2 text-[11px] text-[color:var(--muted)]">
+                                        {jobError ||
+                                            job?.message ||
+                                            (isProcessing ? "Uploading file to worker..." : "Waiting for job update...")}
+                                    </p>
+
+                                    {jobId ? (
+                                        <p className="mt-2 text-[11px] text-[color:var(--muted)]">
+                                            Job ID: <span className="font-mono">{jobId}</span>
+                                        </p>
+                                    ) : null}
+                                </div>
+                            )}
+
+                            <PdfActionButton
+                                text="Save Highlight Markers"
+                                loadingText="Uploading and queueing..."
+                                loading={isProcessing}
+                                disabled={isProcessing || isRenderingCanvas || boxes.length === 0}
+                                onClick={handleHighlightProcessing}
+                            />
+                        </div>
                     </div>
 
                     <div className="lg:col-span-7 flex flex-col bg-[color:var(--background)]/30 border border-[color:var(--border)] rounded-2xl p-6 relative w-full">
@@ -849,7 +1110,7 @@ export default function HighlightPdfWorkspace() {
                                         type="button"
                                         disabled={currentPage <= 1}
                                         onClick={() => {
-                                            setCurrentPage(p => p - 1);
+                                            setCurrentPage((p) => p - 1);
                                             setActiveId(null);
                                         }}
                                         className="hover:text-[color:var(--foreground)] disabled:opacity-20 transition"
@@ -863,7 +1124,7 @@ export default function HighlightPdfWorkspace() {
                                         type="button"
                                         disabled={currentPage >= totalPages}
                                         onClick={() => {
-                                            setCurrentPage(p => p + 1);
+                                            setCurrentPage((p) => p + 1);
                                             setActiveId(null);
                                         }}
                                         className="hover:text-[color:var(--foreground)] disabled:opacity-20 transition"
@@ -884,7 +1145,7 @@ export default function HighlightPdfWorkspace() {
                                 onPointerDown={handleContainerPointerDown}
                                 onPointerMove={handleContainerPointerMove}
                                 onPointerUp={handleContainerPointerUp}
-                                onClick={e => e.stopPropagation()}
+                                onClick={(e) => e.stopPropagation()}
                             >
                                 <canvas
                                     ref={canvasRef}
@@ -907,29 +1168,31 @@ export default function HighlightPdfWorkspace() {
                                     </div>
                                 )}
 
-                                {boxes.filter(box => box.page === currentPage).map(box => {
-                                    const isActive = activeId === box.id;
-                                    return (
-                                        <div
-                                            key={box.id}
-                                            onClick={e => {
-                                                e.stopPropagation();
-                                                setActiveId(box.id);
-                                            }}
-                                            style={{
-                                                position: "absolute",
-                                                left: `${box.x * scaleFactor}px`,
-                                                top: `${box.y * scaleFactor}px`,
-                                                width: `${box.width * scaleFactor}px`,
-                                                height: `${box.height * scaleFactor}px`,
-                                                backgroundColor: box.color,
-                                            }}
-                                            className={`opacity-40 transition-all ${
-                                                isActive ? "ring-2 ring-indigo-600 opacity-60 z-20 shadow-md" : "hover:opacity-50 z-10"
-                                            }`}
-                                        />
-                                    );
-                                })}
+                                {boxes
+                                    .filter((box) => box.page === currentPage)
+                                    .map((box) => {
+                                        const isActive = activeId === box.id;
+                                        return (
+                                            <div
+                                                key={box.id}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setActiveId(box.id);
+                                                }}
+                                                style={{
+                                                    position: "absolute",
+                                                    left: `${box.x * scaleFactor}px`,
+                                                    top: `${box.y * scaleFactor}px`,
+                                                    width: `${box.width * scaleFactor}px`,
+                                                    height: `${box.height * scaleFactor}px`,
+                                                    backgroundColor: box.color,
+                                                }}
+                                                className={`opacity-40 transition-all ${
+                                                    isActive ? "ring-2 ring-indigo-600 opacity-60 z-20 shadow-md" : "hover:opacity-50 z-10"
+                                                }`}
+                                            />
+                                        );
+                                    })}
                             </div>
                         </div>
 

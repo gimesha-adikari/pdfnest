@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import {
     ChevronLeft,
     ChevronRight,
@@ -15,8 +15,8 @@ import {
     Trash2,
     Undo2,
 } from "lucide-react";
-import { getBaseUrl, uploadAndDownloadFile } from "@/lib/api";
-import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
+import { getBaseUrl } from "@/lib/api";
+import { getFriendlyErrorMessage, handleClientError } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 
@@ -73,6 +73,24 @@ interface StrikeoutToolProps {
     onStrikeoutFile: (file: File) => Promise<void>;
 }
 
+interface JobSubmissionResponse {
+    success?: boolean;
+    job_id: string;
+    status: string;
+    queue_name: string;
+}
+
+interface JobRecord {
+    id: string;
+    job_type: string;
+    status: string;
+    progress: number;
+    message: string;
+    result: Record<string, unknown> | null;
+    error: string | null;
+    cancel_requested: boolean;
+}
+
 const STRIKE_COLORS = [
     { name: "Red", hex: "#FF0000" },
     { name: "Black", hex: "#000000" },
@@ -101,9 +119,121 @@ async function loadPdfJs() {
     return pdfjsLib;
 }
 
+function buildApiUrl(path: string) {
+    const base = getBaseUrl().replace(/\/+$/, "");
+    return `${base}${path}`;
+}
+
+async function submitStrikeoutJob(
+    file: File,
+    boxes: StrikeoutBox[],
+    mode: StrikeoutMode,
+    filePassword?: string
+): Promise<JobSubmissionResponse> {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("boxes", JSON.stringify(boxes));
+    formData.append("mode", mode);
+
+    if (filePassword?.trim()) {
+        formData.append("file_password", filePassword.trim());
+    }
+
+    const response = await fetch(buildApiUrl("/api/markup/strikeout"), {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+    });
+
+    const text = await response.text();
+    if (!response.ok) {
+        let message = text || `Request failed with status ${response.status}`;
+        try {
+            const parsed = JSON.parse(text);
+            message = parsed.message || parsed.error || message;
+        } catch {
+            // keep raw text
+        }
+        throw new Error(message);
+    }
+
+    return JSON.parse(text) as JobSubmissionResponse;
+}
+
+async function fetchJob(jobId: string): Promise<JobRecord> {
+    const response = await fetch(buildApiUrl(`/api/markup/jobs/${jobId}`), {
+        method: "GET",
+        credentials: "include",
+    });
+
+    const text = await response.text();
+    if (!response.ok) {
+        let message = text || `Request failed with status ${response.status}`;
+        try {
+            const parsed = JSON.parse(text);
+            message = parsed.message || parsed.error || message;
+        } catch {
+            // keep raw text
+        }
+        throw new Error(message);
+    }
+
+    return JSON.parse(text) as JobRecord;
+}
+
+async function waitForJob(jobId: string, onUpdate: (job: JobRecord) => void, signal?: AbortSignal): Promise<JobRecord> {
+    while (true) {
+        if (signal?.aborted) {
+            throw new DOMException("Aborted", "AbortError");
+        }
+
+        const job = await fetchJob(jobId);
+        onUpdate(job);
+
+        if (["succeeded", "failed", "cancelled"].includes(job.status)) {
+            return job;
+        }
+
+        await new Promise<void>((resolve, reject) => {
+            const timer = window.setTimeout(() => resolve(), 1000);
+
+            if (signal) {
+                signal.addEventListener(
+                    "abort",
+                    () => {
+                        window.clearTimeout(timer);
+                        reject(new DOMException("Aborted", "AbortError"));
+                    },
+                    { once: true }
+                );
+            }
+        });
+    }
+}
+
+async function downloadJobPdf(jobId: string): Promise<Blob> {
+    const response = await fetch(buildApiUrl(`/api/markup/jobs/${jobId}/download`), {
+        method: "GET",
+        credentials: "include",
+    });
+
+    if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        let message = text || `Download failed with status ${response.status}`;
+        try {
+            const parsed = JSON.parse(text);
+            message = parsed.message || parsed.error || message;
+        } catch {
+            // keep raw text
+        }
+        throw new Error(message);
+    }
+
+    return await response.blob();
+}
+
 export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutToolProps) {
     const { requireAuth } = useAuth();
-    const baseUrl = getBaseUrl();
 
     const [pdfDocument, setPdfDocument] = useState<PdfJsDocument | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
@@ -132,12 +262,19 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
     const [isRenderingPreview, setIsRenderingPreview] = useState(false);
     const [previewCacheToken, setPreviewCacheToken] = useState("");
 
+    const [jobId, setJobId] = useState<string>("");
+    const [job, setJob] = useState<JobRecord | null>(null);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [jobError, setJobError] = useState<string | null>(null);
+
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const renderTaskRef = useRef<PdfJsRenderTask | null>(null);
     const analysisAbortRef = useRef<AbortController | null>(null);
     const isDrawingRef = useRef(false);
     const drawStartRef = useRef<{ x: number; y: number; id: string } | null>(null);
+    const jobAbortRef = useRef<AbortController | null>(null);
+    const handledSuccessRef = useRef(false);
 
     const scaleFactor = useMemo(() => {
         if (pdfDimensions.width === 0 || displayDimensions.width === 0) return 1;
@@ -208,25 +345,31 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
     }, [handleRedoAction, handleUndoAction]);
 
     useEffect(() => {
-        if (!baseFile) {
-            setPdfDocument(null);
-            setTotalPages(0);
-            setCurrentPage(1);
-            setBoxes([]);
-            setHistoryPast([]);
-            setHistoryFuture([]);
-            setActiveId(null);
-            setSuccess(false);
-            setStrikeoutMode("smart");
-            setPageAnalysisMap({});
-            setAnalysisLoaded(false);
-            setAnalysisError(null);
-            setIsAnalyzing(false);
-            if (previewImageSrc) URL.revokeObjectURL(previewImageSrc);
-            setPreviewImageSrc("");
-            setPreviewCacheToken("");
-            return;
-        }
+        setJobId("");
+        setJob(null);
+        setUploadProgress(0);
+        setJobError(null);
+        handledSuccessRef.current = false;
+
+        setPdfDocument(null);
+        setTotalPages(0);
+        setCurrentPage(1);
+        setBoxes([]);
+        setHistoryPast([]);
+        setHistoryFuture([]);
+        setActiveId(null);
+        setSuccess(false);
+        setStrikeoutMode("smart");
+        setPageAnalysisMap({});
+        setAnalysisLoaded(false);
+        setAnalysisError(null);
+        setIsAnalyzing(false);
+
+        if (previewImageSrc) URL.revokeObjectURL(previewImageSrc);
+        setPreviewImageSrc("");
+        setPreviewCacheToken("");
+
+        if (!baseFile) return;
 
         let cancelled = false;
 
@@ -244,7 +387,7 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                 setCurrentPage(1);
                 setPreviewCacheToken(Math.random().toString(36).slice(2));
             } catch (err) {
-                console.error("Failed to parse document context:", err);
+                console.error("Failed to parse document context framework:", err);
             } finally {
                 if (!cancelled) setIsRenderingCanvas(false);
             }
@@ -256,7 +399,7 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
             cancelled = true;
             if (renderTaskRef.current) renderTaskRef.current.cancel();
         };
-    }, [baseFile, previewImageSrc]);
+    }, [baseFile]); // reset when file changes
 
     useEffect(() => {
         if (!baseFile) return;
@@ -280,10 +423,11 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                 const maybePassword = (baseFile as CustomPdfFile).originalPassword;
                 if (maybePassword) formData.append("file_password", maybePassword);
 
-                const response = await fetch(`${baseUrl}/api/structure/analyze`, {
+                const response = await fetch(buildApiUrl("/api/structure/analyze"), {
                     method: "POST",
                     body: formData,
                     signal: controller.signal,
+                    credentials: "include",
                 });
 
                 const raw = await response.text();
@@ -318,7 +462,7 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
 
         void analyze();
         return () => controller.abort();
-    }, [baseFile, baseUrl]);
+    }, [baseFile]);
 
     useEffect(() => {
         if (!currentPageAnalysis) return;
@@ -353,7 +497,7 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                 const password = (baseFile as CustomPdfFile).originalPassword;
                 if (password) formData.append("file_password", password);
 
-                const response = await fetch(`${baseUrl}/api/conversion/preview/page`, {
+                const response = await fetch(buildApiUrl("/api/conversion/preview/page"), {
                     method: "POST",
                     body: formData,
                     credentials: "include",
@@ -369,8 +513,8 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                     if (prev) URL.revokeObjectURL(prev);
                     return URL.createObjectURL(imgBlob);
                 });
-            } catch (err: any) {
-                if (err?.name !== "AbortError") {
+            } catch (err: unknown) {
+                if ((err as Error)?.name !== "AbortError") {
                     console.error("Failed to render scanned page preview:", err);
                 }
             } finally {
@@ -380,7 +524,7 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
 
         void fetchScannedPreview();
         return () => abortController.abort();
-    }, [baseFile, baseUrl, currentPage, currentPageAnalysis?.kind, pdfDocument, previewCacheToken]);
+    }, [baseFile, currentPage, currentPageAnalysis?.kind, pdfDocument, previewCacheToken]);
 
     useEffect(() => {
         return () => {
@@ -453,7 +597,93 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
         };
     }, [currentPage, pdfDocument]);
 
-    const handleContainerPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    useEffect(() => {
+        if (!jobId) return;
+
+        const controller = new AbortController();
+        jobAbortRef.current = controller;
+        handledSuccessRef.current = false;
+
+        const run = async () => {
+            try {
+                const finalJob = await waitForJob(
+                    jobId,
+                    (nextJob) => {
+                        setJob(nextJob);
+                        setJobError(null);
+                    },
+                    controller.signal
+                );
+
+                if (controller.signal.aborted) return;
+
+                setJob(finalJob);
+
+                if (finalJob.status === "failed") {
+                    throw new Error(finalJob.error || "Strikeout processing failed");
+                }
+
+                if (finalJob.status !== "succeeded") {
+                    return;
+                }
+
+                if (handledSuccessRef.current) {
+                    return;
+                }
+                handledSuccessRef.current = true;
+
+                const blob = await downloadJobPdf(jobId);
+
+                const fileName = (baseFile?.name || "document.pdf").replace(/\.pdf$/i, "");
+                const strikeoutFile = new File([blob], `${fileName}-strikeout.pdf`, {
+                    type: "application/pdf",
+                });
+
+                await onStrikeoutFile(strikeoutFile);
+
+                setBoxes([]);
+                setHistoryPast([]);
+                setHistoryFuture([]);
+                setActiveId(null);
+                setCurrentPage(1);
+                setSuccess(true);
+
+                setJob(null);
+                setJobId("");
+                setUploadProgress(0);
+                setJobError(null);
+
+                notify("Strikeout PDF loaded back into Studio.", "success");
+
+                setJobId("");
+                setUploadProgress(0);
+            }catch (err) {
+                console.log("ERROR TYPE:", typeof err);
+                console.log("ERROR VALUE:", err);
+                console.log("INSTANCEOF ERROR:", err instanceof Error);
+
+                if ((err as Error)?.name === "AbortError") return;
+
+                setJobError(getFriendlyErrorMessage(err));
+
+                if (err != null) {
+                    handleClientError(err);
+                }
+
+                setIsProcessing(false);
+            } finally {
+                if (!controller.signal.aborted) {
+                    setIsProcessing(false);
+                }
+            }
+        };
+
+        void run();
+
+        return () => controller.abort();
+    }, [jobId]); // polling flow
+
+    const handleContainerPointerDown = (e: PointerEvent<HTMLDivElement>) => {
         if (!containerRef.current || pdfDimensions.width === 0) return;
         e.preventDefault();
 
@@ -479,7 +709,7 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
         updateBoxesStateWithHistory((prev) => [...prev, newBox]);
     };
 
-    const handleContainerPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const handleContainerPointerMove = (e: PointerEvent<HTMLDivElement>) => {
         if (!isDrawingRef.current || !drawStartRef.current || !containerRef.current) return;
 
         const rect = containerRef.current.getBoundingClientRect();
@@ -525,12 +755,12 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
 
         const validBoxes = boxes.filter((b) => b.width > 2 && b.height > 2);
         if (validBoxes.length === 0) {
-            notify("Please draw at least one strikeout area on the document.","warning");
+            notify("Please draw at least one strikeout area on the document.", "warning");
             return;
         }
 
         if (currentPageAnalysis?.kind === "scanned" && strikeoutMode === "smart") {
-            notify("This page is scanned. Please choose Manual strikeout or Recognize Text.","warning");
+            notify("This page is scanned. Please choose Manual strikeout or Recognize Text.", "warning");
             return;
         }
 
@@ -540,37 +770,40 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
             try {
                 setIsProcessing(true);
                 setSuccess(false);
+                setJobError(null);
+                setUploadProgress(0);
 
-                const formData = new FormData();
-                formData.append("file", validFile);
-                formData.append("boxes", JSON.stringify(validBoxes));
-                formData.append("mode", strikeoutMode);
-
-                if (validFile.originalPassword) formData.append("file_password", validFile.originalPassword);
-
-                const responseBlob = await uploadAndDownloadFile("/api/structure/strikeout", formData);
-                const strikeoutFile = new File(
-                    [responseBlob],
-                    `${validFile.name.replace(/\.pdf$/i, "")}-strikeout.pdf`,
-                    { type: "application/pdf" }
+                const submission = await submitStrikeoutJob(
+                    validFile,
+                    validBoxes,
+                    strikeoutMode,
+                    validFile.originalPassword
                 );
 
-                await onStrikeoutFile(strikeoutFile);
-                setBoxes([]);
-                setHistoryPast([]);
-                setHistoryFuture([]);
-                setActiveId(null);
-                setCurrentPage(1);
-                setSuccess(true);
-                notify("Strikeout PDF loaded back into Studio.","success");
+                setJobId(submission.job_id);
+                setJob(null);
+                setUploadProgress(100);
+                notify("Strikeout job queued. Waiting for worker...", "info");
             } catch (err) {
                 console.error(err);
+                setJobError(getFriendlyErrorMessage(err));
                 handleClientError(err);
-            } finally {
                 setIsProcessing(false);
             }
         });
     };
+
+    const progress = Math.max(0, Math.min(100, job?.progress ?? uploadProgress));
+    const statusText =
+        jobError
+            ? "Failed"
+            : job?.status === "running" || job?.status === "queued"
+                ? "Processing"
+                : isProcessing
+                    ? "Uploading"
+                    : job?.status === "succeeded"
+                        ? "Completed"
+                        : "Idle";
 
     if (!baseFile) return null;
 
@@ -599,15 +832,14 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                                     type="button"
                                     disabled={historyFuture.length === 0}
                                     onClick={handleRedoAction}
-                                    className="rounded-lg p-1.5 text-foreground transition hover:bg-background
-                                    disabled:opacity-30"
+                                    className="rounded-lg p-1.5 text-foreground transition hover:bg-background disabled:opacity-30"
                                     title="Redo"
                                 >
                                     <Redo2 size={14} />
                                 </button>
                             </div>
-                            <div className="rounded-xl border border-border bg-(--background)/40 px-3 py-2 text-xs
-                            font-medium text-muted">
+
+                            <div className="rounded-xl border border-border bg-(--background)/40 px-3 py-2 text-xs font-medium text-muted">
                                 Page {currentPage} / {totalPages || "?"}
                             </div>
                         </div>
@@ -618,8 +850,7 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                                 <select
                                     value={strikeoutMode}
                                     onChange={(e) => setStrikeoutMode(e.target.value as StrikeoutMode)}
-                                    className="w-full rounded-xl border border-border bg-background px-4 py-2 text-sm
-                                    font-medium text-foreground outline-none transition focus:border-indigo-500"
+                                    className="w-full rounded-xl border border-border bg-background px-4 py-2 text-sm font-medium text-foreground outline-none transition focus:border-indigo-500"
                                 >
                                     <option value="smart" disabled={!canUseSmartMode}>
                                         Smart (text first, OCR fallback)
@@ -693,6 +924,7 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                                             </p>
                                         </div>
                                     </div>
+
                                     <div className="text-[10px] font-bold uppercase tracking-wider text-muted">
                                         {currentPageAnalysis.wordCount} words
                                     </div>
@@ -760,6 +992,48 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                             </div>
                         )}
 
+                        {!success && (job || jobError || jobId || isProcessing) && (
+                            <div className="rounded-2xl border border-border bg-background/40 p-4">
+                                <div className="flex items-center justify-between text-xs text-muted">
+                                    <span className="inline-flex items-center gap-2">
+                                        {isProcessing ||
+                                        job?.status === "running" ||
+                                        job?.status === "queued" ||
+                                        (jobId && !job) ? (
+                                            <Loader2 size={14} className="animate-spin text-foreground" />
+                                        ) : null}
+                                        {statusText}
+                                    </span>
+                                    <span>{Math.round(progress)}%</span>
+                                </div>
+
+                                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
+                                    <div
+                                        className={`h-full rounded-full transition-all ${
+                                            jobError || job?.status === "failed"
+                                                ? "bg-red-500"
+                                                : job?.status === "succeeded"
+                                                    ? "bg-emerald-500"
+                                                    : "bg-foreground"
+                                        }`}
+                                        style={{ width: `${progress}%` }}
+                                    />
+                                </div>
+
+                                <p className="mt-2 text-[11px] text-muted">
+                                    {jobError ||
+                                        job?.message ||
+                                        (isProcessing ? "Uploading file to worker..." : "Waiting for job update...")}
+                                </p>
+
+                                {jobId ? (
+                                    <p className="mt-2 text-[11px] text-muted">
+                                        Job ID: <span className="font-mono">{jobId}</span>
+                                    </p>
+                                ) : null}
+                            </div>
+                        )}
+
                         <button
                             type="button"
                             onClick={handleStrikeoutProcessing}
@@ -781,7 +1055,7 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                         </span>
 
                         {totalPages > 0 && (
-                            <div className="flex select-none items-center gap-2 rounded-lg border border-border bg-[var(--card)] px-2 py-0.5 font-mono text-xs text-[color:var(--muted)]">
+                            <div className="flex select-none items-center gap-2 rounded-lg border border-border bg-[var(--card)] px-2 py-0.5 font-mono text-xs text-muted">
                                 <button
                                     type="button"
                                     disabled={currentPage <= 1}
@@ -812,11 +1086,11 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                     </div>
 
                     <div
-                        className="relative flex min-h-105 w-full items-start justify-start overflow-auto rounded-xl border border-[color:var(--border)] bg-gray-500/5 p-4 dark:bg-black/20"
+                        className="relative flex min-h-[420px] w-full items-start justify-start overflow-auto rounded-xl border border-border bg-gray-500/5 p-4 dark:bg-black/20"
                         onClick={() => setActiveId(null)}
                     >
                         {(isRenderingCanvas || isRenderingPreview) && (
-                            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-xl bg-[color:var(--background)]/40 text-xs font-medium text-[color:var(--muted)] backdrop-blur-sm">
+                            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-xl bg-background/40 text-xs font-medium text-muted backdrop-blur-sm">
                                 <Loader2 className="mb-2 animate-spin text-indigo-500" size={24} />
                                 {isScannedPage ? "Loading scanned preview..." : "Synchronizing view matrix framework..."}
                             </div>
@@ -832,9 +1106,9 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                         >
                             <canvas
                                 ref={canvasRef}
-                                className={`block max-w-full h-auto rounded pointer-events-none ${isScannedPage 
-                                    ? "opacity-0" 
-                                    : "opacity-100"}`}
+                                className={`block max-w-full h-auto rounded pointer-events-none ${
+                                    isScannedPage ? "opacity-0" : "opacity-100"
+                                }`}
                             />
 
                             {isScannedPage && previewImageSrc && (
@@ -868,21 +1142,25 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                                             height: `${box.height * scaleFactor}px`,
                                         }}
                                         className={`transition-all ${
-                                            isActive ? "z-20 rounded ring-2 ring-indigo-600 bg-indigo-500/10 shadow-md" : "z-10 hover:opacity-50"
+                                            isActive
+                                                ? "z-20 rounded ring-2 ring-indigo-600 opacity-60 shadow-md"
+                                                : "z-10 hover:opacity-50"
                                         }`}
                                     >
                                         <div
-                                            style={{
-                                                position: "absolute",
-                                                left: 0,
-                                                right: 0,
-                                                top: "50%",
-                                                height: "3px",
-                                                transform: "translateY(-50%)",
-                                                backgroundColor: box.color,
-                                                opacity: 0.95,
-                                                borderRadius: "9999px",
-                                            }}
+                                            style={
+                                                {
+                                                    position: "absolute",
+                                                    left: 0,
+                                                    right: 0,
+                                                    top: "50%",
+                                                    height: "3px",
+                                                    transform: "translateY(-50%)",
+                                                    backgroundColor: box.color,
+                                                    opacity: 0.95,
+                                                    borderRadius: "9999px",
+                                                } as CSSProperties
+                                            }
                                         />
                                     </div>
                                 );

@@ -17,8 +17,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/lib/notify";
-import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
-import {getBaseUrl, uploadAndDownloadFile} from "@/lib/api";
+import { getFriendlyErrorMessage, handleClientError } from "@/lib/errorHandler";
+import { getBaseUrl } from "@/lib/api";
 
 interface CustomPdfFile extends File {
     originalPassword?: string;
@@ -31,7 +31,10 @@ interface PdfJsRenderTask {
 
 interface PdfJsPage {
     getViewport: (options: { scale: number }) => { width: number; height: number };
-    render: (options: { canvasContext: CanvasRenderingContext2D; viewport: unknown }) => PdfJsRenderTask;
+    render: (options: {
+        canvasContext: CanvasRenderingContext2D;
+        viewport: unknown;
+    }) => PdfJsRenderTask;
 }
 
 interface PdfJsDocument {
@@ -68,9 +71,27 @@ interface HighlightBox {
     color: string;
 }
 
-interface HighlightTool {
+interface HighlightToolProps {
     baseFile: File | null;
     onHighlightedFile: (file: File) => Promise<void>;
+}
+
+interface JobSubmissionResponse {
+    success?: boolean;
+    job_id: string;
+    status: string;
+    queue_name: string;
+}
+
+interface JobRecord {
+    id: string;
+    job_type: string;
+    status: string;
+    progress: number;
+    message: string;
+    result: Record<string, unknown> | null;
+    error: string | null;
+    cancel_requested: boolean;
 }
 
 const HIGHLIGHT_COLORS = [
@@ -102,10 +123,125 @@ async function loadPdfJs() {
     return pdfjsLib;
 }
 
-export default function HighlightTool({ baseFile, onHighlightedFile }: HighlightTool) {
-    const { requireAuth } = useAuth();
+function buildApiUrl(path: string) {
+    const base = getBaseUrl().replace(/\/+$/, "");
+    return `${base}${path}`;
+}
 
-    const baseUrl = getBaseUrl();
+async function submitHighlightJob(
+    file: File,
+    boxes: HighlightBox[],
+    mode: HighlightMode,
+    filePassword?: string
+): Promise<JobSubmissionResponse> {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("boxes", JSON.stringify(boxes));
+    formData.append("mode", mode);
+
+    if (filePassword?.trim()) {
+        formData.append("file_password", filePassword.trim());
+    }
+
+    const response = await fetch(buildApiUrl("/api/markup/highlight"), {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+    });
+
+    const text = await response.text();
+    if (!response.ok) {
+        let message = text || `Request failed with status ${response.status}`;
+        try {
+            const parsed = JSON.parse(text);
+            message = parsed.message || parsed.error || message;
+        } catch {
+            // keep raw text
+        }
+        throw new Error(message);
+    }
+
+    return JSON.parse(text) as JobSubmissionResponse;
+}
+
+async function fetchJob(jobId: string): Promise<JobRecord> {
+    const response = await fetch(buildApiUrl(`/api/markup/jobs/${jobId}`), {
+        method: "GET",
+        credentials: "include",
+    });
+
+    const text = await response.text();
+    if (!response.ok) {
+        let message = text || `Request failed with status ${response.status}`;
+        try {
+            const parsed = JSON.parse(text);
+            message = parsed.message || parsed.error || message;
+        } catch {
+            // keep raw text
+        }
+        throw new Error(message);
+    }
+
+    return JSON.parse(text) as JobRecord;
+}
+
+async function waitForJob(
+    jobId: string,
+    onUpdate: (job: JobRecord) => void,
+    signal?: AbortSignal
+): Promise<JobRecord> {
+    while (true) {
+        if (signal?.aborted) {
+            throw new DOMException("Aborted", "AbortError");
+        }
+
+        const job = await fetchJob(jobId);
+        onUpdate(job);
+
+        if (["succeeded", "failed", "cancelled"].includes(job.status)) {
+            return job;
+        }
+
+        await new Promise<void>((resolve, reject) => {
+            const timer = window.setTimeout(() => resolve(), 1000);
+
+            if (signal) {
+                signal.addEventListener(
+                    "abort",
+                    () => {
+                        window.clearTimeout(timer);
+                        reject(new DOMException("Aborted", "AbortError"));
+                    },
+                    { once: true }
+                );
+            }
+        });
+    }
+}
+
+async function downloadJobPdf(jobId: string): Promise<Blob> {
+    const response = await fetch(buildApiUrl(`/api/markup/jobs/${jobId}/download`), {
+        method: "GET",
+        credentials: "include",
+    });
+
+    if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        let message = text || `Download failed with status ${response.status}`;
+        try {
+            const parsed = JSON.parse(text);
+            message = parsed.message || parsed.error || message;
+        } catch {
+            // keep raw text
+        }
+        throw new Error(message);
+    }
+
+    return await response.blob();
+}
+
+export default function HighlightTool({ baseFile, onHighlightedFile }: HighlightToolProps) {
+    const { requireAuth } = useAuth();
 
     const [pdfDocument, setPdfDocument] = useState<PdfJsDocument | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
@@ -135,12 +271,19 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
     const [isRenderingPreview, setIsRenderingPreview] = useState(false);
     const [previewCacheToken, setPreviewCacheToken] = useState("");
 
+    const [jobId, setJobId] = useState<string>("");
+    const [job, setJob] = useState<JobRecord | null>(null);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [jobError, setJobError] = useState<string | null>(null);
+
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const renderTaskRef = useRef<PdfJsRenderTask | null>(null);
     const analysisAbortRef = useRef<AbortController | null>(null);
     const isDrawingRef = useRef(false);
     const drawStartRef = useRef<{ x: number; y: number; id: string } | null>(null);
+    const jobAbortRef = useRef<AbortController | null>(null);
+    const handledSuccessRef = useRef(false);
 
     const scaleFactor = useMemo(() => {
         if (pdfDimensions.width === 0 || displayDimensions.width === 0) return 1;
@@ -211,25 +354,31 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
     }, [handleRedoAction, handleUndoAction]);
 
     useEffect(() => {
-        if (!baseFile) {
-            setPdfDocument(null);
-            setTotalPages(0);
-            setCurrentPage(1);
-            setBoxes([]);
-            setHistoryPast([]);
-            setHistoryFuture([]);
-            setActiveId(null);
-            setSuccess(false);
-            setHighlightMode("smart");
-            setPageAnalysisMap({});
-            setAnalysisLoaded(false);
-            setAnalysisError(null);
-            setIsAnalyzing(false);
-            if (previewImageSrc) URL.revokeObjectURL(previewImageSrc);
-            setPreviewImageSrc("");
-            setPreviewCacheToken("");
-            return;
-        }
+        setJobId("");
+        setJob(null);
+        setUploadProgress(0);
+        setJobError(null);
+        handledSuccessRef.current = false;
+
+        setPdfDocument(null);
+        setTotalPages(0);
+        setCurrentPage(1);
+        setBoxes([]);
+        setHistoryPast([]);
+        setHistoryFuture([]);
+        setActiveId(null);
+        setSuccess(false);
+        setHighlightMode("smart");
+        setPageAnalysisMap({});
+        setAnalysisLoaded(false);
+        setAnalysisError(null);
+        setIsAnalyzing(false);
+
+        if (previewImageSrc) URL.revokeObjectURL(previewImageSrc);
+        setPreviewImageSrc("");
+        setPreviewCacheToken("");
+
+        if (!baseFile) return;
 
         let cancelled = false;
 
@@ -259,7 +408,7 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
             cancelled = true;
             if (renderTaskRef.current) renderTaskRef.current.cancel();
         };
-    }, [baseFile]);
+    }, [baseFile]); // intentional reset-on-file-change behavior
 
     useEffect(() => {
         if (!baseFile) return;
@@ -283,10 +432,11 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
                 const maybePassword = (baseFile as CustomPdfFile).originalPassword;
                 if (maybePassword) formData.append("file_password", maybePassword);
 
-                const response = await fetch(`${baseUrl}/api/structure/analyze`, {
+                const response = await fetch(buildApiUrl("/api/structure/analyze"), {
                     method: "POST",
                     body: formData,
                     signal: controller.signal,
+                    credentials: "include",
                 });
 
                 const raw = await response.text();
@@ -356,7 +506,7 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
                 const password = (baseFile as CustomPdfFile).originalPassword;
                 if (password) formData.append("file_password", password);
 
-                const response = await fetch("/api/conversion/preview/page", {
+                const response = await fetch(buildApiUrl("/api/conversion/preview/page"), {
                     method: "POST",
                     body: formData,
                     credentials: "include",
@@ -372,8 +522,8 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
                     if (prev) URL.revokeObjectURL(prev);
                     return URL.createObjectURL(imgBlob);
                 });
-            } catch (err: any) {
-                if (err?.name !== "AbortError") {
+            } catch (err: unknown) {
+                if ((err as Error)?.name !== "AbortError") {
                     console.error("Failed to render scanned page preview:", err);
                 }
             } finally {
@@ -383,7 +533,7 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
 
         void fetchScannedPreview();
         return () => abortController.abort();
-    }, [baseFile, pdfDocument, currentPage, currentPageAnalysis?.kind, previewCacheToken]);
+    }, [baseFile, currentPage, currentPageAnalysis?.kind, pdfDocument, previewCacheToken]);
 
     useEffect(() => {
         return () => {
@@ -454,7 +604,84 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
             window.removeEventListener("resize", updateDisplaySize);
             if (renderTaskRef.current) renderTaskRef.current.cancel();
         };
-    }, [pdfDocument, currentPage]);
+    }, [currentPage, pdfDocument]);
+
+    useEffect(() => {
+        if (!jobId) return;
+
+        const controller = new AbortController();
+        jobAbortRef.current = controller;
+        handledSuccessRef.current = false;
+
+        const run = async () => {
+            try {
+                const finalJob = await waitForJob(
+                    jobId,
+                    (nextJob) => {
+                        setJob(nextJob);
+                        setJobError(null);
+                    },
+                    controller.signal
+                );
+
+                if (controller.signal.aborted) return;
+
+                setJob(finalJob);
+
+                if (finalJob.status === "failed") {
+                    throw new Error(finalJob.error || "Highlight processing failed");
+                }
+
+                if (finalJob.status !== "succeeded") {
+                    return;
+                }
+
+                if (handledSuccessRef.current) {
+                    return;
+                }
+                handledSuccessRef.current = true;
+
+                const blob = await downloadJobPdf(jobId);
+
+                const fileName = (baseFile?.name || "document.pdf").replace(/\.pdf$/i, "");
+                const highlightedFile = new File([blob], `${fileName}-highlighted.pdf`, {
+                    type: "application/pdf",
+                });
+
+                await onHighlightedFile(highlightedFile);
+
+                setBoxes([]);
+                setHistoryPast([]);
+                setHistoryFuture([]);
+                setActiveId(null);
+                setCurrentPage(1);
+                setSuccess(true);
+
+                setJob(null);
+                setJobId("");
+                setUploadProgress(0);
+                setJobError(null);
+
+                notify("Highlighted PDF loaded back into Studio.", "success");
+
+                setJobId("");
+                setUploadProgress(0);
+            } catch (err) {
+                if ((err as Error)?.name === "AbortError") return;
+                console.error(err);
+                setJobError(getFriendlyErrorMessage(err));
+                handleClientError(err);
+            } finally {
+                if (!controller.signal.aborted) {
+                    setIsProcessing(false);
+                }
+            }
+        };
+
+        void run();
+
+        return () => controller.abort();
+    }, [jobId]); // job completion flow
 
     const handleContainerPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
         if (!containerRef.current || pdfDimensions.width === 0) return;
@@ -528,7 +755,7 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
 
         const validBoxes = boxes.filter((b) => b.width > 2 && b.height > 2);
         if (validBoxes.length === 0) {
-            notify("Please draw at least one highlighting box on the document.","warning");
+            notify("Please draw at least one highlighting box on the document.", "warning");
             return;
         }
 
@@ -538,43 +765,30 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
             try {
                 setIsProcessing(true);
                 setSuccess(false);
+                setJobError(null);
+                setUploadProgress(0);
 
-                const formData = new FormData();
-                formData.append("file", validFile);
-                formData.append("boxes", JSON.stringify(validBoxes));
-                formData.append("mode", highlightMode);
-
-                if (validFile.originalPassword) formData.append("file_password", validFile.originalPassword);
-
-                const responseBlob = await uploadAndDownloadFile("/api/structure/highlight", formData);
-                const highlightedFile = new File(
-                    [responseBlob],
-                    `${validFile.name.replace(/\.pdf$/i, "")}-highlighted.pdf`,
-                    { type: "application/pdf" }
+                const submission = await submitHighlightJob(
+                    validFile,
+                    validBoxes,
+                    highlightMode,
+                    validFile.originalPassword
                 );
 
-                await onHighlightedFile(highlightedFile);
-
-                setBoxes([]);
-                setHistoryPast([]);
-                setHistoryFuture([]);
-                setActiveId(null);
-                setCurrentPage(1);
-
-                setSuccess(true);
-                notify("Highlighted PDF loaded back into Studio.","success");
+                setJobId(submission.job_id);
+                setJob(null);
+                setUploadProgress(100);
+                notify("Highlight job queued. Waiting for worker...", "info");
             } catch (err) {
                 console.error(err);
+                setJobError(getFriendlyErrorMessage(err));
                 handleClientError(err);
-            } finally {
                 setIsProcessing(false);
             }
         });
     };
 
     if (!baseFile) return null;
-
-    const activeFile = baseFile as CustomPdfFile;
 
     return (
         <div className="grid h-full min-h-0 grid-cols-1 gap-6 overflow-hidden p-4 lg:grid-cols-12">
@@ -629,7 +843,9 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
                             </div>
 
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-[10px] font-bold uppercase text-[color:var(--muted)]">Active Marker Color</label>
+                                <label className="text-[10px] font-bold uppercase text-[color:var(--muted)]">
+                                    Active Marker Color
+                                </label>
                                 <div className="flex flex-wrap items-center gap-2">
                                     {HIGHLIGHT_COLORS.map((c) => (
                                         <button
@@ -654,7 +870,9 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
                                 <Loader2 className="mt-0.5 animate-spin text-indigo-500" size={16} />
                                 <div className="text-xs text-[color:var(--foreground)]/90">
                                     <p className="font-semibold">Analyzing page structure...</p>
-                                    <p className="mt-0.5 text-[color:var(--muted)]">Detecting text pages before highlight processing.</p>
+                                    <p className="mt-0.5 text-[color:var(--muted)]">
+                                        Detecting text pages before highlight processing.
+                                    </p>
                                 </div>
                             </div>
                         )}
@@ -669,7 +887,9 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
                         {analysisLoaded && currentPageAnalysis && (
                             <div
                                 className={`rounded-xl border p-4 ${
-                                    isScannedPage ? "border-amber-500/20 bg-amber-500/10" : "border-emerald-500/20 bg-emerald-500/10"
+                                    isScannedPage
+                                        ? "border-amber-500/20 bg-amber-500/10"
+                                        : "border-emerald-500/20 bg-emerald-500/10"
                                 }`}
                             >
                                 <div className="flex items-start justify-between gap-3">
@@ -680,7 +900,9 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
                                             <Sparkles className="mt-0.5 text-emerald-500" size={18} />
                                         )}
                                         <div className="text-xs">
-                                            <p className="font-semibold">Page {currentPage} is {prettyKind(pageKind)}</p>
+                                            <p className="font-semibold">
+                                                Page {currentPage} is {prettyKind(pageKind)}
+                                            </p>
                                             <p className="mt-0.5 opacity-80">
                                                 {isScannedPage
                                                     ? "This page has no selectable text. Choose Manual highlight or Recognize Text."
@@ -759,6 +981,48 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
                             </div>
                         )}
 
+                        {!success && (job || jobError || jobId || isProcessing) && (
+                            <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--background)]/40 p-4">
+                                <div className="flex items-center justify-between text-xs text-[color:var(--muted)]">
+                                    <span className="inline-flex items-center gap-2">
+                                        {isProcessing ||
+                                        job?.status === "running" ||
+                                        job?.status === "queued" ||
+                                        (jobId && !job) ? (
+                                            <Loader2 size={14} className="animate-spin text-foreground" />
+                                        ) : null}
+                                        {jobError ? "Failed" : job?.status || (isProcessing ? "Uploading" : "Idle")}
+                                    </span>
+                                    <span>{Math.round(job?.progress ?? uploadProgress)}%</span>
+                                </div>
+
+                                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
+                                    <div
+                                        className={`h-full rounded-full transition-all ${
+                                            jobError || job?.status === "failed"
+                                                ? "bg-red-500"
+                                                : job?.status === "succeeded"
+                                                    ? "bg-emerald-500"
+                                                    : "bg-foreground"
+                                        }`}
+                                        style={{ width: `${Math.max(0, Math.min(100, job?.progress ?? uploadProgress))}%` }}
+                                    />
+                                </div>
+
+                                <p className="mt-2 text-[11px] text-[color:var(--muted)]">
+                                    {jobError ||
+                                        job?.message ||
+                                        (isProcessing ? "Uploading file to worker..." : "Waiting for job update...")}
+                                </p>
+
+                                {jobId ? (
+                                    <p className="mt-2 text-[11px] text-[color:var(--muted)]">
+                                        Job ID: <span className="font-mono">{jobId}</span>
+                                    </p>
+                                ) : null}
+                            </div>
+                        )}
+
                         <button
                             type="button"
                             onClick={handleHighlightProcessing}
@@ -778,6 +1042,7 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
                         <span className="flex items-center gap-2">
                             <Eye size={16} className="text-indigo-500" /> Highlight Canvas
                         </span>
+
                         {totalPages > 0 && (
                             <div className="flex select-none items-center gap-2 rounded-lg border border-[color:var(--border)] bg-[var(--card)] px-2 py-0.5 font-mono text-xs text-[color:var(--muted)]">
                                 <button
@@ -830,7 +1095,9 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
                         >
                             <canvas
                                 ref={canvasRef}
-                                className={`block max-w-full h-auto rounded pointer-events-none ${isScannedPage ? "opacity-0" : "opacity-100"}`}
+                                className={`block max-w-full h-auto rounded pointer-events-none ${
+                                    isScannedPage ? "opacity-0" : "opacity-100"
+                                }`}
                             />
 
                             {isScannedPage && previewImageSrc && (
@@ -865,7 +1132,9 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
                                             backgroundColor: box.color,
                                         }}
                                         className={`opacity-40 transition-all ${
-                                            isActive ? "z-20 ring-2 ring-indigo-600 opacity-60 shadow-md" : "z-10 hover:opacity-50"
+                                            isActive
+                                                ? "z-20 ring-2 ring-indigo-600 opacity-60 shadow-md"
+                                                : "z-10 hover:opacity-50"
                                         }`}
                                     />
                                 );

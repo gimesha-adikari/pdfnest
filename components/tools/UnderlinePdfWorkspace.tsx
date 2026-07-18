@@ -17,8 +17,7 @@ import {
     Sparkles,
 } from "lucide-react";
 import { getBaseUrl } from "@/lib/api";
-import { uploadAndDownloadFile } from "@/lib/api";
-import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
+import { getFriendlyErrorMessage, handleClientError } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/layout";
@@ -74,6 +73,24 @@ interface PDFAnalysis {
     pages: PageAnalysis[];
 }
 
+interface JobSubmissionResponse {
+    success?: boolean;
+    job_id: string;
+    status: string;
+    queue_name: string;
+}
+
+interface JobRecord {
+    id: string;
+    job_type: string;
+    status: string;
+    progress: number;
+    message: string;
+    result: Record<string, unknown> | null;
+    error: string | null;
+    cancel_requested: boolean;
+}
+
 const UNDERLINE_COLORS = [
     { name: "Red", hex: "#FF4D4D" },
     { name: "Blue", hex: "#4D7CFF" },
@@ -101,12 +118,133 @@ function prettyKind(kind: PageKind | undefined) {
     }
 }
 
+function buildApiUrl(path: string) {
+    const base = getBaseUrl().replace(/\/+$/, "");
+    return `${base}${path}`;
+}
+
+async function loadPdfJs() {
+    const pdfjsLib = await import("pdfjs-dist");
+    pdfjsLib.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
+    return pdfjsLib;
+}
+
+async function submitUnderlineJob(
+    file: File,
+    boxes: UnderlineBox[],
+    mode: UnderlineMode,
+    filePassword?: string
+): Promise<JobSubmissionResponse> {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("boxes", JSON.stringify(boxes));
+    formData.append("mode", mode);
+
+    if (filePassword?.trim()) {
+        formData.append("file_password", filePassword.trim());
+    }
+
+    const response = await fetch(buildApiUrl("/api/markup/underline"), {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+    });
+
+    const text = await response.text();
+    if (!response.ok) {
+        let message = text || `Request failed with status ${response.status}`;
+        try {
+            const parsed = JSON.parse(text);
+            message = parsed.message || parsed.error || message;
+        } catch {
+            // keep raw response text
+        }
+        throw new Error(message);
+    }
+
+    return JSON.parse(text) as JobSubmissionResponse;
+}
+
+async function fetchJob(jobId: string): Promise<JobRecord> {
+    const response = await fetch(buildApiUrl(`/api/markup/jobs/${jobId}`), {
+        method: "GET",
+        credentials: "include",
+    });
+
+    const text = await response.text();
+    if (!response.ok) {
+        let message = text || `Request failed with status ${response.status}`;
+        try {
+            const parsed = JSON.parse(text);
+            message = parsed.message || parsed.error || message;
+        } catch {
+            // keep raw response text
+        }
+        throw new Error(message);
+    }
+
+    return JSON.parse(text) as JobRecord;
+}
+
+async function waitForJob(
+    jobId: string,
+    onUpdate: (job: JobRecord) => void,
+    signal?: AbortSignal
+): Promise<JobRecord> {
+    while (true) {
+        if (signal?.aborted) {
+            throw new DOMException("Aborted", "AbortError");
+        }
+
+        const job = await fetchJob(jobId);
+        onUpdate(job);
+
+        if (["succeeded", "failed", "cancelled"].includes(job.status)) {
+            return job;
+        }
+
+        await new Promise<void>((resolve, reject) => {
+            const timer = window.setTimeout(() => resolve(), 1000);
+
+            if (signal) {
+                signal.addEventListener(
+                    "abort",
+                    () => {
+                        window.clearTimeout(timer);
+                        reject(new DOMException("Aborted", "AbortError"));
+                    },
+                    { once: true }
+                );
+            }
+        });
+    }
+}
+
+async function downloadJobPdf(jobId: string): Promise<Blob> {
+    const response = await fetch(buildApiUrl(`/api/markup/jobs/${jobId}/download`), {
+        method: "GET",
+        credentials: "include",
+    });
+
+    if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        let message = text || `Download failed with status ${response.status}`;
+        try {
+            const parsed = JSON.parse(text);
+            message = parsed.message || parsed.error || message;
+        } catch {
+            // keep raw text
+        }
+        throw new Error(message);
+    }
+
+    return await response.blob();
+}
+
 export default function UnderlinePdfWorkspace() {
     const { requireAuth } = useAuth();
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
-
-    const baseUrl = getBaseUrl();
 
     const [pdfDocument, setPdfDocument] = useState<PdfJsDocument | null>(null);
     const [currentPage, setCurrentPage] = useState<number>(1);
@@ -119,29 +257,36 @@ export default function UnderlinePdfWorkspace() {
     const [boxes, setBoxes] = useState<UnderlineBox[]>([]);
     const [selectedColor, setSelectedColor] = useState<string>("#FF4D4D");
     const [activeId, setActiveId] = useState<string | null>(null);
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [success, setSuccess] = useState(false);
+    const [isProcessing, setIsProcessing] = useState<boolean>(false);
+    const [success, setSuccess] = useState<boolean>(false);
     const [underlineMode, setUnderlineMode] = useState<UnderlineMode>("smart");
 
     const [historyPast, setHistoryPast] = useState<UnderlineBox[][]>([]);
     const [historyFuture, setHistoryFuture] = useState<UnderlineBox[][]>([]);
 
     const [pageAnalysisMap, setPageAnalysisMap] = useState<Record<number, PageAnalysis>>({});
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [analysisLoaded, setAnalysisLoaded] = useState(false);
+    const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
+    const [analysisLoaded, setAnalysisLoaded] = useState<boolean>(false);
     const [analysisError, setAnalysisError] = useState<string | null>(null);
 
     const [previewImageSrc, setPreviewImageSrc] = useState<string>("");
     const [isRenderingPreview, setIsRenderingPreview] = useState<boolean>(false);
     const [previewCacheToken, setPreviewCacheToken] = useState<string>("");
 
+    const [jobId, setJobId] = useState<string>("");
+    const [job, setJob] = useState<JobRecord | null>(null);
+    const [uploadProgress, setUploadProgress] = useState<number>(0);
+    const [jobError, setJobError] = useState<string | null>(null);
+
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const renderTaskRef = useRef<PdfJsRenderTask | null>(null);
     const analysisAbortRef = useRef<AbortController | null>(null);
+    const jobAbortRef = useRef<AbortController | null>(null);
 
     const isDrawingRef = useRef(false);
     const drawStartRef = useRef<{ x: number; y: number; id: string } | null>(null);
+    const handledSuccessRef = useRef(false);
 
     const scaleFactor = useMemo(() => {
         if (pdfDimensions.width === 0 || displayDimensions.width === 0) return 1;
@@ -153,16 +298,20 @@ export default function UnderlinePdfWorkspace() {
         return formatMB(file.size);
     }, [file]);
 
-    const currentPageAnalysis = useMemo(() => {
-        return pageAnalysisMap[currentPage] ?? null;
-    }, [pageAnalysisMap, currentPage]);
+    const currentPageAnalysis = useMemo(() => pageAnalysisMap[currentPage] ?? null, [pageAnalysisMap, currentPage]);
+    const pageKind = currentPageAnalysis?.kind ?? (analysisLoaded ? "unknown" : null);
+    const isScannedPage = pageKind === "scanned";
+    const isTextPage = pageKind === "text";
+    const isMixedPage = pageKind === "mixed";
+    const canUseSmartMode = pageKind !== "scanned" && pageKind !== "blank";
+    const currentPageBoxes = useMemo(() => boxes.filter((b) => b.page === currentPage), [boxes, currentPage]);
 
     const updateBoxesStateWithHistory = (
         nextState: UnderlineBox[] | ((prev: UnderlineBox[]) => UnderlineBox[])
     ) => {
-        setBoxes(prev => {
+        setBoxes((prev) => {
             const computedNext = typeof nextState === "function" ? nextState(prev) : nextState;
-            setHistoryPast(past => [...past, prev]);
+            setHistoryPast((past) => [...past, prev]);
             setHistoryFuture([]);
             return computedNext;
         });
@@ -174,7 +323,7 @@ export default function UnderlinePdfWorkspace() {
         const updatedPast = historyPast.slice(0, -1);
 
         setHistoryPast(updatedPast);
-        setHistoryFuture(future => [boxes, ...future]);
+        setHistoryFuture((future) => [boxes, ...future]);
         setBoxes(previousState);
         setActiveId(null);
     };
@@ -185,22 +334,167 @@ export default function UnderlinePdfWorkspace() {
         const updatedFuture = historyFuture.slice(1);
 
         setHistoryFuture(updatedFuture);
-        setHistoryPast(past => [...past, boxes]);
+        setHistoryPast((past) => [...past, boxes]);
         setBoxes(nextState);
         setActiveId(null);
     };
 
     useEffect(() => {
-        if (!file || !pdfDocument) return;
-        if (currentPageAnalysis?.kind !== "scanned") {
+        const handleKeyboardShortcuts = (e: KeyboardEvent) => {
+            const isMeta = e.metaKey || e.ctrlKey;
+            const keyLower = e.key.toLowerCase();
+
+            if (isMeta && keyLower === "z") {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    handleRedoAction();
+                } else {
+                    handleUndoAction();
+                }
+            } else if (isMeta && keyLower === "y") {
+                e.preventDefault();
+                handleRedoAction();
+            }
+        };
+
+        window.addEventListener("keydown", handleKeyboardShortcuts);
+        return () => window.removeEventListener("keydown", handleKeyboardShortcuts);
+    }, [historyPast, historyFuture, boxes]);
+
+    useEffect(() => {
+        if (!file) {
+            setPdfDocument(null);
+            setTotalPages(0);
+            setCurrentPage(1);
+            setBoxes([]);
+            setHistoryPast([]);
+            setHistoryFuture([]);
+            setActiveId(null);
+            setSuccess(false);
+            setUnderlineMode("smart");
+            setPageAnalysisMap({});
+            setAnalysisLoaded(false);
+            setAnalysisError(null);
+            setIsAnalyzing(false);
+            if (previewImageSrc) URL.revokeObjectURL(previewImageSrc);
+            setPreviewImageSrc("");
+            setPreviewCacheToken("");
+            setJobId("");
+            setJob(null);
+            setUploadProgress(0);
+            setJobError(null);
             return;
         }
+
+        const loadPdf = async () => {
+            try {
+                setIsRenderingCanvas(true);
+                const pdfjsLib = await loadPdfJs();
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+
+                setPdfDocument(pdf as unknown as PdfJsDocument);
+                setTotalPages(pdf.numPages);
+                setCurrentPage(1);
+                setPreviewCacheToken(Math.random().toString(36).slice(2));
+            } catch (err) {
+                console.error("Failed to parse document context framework:", err);
+            } finally {
+                setIsRenderingCanvas(false);
+            }
+        };
+
+        loadPdf();
+    }, [file]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        if (!file) return;
+
+        if (analysisAbortRef.current) {
+            analysisAbortRef.current.abort();
+        }
+
+        const controller = new AbortController();
+        analysisAbortRef.current = controller;
+
+        const analyze = async () => {
+            try {
+                setIsAnalyzing(true);
+                setAnalysisLoaded(false);
+                setAnalysisError(null);
+
+                const formData = new FormData();
+                formData.append("file", file);
+
+                const maybePassword = (file as CustomPdfFile).originalPassword;
+                if (maybePassword) {
+                    formData.append("file_password", maybePassword);
+                }
+
+                const response = await fetch(buildApiUrl("/api/structure/analyze"), {
+                    method: "POST",
+                    body: formData,
+                    signal: controller.signal,
+                    credentials: "include",
+                });
+
+                const raw = await response.text();
+
+                if (!response.ok) {
+                    let message = raw || `Server rejected request with status ${response.status}`;
+                    try {
+                        const parsed = JSON.parse(raw);
+                        message = parsed.message || parsed.error || message;
+                    } catch {
+                        // keep raw text
+                    }
+                    throw new Error(message);
+                }
+
+                const parsed = JSON.parse(raw) as PDFAnalysis;
+                const map: Record<number, PageAnalysis> = {};
+                for (const page of parsed.pages ?? []) {
+                    map[page.page] = page;
+                }
+
+                setPageAnalysisMap(map);
+                setAnalysisLoaded(true);
+            } catch (err) {
+                if ((err as Error)?.name !== "AbortError") {
+                    console.error("Failed to analyze PDF:", err);
+                    setAnalysisError((err as Error)?.message || "Failed to analyze PDF.");
+                    setPageAnalysisMap({});
+                    setAnalysisLoaded(false);
+                }
+            } finally {
+                if (!controller.signal.aborted) {
+                    setIsAnalyzing(false);
+                }
+            }
+        };
+
+        analyze();
+
+        return () => controller.abort();
+    }, [file]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        if (!currentPageAnalysis) return;
+        if (currentPageAnalysis.kind === "scanned" && underlineMode === "smart") {
+            setUnderlineMode("manual");
+        }
+    }, [currentPageAnalysis, underlineMode]);
+
+    let baseUrl = getBaseUrl();
+
+    useEffect(() => {
+        if (!file || !pdfDocument) return;
+
         const isScanned = currentPageAnalysis?.kind === "scanned";
 
         if (!isScanned) {
             if (previewImageSrc) {
                 URL.revokeObjectURL(previewImageSrc);
-                // eslint-disable-next-line react-hooks/set-state-in-effect
                 setPreviewImageSrc("");
             }
             return;
@@ -225,7 +519,7 @@ export default function UnderlinePdfWorkspace() {
                     formData.append("file_password", password);
                 }
 
-                const response = await fetch(`${baseUrl}/api/conversion/preview/page`, {
+                const response = await fetch(buildApiUrl("/api/conversion/preview/page"), {
                     method: "POST",
                     body: formData,
                     credentials: "include",
@@ -238,7 +532,7 @@ export default function UnderlinePdfWorkspace() {
 
                 const imgBlob = await response.blob();
 
-                setPreviewImageSrc(prev => {
+                setPreviewImageSrc((prev) => {
                     if (prev) URL.revokeObjectURL(prev);
                     return URL.createObjectURL(imgBlob);
                 });
@@ -289,130 +583,6 @@ export default function UnderlinePdfWorkspace() {
     }, [historyPast, historyFuture, boxes]);
 
     useEffect(() => {
-        if (!file) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setPdfDocument(null);
-            setTotalPages(0);
-            setCurrentPage(1);
-            setBoxes([]);
-            setHistoryPast([]);
-            setHistoryFuture([]);
-            setActiveId(null);
-            setSuccess(false);
-            setAnalysisLoaded(false);
-            setIsAnalyzing(false);
-            setAnalysisError(null);
-            setPageAnalysisMap({});
-            setUnderlineMode("smart");
-            return;
-        }
-
-        const loadPdf = async () => {
-            try {
-                setIsRenderingCanvas(true);
-                const pdfjsLib = await import("pdfjs-dist");
-                pdfjsLib.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
-
-                const arrayBuffer = await file.arrayBuffer();
-                const typedArray = new Uint8Array(arrayBuffer);
-                const loadingTask = pdfjsLib.getDocument({ data: typedArray });
-                const pdf = await loadingTask.promise;
-
-                setPdfDocument(pdf as unknown as PdfJsDocument);
-                setTotalPages(pdf.numPages);
-                setCurrentPage(1);
-            } catch (err) {
-                console.error("Failed to parse document context:", err);
-            } finally {
-                setIsRenderingCanvas(false);
-            }
-        };
-
-        loadPdf();
-    }, [file]);
-
-    useEffect(() => {
-        if (!file) return;
-
-        if (analysisAbortRef.current) {
-            analysisAbortRef.current.abort();
-        }
-
-        const controller = new AbortController();
-        analysisAbortRef.current = controller;
-
-        const analyze = async () => {
-
-            try {
-                setIsAnalyzing(true);
-                setAnalysisLoaded(false);
-                setAnalysisError(null);
-
-                const formData = new FormData();
-                formData.append("file", file);
-
-                const maybePassword = (file as CustomPdfFile).originalPassword;
-                if (maybePassword) {
-                    formData.append("file_password", maybePassword);
-                }
-
-                const response = await fetch(`${baseUrl}/api/structure/analyze`, {
-                    method: "POST",
-                    body: formData,
-                });
-
-                const raw = await response.text();
-
-                if (!response.ok) {
-                    let message = raw || `Server rejected request with status ${response.status}`;
-                    try {
-                        const parsed = JSON.parse(raw);
-                        message = parsed.message || parsed.error || message;
-                    } catch {
-                        // keep raw text
-                    }
-                    throw new Error(message);
-                }
-
-                const parsed = JSON.parse(raw) as PDFAnalysis;
-                const map: Record<number, PageAnalysis> = {};
-                for (const page of parsed.pages ?? []) {
-                    map[page.page] = page;
-                }
-
-                setPageAnalysisMap(map);
-                setAnalysisLoaded(true);
-            } catch (err) {
-                if ((err as Error)?.name !== "AbortError") {
-                    console.error("Failed to analyze PDF:", err);
-                    setAnalysisError((err as Error)?.message || "Failed to analyze PDF.");
-                    setPageAnalysisMap({});
-                    setAnalysisLoaded(false);
-                }
-            } finally {
-                if (!controller.signal.aborted) {
-                    setIsAnalyzing(false);
-                }
-            }
-        };
-
-        analyze();
-
-        return () => {
-            controller.abort();
-        };
-    }, [file]);
-
-    useEffect(() => {
-        if (!currentPageAnalysis) return;
-
-        if (currentPageAnalysis.kind === "scanned" && underlineMode === "smart") {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setUnderlineMode("manual");
-        }
-    }, [currentPageAnalysis, underlineMode]);
-
-    useEffect(() => {
         if (!pdfDocument || !canvasRef.current) return;
 
         const renderPage = async () => {
@@ -438,7 +608,6 @@ export default function UnderlinePdfWorkspace() {
                     viewport: renderViewport,
                 });
                 renderTaskRef.current = renderTask;
-
                 await renderTask.promise;
                 renderTaskRef.current = null;
 
@@ -478,6 +647,87 @@ export default function UnderlinePdfWorkspace() {
         };
     }, [pdfDocument, currentPage]);
 
+    useEffect(() => {
+        if (!jobId) return;
+
+        const controller = new AbortController();
+        jobAbortRef.current = controller;
+        handledSuccessRef.current = false;
+
+        const run = async () => {
+            try {
+                const finalJob = await waitForJob(
+                    jobId,
+                    (nextJob) => {
+                        setJob(nextJob);
+                        setJobError(null);
+                    },
+                    controller.signal
+                );
+
+                if (controller.signal.aborted) return;
+
+                setJob(finalJob);
+
+                if (finalJob.status === "failed") {
+                    throw new Error(finalJob.error || "Underline processing failed");
+                }
+
+                if (finalJob.status !== "succeeded") {
+                    return;
+                }
+
+                if (handledSuccessRef.current) {
+                    return;
+                }
+                handledSuccessRef.current = true;
+
+                const blob = await downloadJobPdf(jobId);
+
+                const fileName = (file?.name || "document.pdf").replace(/\.pdf$/i, "");
+                const underlinedFile = new File([blob], `${fileName}-underlined.pdf`, {
+                    type: "application/pdf",
+                });
+
+                setDownloadData({
+                    blob,
+                    fileName: `${fileName}-underlined.pdf`,
+                });
+
+                setSuccess(true);
+
+                setJob(null);
+                setJobId("");
+                setUploadProgress(0);
+                setJobError(null);
+
+                notify("Underline PDF ready.", "success");
+                router.push(`/${toolId}/download`);
+
+                setBoxes([]);
+                setHistoryPast([]);
+                setHistoryFuture([]);
+                setActiveId(null);
+                setCurrentPage(1);
+                setJobId("");
+                setUploadProgress(0);
+            } catch (err) {
+                if ((err as Error)?.name === "AbortError") return;
+                console.error(err);
+                setJobError(getFriendlyErrorMessage(err));
+                handleClientError(err);
+            } finally {
+                if (!controller.signal.aborted) {
+                    setIsProcessing(false);
+                }
+            }
+        };
+
+        void run();
+
+        return () => controller.abort();
+    }, [jobId]); // eslint-disable-line react-hooks/exhaustive-deps
+
     const handleContainerPointerDown = (e: PointerEvent<HTMLDivElement>) => {
         if (!containerRef.current || pdfDimensions.width === 0) return;
 
@@ -502,7 +752,7 @@ export default function UnderlinePdfWorkspace() {
             color: selectedColor,
         };
 
-        updateBoxesStateWithHistory(prev => [...prev, newBox]);
+        updateBoxesStateWithHistory((prev) => [...prev, newBox]);
     };
 
     const handleContainerPointerMove = (e: PointerEvent<HTMLDivElement>) => {
@@ -519,8 +769,8 @@ export default function UnderlinePdfWorkspace() {
         const targetWidth = Math.abs(currentPdfX - start.x);
         const targetHeight = Math.abs(currentPdfY - start.y);
 
-        setBoxes(prev =>
-            prev.map(box => {
+        setBoxes((prev) =>
+            prev.map((box) => {
                 if (box.id === start.id) {
                     return {
                         ...box,
@@ -542,23 +792,22 @@ export default function UnderlinePdfWorkspace() {
 
     const deleteActiveBox = () => {
         if (!activeId) return;
-        updateBoxesStateWithHistory(prev => prev.filter(b => b.id !== activeId));
+        updateBoxesStateWithHistory((prev) => prev.filter((b) => b.id !== activeId));
         setActiveId(null);
     };
 
-    const handleUnderlineProcessing = async () => {
+    const handleUnderlineProcessing = () => {
         const activeFile = file;
         if (!activeFile) return;
 
-        const validBoxes = boxes.filter(b => b.width > 2 && b.height > 2);
-
+        const validBoxes = boxes.filter((b) => b.width > 2 && b.height > 2);
         if (validBoxes.length === 0) {
-            notify("Please draw at least one underline box on the document.","warning");
+            notify("Please draw at least one underline box on the document.", "warning");
             return;
         }
 
         if (currentPageAnalysis?.kind === "scanned" && underlineMode === "smart") {
-            notify("This page is scanned. Please choose Manual line or Recognize Text.","warning");
+            notify("This page is scanned. Please choose Manual line or Recognize Text.", "warning");
             return;
         }
 
@@ -568,37 +817,40 @@ export default function UnderlinePdfWorkspace() {
             try {
                 setIsProcessing(true);
                 setSuccess(false);
+                setJobError(null);
+                setUploadProgress(0);
 
-                const formData = new FormData();
-                formData.append("file", validFile);
-                formData.append("boxes", JSON.stringify(validBoxes));
-                formData.append("mode", underlineMode);
+                const submission = await submitUnderlineJob(
+                    validFile,
+                    validBoxes,
+                    underlineMode,
+                    validFile.originalPassword
+                );
 
-                if (validFile.originalPassword) formData.append("file_password", validFile.originalPassword);
-
-                const responseBlob = await uploadAndDownloadFile("/api/structure/underline", formData);
-
-                setDownloadData({
-                    blob: responseBlob,
-                    fileName: `${validFile.name.replace(/\.pdf$/i, "")}-underlined.pdf`,
-                });
-
-                setSuccess(true);
-                router.push(`/${toolId}/download`);
+                setJobId(submission.job_id);
+                setJob(null);
+                setUploadProgress(100);
+                notify("Underline job queued. Waiting for worker...", "info");
             } catch (err) {
                 console.error(err);
+                setJobError(getFriendlyErrorMessage(err));
                 handleClientError(err);
-            } finally {
                 setIsProcessing(false);
             }
         });
     };
 
-    const pageKind = currentPageAnalysis?.kind ?? (analysisLoaded ? "unknown" : null);
-    const isScannedPage = pageKind === "scanned";
-    const isTextPage = pageKind === "text";
-    const isMixedPage = pageKind === "mixed";
-    const canUseSmartMode = pageKind !== "scanned" && pageKind !== "blank";
+    const progress = Math.max(0, Math.min(100, job?.progress ?? uploadProgress));
+    const statusText =
+        jobError
+            ? "Failed"
+            : job?.status === "running" || job?.status === "queued"
+                ? "Processing"
+                : isProcessing
+                    ? "Uploading"
+                    : job?.status === "succeeded"
+                        ? "Completed"
+                        : "Idle";
 
     if (!file) return null;
     const activeFile = file;
@@ -667,9 +919,11 @@ export default function UnderlinePdfWorkspace() {
                                 </div>
 
                                 <div className="flex flex-col gap-1.5">
-                                    <label className="text-[10px] text-[color:var(--muted)] font-bold uppercase">Active Line Color</label>
+                                    <label className="text-[10px] text-[color:var(--muted)] font-bold uppercase">
+                                        Active Line Color
+                                    </label>
                                     <div className="flex items-center gap-2 flex-wrap">
-                                        {UNDERLINE_COLORS.map(c => (
+                                        {UNDERLINE_COLORS.map((c) => (
                                             <button
                                                 key={c.hex}
                                                 type="button"
@@ -692,7 +946,9 @@ export default function UnderlinePdfWorkspace() {
                                     <Loader2 className="animate-spin text-indigo-500 mt-0.5" size={16} />
                                     <div className="text-xs text-[color:var(--foreground)]/90">
                                         <p className="font-semibold">Analyzing page structure...</p>
-                                        <p className="mt-0.5 text-[color:var(--muted)]">Detecting text pages before underline processing.</p>
+                                        <p className="mt-0.5 text-[color:var(--muted)]">
+                                            Detecting text pages before underline processing.
+                                        </p>
                                     </div>
                                 </div>
                             )}
@@ -725,10 +981,10 @@ export default function UnderlinePdfWorkspace() {
                                                 </p>
                                                 <p className="mt-0.5 opacity-80">
                                                     {isScannedPage
-                                                        ? "This page has no selectable text. Choose Manual highlight or Recognize Text."
+                                                        ? "This page has no selectable text. Choose Manual line or Recognize Text."
                                                         : isMixedPage
-                                                            ? "Could be scanned document. Manual highlight or Recognize Text is recommended."
-                                                            :isTextPage
+                                                            ? "Could be scanned document. Manual line or Recognize Text is recommended."
+                                                            : isTextPage
                                                                 ? "Selectable text detected. Smart mode is recommended."
                                                                 : "No clear text structure detected on this page."}
                                                 </p>
@@ -739,36 +995,7 @@ export default function UnderlinePdfWorkspace() {
                                         </div>
                                     </div>
 
-                                    {isScannedPage && (
-                                        <div className="mt-4 grid grid-cols-2 gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => setUnderlineMode("manual")}
-                                                className={`rounded-lg px-3 py-2 text-xs font-semibold border transition flex items-center justify-center gap-1.5 ${
-                                                    underlineMode === "manual"
-                                                        ? "bg-indigo-500 text-white border-indigo-500"
-                                                        : "bg-white/60 dark:bg-black/10 border-[color:var(--border)] hover:border-indigo-500"
-                                                }`}
-                                            >
-                                                <MousePointer2 size={14} />
-                                                Manual line
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setUnderlineMode("ocr")}
-                                                className={`rounded-lg px-3 py-2 text-xs font-semibold border transition flex items-center justify-center gap-1.5 ${
-                                                    underlineMode === "ocr"
-                                                        ? "bg-indigo-500 text-white border-indigo-500"
-                                                        : "bg-white/60 dark:bg-black/10 border-[color:var(--border)] hover:border-indigo-500"
-                                                }`}
-                                            >
-                                                <ScanText size={14} />
-                                                Recognize Text
-                                            </button>
-                                        </div>
-                                    )}
-
-                                    {isMixedPage && (
+                                    {(isScannedPage || isMixedPage) && (
                                         <div className="mt-4 grid grid-cols-2 gap-2">
                                             <button
                                                 type="button"
@@ -816,33 +1043,75 @@ export default function UnderlinePdfWorkspace() {
                                     </button>
                                 </div>
                             )}
-                        </div>
 
-                        <div className="grid gap-4 sm:grid-cols-2">
-                            <div className="rounded-2xl border border-[color:var(--border)] p-4 bg-transparent">
-                                <p className="text-sm text-[color:var(--muted)]">Source document size</p>
-                                <p className="mt-1 text-xl font-bold text-[color:var(--foreground)]">{fileExtractedSize} MB</p>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <div className="rounded-2xl border border-[color:var(--border)] p-4 bg-transparent">
+                                    <p className="text-sm text-[color:var(--muted)]">Source document size</p>
+                                    <p className="mt-1 text-xl font-bold text-[color:var(--foreground)]">{fileExtractedSize} MB</p>
+                                </div>
+                                <div className="rounded-2xl border border-[color:var(--border)] p-4 bg-transparent">
+                                    <p className="text-sm text-[color:var(--muted)]">Total Sheets</p>
+                                    <p className="mt-1 text-xl font-bold text-indigo-500">{totalPages} Pages</p>
+                                </div>
                             </div>
-                            <div className="rounded-2xl border border-[color:var(--border)] p-4 bg-transparent">
-                                <p className="text-sm text-[color:var(--muted)]">Total Sheets</p>
-                                <p className="mt-1 text-xl font-bold text-indigo-500">{totalPages} Pages</p>
-                            </div>
-                        </div>
 
-                        <PdfActionButton
-                            text="Save Underline Markers"
-                            loadingText="Baking Underlines..."
-                            loading={isProcessing}
-                            disabled={isProcessing || isRenderingCanvas || boxes.length === 0}
-                            onClick={handleUnderlineProcessing}
-                        />
+                            {!success && (job || jobError || jobId || isProcessing) && (
+                                <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--background)]/40 p-4">
+                                    <div className="flex items-center justify-between text-xs text-[color:var(--muted)]">
+                                        <span className="inline-flex items-center gap-2">
+                                            {isProcessing ||
+                                            job?.status === "running" ||
+                                            job?.status === "queued" ||
+                                            (jobId && !job) ? (
+                                                <Loader2 size={14} className="animate-spin text-foreground" />
+                                            ) : null}
+                                            {jobError ? "Failed" : job?.status || (isProcessing ? "Uploading" : "Idle")}
+                                        </span>
+                                        <span>{Math.round(progress)}%</span>
+                                    </div>
+
+                                    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
+                                        <div
+                                            className={`h-full rounded-full transition-all ${
+                                                jobError || job?.status === "failed"
+                                                    ? "bg-red-500"
+                                                    : job?.status === "succeeded"
+                                                        ? "bg-emerald-500"
+                                                        : "bg-foreground"
+                                            }`}
+                                            style={{ width: `${progress}%` }}
+                                        />
+                                    </div>
+
+                                    <p className="mt-2 text-[11px] text-[color:var(--muted)]">
+                                        {jobError ||
+                                            job?.message ||
+                                            (isProcessing ? "Uploading file to worker..." : "Waiting for job update...")}
+                                    </p>
+
+                                    {jobId ? (
+                                        <p className="mt-2 text-[11px] text-[color:var(--muted)]">
+                                            Job ID: <span className="font-mono">{jobId}</span>
+                                        </p>
+                                    ) : null}
+                                </div>
+                            )}
+
+                            <PdfActionButton
+                                text="Save Underline Markers"
+                                loadingText="Baking Underlines..."
+                                loading={isProcessing}
+                                disabled={isProcessing || isRenderingCanvas || boxes.length === 0}
+                                onClick={handleUnderlineProcessing}
+                            />
+                        </div>
                     </div>
 
                     <div className="lg:col-span-7 flex flex-col bg-[color:var(--background)]/30 border border-[color:var(--border)] rounded-2xl p-6 relative w-full">
-                        {isRenderingCanvas && (
+                        {(isRenderingCanvas || isRenderingPreview) && (
                             <div className="absolute inset-0 bg-[color:var(--background)]/40 backdrop-blur-sm rounded-2xl z-20 flex flex-col items-center justify-center text-xs font-medium text-[color:var(--muted)]">
                                 <Loader2 className="animate-spin text-indigo-500 mb-2" size={24} />
-                                Synchronizing view matrix framework...
+                                {isScannedPage ? "Loading scanned preview..." : "Synchronizing view matrix framework..."}
                             </div>
                         )}
 
@@ -857,7 +1126,7 @@ export default function UnderlinePdfWorkspace() {
                                         type="button"
                                         disabled={currentPage <= 1}
                                         onClick={() => {
-                                            setCurrentPage(p => p - 1);
+                                            setCurrentPage((p) => p - 1);
                                             setActiveId(null);
                                         }}
                                         className="hover:text-[color:var(--foreground)] disabled:opacity-20 transition"
@@ -871,7 +1140,7 @@ export default function UnderlinePdfWorkspace() {
                                         type="button"
                                         disabled={currentPage >= totalPages}
                                         onClick={() => {
-                                            setCurrentPage(p => p + 1);
+                                            setCurrentPage((p) => p + 1);
                                             setActiveId(null);
                                         }}
                                         className="hover:text-[color:var(--foreground)] disabled:opacity-20 transition"
@@ -888,41 +1157,39 @@ export default function UnderlinePdfWorkspace() {
                         >
                             <div
                                 ref={containerRef}
-                                className="relative shadow-xl rounded border border-gray-400/20 bg-white max-w-full h-auto cursor-crosshair select-none touch-none"
+                                className="relative shadow-xl rounded border border-gray-400/20 bg-white max-w-full h-auto cursor-crosshair select-none touch-none overflow-hidden"
                                 onPointerDown={handleContainerPointerDown}
                                 onPointerMove={handleContainerPointerMove}
                                 onPointerUp={handleContainerPointerUp}
-                                onClick={e => e.stopPropagation()}
+                                onClick={(e) => e.stopPropagation()}
                             >
-                                {isScannedPage ? (
-                                    isRenderingPreview ? (
-                                        <div className="flex items-center justify-center p-10">
-                                            <Loader2 className="animate-spin text-indigo-500" size={24} />
-                                        </div>
-                                    ) : (
-                                        previewImageSrc ? (
-                                            <img
-                                                src={previewImageSrc}
-                                                alt=""
-                                                className="..."
-                                            />
-                                        ) : (
-                                            <Loader2 className="animate-spin" />
-                                        )
-                                    )
-                                ) : (
-                                    <canvas
-                                        ref={canvasRef}
-                                        className="max-w-full h-auto block rounded pointer-events-none"
+                                <canvas
+                                    ref={canvasRef}
+                                    className={`max-w-full h-auto block rounded pointer-events-none ${
+                                        isScannedPage ? "opacity-0" : "opacity-100"
+                                    }`}
+                                />
+
+                                {isScannedPage && previewImageSrc && (
+                                    <img
+                                        src={previewImageSrc}
+                                        alt={`Scanned page preview ${currentPage}`}
+                                        className="absolute inset-0 w-full h-full object-contain rounded pointer-events-none"
                                     />
                                 )}
 
-                                {boxes.filter(box => box.page === currentPage).map(box => {
+                                {isScannedPage && !previewImageSrc && (
+                                    <div className="absolute inset-0 flex items-center justify-center text-xs text-[color:var(--muted)]">
+                                        Preparing scanned preview...
+                                    </div>
+                                )}
+
+                                {boxes.filter((box) => box.page === currentPage).map((box) => {
                                     const isActive = activeId === box.id;
                                     return (
                                         <div
                                             key={box.id}
-                                            onClick={e => {
+                                            onClick={(e) => {
                                                 e.stopPropagation();
                                                 setActiveId(box.id);
                                             }}
@@ -932,26 +1199,12 @@ export default function UnderlinePdfWorkspace() {
                                                 top: `${box.y * scaleFactor}px`,
                                                 width: `${box.width * scaleFactor}px`,
                                                 height: `${box.height * scaleFactor}px`,
+                                                backgroundColor: box.color,
                                             }}
-                                            className={`transition-all ${
-                                                isActive
-                                                    ? "ring-2 ring-indigo-600 bg-indigo-500/10 rounded shadow-md z-20"
-                                                    : "hover:opacity-50 z-10"
+                                            className={`opacity-40 transition-all ${
+                                                isActive ? "ring-2 ring-indigo-600 opacity-60 z-20 shadow-md" : "hover:opacity-50 z-10"
                                             }`}
-                                        >
-                                            <div
-                                                style={{
-                                                    position: "absolute",
-                                                    left: 0,
-                                                    right: 0,
-                                                    bottom: "10%",
-                                                    height: "3px",
-                                                    backgroundColor: box.color,
-                                                    opacity: 0.95,
-                                                    borderRadius: "9999px",
-                                                }}
-                                            />
-                                        </div>
+                                        />
                                     );
                                 })}
                             </div>
