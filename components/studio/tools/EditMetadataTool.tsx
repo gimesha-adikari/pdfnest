@@ -114,8 +114,10 @@ export default function EditMetadataTool({
                 setSuccess(true);
                 notify("Metadata loaded into Studio.","success");
             } catch (err) {
-                console.error(err);
-                handleClientError(err);
+                if (err != null){
+                    console.error(err);
+                    handleClientError(err);
+                }
             } finally {
                 setIsProcessing(false);
             }
