@@ -312,6 +312,8 @@ export default function SignPdfTool({baseFile, onSignedFile}: SignPdfToolProps) 
                 setSuccess(true);
                 notify("Signed PDF loaded into Studio.","success");
             } catch (err: any) {
+                if (err==null)
+                    return
                 console.error(err);
                 setError(err?.message || getFriendlyErrorMessage(err));
                 notify(err?.message || "Failed to sign document", "error");

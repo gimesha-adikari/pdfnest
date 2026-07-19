@@ -87,8 +87,8 @@ function hasScannedLikePages(analysis: PDFAnalysis | null): number[] {
 }
 
 
-export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps) {
-    const { requireAuth } = useAuth();
+export default function EditPdfTool({baseFile, onEditedFile}: EditPdfToolProps) {
+    const {requireAuth} = useAuth();
 
     const [pages, setPages] = useState<PageData[]>([]);
     const [sourceTracker, setSourceTracker] = useState<string>("");
@@ -198,7 +198,6 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
         };
 
 
-
         void parsePdfLayout();
 
         return () => {
@@ -279,8 +278,8 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                 }
 
 
-                const arrayBuffer = await ( baseFile.arrayBuffer());
-                const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+                const arrayBuffer = await (baseFile.arrayBuffer());
+                const pdf = await pdfjsLib.getDocument({data: new Uint8Array(arrayBuffer)}).promise;
 
                 if (!cancelled) {
                     setPdfDocument(pdf as unknown as PdfJsDocument);
@@ -298,7 +297,8 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                 localStorage.removeItem("pdfnest:edit:extractJobId");
                 setExtractJobId("");
             } catch (e) {
-                console.error(e);
+                if (e != null)
+                    console.error(e);
                 if (!cancelled) {
                     setError(getFriendlyErrorMessage(e));
                     notify("Failed to parse structural layout grids.", "error");
@@ -328,7 +328,7 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                     const context = canvas.getContext("2d");
                     if (!context) continue;
 
-                    const viewport = pdfPage.getViewport({ scale: 1.0, rotation: 0 });
+                    const viewport = pdfPage.getViewport({scale: 1.0, rotation: 0});
                     canvas.width = viewport.width;
                     canvas.height = viewport.height;
                     canvas.style.width = `${viewport.width}px`;
@@ -395,6 +395,8 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                 localStorage.setItem("pdfnest:edit:compileJobId", submission.job_id);
                 notify("Compilation queued. Waiting for worker...", "info");
             } catch (e) {
+                if (e==null)
+                    return
                 console.error(e);
                 notify("Compilation failed to queue.", "error");
                 handleClientError(e);
@@ -496,7 +498,7 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                         <div className="flex items-center justify-between gap-4 border-b border-border pb-3">
                             <div>
                                 <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                                    <FileEdit size={16} className="text-indigo-500" />
+                                    <FileEdit size={16} className="text-indigo-500"/>
                                     Precision PDF Layout Editor
                                 </h3>
                                 <p className="mt-1 text-xs text-muted">
@@ -514,12 +516,12 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                                     setScannedPages([]);
                                     setSuccess(false);
                                     setError(null);
-                                    notify("Workspace reset.","info");
+                                    notify("Workspace reset.", "info");
                                 }}
                                 className="inline-flex items-center gap-1 rounded-xl border border-border
                                 px-3 py-2 text-sm font-medium text-foreground transition hover:bg-background"
                             >
-                                <RefreshCw size={13} /> Reset Workspace
+                                <RefreshCw size={13}/> Reset Workspace
                             </button>
                         </div>
 
@@ -557,19 +559,21 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
 
                         {isExtracting && (
                             <div className="flex flex-col items-center justify-center py-20 text-muted">
-                                <Loader2 className="mb-4 animate-spin" size={32} />
+                                <Loader2 className="mb-4 animate-spin" size={32}/>
                                 <p>Deconstructing text lines and tracking alignment grids across all pages...</p>
                             </div>
                         )}
 
                         {!isExtracting && scannedPages.length > 0 && (
-                            <div className="mb-6 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-rose-600 shadow-sm dark:text-rose-300">
+                            <div
+                                className="mb-6 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-rose-600 shadow-sm dark:text-rose-300">
                                 <div className="flex items-start gap-3">
-                                    <AlertTriangle className="mt-0.5 shrink-0 text-rose-500" size={20} />
+                                    <AlertTriangle className="mt-0.5 shrink-0 text-rose-500" size={20}/>
                                     <div>
                                         <h4 className="text-sm font-bold">Scanned / Image-based PDF detected</h4>
                                         <p className="mt-0.5 text-xs opacity-90">
-                                            This editor is designed for PDFs with selectable text. Scanned PDFs may not work as expected here.
+                                            This editor is designed for PDFs with selectable text. Scanned PDFs may not
+                                            work as expected here.
                                         </p>
                                         <p className="mt-1 text-[11px] opacity-80">
                                             Problem pages: {scannedPages.join(", ")}
@@ -584,11 +588,12 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                             bg-amber-500/10 p-4 text-amber-600 shadow-sm dark:text-amber-400 sm:flex-row
                             sm:items-center sm:justify-between">
                                 <div className="flex items-start gap-3">
-                                    <AlertTriangle className="mt-0.5 shrink-0 text-amber-500" size={20} />
+                                    <AlertTriangle className="mt-0.5 shrink-0 text-amber-500" size={20}/>
                                     <div>
                                         <h4 className="text-sm font-bold">Rotated Document Detected</h4>
                                         <p className="mt-0.5 text-xs opacity-90">
-                                            Editing rotated PDFs can lead to alignment offsets. Fix orientation first for best results.
+                                            Editing rotated PDFs can lead to alignment offsets. Fix orientation first
+                                            for best results.
                                         </p>
                                     </div>
                                 </div>
@@ -598,7 +603,7 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                                     py-2 text-xs font-bold text-white shadow-sm transition
                                     hover:bg-amber-600"
                                 >
-                                    <RotateCw size={14} /> Fix with Rotate Tool
+                                    <RotateCw size={14}/> Fix with Rotate Tool
                                 </Link>
                             </div>
                         )}
@@ -645,7 +650,7 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                                             className="relative mx-auto flex w-full max-w-full shrink-0
                                             flex-col items-center rounded-2xl border border-border bg-white
                                             p-4 shadow-xl"
-                                            style={{ minHeight: page.height + 100 }}
+                                            style={{minHeight: page.height + 100}}
                                         >
                                             <div className="mb-3 flex w-full items-center justify-between">
                                                 <span className="rounded-lg border border-border bg-card
@@ -712,11 +717,11 @@ export default function EditPdfTool({ baseFile, onEditedFile }: EditPdfToolProps
                                     hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                     {isCompiling ? (
-                                        <><Loader2 className="animate-spin" size={16} />
+                                        <><Loader2 className="animate-spin" size={16}/>
                                             Assembling Layers Across All Pages...
                                         </>
                                     ) : (
-                                        <><Download size={16} />
+                                        <><Download size={16}/>
                                             Export Precision Vector Document Changes
                                         </>
                                     )}
