@@ -6,7 +6,7 @@ import { FileText, ShieldCheck, Loader2 } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
 import {handleClientError} from "@/lib/errorHandler";
 import { useAuth } from "@/context/AuthContext";
-import { useSharedTool } from "@/app/(site)/[toolId]/layout";
+import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 

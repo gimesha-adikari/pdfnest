@@ -9,7 +9,7 @@ import { notify } from "@/lib/notify";
 import { PDFDocumentProxy } from "pdfjs-dist";
 import { FileWithPassword } from "@/lib/types";
 import { useAuth } from "@/context/AuthContext";
-import { useSharedTool } from "@/app/(site)/[toolId]/layout";
+import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";

@@ -6,7 +6,7 @@ import { Eye, Globe, Loader2, ShieldCheck, Sliders } from "lucide-react";
 import {getBaseUrl, uploadAndDownloadFile} from "@/lib/api";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
-import { useSharedTool } from "@/app/(site)/[toolId]/layout";
+import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import { PdfProgressTracker } from "@/components/pdf/PdfProgressTracker";
 import PdfToolHero from "@/components/pdf/PdfToolHero";

@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useSharedTool } from "./layout";
+import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import { Globe } from "lucide-react";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";

@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useSharedTool } from "../layout";
+import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PageNumbersWorkspace from "@/components/tools/PageNumbersWorkspace";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import CodeToPdfWorkspace from "@/components/tools/CodeToPdfWorkspace";

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { NAV_TOOLS } from "@/lib/toolsData";
 import { fetchJson } from "@/lib/api";
+import {getFrontUrl} from "@/lib/getFrontUrl";
 
 interface BackendTool {
     Title?: string;
@@ -60,7 +61,7 @@ export default function ToolSchema({
         applicationCategory: "DocumentManagementApplication",
         operatingSystem: "Web",
         description: toolData.description,
-        url: `https://yourdomain.com${toolData.href}`,
+        url: `${getFrontUrl()}${toolData.href}`,
         offers: {
             "@type": "Offer",
             price: "0",

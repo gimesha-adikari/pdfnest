@@ -7,7 +7,7 @@ import { uploadAndDownloadFile } from "@/lib/api";
 import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
-import { useSharedTool } from "@/app/(site)/[toolId]/layout";
+import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PageReorderGrid from "@/components/pdf/PageReorderGrid";
 import PdfActionButton from "@/components/pdf/PdfActionButton";

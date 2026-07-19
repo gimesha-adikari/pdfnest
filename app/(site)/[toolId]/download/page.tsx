@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck, ArrowLeft, Download } from "lucide-react";
-import { useSharedTool } from "../layout";
+import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 
 export default function SharedDownloadPage() {

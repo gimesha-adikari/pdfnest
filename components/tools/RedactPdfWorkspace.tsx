@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {ShieldAlert, Type, MousePointerSquareDashed, Trash2, Loader2} from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { useSharedTool } from "@/app/(site)/[toolId]/layout";
+import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";

@@ -6,6 +6,8 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/context/AuthContext";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 
+const SITE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://pdfnest.gimesha.dev").replace(/\/$/, "");
+
 const geistSans = Geist({
     variable: "--font-geist-sans",
     subsets: ["latin"],
@@ -17,22 +19,28 @@ const geistMono = Geist({
 });
 
 export const metadata: Metadata = {
-    title: "PDFNest - Free PDF Tools Online",
-    description:
-        "Merge, split, rotate, convert PDFs and images directly in your browser for free.",
-    keywords: [
-        "PDF",
-        "Merge PDF",
-        "Split PDF",
-        "Rotate PDF",
-        "PDF to Images",
-        "Images to PDF",
-        "Free PDF Tools",
-        "Online PDF Editor",
-    ],
+    metadataBase: new URL(SITE_URL),
+    title: {
+        default: "PDFNest - Free PDF Tools Online",
+        template: "%s | PDFNest",
+    },
+    description: "Merge, split, rotate, convert PDFs and images directly in your browser for free.",
+    alternates: {
+        canonical: "/",
+    },
     verification: {
         google: "cqwXOOqo2LotVxmcp8Hgtahz0-pcYaZ4J15J_Yl7PvU",
     },
+    applicationName: "PDFNest",
+    creator: "PDFNest",
+    publisher: "PDFNest",
+    category: "productivity",
+    formatDetection: {
+        email: false,
+        address: false,
+        telephone: false,
+    },
+    referrer: "origin-when-cross-origin",
 };
 
 export default function RootLayout({
