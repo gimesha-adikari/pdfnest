@@ -17,7 +17,7 @@ import {
 import {uploadAndDownloadFile} from "@/lib/api";
 import {handleClientError} from "@/lib/errorHandler";
 import {useAuth} from "@/context/AuthContext";
-import {useSharedTool} from "@/app/(site)/[toolId]/layout";
+import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
