@@ -30,6 +30,9 @@ export const metadata: Metadata = {
         "Free PDF Tools",
         "Online PDF Editor",
     ],
+    verification: {
+        google: "cqwXOOqo2LotVxmcp8Hgtahz0-pcYaZ4J15J_Yl7PvU",
+    },
 };
 
 export default function RootLayout({
