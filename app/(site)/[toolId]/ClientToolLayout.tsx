@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { NAV_TOOLS } from "@/lib/toolsData";
 import ToolFAQ from "@/components/SEO/ToolFAQ";
 import { fetchJson } from "@/lib/api";
+import ToolSchema from "@/components/SEO/ToolSchema";
 
 interface ToolItem {
     title: string;
@@ -177,6 +178,7 @@ export default function ClientToolLayout({ children }: { children: ReactNode }) 
                 isLoadingConfig,
             }}
         >
+            <ToolSchema toolHref={`/${toolId}`} />
             {children}
             <ToolFAQ toolHref={`/${toolId}`} />
         </ToolContext.Provider>
