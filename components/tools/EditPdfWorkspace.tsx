@@ -7,7 +7,7 @@ import {AlertTriangle, Download, FileEdit, Loader2, RefreshCw, RotateCw,} from "
 import type {PDFDocumentProxy} from "pdfjs-dist";
 
 import {useAuth} from "@/context/AuthContext";
-import {useSharedTool} from "@/app/(site)/[toolId]/layout";
+import {useSharedTool} from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import JobProgressCard from "@/components/studio/ui/JobProgressCard";
 import {
@@ -20,7 +20,7 @@ import {
 import {getBaseUrl} from "@/lib/api";
 import {notify} from "@/lib/notify";
 import {handleClientError} from "@/lib/errorHandler";
-import { loadPdfJs } from "../shared/LoadPdfJs";
+import {loadPdfJs} from "../shared/LoadPdfJs";
 
 interface LayoutElement {
     text: string;
@@ -235,7 +235,7 @@ function EditPdfWorkspace() {
                 setExtractJob(job);
 
                 if (job.status === "failed") {
-                    console.error( new Error(job.error || "Extraction failed"));
+                    console.error(new Error(job.error || "Extraction failed"));
                     return
                 }
 
@@ -250,7 +250,7 @@ function EditPdfWorkspace() {
                     | null;
 
                 if (!result?.pages) {
-                    notify('Extraction was unsuccessful',"error")
+                    notify('Extraction was unsuccessful', "error")
                     console.error(new Error("Malformed extraction result."));
                     return
                 }
@@ -348,7 +348,7 @@ function EditPdfWorkspace() {
                 setCompileJob(job);
 
                 if (job.status === "failed") {
-                    console.error( new Error(job.error || "Compilation failed"));
+                    console.error(new Error(job.error || "Compilation failed"));
                 }
 
                 if (job.status !== "succeeded") return;
@@ -655,7 +655,7 @@ interface PdfCanvasPageProps {
     handleInputChange: (pageIdx: number, elementIdx: number, val: string) => void;
 }
 
-function PdfCanvasPage({ page, pdfDocument, pageIdx, handleInputChange }: PdfCanvasPageProps) {
+function PdfCanvasPage({page, pdfDocument, pageIdx, handleInputChange}: PdfCanvasPageProps) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const [isRendered, setIsRendered] = useState(false);
 
@@ -674,7 +674,7 @@ function PdfCanvasPage({ page, pdfDocument, pageIdx, handleInputChange }: PdfCan
                 const context = canvas.getContext("2d");
                 if (!context) return;
 
-                const viewport = pdfPage.getViewport({ scale: 1.0, rotation: 0 });
+                const viewport = pdfPage.getViewport({scale: 1.0, rotation: 0});
 
                 canvas.width = viewport.width;
                 canvas.height = viewport.height;
@@ -715,11 +715,12 @@ function PdfCanvasPage({ page, pdfDocument, pageIdx, handleInputChange }: PdfCan
                 marginBottom: "24px",
             }}
         >
-            <span className="absolute -left-20 top-2 z-20 rounded border border-zinc-200 bg-white px-2 py-1 text-xs font-bold text-zinc-500 shadow-sm">
+            <span
+                className="absolute -left-20 top-2 z-20 rounded border border-zinc-200 bg-white px-2 py-1 text-xs font-bold text-zinc-500 shadow-sm">
                 Page {page.page_num}
             </span>
 
-            <canvas ref={canvasRef} className="absolute left-0 top-0 z-0 rounded" />
+            <canvas ref={canvasRef} className="absolute left-0 top-0 z-0 rounded"/>
 
             <div
                 className={`absolute left-0 top-0 z-10 h-full w-full pointer-events-none transition-opacity duration-300 ${
