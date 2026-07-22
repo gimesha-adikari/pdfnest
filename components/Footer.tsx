@@ -101,7 +101,6 @@ export default function Footer() {
                     <div>
                         <h4 className="font-bold text-xs uppercase tracking-widest text-[color:var(--foreground)] mb-3">Architecture Info</h4>
                         <div className="flex flex-col gap-2 text-xs font-medium text-[color:var(--muted)]">
-                            <span className="flex items-center gap-1.5">No Costs or Licensing</span>
                             <span className="flex items-center gap-1.5">Isolated Security Run</span>
                             <span className="flex items-center gap-1.5">Privacy Compliant Proxy</span>
 
