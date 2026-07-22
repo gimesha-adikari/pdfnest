@@ -1,8 +1,8 @@
 ![Project cover](cover.png)
 
-# PDFNest
+# Platen PDF
 
-PDFNest is a Next.js PDF workspace for browsing tools, uploading documents, previewing PDFs in the browser, and sending processing requests to the PDFNest backend. The app includes a shared tool layout, per-tool workspaces, a download step for completed files, and a studio-style editor for advanced PDF workflows.
+Platen PDF is a Next.js PDF workspace for browsing tools, uploading documents, previewing PDFs in the browser, and sending processing requests to the Platen PDF backend. The app includes a shared tool layout, per-tool workspaces, a download step for completed files, and a studio-style editor for advanced PDF workflows.
 
 ## What the app includes
 
@@ -63,8 +63,8 @@ The shared tool layout fetches the active tool configuration from the backend, t
 
 - Node.js 20 or newer
 - npm, pnpm, yarn, or bun
-- A running PDFNest backend API
-- A running PDFNest worker service for worker-backed tools
+- A running Platen PDF backend API
+- A running Platen PDF worker service for worker-backed tools
 
 The frontend reads its backend base URL from `NEXT_PUBLIC_API_URL`. The example environment files use `http://localhost:8080` for local development and the Render backend URL for production. fileciteturn22file0L28-L45
 

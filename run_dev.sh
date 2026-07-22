@@ -69,7 +69,7 @@ fi
 
 echo ""
 echo "=================================="
-echo "Starting PDFNest Frontend (DEV)"
+echo "Starting Platen PDF Frontend (DEV)"
 echo "=================================="
 echo ""
 

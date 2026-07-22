@@ -57,7 +57,7 @@ export const fallbackSubscribeContent: SubscribeContent = {
 
     heroTitle: "Unlock More With",
 
-    heroTitleGradient: "PDFNest Pro Ecosystem",
+    heroTitleGradient: "Platen PDF Pro Ecosystem",
 
     heroSubtitle:
         "Everything you need to edit, convert, organize and secure PDFs. Start free and upgrade only when you need more.",
@@ -132,7 +132,7 @@ export const fallbackSubscribeContent: SubscribeContent = {
         "Temporary processing,Secure transfers,Automatic cleanup,No permanent storage",
 
     ctaGuestTitle:
-        "Create a free account and start using PDFNest today.",
+        "Create a free account and start using Platen PDF today.",
 
     ctaFreeTitle:
         "Need more power?",
@@ -154,7 +154,7 @@ export const fallbackSubscribeContent: SubscribeContent = {
 
     faqsJson: `[
         {
-            "q":"Is PDFNest free?",
+            "q":"Is Platen PDF free?",
             "a":"Yes. The Free plan includes essential PDF tools with a daily usage allowance."
         },
         {

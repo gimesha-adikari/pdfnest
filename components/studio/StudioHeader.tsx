@@ -78,8 +78,8 @@ export default function StudioHeader({
                     <Link href="/" className="flex items-center gap-2 rounded-xl p-1">
                         <div className="relative h-10 w-10 overflow-hidden rounded-xl border border-indigo-500/20 bg-indigo-500/10 dark:bg-indigo-500/20">
                             <Image
-                                src="/pdfnest-logo.svg"
-                                alt="PDFNest"
+                                src="/platen-logo.svg"
+                                alt="Platen"
                                 fill
                                 className="object-contain p-1"
                                 priority
@@ -88,7 +88,7 @@ export default function StudioHeader({
 
                         <div className="leading-tight">
                             <span className="block bg-gradient-to-r from-indigo-500 to-purple-500 bg-clip-text text-md font-black tracking-tight text-transparent">
-                                PDFNest Studio
+                                Platen PDF Studio
                             </span>
                             <span className="block -mt-0.5 text-[10px] font-bold uppercase tracking-wider text-[color:var(--muted)]">
                                 {documentName || "No document loaded"}
@@ -148,7 +148,7 @@ export default function StudioHeader({
                             </summary>
                             <div className="absolute left-0 top-full mt-2 w-64 rounded-2xl border border-[color:var(--border)] bg-[var(--card)] p-2 shadow-2xl">
                                 <Link href="/about" className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[color:var(--background)]">
-                                    About PDFNest Studio
+                                    About Platen PDF Studio
                                 </Link>
                                 <Link href="/tools" className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[color:var(--background)]">
                                     Browse tools

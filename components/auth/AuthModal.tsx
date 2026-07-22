@@ -82,7 +82,7 @@ export default function AuthModal() {
 
                 <div className="mb-6 text-center">
                     <h2 className="text-2xl font-black tracking-tight text-[color:var(--foreground)]">
-                        {isLoginView ? "Welcome back" : "Unlock PDFNest"}
+                        {isLoginView ? "Welcome back" : "Unlock Platen PDF"}
                     </h2>
                     <p className="text-sm text-[color:var(--muted-foreground)] mt-1">
                         {isLoginView ? "Sign in to process your file." : "Create a free account to process this file instantly."}

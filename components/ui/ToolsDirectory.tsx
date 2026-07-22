@@ -57,7 +57,7 @@ export default function ToolsDirectory() {
 
                 <p className="mx-auto mt-4 max-w-2xl text-lg text-[color:var(--muted)]">
                     Edit, convert, optimize and secure PDF documents with
-                    PDFNest.
+                    Platen PDF.
                 </p>
             </section>
 

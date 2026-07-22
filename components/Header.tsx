@@ -69,23 +69,33 @@ export default function Header() {
                     >
                         <div
                             className="
-                                relative
-                                h-10 w-10
-                                rounded-xl
-                                border border-indigo-500/20
-                                bg-indigo-500/10
-                                dark:bg-indigo-500/20
-                                overflow-hidden
-                                transition-transform
-                                group-hover:scale-105
-                            "
+        relative
+        h-10 w-10
+        rounded-xl
+        border border-indigo-500/20
+        bg-indigo-500/10
+        dark:bg-indigo-500/20
+        overflow-hidden
+        transition-transform
+        group-hover:scale-105
+    "
                         >
+                            {/* Light theme */}
                             <Image
-                                src="/pdfnest-logo.svg"
-                                alt="PDFNest"
+                                src="/platen-logo.svg"
+                                alt="Platen"
                                 fill
-                                className="object-contain p-1"
                                 priority
+                                className="object-contain p-1 dark:hidden"
+                            />
+
+                            {/* Dark theme */}
+                            <Image
+                                src="/platen-logo-dark.svg"
+                                alt="Platen"
+                                fill
+                                priority
+                                className="hidden object-contain p-1 dark:block"
                             />
                         </div>
 
@@ -103,7 +113,7 @@ export default function Header() {
                                     text-transparent
                                 "
                             >
-                                PDFNest
+                                PLATEN
                             </span>
 
                             <span

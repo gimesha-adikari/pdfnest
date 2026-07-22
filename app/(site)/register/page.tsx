@@ -135,7 +135,7 @@ function RegisterContent() {
                 <div className="w-full max-w-sm flex flex-col items-stretch">
                     <div className="text-center mb-8">
                         <h2 className="text-2xl font-black tracking-tight text-[color:var(--foreground)] mb-2">Create your account</h2>
-                        <p className="text-sm text-[color:var(--muted-foreground)]">Join PDFNest to unlock your daily quota.</p>
+                        <p className="text-sm text-[color:var(--muted-foreground)]">Join Platen PDF to unlock your daily quota.</p>
                     </div>
 
                     {error && (

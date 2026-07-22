@@ -21,8 +21,8 @@ const geistMono = Geist({
 export const metadata: Metadata = {
     metadataBase: new URL(SITE_URL),
     title: {
-        default: "PDFNest - Free PDF Tools Online",
-        template: "%s | PDFNest",
+        default: "Platen PDF - Free PDF Tools Online",
+        template: "%s | Platen PDF",
     },
     description: "Merge, split, rotate, convert PDFs and images directly in your browser for free.",
     alternates: {
@@ -31,9 +31,9 @@ export const metadata: Metadata = {
     verification: {
         google: "cqwXOOqo2LotVxmcp8Hgtahz0-pcYaZ4J15J_Yl7PvU",
     },
-    applicationName: "PDFNest",
-    creator: "PDFNest",
-    publisher: "PDFNest",
+    applicationName: "Platen PDF",
+    creator: "Platen",
+    publisher: "Platen",
     category: "productivity",
     formatDetection: {
         email: false,

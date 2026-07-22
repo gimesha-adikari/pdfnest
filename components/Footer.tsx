@@ -48,7 +48,7 @@ export default function Footer() {
                 <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-5">
                     <div className="space-y-3">
                         <h3 className="text-md font-black tracking-tight bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent select-none">
-                            PDFNest Engine
+                            Platen PDF Engine
                         </h3>
                         <p className="text-xs leading-relaxed text-muted font-medium">
                             Files are processed inside secure, isolated execution environments. All structural data payloads are permanently wiped from sandbox tracks automatically immediately upon download completion.
@@ -109,14 +109,14 @@ export default function Footer() {
                                 href="/about"
                                 className="mt-2 hover:text-indigo-500 transition-colors text-[var(--foreground)] font-bold uppercase tracking-wide text-[10px]"
                             >
-                                About PDFNest Setup →
+                                About Platen PDF Setup →
                             </Link>
                         </div>
                     </div>
                 </div>
 
                 <div className="mt-12 border-t border-[color:var(--border)] pt-6 text-center text-xs font-medium text-[color:var(--muted)]">
-                    © {new Date().getFullYear()} PDFNest Core Document Engine. All privileges reserved.
+                    © {new Date().getFullYear()} Platen Core Document Engine. All privileges reserved.
                 </div>
             </div>
         </footer>

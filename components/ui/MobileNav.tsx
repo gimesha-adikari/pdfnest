@@ -225,7 +225,7 @@ export default function MobileNav() {
                         <div className="flex justify-between items-center pb-5 border-b border-slate-200/60 dark:border-white/10">
                             <div>
                                 <h2 className="text-xl font-black bg-gradient-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">
-                                    PDFNest
+                                    Platen PDF
                                 </h2>
                                 <p className="text-xs text-slate-400 font-medium">
                                     Free PDF Tools

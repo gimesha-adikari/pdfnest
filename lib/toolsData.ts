@@ -37,7 +37,7 @@ export const NAV_TOOLS: ToolItem[] = [
         href: "/merge-pdf",
         category: "organize",
         seoTitle: "Merge PDF Online Free - Combine PDF Files",
-        seoDescription: "Merge multiple PDF files into one document online. Arrange pages and create a single PDF quickly with PDFNest.",
+        seoDescription: "Merge multiple PDF files into one document online. Arrange pages and create a single PDF quickly with Platen PDF.",
         intent: "Users want to combine multiple PDF documents into one file.",
         keywords: [
             "merge pdf online",
@@ -55,7 +55,7 @@ export const NAV_TOOLS: ToolItem[] = [
         faq: [
             {
                 question: "Can I merge multiple PDF files?",
-                answer: "Yes. PDFNest allows you to combine multiple PDF documents into one file."
+                answer: "Yes. Platen PDF allows you to combine multiple PDF documents into one file."
             },
             {
                 question: "Is it free to merge PDFs?",

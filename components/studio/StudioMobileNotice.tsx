@@ -17,7 +17,7 @@ export default function StudioMobileNotice() {
                         </h3>
 
                         <p className="mt-1 text-sm text-[color:var(--muted)]">
-                            PDFNest Studio works on mobile devices, but for the
+                            Platen PDF Studio works on mobile devices, but for the
                             best editing experience we recommend using a desktop
                             or laptop. Some tools require a larger screen for
                             accurate page editing.

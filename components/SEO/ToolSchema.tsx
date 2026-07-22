@@ -57,7 +57,7 @@ export default function ToolSchema({
     const schema = {
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
-        name: `${toolData.title} - PDFNest`,
+        name: `${toolData.title} - Platen PDF`,
         applicationCategory: "DocumentManagementApplication",
         operatingSystem: "Web",
         description: toolData.description,
@@ -76,7 +76,7 @@ export default function ToolSchema({
             ],
         publisher: {
             "@type": "Organization",
-            name: "PDFNest"
+            name: "Platen"
         }
     };
 

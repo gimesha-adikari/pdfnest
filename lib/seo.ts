@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { NAV_TOOLS } from "./toolsData";
 
 const BASE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://pdfnest.gimesha.dev").replace(/\/$/, "");
-const OG_IMAGE = `${BASE_URL}/pdfnest-og.png`;
+const OG_IMAGE = `${BASE_URL}/platen-og.png`;
 
 function buildAbsoluteUrl(pathname: string): string {
     return new URL(pathname.startsWith("/") ? pathname : `/${pathname}`, BASE_URL).toString();
@@ -12,15 +12,15 @@ function buildBaseMetadata(): Metadata {
     return {
         metadataBase: new URL(BASE_URL),
         title: {
-            default: "PDFNest - Free PDF Tools Online",
-            template: "%s | PDFNest",
+            default: "Platen PDF - Free PDF Tools Online",
+            template: "%s | Platen PDF",
         },
         description:
             "Merge, split, rotate, convert, compress, edit, and secure PDF documents directly in your browser.",
-        applicationName: "PDFNest",
+        applicationName: "Platen PDF",
         category: "productivity",
-        creator: "PDFNest",
-        publisher: "PDFNest",
+        creator: "Platen",
+        publisher: "Platen",
         referrer: "origin-when-cross-origin",
         formatDetection: {
             email: false,
@@ -53,11 +53,11 @@ function buildBaseMetadata(): Metadata {
             canonical: BASE_URL,
         },
         openGraph: {
-            title: "PDFNest - Free PDF Tools Online",
+            title: "Platen PDF - Free PDF Tools Online",
             description:
                 "Merge, split, rotate, convert, compress, edit, and secure PDF documents directly in your browser.",
             url: BASE_URL,
-            siteName: "PDFNest",
+            siteName: "Platen PDF",
             locale: "en_US",
             type: "website",
             images: [
@@ -65,13 +65,13 @@ function buildBaseMetadata(): Metadata {
                     url: OG_IMAGE,
                     width: 1200,
                     height: 630,
-                    alt: "PDFNest",
+                    alt: "Platen PDF",
                 },
             ],
         },
         twitter: {
             card: "summary_large_image",
-            title: "PDFNest - Free PDF Tools Online",
+            title: "Platen PDF - Free PDF Tools Online",
             description:
                 "Merge, split, rotate, convert, compress, edit, and secure PDF documents directly in your browser.",
             images: [OG_IMAGE],
@@ -90,7 +90,7 @@ export function getToolMetadata(toolHref: string): Metadata {
         return buildBaseMetadata();
     }
 
-    const title = tool.seoTitle ?? `${tool.title} Online Free - PDFNest`;
+    const title = tool.seoTitle ?? `${tool.title} Online Free - Platen PDF`;
     const description = tool.seoDescription ?? tool.description;
 
     const keywords = Array.from(
@@ -98,7 +98,7 @@ export function getToolMetadata(toolHref: string): Metadata {
             tool.title,
             `${tool.title} online`,
             `${tool.title} free`,
-            "PDFNest",
+            "Platen PDF",
             "free PDF tools",
             ...(tool.keywords ?? []),
         ])
@@ -111,10 +111,10 @@ export function getToolMetadata(toolHref: string): Metadata {
         title,
         description,
         keywords,
-        applicationName: "PDFNest",
+        applicationName: "Platen PDF",
         category: "productivity",
-        creator: "PDFNest",
-        publisher: "PDFNest",
+        creator: "Platen",
+        publisher: "Platen",
         referrer: "origin-when-cross-origin",
         formatDetection: {
             email: false,
@@ -139,7 +139,7 @@ export function getToolMetadata(toolHref: string): Metadata {
             title,
             description,
             url,
-            siteName: "PDFNest",
+            siteName: "Platen PDF",
             locale: "en_US",
             type: "website",
             images: [
