@@ -73,8 +73,6 @@ echo "Starting Platen PDF Frontend (DEV)"
 echo "=================================="
 echo ""
 
-echo "$NEXT_PUBLIC_GOOGLE_CLIENT_ID"
-
 case "$PKG_MANAGER" in
     npm)
         npm run dev

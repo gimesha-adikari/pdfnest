@@ -4,7 +4,7 @@ import { useMemo, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Crop, Loader2, ShieldCheck, ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
-import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
+import { getFriendlyErrorMessage, handleClientError } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
@@ -36,6 +36,18 @@ function formatMB(bytes: number) {
 }
 
 type DragType = "move" | "top" | "bottom" | "left" | "right" | "top-left" | "top-right" | "bottom-left" | "bottom-right" | null;
+type PageSelectionMode = "current" | "all" | "custom";
+
+function normalizePageSelectionInput(input: string): string[] {
+    return input
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean);
+}
+
+function joinPreviewPages(parts: string[]) {
+    return parts.length ? parts.join(", ") : "none";
+}
 
 export default function CropPdfWorkspace() {
     const { requireAuth } = useAuth();
@@ -62,11 +74,21 @@ export default function CropPdfWorkspace() {
     const [displayDimensions, setDisplayDimensions] = useState({ width: 0, height: 0 });
 
     const [dragType, setDragType] = useState<DragType>(null);
-    const dragStartRef = useRef<{ mouseX: number; mouseY: number; xmin: number; ymin: number; xmax: number; ymax: number }>({ mouseX: 0, mouseY: 0, xmin: 0, ymin: 0, xmax: 0, ymax: 0 });
+    const dragStartRef = useRef<{ mouseX: number; mouseY: number; xmin: number; ymin: number; xmax: number; ymax: number }>({
+        mouseX: 0,
+        mouseY: 0,
+        xmin: 0,
+        ymin: 0,
+        xmax: 0,
+        ymax: 0,
+    });
 
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const renderTaskRef = useRef<PdfJsRenderTask | null>(null);
+
+    const [pageSelectionMode, setPageSelectionMode] = useState<PageSelectionMode>("current");
+    const [customPagesInput, setCustomPagesInput] = useState<string>("");
 
     // Maps workspace points onto HTML display pixels smoothly
     const scaleFactor = useMemo(() => {
@@ -79,12 +101,40 @@ export default function CropPdfWorkspace() {
         return formatMB(file.size);
     }, [file]);
 
+    const selectedPagesPreview = useMemo(() => {
+        if (!totalPages) return "No pages loaded";
+
+        if (pageSelectionMode === "all") {
+            return `All pages (1-${totalPages})`;
+        }
+
+        if (pageSelectionMode === "current") {
+            return `Current page (${currentPage})`;
+        }
+
+        const normalized = normalizePageSelectionInput(customPagesInput);
+        return normalized.length > 0 ? normalized.join(", ") : "Enter page numbers or ranges";
+    }, [pageSelectionMode, currentPage, totalPages, customPagesInput]);
+
+    const selectedPagesPayload = useMemo(() => {
+        if (pageSelectionMode === "all") return null;
+
+        if (pageSelectionMode === "current") {
+            return [String(currentPage)];
+        }
+
+        const normalized = normalizePageSelectionInput(customPagesInput);
+        return normalized.length > 0 ? normalized : null;
+    }, [pageSelectionMode, currentPage, customPagesInput]);
+
     useEffect(() => {
         if (!file) {
             // eslint-disable-next-line react-hooks/set-state-in-effect
             setPdfDocument(null);
             setTotalPages(0);
             setCurrentPage(1);
+            setPageSelectionMode("current");
+            setCustomPagesInput("");
             return;
         }
 
@@ -102,6 +152,7 @@ export default function CropPdfWorkspace() {
                 setPdfDocument(pdf as unknown as PdfJsDocument);
                 setTotalPages(pdf.numPages);
                 setCurrentPage(1);
+                setPageSelectionMode("current");
             } catch (err) {
                 console.error("Failed to parse document context framework:", err);
             } finally {
@@ -141,7 +192,7 @@ export default function CropPdfWorkspace() {
 
                 const renderTask = page.render({
                     canvasContext: ctx,
-                    viewport: renderViewport
+                    viewport: renderViewport,
                 });
                 renderTaskRef.current = renderTask;
 
@@ -153,11 +204,10 @@ export default function CropPdfWorkspace() {
                         setPdfDimensions({ width: baseViewport.width, height: baseViewport.height });
                         setDisplayDimensions({
                             width: canvasRef.current.clientWidth,
-                            height: canvasRef.current.clientHeight
+                            height: canvasRef.current.clientHeight,
                         });
                     }
                 }, 0);
-
             } catch (err: unknown) {
                 const errorObj = err as Error;
                 if (errorObj?.name !== "RenderingCancelledException") {
@@ -174,7 +224,7 @@ export default function CropPdfWorkspace() {
             if (canvasRef.current) {
                 setDisplayDimensions({
                     width: canvasRef.current.clientWidth,
-                    height: canvasRef.current.clientHeight
+                    height: canvasRef.current.clientHeight,
                 });
             }
         };
@@ -218,7 +268,7 @@ export default function CropPdfWorkspace() {
             xmin,
             ymin,
             xmax,
-            ymax
+            ymax,
         };
     };
 
@@ -299,6 +349,11 @@ export default function CropPdfWorkspace() {
                 formData.append("file", validFile);
                 formData.append("box", compiledBoxString);
 
+                const pagesToSend = selectedPagesPayload;
+                if (pagesToSend && pagesToSend.length > 0) {
+                    formData.append("pages", pagesToSend.join(","));
+                }
+
                 if (validFile.originalPassword) {
                     formData.append("file_password", validFile.originalPassword);
                 }
@@ -307,14 +362,14 @@ export default function CropPdfWorkspace() {
 
                 setDownloadData({
                     blob: responseBlob,
-                    fileName: `${validFile.name.replace(/\.pdf$/i, "")}-cropped.pdf`
+                    fileName: `${validFile.name.replace(/\.pdf$/i, "")}-cropped.pdf`,
                 });
 
                 setSuccess(true);
                 router.push(`/${toolId}/download`);
             } catch (err) {
                 console.error(err);
-               handleClientError(err);
+                handleClientError(err);
             } finally {
                 setIsProcessing(false);
             }
@@ -332,13 +387,15 @@ export default function CropPdfWorkspace() {
 
             <div className="mt-12 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8 shadow-lg w-full">
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 w-full">
-
                     {/* Controls Sidebar */}
                     <div className="lg:col-span-5 space-y-6">
-                        <PdfFileInfo file={file} onClear={() => {
-                            setFile(null);
-                            router.push(`/${toolId}`);
-                        }} />
+                        <PdfFileInfo
+                            file={file}
+                            onClear={() => {
+                                setFile(null);
+                                router.push(`/${toolId}`);
+                            }}
+                        />
 
                         <div className="rounded-2xl border border-[color:var(--border)] p-5 bg-[color:var(--background)]/50 space-y-4">
                             <h3 className="text-sm font-semibold flex items-center gap-2">
@@ -349,25 +406,118 @@ export default function CropPdfWorkspace() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="flex flex-col gap-1">
                                     <label className="text-[10px] text-[color:var(--muted)] font-bold uppercase">Min X (Left)</label>
-                                    <input type="number" value={xmin} onChange={(e) => setXmin(Math.max(0, parseInt(e.target.value) || 0))} className="w-full px-3 py-2 text-sm border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl text-[color:var(--foreground)] outline-none font-medium" />
+                                    <input
+                                        type="number"
+                                        value={xmin}
+                                        onChange={(e) => setXmin(Math.max(0, parseInt(e.target.value) || 0))}
+                                        className="w-full px-3 py-2 text-sm border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl text-[color:var(--foreground)] outline-none font-medium"
+                                    />
                                 </div>
                                 <div className="flex flex-col gap-1">
                                     <label className="text-[10px] text-[color:var(--muted)] font-bold uppercase">Min Y (Top)</label>
-                                    <input type="number" value={ymin} onChange={(e) => setYmin(Math.max(0, parseInt(e.target.value) || 0))} className="w-full px-3 py-2 text-sm border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl text-[color:var(--foreground)] outline-none font-medium" />
+                                    <input
+                                        type="number"
+                                        value={ymin}
+                                        onChange={(e) => setYmin(Math.max(0, parseInt(e.target.value) || 0))}
+                                        className="w-full px-3 py-2 text-sm border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl text-[color:var(--foreground)] outline-none font-medium"
+                                    />
                                 </div>
                                 <div className="flex flex-col gap-1">
                                     <label className="text-[10px] text-[color:var(--muted)] font-bold uppercase">Max X (Right)</label>
-                                    <input type="number" value={xmax} onChange={(e) => setXmax(Math.min(pdfDimensions.width, parseInt(e.target.value) || 0))} className="w-full px-3 py-2 text-sm border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl text-[color:var(--foreground)] outline-none font-medium" />
+                                    <input
+                                        type="number"
+                                        value={xmax}
+                                        onChange={(e) => setXmax(Math.min(pdfDimensions.width, parseInt(e.target.value) || 0))}
+                                        className="w-full px-3 py-2 text-sm border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl text-[color:var(--foreground)] outline-none font-medium"
+                                    />
                                 </div>
                                 <div className="flex flex-col gap-1">
                                     <label className="text-[10px] text-[color:var(--muted)] font-bold uppercase">Max Y (Bottom)</label>
-                                    <input type="number" value={ymax} onChange={(e) => setYmax(Math.min(pdfDimensions.height, parseInt(e.target.value) || 0))} className="w-full px-3 py-2 text-sm border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl text-[color:var(--foreground)] outline-none font-medium" />
+                                    <input
+                                        type="number"
+                                        value={ymax}
+                                        onChange={(e) => setYmax(Math.min(pdfDimensions.height, parseInt(e.target.value) || 0))}
+                                        className="w-full px-3 py-2 text-sm border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl text-[color:var(--foreground)] outline-none font-medium"
+                                    />
                                 </div>
                             </div>
 
                             <div className="pt-3 border-t border-[color:var(--border)] flex items-center justify-between text-xs">
                                 <span className="text-[color:var(--muted)]">Calculated Core Points:</span>
                                 <span className="font-mono font-bold text-indigo-500 bg-indigo-500/10 px-2 py-1 rounded-md">{compiledBoxString}</span>
+                            </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-[color:var(--border)] p-5 bg-[color:var(--background)]/50 space-y-4">
+                            <h3 className="text-sm font-semibold flex items-center gap-2">
+                                <Eye size={16} className="text-indigo-500" />
+                                Page Selection
+                            </h3>
+
+                            <div className="grid grid-cols-3 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setPageSelectionMode("current")}
+                                    className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                                        pageSelectionMode === "current"
+                                            ? "border-indigo-500 bg-indigo-500/10 text-indigo-600"
+                                            : "border-[color:var(--border)] bg-[color:var(--background)] text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
+                                    }`}
+                                >
+                                    Current page
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setPageSelectionMode("all")}
+                                    className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                                        pageSelectionMode === "all"
+                                            ? "border-indigo-500 bg-indigo-500/10 text-indigo-600"
+                                            : "border-[color:var(--border)] bg-[color:var(--background)] text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
+                                    }`}
+                                >
+                                    All pages
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setPageSelectionMode("custom")}
+                                    className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                                        pageSelectionMode === "custom"
+                                            ? "border-indigo-500 bg-indigo-500/10 text-indigo-600"
+                                            : "border-[color:var(--border)] bg-[color:var(--background)] text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
+                                    }`}
+                                >
+                                    Custom
+                                </button>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] text-[color:var(--muted)] font-bold uppercase">Pages to crop</label>
+
+                                {pageSelectionMode === "custom" ? (
+                                    <input
+                                        type="text"
+                                        value={customPagesInput}
+                                        onChange={(e) => setCustomPagesInput(e.target.value)}
+                                        placeholder="1-3,5,8-10"
+                                        className="w-full px-3 py-2 text-sm border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl text-[color:var(--foreground)] outline-none font-medium"
+                                    />
+                                ) : (
+                                    <div className="w-full px-3 py-2 text-sm border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl text-[color:var(--foreground)] font-medium">
+                                        {selectedPagesPreview}
+                                    </div>
+                                )}
+
+                                <p className="text-[11px] text-[color:var(--muted)] leading-relaxed">
+                                    Use a comma-separated list for custom pages. Examples: <span className="font-mono">1</span>,{" "}
+                                    <span className="font-mono">1-3</span>, <span className="font-mono">1,4,7-9</span>.
+                                </p>
+                            </div>
+
+                            <div className="pt-3 border-t border-[color:var(--border)] flex items-center justify-between text-xs">
+                                <span className="text-[color:var(--muted)]">Applied Pages:</span>
+                                <span className="font-mono font-bold text-indigo-500 bg-indigo-500/10 px-2 py-1 rounded-md">
+                  {selectedPagesPreview}
+                </span>
                             </div>
                         </div>
 
@@ -401,12 +551,28 @@ export default function CropPdfWorkspace() {
                         )}
 
                         <div className="w-full flex items-center justify-between border-b border-[color:var(--border)] pb-3 text-[color:var(--foreground)] text-sm font-bold mb-4">
-                            <span className="flex items-center gap-2"><Eye size={16} className="text-indigo-500" /> Workspace Canvas Simulator</span>
+              <span className="flex items-center gap-2">
+                <Eye size={16} className="text-indigo-500" /> Workspace Canvas Simulator
+              </span>
                             {totalPages > 0 && (
                                 <div className="flex items-center gap-2 border border-[color:var(--border)] px-2 py-0.5 rounded-lg bg-[var(--card)] text-xs text-[color:var(--muted)] font-mono select-none">
-                                    <button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage(p => p - 1)} className="hover:text-[color:var(--foreground)] disabled:opacity-20 transition"><ChevronLeft size={14} /></button>
+                                    <button
+                                        type="button"
+                                        disabled={currentPage <= 1}
+                                        onClick={() => setCurrentPage((p) => p - 1)}
+                                        className="hover:text-[color:var(--foreground)] disabled:opacity-20 transition"
+                                    >
+                                        <ChevronLeft size={14} />
+                                    </button>
                                     <span>Page {currentPage} of {totalPages}</span>
-                                    <button type="button" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)} className="hover:text-[color:var(--foreground)] disabled:opacity-20 transition"><ChevronRight size={14} /></button>
+                                    <button
+                                        type="button"
+                                        disabled={currentPage >= totalPages}
+                                        onClick={() => setCurrentPage((p) => p + 1)}
+                                        className="hover:text-[color:var(--foreground)] disabled:opacity-20 transition"
+                                    >
+                                        <ChevronRight size={14} />
+                                    </button>
                                 </div>
                             )}
                         </div>
@@ -426,16 +592,40 @@ export default function CropPdfWorkspace() {
                                     </div>
 
                                     {/* Corner Handles */}
-                                    <div className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-indigo-600 rounded-full cursor-nwse-resize z-20" onMouseDown={(e) => handleMouseDown("top-left", e)} />
-                                    <div className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-indigo-600 rounded-full cursor-nesw-resize z-20" onMouseDown={(e) => handleMouseDown("top-right", e)} />
-                                    <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-indigo-600 rounded-full cursor-nesw-resize z-20" onMouseDown={(e) => handleMouseDown("bottom-left", e)} />
-                                    <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-indigo-600 rounded-full cursor-nwse-resize z-20" onMouseDown={(e) => handleMouseDown("bottom-right", e)} />
+                                    <div
+                                        className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-indigo-600 rounded-full cursor-nwse-resize z-20"
+                                        onMouseDown={(e) => handleMouseDown("top-left", e)}
+                                    />
+                                    <div
+                                        className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-indigo-600 rounded-full cursor-nesw-resize z-20"
+                                        onMouseDown={(e) => handleMouseDown("top-right", e)}
+                                    />
+                                    <div
+                                        className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-indigo-600 rounded-full cursor-nesw-resize z-20"
+                                        onMouseDown={(e) => handleMouseDown("bottom-left", e)}
+                                    />
+                                    <div
+                                        className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-indigo-600 rounded-full cursor-nwse-resize z-20"
+                                        onMouseDown={(e) => handleMouseDown("bottom-right", e)}
+                                    />
 
                                     {/* Line Handles */}
-                                    <div className="absolute top-0 left-1/2 -translate-x-1/2 -top-1.5 w-6 h-2 bg-white border border-indigo-600 rounded-sm cursor-ns-resize z-20" onMouseDown={(e) => handleMouseDown("top", e)} />
-                                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 -bottom-1.5 w-6 h-2 bg-white border border-indigo-600 rounded-sm cursor-ns-resize z-20" onMouseDown={(e) => handleMouseDown("bottom", e)} />
-                                    <div className="absolute left-0 top-1/2 -translate-y-1/2 -left-1.5 h-6 w-2 bg-white border border-indigo-600 rounded-sm cursor-ew-resize z-20" onMouseDown={(e) => handleMouseDown("left", e)} />
-                                    <div className="absolute right-0 top-1/2 -translate-y-1/2 -right-1.5 h-6 w-2 bg-white border border-indigo-600 rounded-sm cursor-ew-resize z-20" onMouseDown={(e) => handleMouseDown("right", e)} />
+                                    <div
+                                        className="absolute top-0 left-1/2 -translate-x-1/2 -top-1.5 w-6 h-2 bg-white border border-indigo-600 rounded-sm cursor-ns-resize z-20"
+                                        onMouseDown={(e) => handleMouseDown("top", e)}
+                                    />
+                                    <div
+                                        className="absolute bottom-0 left-1/2 -translate-x-1/2 -bottom-1.5 w-6 h-2 bg-white border border-indigo-600 rounded-sm cursor-ns-resize z-20"
+                                        onMouseDown={(e) => handleMouseDown("bottom", e)}
+                                    />
+                                    <div
+                                        className="absolute left-0 top-1/2 -translate-y-1/2 -left-1.5 h-6 w-2 bg-white border border-indigo-600 rounded-sm cursor-ew-resize z-20"
+                                        onMouseDown={(e) => handleMouseDown("left", e)}
+                                    />
+                                    <div
+                                        className="absolute right-0 top-1/2 -translate-y-1/2 -right-1.5 h-6 w-2 bg-white border border-indigo-600 rounded-sm cursor-ew-resize z-20"
+                                        onMouseDown={(e) => handleMouseDown("right", e)}
+                                    />
                                 </div>
                             </div>
                         </div>
@@ -452,7 +642,6 @@ export default function CropPdfWorkspace() {
                             </div>
                         )}
                     </div>
-
                 </div>
             </div>
         </>
