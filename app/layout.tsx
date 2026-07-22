@@ -48,10 +48,7 @@ export default function RootLayout({
                                    }: Readonly<{
     children: React.ReactNode;
 }>) {
-    const googleClientId =
-        process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ||
-        "238327273003-0e17tkoua8oeg8197v7n01iqs337pkh6.apps.googleusercontent.com";
-
+    const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!;
     return (
         <html
             lang="en"

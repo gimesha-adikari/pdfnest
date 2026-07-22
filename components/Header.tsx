@@ -10,12 +10,14 @@ import {NAV_TOOLS} from "@/lib/toolsData";
 import {ChevronDown, LogOut, ShieldAlert, Sparkles, Zap} from "lucide-react";
 import {useAuth} from "@/context/AuthContext";
 import {fetchJson} from "@/lib/api";
+import { useTheme } from "next-themes";
 
 export default function Header() {
     const {subscription, isAuthenticated, logout, user} = useAuth();
     const pathname = usePathname();
     const [forceHide, setForceHide] = useState(false);
     const [toolsList, setToolsList] = useState<any[]>([]);
+    const { resolvedTheme } = useTheme();
 
     useEffect(() => {
         fetchJson("/site-content/tools")
@@ -80,23 +82,31 @@ export default function Header() {
         group-hover:scale-105
     "
                         >
-                            {/* Light theme */}
-                            <Image
-                                src="/platen-logo.svg"
-                                alt="Platen"
-                                fill
-                                priority
-                                className="object-contain p-1 dark:hidden"
-                            />
+                            <div
+                                className="
+        relative
+        h-10 w-10
+        rounded-xl
+        border border-indigo-500/20
+        bg-indigo-500/10
+        dark:bg-indigo-500/20
+        overflow-hidden
+        transition-transform
+        group-hover:scale-105
+    "
+                            >
 
-                            {/* Dark theme */}
-                            <Image
-                                src="/platen-logo-dark.svg"
-                                alt="Platen"
-                                fill
-                                priority
-                                className="hidden object-contain p-1 dark:block"
-                            />
+                                <Image
+                                    src={
+                                        resolvedTheme === "dark"
+                                            ? "/platen-logo-dark.svg"
+                                            : "/platen-logo.svg"
+                                    }
+                                    alt="Platen"
+                                    fill
+                                    className="object-contain p-1"
+                                />
+                            </div>
                         </div>
 
                         <div className="leading-tight">

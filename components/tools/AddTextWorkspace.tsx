@@ -2,9 +2,20 @@
 
 import { useMemo, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Type, Loader2, ShieldCheck, ChevronLeft, ChevronRight, Eye, MousePointerSquareDashed, Trash2, Plus } from "lucide-react";
+import {
+    Type,
+    Loader2,
+    ShieldCheck,
+    ChevronLeft,
+    ChevronRight,
+    Eye,
+    MousePointerSquareDashed,
+    Trash2,
+    Plus,
+} from "lucide-react";
+
 import { uploadAndDownloadFile } from "@/lib/api";
-import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
+import { getFriendlyErrorMessage, handleClientError } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
@@ -12,12 +23,23 @@ import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 
-interface CustomPdfFile extends File { originalPassword?: string; }
-interface PdfJsRenderTask { cancel: () => void; promise: Promise<void>; }
+interface CustomPdfFile extends File {
+    originalPassword?: string;
+}
+
+interface PdfJsRenderTask {
+    cancel: () => void;
+    promise: Promise<void>;
+}
+
 interface PdfJsPage {
     getViewport: (options: { scale: number }) => { width: number; height: number };
-    render: (options: { canvasContext: CanvasRenderingContext2D; viewport: unknown }) => PdfJsRenderTask;
+    render: (options: {
+        canvasContext: CanvasRenderingContext2D;
+        viewport: unknown;
+    }) => PdfJsRenderTask;
 }
+
 interface PdfJsDocument {
     numPages: number;
     getPage: (pageNumber: number) => Promise<PdfJsPage>;
@@ -59,7 +81,13 @@ export default function AddTextWorkspace() {
     const [success, setSuccess] = useState(false);
 
     // Drag tracking system
-    const dragRef = useRef<{ id: string; startX: number; startY: number; initialPdfX: number; initialPdfY: number } | null>(null);
+    const dragRef = useRef<{
+        id: string;
+        startX: number;
+        startY: number;
+        initialPdfX: number;
+        initialPdfY: number;
+    } | null>(null);
 
     const scaleFactor = useMemo(() => {
         if (pdfDimensions.width === 0 || displayDimensions.width === 0) return 1;
@@ -67,7 +95,7 @@ export default function AddTextWorkspace() {
     }, [pdfDimensions, displayDimensions]);
 
     // Derived active element config mapping
-    const activeElement = elements.find(el => el.id === activeId);
+    const activeElement = elements.find((el) => el.id === activeId);
 
     useEffect(() => {
         if (!file) {
@@ -125,7 +153,7 @@ export default function AddTextWorkspace() {
 
                 const renderTask = page.render({
                     canvasContext: ctx,
-                    viewport: renderViewport
+                    viewport: renderViewport,
                 });
                 renderTaskRef.current = renderTask;
 
@@ -137,7 +165,7 @@ export default function AddTextWorkspace() {
                         setPdfDimensions({ width: baseViewport.width, height: baseViewport.height });
                         setDisplayDimensions({
                             width: canvasRef.current.clientWidth,
-                            height: canvasRef.current.clientHeight
+                            height: canvasRef.current.clientHeight,
                         });
                     }
                 }, 0);
@@ -154,7 +182,10 @@ export default function AddTextWorkspace() {
 
         const updateDisplaySize = () => {
             if (canvasRef.current) {
-                setDisplayDimensions({ width: canvasRef.current.clientWidth, height: canvasRef.current.clientHeight });
+                setDisplayDimensions({
+                    width: canvasRef.current.clientWidth,
+                    height: canvasRef.current.clientHeight,
+                });
             }
         };
 
@@ -172,20 +203,21 @@ export default function AddTextWorkspace() {
 
             const { id, startX, startY, initialPdfX, initialPdfY } = dragRef.current;
 
-            // Calculate movement delta scaled back to real PDF Points
             const deltaPdfX = (e.clientX - startX) / scaleFactor;
             const deltaPdfY = (e.clientY - startY) / scaleFactor;
 
-            setElements(prev => prev.map(el => {
-                if (el.id === id) {
-                    return {
-                        ...el,
-                        x: Math.max(0, initialPdfX + deltaPdfX), // clamp to edge
-                        y: Math.max(0, initialPdfY + deltaPdfY)
-                    };
-                }
-                return el;
-            }));
+            setElements((prev) =>
+                prev.map((el) => {
+                    if (el.id === id) {
+                        return {
+                            ...el,
+                            x: Math.max(0, initialPdfX + deltaPdfX),
+                            y: Math.max(0, initialPdfY + deltaPdfY),
+                        };
+                    }
+                    return el;
+                })
+            );
         };
 
         const handlePointerUp = () => {
@@ -211,7 +243,7 @@ export default function AddTextWorkspace() {
             y: 50,
             page: currentPage,
             fontSize: 24,
-            color: "#000000"
+            color: "#000000",
         };
         setElements([...elements, newElement]);
         setActiveId(newId);
@@ -219,21 +251,23 @@ export default function AddTextWorkspace() {
 
     const updateActiveElement = (updates: Partial<TextElement>) => {
         if (!activeId) return;
-        setElements(prev => prev.map(el => el.id === activeId ? { ...el, ...updates } : el));
+        setElements((prev) =>
+            prev.map((el) => (el.id === activeId ? { ...el, ...updates } : el))
+        );
     };
 
     const deleteActiveElement = () => {
         if (!activeId) return;
-        setElements(prev => prev.filter(el => el.id !== activeId));
+        setElements((prev) => prev.filter((el) => el.id !== activeId));
         setActiveId(null);
     };
 
     const handleTextProcessing = async () => {
         if (!file) return;
-        const validElements = elements.filter(e => e.text.trim() !== "");
+        const validElements = elements.filter((e) => e.text.trim() !== "");
 
         if (validElements.length === 0) {
-            notify("Please add at least one text box with text content.","warning");
+            notify("Please add at least one text box with text content.", "warning");
             return;
         }
 
@@ -248,13 +282,15 @@ export default function AddTextWorkspace() {
                 formData.append("file", validFile);
                 formData.append("elements", JSON.stringify(validElements));
 
-                if (validFile.originalPassword) formData.append("file_password", validFile.originalPassword);
+                if (validFile.originalPassword) {
+                    formData.append("file_password", validFile.originalPassword);
+                }
 
                 const responseBlob = await uploadAndDownloadFile("/api/structure/add-text", formData);
 
                 setDownloadData({
                     blob: responseBlob,
-                    fileName: `${validFile.name.replace(/\.pdf$/i, "")}-text-added.pdf`
+                    fileName: `${validFile.name.replace(/\.pdf$/i, "")}-text-added.pdf`,
                 });
 
                 setSuccess(true);
@@ -270,6 +306,9 @@ export default function AddTextWorkspace() {
 
     if (!file) return null;
 
+    const surfaceClass =
+        "w-full flex flex-col items-center justify-center rounded-xl border border-[color:var(--border)] bg-[color:var(--background)] p-4 relative overflow-hidden min-h-[420px]";
+
     return (
         <>
             <PdfToolHero
@@ -277,75 +316,87 @@ export default function AddTextWorkspace() {
                 description="Drag, drop, and type. Place text boxes anywhere on your document pages effortlessly like a real editor."
             />
 
-            <div className="mt-12 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8 shadow-lg w-full">
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 w-full">
-
+            <div className="mt-12 w-full rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8 shadow-lg">
+                <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
                     {/* Controls Sidebar */}
-                    <div className="lg:col-span-5 space-y-6">
-                        <PdfFileInfo file={file} onClear={() => {
-                            setFile(null);
-                            router.push(`/${toolId}`);
-                        }} />
+                    <div className="space-y-6 lg:col-span-5">
+                        <PdfFileInfo
+                            file={file}
+                            onClear={() => {
+                                setFile(null);
+                                router.push(`/${toolId}`);
+                            }}
+                        />
 
-                        <div className="rounded-2xl border border-[color:var(--border)] p-5 bg-[color:var(--background)]/50 space-y-5">
+                        <div className="space-y-5 rounded-2xl border border-[color:var(--border)] bg-[color:var(--background)]/50 p-5">
                             <div className="flex items-center justify-between">
-                                <h3 className="text-sm font-semibold flex items-center gap-2">
+                                <h3 className="flex items-center gap-2 text-sm font-semibold text-[color:var(--foreground)]">
                                     <Type size={16} className="text-indigo-500" />
                                     Text Box Properties
                                 </h3>
+
                                 <button
                                     onClick={addTextBox}
-                                    className="text-[10px] px-2.5 py-1.5 font-bold rounded-lg bg-indigo-500 text-white shadow hover:bg-indigo-600 transition flex items-center gap-1 uppercase tracking-wider"
+                                    className="flex items-center gap-1 rounded-lg bg-indigo-500 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white shadow transition hover:bg-indigo-600"
                                 >
                                     <Plus size={12} /> Add Box
                                 </button>
                             </div>
 
                             {activeElement ? (
-                                <div className="space-y-4 animate-fadeIn">
+                                <div className="animate-fadeIn space-y-4">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="flex flex-col gap-1.5">
-                                            <label className="text-[10px] text-[color:var(--muted)] font-bold uppercase">Font Size (pt)</label>
+                                            <label className="text-[10px] font-bold uppercase text-[color:var(--muted-foreground)]">
+                                                Font Size (pt)
+                                            </label>
                                             <input
                                                 type="number"
                                                 min={8}
                                                 max={144}
                                                 value={activeElement.fontSize}
-                                                onChange={(e) => updateActiveElement({ fontSize: parseInt(e.target.value) || 24 })}
-                                                className="w-full px-4 py-2 text-sm border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl text-[color:var(--foreground)] outline-none font-medium transition focus:border-indigo-500"
+                                                onChange={(e) =>
+                                                    updateActiveElement({ fontSize: parseInt(e.target.value) || 24 })
+                                                }
+                                                className="w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--background)] px-4 py-2 text-sm font-medium text-[color:var(--foreground)] outline-none transition focus:border-indigo-500"
                                             />
                                         </div>
+
                                         <div className="flex flex-col gap-1.5">
-                                            <label className="text-[10px] text-[color:var(--muted)] font-bold uppercase">Text Color</label>
-                                            <div className="flex items-center gap-2 h-full">
+                                            <label className="text-[10px] font-bold uppercase text-[color:var(--muted-foreground)]">
+                                                Text Color
+                                            </label>
+                                            <div className="flex h-full items-center gap-2">
                                                 <input
                                                     type="color"
                                                     value={activeElement.color}
                                                     onChange={(e) => updateActiveElement({ color: e.target.value })}
-                                                    className="h-9 w-9 rounded-lg cursor-pointer bg-transparent border-0 p-0"
+                                                    className="h-9 w-9 cursor-pointer rounded-lg border-0 bg-transparent p-0"
                                                 />
-                                                <span className="text-sm font-mono text-[color:var(--muted)]">{activeElement.color.toUpperCase()}</span>
+                                                <span className="font-mono text-sm text-[color:var(--muted-foreground)]">
+                          {activeElement.color.toUpperCase()}
+                        </span>
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div className="pt-2 border-t border-[color:var(--border)] flex justify-between items-center">
-                                        <span className="text-xs text-[color:var(--muted)] font-mono">
-                                            X: {Math.round(activeElement.x)} Y: {Math.round(activeElement.y)}
-                                        </span>
+                                    <div className="flex items-center justify-between border-t border-[color:var(--border)] pt-2">
+                    <span className="text-xs font-mono text-[color:var(--muted-foreground)]">
+                      X: {Math.round(activeElement.x)} Y: {Math.round(activeElement.y)}
+                    </span>
                                         <button
                                             onClick={deleteActiveElement}
-                                            className="text-xs flex items-center gap-1.5 text-red-500 hover:text-red-600 font-semibold transition bg-red-500/10 hover:bg-red-500/20 px-3 py-1.5 rounded-lg"
+                                            className="flex items-center gap-1.5 rounded-lg bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-500 transition hover:bg-red-500/20 hover:text-red-600"
                                         >
                                             <Trash2 size={14} /> Remove Box
                                         </button>
                                     </div>
                                 </div>
                             ) : (
-                                <div className="flex flex-col items-center justify-center py-6 text-center text-[color:var(--muted)] border-2 border-dashed border-[color:var(--border)] rounded-xl">
+                                <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-[color:var(--border)] py-6 text-center text-[color:var(--muted-foreground)]">
                                     <MousePointerSquareDashed size={24} className="mb-2 opacity-50" />
                                     <p className="text-sm font-medium">No box selected</p>
-                                    <p className="text-xs opacity-70 mt-1">Click a box on the canvas or add a new one.</p>
+                                    <p className="mt-1 text-xs opacity-70">Click a box on the canvas or add a new one.</p>
                                 </div>
                             )}
                         </div>
@@ -360,108 +411,139 @@ export default function AddTextWorkspace() {
                     </div>
 
                     {/* WYSIWYG Document Editor Preview Panel */}
-                    <div className="lg:col-span-7 flex flex-col bg-[color:var(--background)]/30 border border-[color:var(--border)] rounded-2xl p-6 relative w-full">
+                    <div className="relative flex w-full flex-col rounded-2xl border border-[color:var(--border)] bg-[color:var(--background)]/30 p-6 lg:col-span-7">
                         {isRenderingCanvas && (
-                            <div className="absolute inset-0 bg-[color:var(--background)]/40 backdrop-blur-sm rounded-2xl z-20 flex flex-col items-center justify-center text-xs font-medium text-[color:var(--muted)]">
-                                <Loader2 className="animate-spin text-indigo-500 mb-2" size={24} />
+                            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-2xl bg-[color:var(--background)]/40 text-xs font-medium text-[color:var(--muted-foreground)] backdrop-blur-sm">
+                                <Loader2 className="mb-2 animate-spin text-indigo-500" size={24} />
                                 Rendering Document Matrix...
                             </div>
                         )}
 
-                        <div className="w-full flex items-center justify-between border-b border-[color:var(--border)] pb-3 text-[color:var(--foreground)] text-sm font-bold mb-4">
-                            <span className="flex items-center gap-2"><Eye size={16} className="text-indigo-500" /> Interactive Canvas</span>
+                        <div className="mb-4 flex w-full items-center justify-between border-b border-[color:var(--border)] pb-3 text-sm font-bold text-[color:var(--foreground)]">
+              <span className="flex items-center gap-2">
+                <Eye size={16} className="text-indigo-500" /> Interactive Canvas
+              </span>
+
                             {totalPages > 0 && (
-                                <div className="flex items-center gap-2 border border-[color:var(--border)] px-2 py-0.5 rounded-lg bg-[var(--card)] text-xs text-[color:var(--muted)] font-mono select-none">
-                                    <button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage(p => p - 1)} className="hover:text-[color:var(--foreground)] disabled:opacity-20 transition"><ChevronLeft size={14} /></button>
-                                    <span>Page {currentPage} of {totalPages}</span>
-                                    <button type="button" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)} className="hover:text-[color:var(--foreground)] disabled:opacity-20 transition"><ChevronRight size={14} /></button>
+                                <div className="select-none rounded-lg border border-[color:var(--border)] bg-[var(--card)] px-2 py-0.5 font-mono text-xs text-[color:var(--muted-foreground)]">
+                                    <button
+                                        type="button"
+                                        disabled={currentPage <= 1}
+                                        onClick={() => setCurrentPage((p) => p - 1)}
+                                        className="transition hover:text-[color:var(--foreground)] disabled:opacity-20"
+                                    >
+                                        <ChevronLeft size={14} />
+                                    </button>
+                                    <span className="mx-2">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                                    <button
+                                        type="button"
+                                        disabled={currentPage >= totalPages}
+                                        onClick={() => setCurrentPage((p) => p + 1)}
+                                        className="transition hover:text-[color:var(--foreground)] disabled:opacity-20"
+                                    >
+                                        <ChevronRight size={14} />
+                                    </button>
                                 </div>
                             )}
                         </div>
 
                         {/* Interactive Wrapper Engine */}
-                        <div
-                            className="w-full flex flex-col items-center justify-center bg-gray-500/5 dark:bg-black/20 rounded-xl border border-[color:var(--border)] p-4 relative overflow-hidden min-h-[420px]"
-                            onClick={() => setActiveId(null)}
-                        >
-                            <div ref={containerRef} className="relative shadow-xl rounded border border-gray-400/20 bg-white max-w-full h-auto" onClick={e => e.stopPropagation()}>
-                                <canvas ref={canvasRef} className="max-w-full h-auto block rounded pointer-events-none" />
+                        <div className={surfaceClass} onClick={() => setActiveId(null)}>
+                            <div
+                                ref={containerRef}
+                                className="relative max-w-full rounded border border-[color:var(--border)] bg-[var(--card)] shadow-xl"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <canvas
+                                    ref={canvasRef}
+                                    className="block h-auto max-w-full rounded pointer-events-none"
+                                />
 
                                 {/* Absolute positioned interactive editor overlays */}
-                                {elements.filter(el => el.page === currentPage).map(el => {
-                                    const isActive = activeId === el.id;
+                                {elements
+                                    .filter((el) => el.page === currentPage)
+                                    .map((el) => {
+                                        const isActive = activeId === el.id;
 
-                                    const POINT_TO_PX = 96 / 72;
-                                    const renderedFontSize = el.fontSize * POINT_TO_PX * scaleFactor;
+                                        const POINT_TO_PX = 96 / 72;
+                                        const renderedFontSize = el.fontSize * POINT_TO_PX * scaleFactor;
 
-                                    return (
-                                        <div
-                                            key={el.id}
-                                            onPointerDown={(e) => {
-                                                e.stopPropagation();
-                                                setActiveId(el.id);
-                                                dragRef.current = {
-                                                    id: el.id,
-                                                    startX: e.clientX,
-                                                    startY: e.clientY,
-                                                    initialPdfX: el.x,
-                                                    initialPdfY: el.y
-                                                };
-                                            }}
-                                            style={{
-                                                position: "absolute",
-                                                left: `${el.x * scaleFactor}px`,
-                                                top: `${el.y * scaleFactor}px`,
-                                                // Adjust visual padding to avoid cropping tall characters
-                                                minWidth: "40px",
-                                            }}
-                                            className={`cursor-move transition-shadow ${isActive ? 'ring-2 ring-indigo-500 bg-indigo-500/5 rounded shadow-lg z-20' : 'hover:ring-1 hover:ring-[color:var(--border)] z-10'}`}
-                                        >
-                                            <textarea
-                                                value={el.text}
-                                                onChange={(e) => {
-                                                    setElements(prev => prev.map(item => item.id === el.id ? { ...item, text: e.target.value } : item));
+                                        return (
+                                            <div
+                                                key={el.id}
+                                                onPointerDown={(e) => {
+                                                    e.stopPropagation();
+                                                    setActiveId(el.id);
+                                                    dragRef.current = {
+                                                        id: el.id,
+                                                        startX: e.clientX,
+                                                        startY: e.clientY,
+                                                        initialPdfX: el.x,
+                                                        initialPdfY: el.y,
+                                                    };
                                                 }}
-                                                // Prevent mouse events from triggering drag when typing inside the box
-                                                onPointerDown={(e) => e.stopPropagation()}
-                                                onFocus={() => setActiveId(el.id)}
                                                 style={{
-                                                    fontSize: `${renderedFontSize}px`,
-                                                    color: el.color,
-                                                    fontFamily: "Helvetica, Arial, sans-serif",
-                                                    lineHeight: "1.2",
-                                                    whiteSpace: "pre",
+                                                    position: "absolute",
+                                                    left: `${el.x * scaleFactor}px`,
+                                                    top: `${el.y * scaleFactor}px`,
+                                                    minWidth: "40px",
                                                 }}
-                                                className="bg-transparent border-none outline-none resize-none overflow-hidden m-0 p-1 font-semibold min-h-[1.5em] min-w-[50px]"
-                                                // Auto-expand textarea horizontally and vertically to match text length
-                                                onInput={(e) => {
-                                                    const target = e.target as HTMLTextAreaElement;
-                                                    target.style.height = "auto";
-                                                    target.style.width = "auto";
-                                                    target.style.height = `${target.scrollHeight}px`;
-                                                    target.style.width = `${target.scrollWidth}px`;
-                                                }}
-                                                rows={el.text.split("\n").length || 1}
-                                            />
-                                        </div>
-                                    );
-                                })}
+                                                className={`z-10 cursor-move transition-shadow ${
+                                                    isActive
+                                                        ? "z-20 rounded bg-indigo-500/5 ring-2 ring-indigo-500 shadow-lg"
+                                                        : "hover:ring-1 hover:ring-[color:var(--border)]"
+                                                }`}
+                                            >
+                        <textarea
+                            value={el.text}
+                            onChange={(e) => {
+                                setElements((prev) =>
+                                    prev.map((item) =>
+                                        item.id === el.id ? { ...item, text: e.target.value } : item
+                                    )
+                                );
+                            }}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onFocus={() => setActiveId(el.id)}
+                            style={{
+                                fontSize: `${renderedFontSize}px`,
+                                color: el.color,
+                                fontFamily: "Helvetica, Arial, sans-serif",
+                                lineHeight: "1.2",
+                                whiteSpace: "pre",
+                            }}
+                            className="m-0 min-h-[1.5em] min-w-[50px] resize-none border-none bg-transparent p-1 font-semibold outline-none overflow-hidden"
+                            onInput={(e) => {
+                                const target = e.target as HTMLTextAreaElement;
+                                target.style.height = "auto";
+                                target.style.width = "auto";
+                                target.style.height = `${target.scrollHeight}px`;
+                                target.style.width = `${target.scrollWidth}px`;
+                            }}
+                            rows={el.text.split("\n").length || 1}
+                        />
+                                            </div>
+                                        );
+                                    })}
                             </div>
                         </div>
 
                         {success && (
-                            <div className="w-full mt-6 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-900 dark:text-emerald-200 flex items-start gap-3">
-                                <ShieldCheck className="text-emerald-500 mt-0.5 shrink-0" size={16} />
+                            <div className="mt-6 flex items-start gap-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4 text-[color:var(--foreground)]">
+                                <ShieldCheck className="mt-0.5 shrink-0 text-emerald-500" size={16} />
                                 <div className="text-xs">
-                                    <p className="font-semibold">Text successfully applied!</p>
-                                    <p className="mt-0.5 text-emerald-800/80 dark:text-emerald-200/70">
+                                    <p className="font-semibold text-[color:var(--foreground)]">
+                                        Text successfully applied!
+                                    </p>
+                                    <p className="mt-0.5 text-[color:var(--muted-foreground)]">
                                         The text boxes and configuration layers were stamped securely into your PDF vectors.
                                     </p>
                                 </div>
                             </div>
                         )}
                     </div>
-
                 </div>
             </div>
         </>

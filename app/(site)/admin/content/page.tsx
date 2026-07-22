@@ -12,7 +12,7 @@ import LandingPageContexts from "@/components/admin/LandingPageContexts";
 import PricingSubscriptionMatrices from "@/components/admin/PricingSubscriptionMatrices";
 import WorkspaceConfigurations from "@/components/admin/WorkspaceConfigurations";
 import AboutPageContexts from "@/components/admin/AboutPageContexts";
-import {notify} from "@/lib/notify";
+import { notify } from "@/lib/notify";
 
 type ActiveTabSection = "home" | "subscribe" | "about" | "tools";
 
@@ -32,16 +32,19 @@ export default function AdminContentEditor() {
 
     useEffect(() => {
         if (isLoading) return;
+
         if (!isAuthenticated || user?.role !== "admin") {
             router.push("/");
             return;
         }
-        // eslint-disable-next-line react-hooks/immutability
+
         loadAllPlatformContent();
+        // eslint-disable-next-line react-hooks/immutability
     }, [isLoading, isAuthenticated, user, router]);
 
     const loadAllPlatformContent = async () => {
         setIsFetching(true);
+
         try {
             const [home, subscribe, about, tools] = await Promise.all([
                 fetchJson("/site-content/home"),
@@ -52,6 +55,7 @@ export default function AdminContentEditor() {
 
             const cleanData = (obj: any) => {
                 const result: Record<string, string> = {};
+
                 if (obj && typeof obj === "object") {
                     Object.keys(obj).forEach((key) => {
                         if (
@@ -60,11 +64,11 @@ export default function AdminContentEditor() {
                             key !== "updatedAt" &&
                             key !== "createdAt"
                         ) {
-                            // GORM fallback safety handler conversion if primitive
                             result[key] = typeof obj[key] === "string" ? obj[key] : JSON.stringify(obj[key] || []);
                         }
                     });
                 }
+
                 return result;
             };
 
@@ -90,7 +94,9 @@ export default function AdminContentEditor() {
                     Accept: staticTool.accept || "",
                     Multiple: staticTool.multiple || false,
                 }));
+
                 setToolsList(standardizedFallbackTools);
+
                 if (standardizedFallbackTools.length > 0) {
                     setSelectedToolHref(standardizedFallbackTools[0].Href);
                 }
@@ -108,31 +114,34 @@ export default function AdminContentEditor() {
 
     const handleSaveAllContent = async () => {
         setIsSavingAll(true);
+
         try {
             if (activeSection === "home") {
                 await fetchJson("/admin/site-content/home", {
                     method: "PUT",
                     body: JSON.stringify(homeData),
                 });
-                notify("All Landing Page Content deployed successfully.","success");
+                notify("All Landing Page Content deployed successfully.", "success");
             } else if (activeSection === "subscribe") {
                 await fetchJson("/admin/site-content/subscribe", {
                     method: "PUT",
                     body: JSON.stringify(subData),
                 });
-                notify("All Plan Matrix parameters deployed successfully.","success");
+                notify("All Plan Matrix parameters deployed successfully.", "success");
             } else if (activeSection === "about") {
                 await fetchJson("/admin/site-content/about", {
                     method: "PUT",
                     body: JSON.stringify(aboutData),
                 });
-                notify("About Page content properties published live successfully.","success");
+                notify("About Page content properties published live successfully.", "success");
             } else if (activeSection === "tools") {
                 const savedToolsPromises = toolsList.map((toolItem) => {
                     const cleanToolPayload = { ...toolItem };
+
                     if (String(cleanToolPayload.ID).length < 3 && !isNaN(Number(cleanToolPayload.ID))) {
                         delete cleanToolPayload.ID;
                     }
+
                     return fetchJson("/admin/site-content/tools-config", {
                         method: "PUT",
                         body: JSON.stringify(cleanToolPayload),
@@ -141,10 +150,10 @@ export default function AdminContentEditor() {
 
                 const structuralUpdatedResponses = await Promise.all(savedToolsPromises);
                 setToolsList(structuralUpdatedResponses);
-                notify(`Successfully deployed updates across all (${toolsList.length}) application tools.`,"success");
+                notify(`Successfully deployed updates across all (${toolsList.length}) application tools.`, "success");
             }
         } catch (err) {
-            notify("Failed executing config master commit workflow.","error");
+            notify("Failed executing config master commit workflow.", "error");
         } finally {
             setIsSavingAll(false);
         }
@@ -167,55 +176,78 @@ export default function AdminContentEditor() {
             .replace(/^./, (str) => str.toUpperCase());
     };
 
+    const pageSurface =
+        "min-h-screen bg-[var(--background)] p-4 md:p-8 text-[var(--foreground)]";
+    const panel =
+        "rounded-3xl border border-[color:var(--border)] bg-[var(--card)] shadow-[0_18px_50px_rgba(0,0,0,0.08)]";
+    const subtlePanel =
+        "rounded-2xl border border-[color:var(--border)] bg-[var(--card)] shadow-[0_10px_28px_rgba(0,0,0,0.06)]";
+    const topBar =
+        "flex items-center justify-between gap-4";
+    const primaryBtn =
+        "inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-6 py-3 text-xs font-bold text-white shadow-lg shadow-indigo-500/10 transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-40";
+    const tabBase =
+        "px-4 py-2 text-xs font-bold rounded-lg transition-all capitalize border border-transparent";
+    const tabActive =
+        "bg-[var(--primary)] text-white shadow-md";
+    const tabInactive =
+        "text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] hover:bg-[color:var(--background)]";
+
     if (isLoading || isFetching) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-[#090a0f]">
-                <Loader2 className="animate-spin text-indigo-500" size={32} />
+            <div className="min-h-screen flex items-center justify-center bg-[var(--background)] text-[var(--foreground)]">
+                <Loader2 className="animate-spin text-[var(--primary)]" size={32} />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-[#090a0f] p-4 md:p-8 text-slate-100">
-            <div className="max-w-6xl mx-auto space-y-6">
+        <div className={pageSurface}>
+            <div className="mx-auto max-w-6xl space-y-6">
                 {/* Header Actions */}
-                <div className="flex items-center justify-between">
-                    <Link href="/admin" className="inline-flex items-center gap-2 text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors">
+                <div className={topBar}>
+                    <Link
+                        href="/admin"
+                        className="inline-flex items-center gap-2 text-xs font-bold text-[var(--primary)] transition-colors hover:opacity-80"
+                    >
                         <ArrowLeft size={14} /> Back to Control panel
                     </Link>
-                    <span className="text-xs font-mono bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 px-3 py-1 rounded-full">
+
+                    <span className="rounded-full border border-[color:var(--border)] bg-[var(--card)] px-3 py-1 font-mono text-xs text-[color:var(--muted-foreground)]">
             Role: Admin
           </span>
                 </div>
 
                 {/* Info Card Banner */}
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-[#11131e] p-6 border border-slate-800 rounded-2xl shadow-xl">
+                <div className={`${panel} flex flex-col gap-4 p-6 md:flex-row md:items-center md:justify-between`}>
                     <div className="space-y-1">
-                        <h1 className="text-2xl font-black flex items-center gap-2.5">
-                            <FileText className="text-indigo-500" size={26} /> Platform Content Engine
+                        <h1 className="flex items-center gap-2.5 text-2xl font-black text-[color:var(--foreground)]">
+                            <FileText className="text-[var(--primary)]" size={26} />
+                            Platform Content Engine
                         </h1>
-                        <p className="text-xs text-slate-400 font-medium">
+                        <p className="text-xs font-medium text-[color:var(--muted-foreground)]">
                             Configure landing descriptions, plan subscription matrix variations, workspace configurations, and specific About Studio layers.
                         </p>
                     </div>
+
                     <button
                         onClick={handleSaveAllContent}
                         disabled={isSavingAll}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 px-6 py-3 text-xs font-bold text-white shadow-lg shadow-indigo-600/10 transition-all active:scale-98 disabled:opacity-40"
+                        className={primaryBtn}
                     >
                         {isSavingAll ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                         Publish Live Updates
                     </button>
                 </div>
 
-                {/* Section Navigation Tabs Layout Selection */}
-                <div className="flex flex-wrap gap-2 bg-[#11131e] p-1.5 border border-slate-800 rounded-xl w-fit">
+                {/* Section Navigation Tabs */}
+                <div className={`${subtlePanel} flex w-fit flex-wrap gap-2 p-1.5`}>
                     {(["home", "subscribe", "about", "tools"] as const).map((tab) => (
                         <button
                             key={tab}
                             onClick={() => setActiveSection(tab)}
-                            className={`px-4 py-2 text-xs font-bold rounded-lg transition-all capitalize ${
-                                activeSection === tab ? "bg-indigo-600 text-white shadow-md" : "text-slate-400 hover:text-slate-200"
+                            className={`${tabBase} ${
+                                activeSection === tab ? tabActive : tabInactive
                             }`}
                         >
                             {tab === "home" && "Landing Page Contexts"}
@@ -228,24 +260,44 @@ export default function AdminContentEditor() {
 
                 {/* Render View Routing Switchboards */}
                 {activeSection === "home" && (
-                    <LandingPageContexts homeData={homeData} setHomeData={setHomeData} formatLabel={formatLabel} />
+                    <div className={panel}>
+                        <LandingPageContexts
+                            homeData={homeData}
+                            setHomeData={setHomeData}
+                            formatLabel={formatLabel}
+                        />
+                    </div>
                 )}
 
                 {activeSection === "subscribe" && (
-                    <PricingSubscriptionMatrices subData={subData} setSubData={setSubData} formatLabel={formatLabel} />
+                    <div className={panel}>
+                        <PricingSubscriptionMatrices
+                            subData={subData}
+                            setSubData={setSubData}
+                            formatLabel={formatLabel}
+                        />
+                    </div>
                 )}
 
                 {activeSection === "about" && (
-                    <AboutPageContexts aboutData={aboutData} setAboutData={setAboutData} formatLabel={formatLabel} />
+                    <div className={panel}>
+                        <AboutPageContexts
+                            aboutData={aboutData}
+                            setAboutData={setAboutData}
+                            formatLabel={formatLabel}
+                        />
+                    </div>
                 )}
 
                 {activeSection === "tools" && (
-                    <WorkspaceConfigurations
-                        toolsList={toolsList}
-                        selectedToolHref={selectedToolHref}
-                        setSelectedToolHref={setSelectedToolHref}
-                        updateCurrentToolField={updateCurrentToolField}
-                    />
+                    <div className={panel}>
+                        <WorkspaceConfigurations
+                            toolsList={toolsList}
+                            selectedToolHref={selectedToolHref}
+                            setSelectedToolHref={setSelectedToolHref}
+                            updateCurrentToolField={updateCurrentToolField}
+                        />
+                    </div>
                 )}
             </div>
         </div>

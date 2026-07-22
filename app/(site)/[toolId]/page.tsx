@@ -2,8 +2,9 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import { Globe } from "lucide-react";
+
+import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfUploader from "@/components/pdf/PdfUploader";
@@ -33,10 +34,13 @@ export default function SharedUploadPage() {
     };
 
     const handleUrlSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault(); // Fixed the missing 'e.' context call execution identifier error here
+        e.preventDefault();
         if (!urlInput.trim()) return;
 
-        const virtualFile = new File([], "url_placeholder.pdf", { type: "application/pdf" }) as ExtendedFile;
+        const virtualFile = new File([], "url_placeholder.pdf", {
+            type: "application/pdf",
+        }) as ExtendedFile;
+
         virtualFile.targetUrl = urlInput.trim();
 
         setFile(virtualFile);
@@ -47,7 +51,7 @@ export default function SharedUploadPage() {
         return (
             <PdfToolLayout>
                 <div className="flex min-h-[60vh] items-center justify-center">
-                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />
+                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
                 </div>
             </PdfToolLayout>
         );
@@ -65,29 +69,33 @@ export default function SharedUploadPage() {
                 {toolId === "url-to-pdf" ? (
                     <form
                         onSubmit={handleUrlSubmit}
-                        className="rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8 shadow-lg max-w-2xl mx-auto space-y-4 animate-in fade-in duration-200"
+                        className="mx-auto max-w-2xl space-y-4 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8 shadow-lg"
                     >
-                        <div className="space-y-2 text-center mb-4">
-                            <h3 className="text-md font-bold text-[color:var(--foreground)]">Convert Remote Link Coordinates</h3>
-                            <p className="text-xs text-[color:var(--muted)]">Provide an address endpoint below to parse content trees straight into a document layout canvas</p>
+                        <div className="mb-4 space-y-2 text-center">
+                            <h3 className="text-md font-bold text-[color:var(--foreground)]">
+                                Convert Remote Link Coordinates
+                            </h3>
+                            <p className="text-xs text-[color:var(--muted-foreground)]">
+                                Provide an address endpoint below to parse content trees straight into a document layout canvas
+                            </p>
                         </div>
 
                         <div className="relative flex items-center">
-                            <Globe className="absolute left-4 text-[color:var(--muted)]" size={18} />
+                            <Globe className="absolute left-4 text-[color:var(--muted-foreground)]" size={18} />
                             <input
                                 type="url"
                                 required
                                 placeholder="https://example.com"
                                 value={urlInput}
                                 onChange={(e) => setUrlInput(e.target.value)}
-                                className="w-full pl-12 pr-4 py-3.5 text-sm border border-[color:var(--border)] bg-[color:var(--background)] rounded-2xl focus:border-indigo-500 focus:outline-none font-medium text-[color:var(--foreground)] transition-colors"
+                                className="w-full rounded-2xl border border-[color:var(--border)] bg-[color:var(--background)] py-3.5 pl-12 pr-4 text-sm font-medium text-[color:var(--foreground)] transition-colors focus:border-[var(--primary)] focus:outline-none"
                             />
                         </div>
 
                         <button
                             type="submit"
                             disabled={!urlInput.trim()}
-                            className="w-full py-3 px-4 rounded-xl font-bold text-xs text-white bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 transition shadow-md"
+                            className="w-full rounded-xl bg-[var(--primary)] px-4 py-3 text-xs font-bold text-white shadow-md transition hover:brightness-105 disabled:opacity-50"
                         >
                             Open Webpage Capture Workspace
                         </button>

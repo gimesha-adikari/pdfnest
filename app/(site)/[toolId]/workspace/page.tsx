@@ -2,9 +2,11 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
-import PageNumbersWorkspace from "@/components/tools/PageNumbersWorkspace";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
+
+import PageNumbersWorkspace from "@/components/tools/PageNumbersWorkspace";
 import CodeToPdfWorkspace from "@/components/tools/CodeToPdfWorkspace";
 import CompressPdfWorkspace from "@/components/tools/CompressPdfWorkspace";
 import DeletePagesWorkspace from "@/components/tools/DeletePagesWorkspace";
@@ -55,7 +57,7 @@ export default function SharedWorkspacePage() {
         return (
             <PdfToolLayout>
                 <div className="flex min-h-[60vh] items-center justify-center">
-                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />
+                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
                 </div>
             </PdfToolLayout>
         );

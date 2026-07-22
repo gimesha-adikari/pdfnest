@@ -59,9 +59,9 @@ esac
 # Environment
 #############################################
 
-if [ -f ".env.local" ]; then
-    export $(grep -v '^#' .env.local | grep '=' | xargs -d '\n')
-fi
+set -o allexport
+source .env.local
+set +o allexport
 
 #############################################
 # Run Next.js
@@ -72,6 +72,8 @@ echo "=================================="
 echo "Starting Platen PDF Frontend (DEV)"
 echo "=================================="
 echo ""
+
+echo "$NEXT_PUBLIC_GOOGLE_CLIENT_ID"
 
 case "$PKG_MANAGER" in
     npm)

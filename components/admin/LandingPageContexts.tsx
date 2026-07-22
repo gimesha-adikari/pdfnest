@@ -14,32 +14,39 @@ export default function LandingPageContexts({
                                                 formatLabel,
                                             }: LandingPageContextsProps) {
     return (
-        <div className="grid gap-4">
+        <div className="grid gap-4 p-6 text-[color:var(--foreground)]">
             {Object.keys(homeData).map((key) => {
+                const value = homeData[key] || "";
                 const isTextArea =
-                    homeData[key].length > 65 ||
+                    value.length > 65 ||
                     key.toLowerCase().includes("desc") ||
                     key.toLowerCase().includes("subtitle");
 
                 return (
-                    <div key={key} className="bg-[#11131e] border border-slate-800 rounded-2xl p-5 space-y-2.5 shadow-sm">
-                        <label className="text-xs font-bold text-slate-300 block">
+                    <div
+                        key={key}
+                        className="space-y-2.5 rounded-2xl border border-[color:var(--border)] bg-[var(--card)] p-5 shadow-sm"
+                    >
+                        <label className="block text-xs font-bold text-[color:var(--foreground)]">
                             {formatLabel(key)}
-                            <span className="block text-[10px] text-indigo-400/70 font-mono mt-0.5">{key}</span>
+                            <span className="mt-0.5 block font-mono text-[10px] text-[color:var(--muted-foreground)]">
+                {key}
+              </span>
                         </label>
+
                         {isTextArea ? (
                             <textarea
-                                value={homeData[key] || ""}
+                                value={value}
                                 onChange={(e) => setHomeData({ ...homeData, [key]: e.target.value })}
                                 rows={3}
-                                className="w-full bg-[#090a0f] border border-slate-800 rounded-xl p-3 text-xs text-slate-200 focus:border-indigo-500 outline-none transition-colors leading-relaxed"
+                                className="w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--background)] p-3 text-xs leading-relaxed text-[color:var(--foreground)] outline-none transition-colors focus:border-[var(--primary)]"
                             />
                         ) : (
                             <input
                                 type="text"
-                                value={homeData[key] || ""}
+                                value={value}
                                 onChange={(e) => setHomeData({ ...homeData, [key]: e.target.value })}
-                                className="w-full bg-[#090a0f] border border-slate-800 rounded-xl px-4 py-3 text-xs font-medium text-slate-200 focus:border-indigo-500 outline-none transition-colors"
+                                className="w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--background)] px-4 py-3 text-xs font-medium text-[color:var(--foreground)] outline-none transition-colors focus:border-[var(--primary)]"
                             />
                         )}
                     </div>
