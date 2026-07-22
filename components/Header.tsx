@@ -11,6 +11,7 @@ import {ChevronDown, LogOut, ShieldAlert, Sparkles, Zap} from "lucide-react";
 import {useAuth} from "@/context/AuthContext";
 import {fetchJson} from "@/lib/api";
 import { useTheme } from "next-themes";
+import Logo from "@/components/ui/Logo";
 
 export default function Header() {
     const {subscription, isAuthenticated, logout, user} = useAuth();
@@ -96,16 +97,9 @@ export default function Header() {
     "
                             >
 
-                                <Image
-                                    src={
-                                        resolvedTheme === "dark"
-                                            ? "/platen-logo-dark.svg"
-                                            : "/platen-logo.svg"
-                                    }
-                                    alt="Platen"
-                                    fill
-                                    className="object-contain p-1"
-                                />
+                                <div className="relative h-10 w-10">
+                                    <Logo/>
+                                </div>
                             </div>
                         </div>
 
