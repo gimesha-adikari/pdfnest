@@ -1,10 +1,11 @@
+// file: /home/gimesha/My_Projects/next/pdfnest/app/(site)/dashboard/page.tsx
 "use client";
 
 import React, {useEffect, useState} from "react";
 import Link from "next/link";
 import {useAuth} from "@/context/AuthContext";
 import {fetchJson} from "@/lib/api";
-import {ArrowUpRight, CheckCircle2, Coins, History, Loader2, Sparkles, Zap} from "lucide-react";
+import {ArrowUpRight, CheckCircle2, Coins, History, Loader2, Sparkles, Zap, Settings} from "lucide-react";
 import {notify} from "@/lib/notify";
 
 export default function UserDashboard() {
@@ -91,10 +92,20 @@ export default function UserDashboard() {
         <div className="min-h-screen bg-[var(--background)] p-8">
             <div className="max-w-4xl mx-auto space-y-8">
 
-                <div>
-                    <h1 className="text-3xl font-black text-[color:var(--foreground)]">Account & Billing</h1>
-                    <p className="text-[color:var(--muted-foreground)] mt-2">Manage your subscription tier level matrix
-                        and add standalone credit buckets.</p>
+                {/* Dashboard Header with Settings Link */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <h1 className="text-3xl font-black text-[color:var(--foreground)]">Account & Billing</h1>
+                        <p className="text-[color:var(--muted-foreground)] mt-2">Manage your subscription tier level matrix
+                            and add standalone credit buckets.</p>
+                    </div>
+                    <Link
+                        href="/dashboard/settings"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--card)] border border-[color:var(--border)] rounded-xl text-sm font-bold text-[color:var(--foreground)] hover:border-indigo-500 hover:text-indigo-500 transition-colors shadow-sm shrink-0"
+                    >
+                        <Settings size={18} />
+                        Account Settings
+                    </Link>
                 </div>
 
                 {/* Main Plan Overview Status Display Card */}

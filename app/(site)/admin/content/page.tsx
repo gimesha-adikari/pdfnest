@@ -38,6 +38,7 @@ export default function AdminContentEditor() {
             return;
         }
 
+        // eslint-disable-next-line react-hooks/immutability
         loadAllPlatformContent();
         // eslint-disable-next-line react-hooks/immutability
     }, [isLoading, isAuthenticated, user, router]);

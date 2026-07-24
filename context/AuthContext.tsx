@@ -7,14 +7,29 @@ interface SubscriptionStatus {
     role: string;
     tier: "free" | "plus" | "pro";
     status: string;
+    billing_interval: "monthly" | "yearly";
     current_period_end: string;
     custom_credits: number;
+    used_units_3h: number;
+    used_units_daily: number;
+    used_units_monthly: number;
     update_url?: string;
     cancel_url?: string;
 }
 
+interface User {
+    id: string;
+    email: string;
+    role: string;
+    status?: string;
+    google_id?: string | null;
+    email_verified?: boolean;
+    created_at?: string;
+    updated_at?: string;
+}
+
 interface AuthContextType {
-    user: { id: string; email: string; role: string } | null;
+    user: User | null;
     subscription: SubscriptionStatus | null;
     isAuthenticated: boolean;
     isLoading: boolean;
