@@ -24,8 +24,7 @@ import {
     Coins,
     FileText
 } from "lucide-react";
-import { createPortal } from "react-dom";
-import {notify} from "@/lib/notify";
+import { notify } from "@/lib/notify";
 
 export default function AdminPage() {
     const { isAuthenticated, isLoading, user } = useAuth();
@@ -49,9 +48,17 @@ export default function AdminPage() {
 
     const MASTER_EMAIL = "gimeshaadikari23@gmail.com";
 
-    const ModalPortal = ({ children }: { children: React.ReactNode }) => {
-        return typeof document !== "undefined" ? createPortal(children, document.body) : null;
-    };
+    // Stop body from scrolling when the panel is open
+    useEffect(() => {
+        if (selectedUserDetail) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [selectedUserDetail]);
 
     useEffect(() => {
         if (isLoading) return;
@@ -59,7 +66,6 @@ export default function AdminPage() {
             router.push("/");
             return;
         }
-        // eslint-disable-next-line react-hooks/immutability
         fetchData();
     }, [isLoading, isAuthenticated, user, router]);
 
@@ -106,7 +112,7 @@ export default function AdminPage() {
 
     const handleBanToggle = async (id: string, email: string) => {
         if (email === MASTER_EMAIL) {
-            notify("Action Prevented: Master admin accounts cannot be suspended.","warning");
+            notify("Action Prevented: Master admin accounts cannot be suspended.", "warning");
             return;
         }
         try {
@@ -119,13 +125,13 @@ export default function AdminPage() {
                 });
             }
         } catch (err) {
-            notify("Failed to update user status.","error");
+            notify("Failed to update user status.", "error");
         }
     };
 
     const handleRoleChange = async (id: string, email: string, currentRole: string) => {
         if (email === MASTER_EMAIL) {
-            notify("Action Prevented: Master admin roles are unalterable.","warning");
+            notify("Action Prevented: Master admin roles are unalterable.", "warning");
             return;
         }
         const newRole = currentRole === "admin" ? "user" : "admin";
@@ -144,13 +150,13 @@ export default function AdminPage() {
                 });
             }
         } catch (err) {
-            notify("Failed to update user role.","error");
+            notify("Failed to update user role.", "error");
         }
     };
 
     const handleSaveSubscription = async (userId: string, email: string) => {
         if (email === MASTER_EMAIL) {
-            notify("Action Prevented: Master admin subscriptions are unalterable.","warning");
+            notify("Action Prevented: Master admin subscriptions are unalterable.", "warning");
             return;
         }
         try {
@@ -163,14 +169,14 @@ export default function AdminPage() {
                     days_to_plus: Number(editDays)
                 })
             });
-            notify("Subscription parameter updates deployed successfully.","success");
+            notify("Subscription parameter updates deployed successfully.", "success");
             setEditingSubId(null);
             fetchData();
             if (selectedUserDetail && selectedUserDetail.user.ID === userId) {
                 handleInspectUser(userId);
             }
         } catch (err) {
-            notify("Failed saving package configuration changes.","error");
+            notify("Failed saving package configuration changes.", "error");
         }
     };
 
@@ -180,8 +186,19 @@ export default function AdminPage() {
 
     return (
         <div className="min-h-screen bg-[var(--background)] p-8 text-[color:var(--foreground)] relative">
-            <div className="max-w-6xl mx-auto space-y-8">
+            <style>{`
+                @keyframes slideInRight {
+                    from { transform: translateX(100%); }
+                    to { transform: translateX(0); }
+                }
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+            `}</style>
 
+            <div className="max-w-6xl mx-auto space-y-8">
+                {/* Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-[var(--card)] p-6 border border-[color:var(--border)] rounded-2xl">
                     <div>
                         <h1 className="text-3xl font-black flex items-center gap-3">
@@ -197,7 +214,7 @@ export default function AdminPage() {
                     </Link>
                 </div>
 
-                {/* Tab Row Layout selectors */}
+                {/* Tab Row */}
                 <div className="flex gap-4 border-b border-[color:var(--border)] pb-px">
                     <button
                         onClick={() => setActiveTab("users")}
@@ -219,6 +236,7 @@ export default function AdminPage() {
                     </button>
                 </div>
 
+                {/* Users Tab */}
                 {activeTab === "users" && (
                     <div className="bg-[var(--card)] border border-[color:var(--border)] rounded-2xl overflow-hidden shadow-sm">
                         <table className="w-full text-left text-sm">
@@ -254,7 +272,12 @@ export default function AdminPage() {
                                             onClick={() => handleInspectUser(u.ID)}
                                             className="px-3 py-1.5 rounded-xl border border-[color:var(--border)] hover:bg-[color:var(--background)] transition-colors flex items-center gap-1.5 text-xs font-bold text-indigo-500"
                                         >
-                                            <Eye size={14} /> Inspect Account
+                                            {isInspecting && selectedUserDetail?.user?.ID === u.ID ? (
+                                                <Loader2 size={14} className="animate-spin" />
+                                            ) : (
+                                                <Eye size={14} />
+                                            )}
+                                            Inspect Account
                                         </button>
                                     </td>
                                 </tr>
@@ -264,6 +287,7 @@ export default function AdminPage() {
                     </div>
                 )}
 
+                {/* Subscriptions Tab */}
                 {activeTab === "subscriptions" && (
                     <div className="bg-[var(--card)] border border-[color:var(--border)] rounded-2xl overflow-hidden shadow-sm">
                         <table className="w-full text-left text-sm">
@@ -298,15 +322,14 @@ export default function AdminPage() {
                                                     <option value="pro">Pro Tier</option>
                                                 </select>
                                             ) : (
-                                                <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${
-                                                    sub.Tier === 'pro'
-                                                        ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white'
-                                                        : sub.Tier === 'plus'
-                                                            ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
-                                                            : 'bg-neutral-800 text-neutral-400'
+                                                <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${sub.Tier === 'pro'
+                                                    ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white'
+                                                    : sub.Tier === 'plus'
+                                                        ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                                                        : 'bg-neutral-800 text-neutral-400'
                                                 }`}>
-                                                    {sub.Tier}
-                                                </span>
+                                                        {sub.Tier}
+                                                    </span>
                                             )}
                                         </td>
                                         <td className="p-4 font-bold text-amber-500 flex items-center gap-1.5">
@@ -359,6 +382,7 @@ export default function AdminPage() {
                     </div>
                 )}
 
+                {/* Metrics Tab */}
                 {activeTab === "metrics" && metrics && (
                     <div className="space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -473,193 +497,202 @@ export default function AdminPage() {
                 )}
             </div>
 
+            {/* Inspect User Animated Side Panel Drawer (No Portal Required) */}
             {selectedUserDetail && (
-                // eslint-disable-next-line react-hooks/static-components
-                <ModalPortal>
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex justify-end" onClick={() => setSelectedUserDetail(null)}>
-                        <div className="w-full max-w-2xl bg-[var(--card)] h-full p-6 shadow-2xl overflow-y-auto border-l border-[color:var(--border)] flex flex-col space-y-6" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-between border-b border-[color:var(--border)] pb-4">
+                <div
+                    className="fixed top-[72px] inset-x-0 bottom-0 z-[40] flex justify-end bg-black/60 backdrop-blur-sm"
+                    style={{ animation: 'fadeIn 0.2s ease-out' }}
+                    onClick={() => setSelectedUserDetail(null)}
+                >
+                    <div
+                        className="w-full sm:w-[600px] h-full bg-[var(--card)] p-6 shadow-2xl overflow-y-auto border-l border-[color:var(--border)] flex flex-col space-y-6"
+                        style={{ animation: 'slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Panel Header */}
+                        <div className="flex items-center justify-between border-b border-[color:var(--border)] pb-4">
+                            <div>
+                                <h2 className="text-xl font-black flex items-center gap-2">
+                                    <Info className="text-indigo-500" size={20} /> User Analytics Inspector
+                                </h2>
+                                <p className="text-xs text-[color:var(--muted-foreground)] mt-0.5 font-mono">{selectedUserDetail.user.ID}</p>
+                            </div>
+                            <button onClick={() => setSelectedUserDetail(null)} className="p-2 bg-[color:var(--background)] border border-[color:var(--border)] rounded-xl hover:text-indigo-500 transition">
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        {/* User Overview */}
+                        <div className="bg-[color:var(--background)]/60 border border-[color:var(--border)] rounded-2xl p-5 space-y-4">
+                            <div className="grid grid-cols-2 gap-4 text-sm">
                                 <div>
-                                    <h2 className="text-xl font-black flex items-center gap-2">
-                                        <Info className="text-indigo-500" size={20} /> User Analytics Inspector
-                                    </h2>
-                                    <p className="text-xs text-[color:var(--muted-foreground)] mt-0.5 font-mono">{selectedUserDetail.user.ID}</p>
+                                    <span className="text-xs text-[color:var(--muted-foreground)] block font-medium">Email Target</span>
+                                    <span className="font-bold text-md flex items-center gap-1.5 mt-0.5 break-all">
+                                        {selectedUserDetail.user.Email}
+                                        {selectedUserDetail.user.Email === MASTER_EMAIL && <ShieldCheck size={16} className="text-indigo-500 flex-shrink-0" />}
+                                    </span>
                                 </div>
-                                <button onClick={() => setSelectedUserDetail(null)} className="p-2 bg-[color:var(--background)] border border-[color:var(--border)] rounded-xl hover:text-indigo-500 transition">
-                                    <X size={18} />
+                                <div>
+                                    <span className="text-xs text-[color:var(--muted-foreground)] block font-medium">Joined On</span>
+                                    <span className="font-mono text-xs block mt-1">{new Date(selectedUserDetail.user.CreatedAt).toLocaleString()}</span>
+                                </div>
+                            </div>
+
+                            <div className="border-t border-[color:var(--border)] pt-4 flex flex-wrap gap-2">
+                                <button
+                                    onClick={() => handleBanToggle(selectedUserDetail.user.ID, selectedUserDetail.user.Email)}
+                                    disabled={selectedUserDetail.user.Email === MASTER_EMAIL}
+                                    className={`px-3 py-2 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 disabled:opacity-40 ${
+                                        selectedUserDetail.user.Status === 'active'
+                                            ? 'bg-red-500/10 border-red-500/20 text-red-500 hover:bg-red-500/20'
+                                            : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500 hover:bg-emerald-500/20'
+                                    }`}
+                                >
+                                    {selectedUserDetail.user.Status === 'active' ? <><Ban size={14} /> Ban Account</> : <><CheckCircle size={14} /> Lift Account Ban</>}
+                                </button>
+
+                                <button
+                                    onClick={() => handleRoleChange(selectedUserDetail.user.ID, selectedUserDetail.user.Email, selectedUserDetail.user.Role)}
+                                    disabled={selectedUserDetail.user.Email === MASTER_EMAIL}
+                                    className="px-3 py-2 rounded-xl bg-[color:var(--background)] border border-[color:var(--border)] hover:text-indigo-500 transition text-xs font-bold disabled:opacity-40"
+                                >
+                                    Toggle Authorization Role ({selectedUserDetail.user.Role})
                                 </button>
                             </div>
+                        </div>
 
-                            <div className="bg-[color:var(--background)]/60 border border-[color:var(--border)] rounded-2xl p-5 space-y-4">
-                                <div className="grid grid-cols-2 gap-4 text-sm">
-                                    <div>
-                                        <span className="text-xs text-[color:var(--muted-foreground)] block font-medium">Email Target</span>
-                                        <span className="font-bold text-md flex items-center gap-1.5 mt-0.5">
-                                            {selectedUserDetail.user.Email}
-                                            {selectedUserDetail.user.Email === MASTER_EMAIL && <ShieldCheck size={16} className="text-indigo-500" />}
-                                        </span>
-                                    </div>
-                                    <div>
-                                        <span className="text-xs text-[color:var(--muted-foreground)] block font-medium">Joined On</span>
-                                        <span className="font-mono text-xs block mt-1">{new Date(selectedUserDetail.user.CreatedAt).toLocaleString()}</span>
-                                    </div>
-                                </div>
-
-                                <div className="border-t border-[color:var(--border)] pt-4 flex flex-wrap gap-2">
-                                    <button
-                                        onClick={() => handleBanToggle(selectedUserDetail.user.ID, selectedUserDetail.user.Email)}
-                                        disabled={selectedUserDetail.user.Email === MASTER_EMAIL}
-                                        className={`px-3 py-2 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 disabled:opacity-40 ${
-                                            selectedUserDetail.user.Status === 'active'
-                                                ? 'bg-red-500/10 border-red-500/20 text-red-500 hover:bg-red-500/20'
-                                                : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500 hover:bg-emerald-500/20'
-                                        }`}
-                                    >
-                                        {selectedUserDetail.user.Status === 'active' ? <><Ban size={14} /> Ban Account</> : <><CheckCircle size={14} /> Lift Account Ban</>}
-                                    </button>
-
-                                    <button
-                                        onClick={() => handleRoleChange(selectedUserDetail.user.ID, selectedUserDetail.user.Email, selectedUserDetail.user.Role)}
-                                        disabled={selectedUserDetail.user.Email === MASTER_EMAIL}
-                                        className="px-3 py-2 rounded-xl bg-[color:var(--background)] border border-[color:var(--border)] hover:text-indigo-500 transition text-xs font-bold disabled:opacity-40"
-                                    >
-                                        Toggle Authorization Role ({selectedUserDetail.user.Role})
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="border border-[color:var(--border)] bg-[var(--card)] rounded-2xl p-5 space-y-4">
-                                <h3 className="font-bold text-sm flex items-center gap-2 text-indigo-500">
-                                    <CreditCard size={16} /> Live Plan Configuration Overrides
-                                </h3>
-                                {selectedUserDetail.user.Email === MASTER_EMAIL ? (
-                                    <p className="text-xs text-emerald-500 font-bold bg-emerald-500/5 border border-emerald-500/10 p-3 rounded-xl flex items-center gap-2">
-                                        <ShieldCheck size={14} /> Master Administrator profile possesses absolute lifelong tier clearance exemptions.
-                                    </p>
-                                ) : selectedUserDetail.subscription ? (
-                                    <div className="space-y-4 text-xs">
-                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                            <div>
-                                                <label className="text-[color:var(--muted-foreground)] block mb-1">Quota Tier</label>
-                                                <select
-                                                    value={editTier}
-                                                    onChange={(e) => setEditTier(e.target.value)}
-                                                    className="w-full bg-[color:var(--background)] border border-[color:var(--border)] rounded-xl p-2 outline-none text-xs text-[color:var(--foreground)]"
-                                                >
-                                                    <option value="free">Free Plan (5/Day)</option>
-                                                    <option value="plus">Plus Plan (50/Day)</option>
-                                                    <option value="pro">Pro Plan (500/Day)</option>
-                                                </select>
-                                            </div>
-                                            <div>
-                                                <label className="text-[color:var(--muted-foreground)] block mb-1">Paddle Status</label>
-                                                <select
-                                                    value={editStatus}
-                                                    onChange={(e) => setEditStatus(e.target.value)}
-                                                    className="w-full bg-[color:var(--background)] border border-[color:var(--border)] rounded-xl p-2 outline-none text-xs text-[color:var(--foreground)]"
-                                                >
-                                                    <option value="active">Active</option>
-                                                    <option value="canceled">Canceled</option>
-                                                    <option value="expired">Expired</option>
-                                                    <option value="past_due">Past Due</option>
-                                                </select>
-                                            </div>
-                                            <div>
-                                                <label className="text-[color:var(--muted-foreground)] block mb-1">Custom Credits</label>
-                                                <input
-                                                    type="number"
-                                                    value={editCredits}
-                                                    onChange={(e) => setEditCredits(Number(e.target.value))}
-                                                    className="w-full bg-[color:var(--background)] border border-[color:var(--border)] rounded-xl p-2 outline-none text-xs font-bold text-[color:var(--foreground)]"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="text-[color:var(--muted-foreground)] block mb-1">Add Time Window</label>
-                                                <input
-                                                    type="number"
-                                                    placeholder="Days"
-                                                    onChange={(e) => setEditDays(Number(e.target.value))}
-                                                    className="w-full bg-[color:var(--background)] border border-[color:var(--border)] rounded-xl p-2 outline-none text-xs text-[color:var(--foreground)]"
-                                                />
-                                            </div>
+                        {/* Plan Config */}
+                        <div className="border border-[color:var(--border)] bg-[var(--card)] rounded-2xl p-5 space-y-4">
+                            <h3 className="font-bold text-sm flex items-center gap-2 text-indigo-500">
+                                <CreditCard size={16} /> Live Plan Configuration Overrides
+                            </h3>
+                            {selectedUserDetail.user.Email === MASTER_EMAIL ? (
+                                <p className="text-xs text-emerald-500 font-bold bg-emerald-500/5 border border-emerald-500/10 p-3 rounded-xl flex items-center gap-2">
+                                    <ShieldCheck size={14} /> Master Administrator profile possesses absolute lifelong tier clearance exemptions.
+                                </p>
+                            ) : selectedUserDetail.subscription ? (
+                                <div className="space-y-4 text-xs">
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                        <div>
+                                            <label className="text-[color:var(--muted-foreground)] block mb-1">Quota Tier</label>
+                                            <select
+                                                value={editTier}
+                                                onChange={(e) => setEditTier(e.target.value)}
+                                                className="w-full bg-[color:var(--background)] border border-[color:var(--border)] rounded-xl p-2 outline-none text-xs text-[color:var(--foreground)]"
+                                            >
+                                                <option value="free">Free Plan (5/Day)</option>
+                                                <option value="plus">Plus Plan (50/Day)</option>
+                                                <option value="pro">Pro Plan (500/Day)</option>
+                                            </select>
                                         </div>
-                                        <button
-                                            onClick={() => handleSaveSubscription(selectedUserDetail.user.ID, selectedUserDetail.user.Email)}
-                                            className="w-full py-2.5 bg-indigo-500 text-white font-bold rounded-xl hover:bg-indigo-600 transition flex items-center justify-center gap-2 shadow-sm text-xs"
-                                        >
-                                            <Save size={14} /> Save Subscription Modifications
-                                        </button>
+                                        <div>
+                                            <label className="text-[color:var(--muted-foreground)] block mb-1">Paddle Status</label>
+                                            <select
+                                                value={editStatus}
+                                                onChange={(e) => setEditStatus(e.target.value)}
+                                                className="w-full bg-[color:var(--background)] border border-[color:var(--border)] rounded-xl p-2 outline-none text-xs text-[color:var(--foreground)]"
+                                            >
+                                                <option value="active">Active</option>
+                                                <option value="canceled">Canceled</option>
+                                                <option value="expired">Expired</option>
+                                                <option value="past_due">Past Due</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-[color:var(--muted-foreground)] block mb-1">Custom Credits</label>
+                                            <input
+                                                type="number"
+                                                value={editCredits}
+                                                onChange={(e) => setEditCredits(Number(e.target.value))}
+                                                className="w-full bg-[color:var(--background)] border border-[color:var(--border)] rounded-xl p-2 outline-none text-xs font-bold text-[color:var(--foreground)]"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[color:var(--muted-foreground)] block mb-1">Add Time Window</label>
+                                            <input
+                                                type="number"
+                                                placeholder="Days"
+                                                onChange={(e) => setEditDays(Number(e.target.value))}
+                                                className="w-full bg-[color:var(--background)] border border-[color:var(--border)] rounded-xl p-2 outline-none text-xs text-[color:var(--foreground)]"
+                                            />
+                                        </div>
                                     </div>
+                                    <button
+                                        onClick={() => handleSaveSubscription(selectedUserDetail.user.ID, selectedUserDetail.user.Email)}
+                                        className="w-full py-2.5 bg-indigo-500 text-white font-bold rounded-xl hover:bg-indigo-600 transition flex items-center justify-center gap-2 shadow-sm text-xs"
+                                    >
+                                        <Save size={14} /> Save Subscription Modifications
+                                    </button>
+                                </div>
+                            ) : (
+                                <p className="text-xs text-[color:var(--muted-foreground)]">No registration tier row found.</p>
+                            )}
+                        </div>
+
+                        {/* Ledger History */}
+                        <div className="space-y-3">
+                            <h3 className="font-bold text-sm flex items-center gap-2">
+                                <History size={16} className="text-indigo-500" /> Transaction Ledger History ({selectedUserDetail.transactions?.length || 0})
+                            </h3>
+                            <div className="max-h-40 overflow-y-auto border border-[color:var(--border)] rounded-xl text-xs bg-[var(--background)]">
+                                {selectedUserDetail.transactions?.length === 0 ? (
+                                    <p className="p-4 text-[color:var(--muted-foreground)] text-center">No transactions on record.</p>
                                 ) : (
-                                    <p className="text-xs text-[color:var(--muted-foreground)]">No registration tier row found.</p>
+                                    <table className="w-full text-left">
+                                        <thead className="bg-[color:var(--background)] sticky top-0 border-b border-[color:var(--border)]">
+                                        <tr>
+                                            <th className="p-3">Date</th>
+                                            <th className="p-3">Amount</th>
+                                            <th className="p-3 text-right">Reference Transaction ID</th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        {selectedUserDetail.transactions.map((tx: any) => (
+                                            <tr key={tx.ID} className="border-b border-[color:var(--border)] last:border-0 hover:bg-[color:var(--card)]">
+                                                <td className="p-3">{new Date(tx.CreatedAt).toLocaleDateString()}</td>
+                                                <td className="p-3 font-bold text-emerald-500">{tx.Amount} {tx.Currency}</td>
+                                                <td className="p-3 text-right font-mono text-[10px] text-[color:var(--muted-foreground)]">{tx.PaddleTransactionID}</td>
+                                            </tr>
+                                        ))}
+                                        </tbody>
+                                    </table>
                                 )}
                             </div>
+                        </div>
 
-                            <div className="space-y-3">
-                                <h3 className="font-bold text-sm flex items-center gap-2">
-                                    <History size={16} className="text-indigo-500" /> Transaction Ledger History ({selectedUserDetail.transactions?.length || 0})
-                                </h3>
-                                <div className="max-h-40 overflow-y-auto border border-[color:var(--border)] rounded-xl text-xs">
-                                    {selectedUserDetail.transactions?.length === 0 ? (
-                                        <p className="p-4 text-[color:var(--muted-foreground)] text-center">No transactions on record.</p>
-                                    ) : (
-                                        <table className="w-full text-left">
-                                            <thead className="bg-[color:var(--background)] sticky top-0 border-b border-[color:var(--border)] p-2">
-                                            <tr>
-                                                <th className="p-2">Date</th>
-                                                <th className="p-2">Amount</th>
-                                                <th className="p-2 text-right">Reference Transaction ID</th>
+                        {/* Activity Logs */}
+                        <div className="space-y-3 flex-1 flex flex-col pb-4">
+                            <h3 className="font-bold text-sm flex items-center gap-2">
+                                <BarChart3 size={16} className="text-indigo-500" /> Recent Document Activity Logs ({selectedUserDetail.usage_logs?.length || 0})
+                            </h3>
+                            <div className="flex-1 max-h-56 overflow-y-auto border border-[color:var(--border)] rounded-xl text-xs bg-[var(--background)]">
+                                {selectedUserDetail.usage_logs?.length === 0 ? (
+                                    <p className="p-4 text-[color:var(--muted-foreground)] text-center">No operational logs captured within current parameters window.</p>
+                                ) : (
+                                    <table className="w-full text-left">
+                                        <thead className="bg-[color:var(--background)] sticky top-0 border-b border-[color:var(--border)]">
+                                        <tr>
+                                            <th className="p-3">Timestamp</th>
+                                            <th className="p-3">Tool Engine Module</th>
+                                            <th className="p-3 text-right">Pages Count</th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        {selectedUserDetail.usage_logs.map((log: any) => (
+                                            <tr key={log.ID} className="border-b border-[color:var(--border)] last:border-0 hover:bg-[color:var(--card)]">
+                                                <td className="p-3 font-mono text-[11px] text-[color:var(--muted-foreground)]">{new Date(log.CreatedAt).toLocaleString()}</td>
+                                                <td className="p-3 font-semibold text-indigo-400 capitalize">{log.ToolName}</td>
+                                                <td className="p-3 text-right font-bold">{log.PagesCount || 1} Pages</td>
                                             </tr>
-                                            </thead>
-                                            <tbody>
-                                            {selectedUserDetail.transactions.map((tx: any) => (
-                                                <tr key={tx.ID} className="border-b border-[color:var(--border)] last:border-0 hover:bg-[color:var(--background)]/40">
-                                                    <td className="p-2">{new Date(tx.CreatedAt).toLocaleDateString()}</td>
-                                                    <td className="p-2 font-bold text-emerald-500">{tx.Amount} {tx.Currency}</td>
-                                                    <td className="p-2 text-right font-mono text-[10px] text-[color:var(--muted-foreground)]">{tx.PaddleTransactionID}</td>
-                                                </tr>
-                                            ))}
-                                            </tbody>
-                                        </table>
-                                    )}
-                                </div>
+                                        ))}
+                                        </tbody>
+                                    </table>
+                                )}
                             </div>
-
-                            <div className="space-y-3 flex-1 flex flex-col">
-                                <h3 className="font-bold text-sm flex items-center gap-2">
-                                    <BarChart3 size={16} className="text-indigo-500" /> Recent Document Activity Logs ({selectedUserDetail.usage_logs?.length || 0})
-                                </h3>
-                                <div className="flex-1 max-h-56 overflow-y-auto border border-[color:var(--border)] rounded-xl text-xs">
-                                    {selectedUserDetail.usage_logs?.length === 0 ? (
-                                        <p className="p-4 text-[color:var(--muted-foreground)] text-center">No operational logs captured within current parameters window.</p>
-                                    ) : (
-                                        <table className="w-full text-left">
-                                            <thead className="bg-[color:var(--background)] sticky top-0 border-b border-[color:var(--border)]">
-                                            <tr>
-                                                <th className="p-2">Timestamp</th>
-                                                <th className="p-2">Tool Engine Module</th>
-                                                <th className="p-2 text-right">Pages Count</th>
-                                            </tr>
-                                            </thead>
-                                            <tbody>
-                                            {selectedUserDetail.usage_logs.map((log: any) => (
-                                                <tr key={log.ID} className="border-b border-[color:var(--border)] last:border-0 hover:bg-[color:var(--background)]/40">
-                                                    <td className="p-2 font-mono text-[11px] text-[color:var(--muted-foreground)]">{new Date(log.CreatedAt).toLocaleString()}</td>
-                                                    <td className="p-2 font-semibold text-indigo-400 capitalize">{log.ToolName}</td>
-                                                    <td className="p-2 text-right font-bold">{log.PagesCount || 1} Pages</td>
-                                                </tr>
-                                            ))}
-                                            </tbody>
-                                        </table>
-                                    )}
-                                </div>
-                            </div>
-
                         </div>
                     </div>
-                </ModalPortal>
+                </div>
             )}
-
         </div>
     );
 }
