@@ -47,3 +47,11 @@ next-env.d.ts
 /collect_text_and_tree.py.py
 /front.txt
 /generate-layouts.js
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
