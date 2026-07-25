@@ -16,7 +16,7 @@ import {
     Download,
     Languages,
     LogOut,
-    Palette
+    Wallet,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -29,20 +29,12 @@ type Preferences = {
     language: string;
 };
 
-type UsageSummary = {
-    usedUnits3h: number;
-    usedUnitsDaily: number;
-    usedUnitsMonthly: number;
-    currentPeriodEnd?: string;
-};
+type PreferencesResponse = Preferences;
 
-type PreferencesResponse = {
-    email_notifications: boolean;
-    product_updates: boolean;
-    billing_emails: boolean;
-    security_alerts: boolean;
-    theme: "system" | "light" | "dark";
-    language: string;
+type BillingPortalResponse = {
+    overview_url: string;
+    update_payment_url?: string;
+    cancel_subscription_url?: string;
 };
 
 export default function SettingsPage() {
@@ -53,6 +45,7 @@ export default function SettingsPage() {
     const [isDeleting, setIsDeleting] = useState(false);
     const [isSavingPreferences, setIsSavingPreferences] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
+    const [isOpeningBillingPortal, setIsOpeningBillingPortal] = useState(false);
     const [loadingPreferences, setLoadingPreferences] = useState(true);
 
     const [passwords, setPasswords] = useState({
@@ -70,8 +63,6 @@ export default function SettingsPage() {
         language: "en"
     });
 
-    const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
-
     useEffect(() => {
         if (!isAuthenticated || !user) return;
 
@@ -87,15 +78,6 @@ export default function SettingsPage() {
                     theme: data.theme ?? "system",
                     language: data.language ?? "en"
                 });
-
-                if (subscription) {
-                    setUsageSummary({
-                        usedUnits3h: subscription.used_units_3h ?? 0,
-                        usedUnitsDaily: subscription.used_units_daily ?? 0,
-                        usedUnitsMonthly: subscription.used_units_monthly ?? 0,
-                        currentPeriodEnd: subscription.current_period_end
-                    });
-                }
             } catch (err: any) {
                 console.error(err);
                 notify(err.message || "Failed to load settings", "error");
@@ -105,7 +87,7 @@ export default function SettingsPage() {
         };
 
         loadSettings();
-    }, [isAuthenticated, user, subscription]);
+    }, [isAuthenticated, user]);
 
     if (isLoading) {
         return (
@@ -198,10 +180,40 @@ export default function SettingsPage() {
         }
     };
 
+    const openBillingPortal = async (mode: "overview" | "payment" | "cancel") => {
+        if (subscription?.tier === "free") {
+            notify("Billing portal is available after upgrading to a paid plan.", "error");
+            return;
+        }
+
+        setIsOpeningBillingPortal(true);
+        try {
+            const portal = await fetchJson<BillingPortalResponse>("/billing/portal-session", {
+                method: "POST"
+            });
+
+            const url =
+                mode === "payment"
+                    ? portal.update_payment_url || portal.overview_url
+                    : mode === "cancel"
+                        ? portal.cancel_subscription_url || portal.overview_url
+                        : portal.overview_url;
+
+            if (!url) {
+                throw new Error("Billing portal link is missing");
+            }
+
+            window.open(url, "_blank", "noopener,noreferrer");
+        } catch (err: any) {
+            console.error(err);
+            notify(err.message || "Failed to open billing portal", "error");
+        } finally {
+            setIsOpeningBillingPortal(false);
+        }
+    };
+
     const handleDeleteAccount = async () => {
-        const typed = window.prompt(
-            `Type your email address to confirm deletion:\n\n${user.email}`
-        );
+        const typed = window.prompt(`Type your email address to confirm deletion:\n\n${user.email}`);
 
         if (!typed) return;
 
@@ -225,7 +237,6 @@ export default function SettingsPage() {
     return (
         <div className="min-h-screen bg-[var(--background)] p-6 md:p-8">
             <div className="max-w-4xl mx-auto space-y-8">
-
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                     <div>
                         <h1 className="text-3xl font-black text-[color:var(--foreground)]">Settings</h1>
@@ -243,7 +254,6 @@ export default function SettingsPage() {
                     </button>
                 </div>
 
-                {/* Profile Information */}
                 <div className="bg-[var(--card)] border border-[color:var(--border)] rounded-3xl p-8 space-y-6">
                     <div className="flex items-center gap-3 border-b border-[color:var(--border)] pb-4">
                         <User className="text-indigo-500" size={24} />
@@ -305,11 +315,10 @@ export default function SettingsPage() {
                     </div>
                 </div>
 
-                {/* Subscription */}
                 <div className="bg-[var(--card)] border border-[color:var(--border)] rounded-3xl p-8 space-y-6">
                     <div className="flex items-center gap-3 border-b border-[color:var(--border)] pb-4">
                         <CreditCard className="text-indigo-500" size={24} />
-                        <h2 className="text-xl font-bold text-[color:var(--foreground)]">Subscription</h2>
+                        <h2 className="text-xl font-bold text-[color:var(--foreground)]">Billing & Payment</h2>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -362,50 +371,42 @@ export default function SettingsPage() {
                         </div>
                     </div>
 
-                    {usageSummary && (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="p-4 rounded-2xl border border-[color:var(--border)] bg-[var(--background)]">
-                                <div className="text-xs uppercase font-bold text-[color:var(--muted-foreground)]">3 Hour Usage</div>
-                                <div className="text-2xl font-black mt-2">{usageSummary.usedUnits3h}</div>
-                            </div>
-                            <div className="p-4 rounded-2xl border border-[color:var(--border)] bg-[var(--background)]">
-                                <div className="text-xs uppercase font-bold text-[color:var(--muted-foreground)]">Daily Usage</div>
-                                <div className="text-2xl font-black mt-2">{usageSummary.usedUnitsDaily}</div>
-                            </div>
-                            <div className="p-4 rounded-2xl border border-[color:var(--border)] bg-[var(--background)]">
-                                <div className="text-xs uppercase font-bold text-[color:var(--muted-foreground)]">Monthly Usage</div>
-                                <div className="text-2xl font-black mt-2">{usageSummary.usedUnitsMonthly}</div>
-                            </div>
-                        </div>
-                    )}
+                    {subscription?.tier === "free" ? (
+                        <p className="text-sm text-[color:var(--muted-foreground)]">
+                            Billing management becomes available after you upgrade to a paid Paddle plan.
+                        </p>
+                    ) : (
+                        <div className="flex flex-wrap gap-3">
+                            <button
+                                onClick={() => openBillingPortal("payment")}
+                                disabled={isOpeningBillingPortal}
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[color:var(--border)] bg-[var(--background)] hover:border-indigo-500 transition text-sm font-bold disabled:opacity-50"
+                            >
+                                {isOpeningBillingPortal ? <Loader2 size={16} className="animate-spin" /> : <Wallet size={16} />}
+                                Update Payment Method
+                            </button>
 
-                    {(subscription?.update_url || subscription?.cancel_url) && (
-                        <div className="flex flex-wrap gap-4">
-                            {subscription?.update_url && (
-                                <a
-                                    href={subscription.update_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-2 px-4 py-2 bg-[var(--background)] border border-[color:var(--border)] rounded-xl text-sm font-bold hover:border-indigo-500 hover:text-indigo-500 transition-colors shadow-sm"
-                                >
-                                    Update Payment Details <ExternalLink size={14} />
-                                </a>
-                            )}
-                            {subscription?.cancel_url && (
-                                <a
-                                    href={subscription.cancel_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-2 px-4 py-2 bg-[var(--background)] border border-[color:var(--border)] rounded-xl text-sm font-bold hover:border-indigo-500 hover:text-indigo-500 transition-colors shadow-sm"
-                                >
-                                    Manage Plan <ExternalLink size={14} />
-                                </a>
-                            )}
+                            <button
+                                onClick={() => openBillingPortal("overview")}
+                                disabled={isOpeningBillingPortal}
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[color:var(--border)] bg-[var(--background)] hover:border-indigo-500 transition text-sm font-bold disabled:opacity-50"
+                            >
+                                {isOpeningBillingPortal ? <Loader2 size={16} className="animate-spin" /> : <ExternalLink size={16} />}
+                                View Billing Portal
+                            </button>
+
+                            <button
+                                onClick={() => openBillingPortal("cancel")}
+                                disabled={isOpeningBillingPortal}
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[color:var(--border)] bg-[var(--background)] hover:border-red-500 hover:text-red-500 transition text-sm font-bold disabled:opacity-50"
+                            >
+                                {isOpeningBillingPortal ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
+                                Manage Subscription
+                            </button>
                         </div>
                     )}
                 </div>
 
-                {/* Security */}
                 {!user.google_id ? (
                     <div className="bg-[var(--card)] border border-[color:var(--border)] rounded-3xl p-8 space-y-6">
                         <div className="flex items-center gap-3 border-b border-[color:var(--border)] pb-4">
@@ -477,7 +478,6 @@ export default function SettingsPage() {
                     </div>
                 )}
 
-                {/* Preferences */}
                 <div className="bg-[var(--card)] border border-[color:var(--border)] rounded-3xl p-8 space-y-6">
                     <div className="flex items-center gap-3 border-b border-[color:var(--border)] pb-4">
                         <Bell className="text-indigo-500" size={24} />
@@ -496,9 +496,7 @@ export default function SettingsPage() {
                                     <input
                                         type="checkbox"
                                         checked={preferences.email_notifications}
-                                        onChange={(e) =>
-                                            setPreferences({ ...preferences, email_notifications: e.target.checked })
-                                        }
+                                        onChange={(e) => setPreferences({ ...preferences, email_notifications: e.target.checked })}
                                     />
                                     <span className="text-sm font-medium">Email notifications</span>
                                 </label>
@@ -507,9 +505,7 @@ export default function SettingsPage() {
                                     <input
                                         type="checkbox"
                                         checked={preferences.product_updates}
-                                        onChange={(e) =>
-                                            setPreferences({ ...preferences, product_updates: e.target.checked })
-                                        }
+                                        onChange={(e) => setPreferences({ ...preferences, product_updates: e.target.checked })}
                                     />
                                     <span className="text-sm font-medium">Product updates</span>
                                 </label>
@@ -518,9 +514,7 @@ export default function SettingsPage() {
                                     <input
                                         type="checkbox"
                                         checked={preferences.billing_emails}
-                                        onChange={(e) =>
-                                            setPreferences({ ...preferences, billing_emails: e.target.checked })
-                                        }
+                                        onChange={(e) => setPreferences({ ...preferences, billing_emails: e.target.checked })}
                                     />
                                     <span className="text-sm font-medium">Billing emails</span>
                                 </label>
@@ -529,9 +523,7 @@ export default function SettingsPage() {
                                     <input
                                         type="checkbox"
                                         checked={preferences.security_alerts}
-                                        onChange={(e) =>
-                                            setPreferences({ ...preferences, security_alerts: e.target.checked })
-                                        }
+                                        onChange={(e) => setPreferences({ ...preferences, security_alerts: e.target.checked })}
                                     />
                                     <span className="text-sm font-medium">Security alerts</span>
                                 </label>
@@ -564,9 +556,7 @@ export default function SettingsPage() {
                                     </label>
                                     <select
                                         value={preferences.language}
-                                        onChange={(e) =>
-                                            setPreferences({ ...preferences, language: e.target.value })
-                                        }
+                                        onChange={(e) => setPreferences({ ...preferences, language: e.target.value })}
                                         className="w-full p-3 rounded-xl bg-[color:var(--background)] border border-[color:var(--border)] focus:border-indigo-500 outline-none transition"
                                     >
                                         <option value="en">English</option>
@@ -581,17 +571,16 @@ export default function SettingsPage() {
                                 disabled={isSavingPreferences}
                                 className="flex items-center justify-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-3 rounded-xl text-sm font-bold transition disabled:opacity-50"
                             >
-                                {isSavingPreferences ? <Loader2 size={18} className="animate-spin" /> : <Palette size={18} />}
+                                {isSavingPreferences ? <Loader2 size={18} className="animate-spin" /> : <Languages size={18} />}
                                 Save Preferences
                             </button>
                         </div>
                     )}
                 </div>
 
-                {/* Data & Privacy */}
                 <div className="bg-[var(--card)] border border-[color:var(--border)] rounded-3xl p-8 space-y-6">
                     <div className="flex items-center gap-3 border-b border-[color:var(--border)] pb-4">
-                        <Languages className="text-indigo-500" size={24} />
+                        <Download className="text-indigo-500" size={24} />
                         <h2 className="text-xl font-bold text-[color:var(--foreground)]">Data & Privacy</h2>
                     </div>
 
@@ -609,7 +598,6 @@ export default function SettingsPage() {
                     </button>
                 </div>
 
-                {/* Danger Zone */}
                 <div className="bg-red-500/5 border border-red-500/20 rounded-3xl p-8 space-y-6">
                     <div className="flex items-center gap-3 border-b border-red-500/20 pb-4">
                         <Trash2 className="text-red-500" size={24} />
