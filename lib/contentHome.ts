@@ -1,9 +1,11 @@
 export interface HomeContent {
     heroBadgeGuest: string;
     heroBadgeFree: string;
+    heroBadgePlus: string;
     heroBadgePro: string;
     heroWelcomeBack: string;
     heroTitleGuest: string;
+    heroTitlePlus: string;
     heroTitlePro: string;
     heroSubtitleGuest: string;
     heroSubtitleGuestBold: string;
@@ -50,8 +52,10 @@ export const fallbackHomeContent: HomeContent = {
     heroBadgeGuest: "Professional PDF Workspace",
     heroBadgeFree: "Free Plan Active",
     heroBadgePro: "Pro Workspace Active",
+    heroBadgePlus: "Plus Workspace Active",
     heroWelcomeBack: "Welcome Back",
     heroTitleGuest: "PDF Workspace",
+    heroTitlePlus: "Plus Workspace",
     heroTitlePro: "Pro Workspace",
     heroSubtitleGuest: "Edit, convert, secure, and organize PDFs online with advanced, cloud-native processing tools.",
     heroSubtitleGuestBold: "Start free. Upgrade anytime.",

@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import {useEffect, useMemo, useState} from "react";
 import {
     ArrowUpRight,
     CheckCircle2,
@@ -13,10 +13,10 @@ import {
 } from "lucide-react";
 
 import ToolCard from "@/components/ToolCard";
-import { NAV_TOOLS } from "@/lib/toolsData";
-import { useAuth } from "@/context/AuthContext";
-import { fetchJson } from "@/lib/api";
-import { fallbackHomeContent, HomeContent } from "@/lib/contentHome";
+import {NAV_TOOLS} from "@/lib/toolsData";
+import {useAuth} from "@/context/AuthContext";
+import {fetchJson} from "@/lib/api";
+import {fallbackHomeContent, HomeContent} from "@/lib/contentHome";
 
 type ToolItem = {
     Title?: string;
@@ -30,20 +30,21 @@ type ToolItem = {
 };
 
 export default function Home() {
-    const { isAuthenticated, subscription, isLoading } = useAuth();
+    const {isAuthenticated, subscription, isLoading} = useAuth();
     const [search, setSearch] = useState("");
     const [content, setContent] = useState<HomeContent>(fallbackHomeContent);
     const [toolsList, setToolsList] = useState<ToolItem[]>([]);
 
-    const isPro = isAuthenticated && subscription?.tier === "pro";
-    const isFreeUser = isAuthenticated && (!subscription || subscription.tier !== "pro");
+    const isProUser = isAuthenticated && subscription?.tier === "pro";
+    const isFreeUser = isAuthenticated && (!subscription || subscription.tier == "free");
+    const isPlusUser = isAuthenticated && (!subscription || subscription.tier == "plus");
     const isGuest = !isAuthenticated;
 
     useEffect(() => {
         fetchJson("/site-content/home")
             .then((data: any) => {
                 if (data && typeof data === "object" && !("error" in data)) {
-                    setContent((prev) => ({ ...prev, ...data }));
+                    setContent((prev) => ({...prev, ...data}));
                 }
             })
             .catch((err) => console.error("Error loading home settings:", err));
@@ -130,68 +131,107 @@ export default function Home() {
         "rounded-2xl border border-[color:var(--border)] bg-[var(--card)] shadow-[0_10px_28px_rgba(0,0,0,0.06)]";
 
     return (
-        <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
+        <div
+            className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
             <main className="relative min-h-screen overflow-hidden pb-24">
                 <div className="pointer-events-none absolute inset-0 -z-10 select-none overflow-hidden">
-                    <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(109,94,245,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(109,94,245,0.08)_1px,transparent_1px)] bg-[size:72px_72px] opacity-20" />
-                    <div className="absolute -top-40 left-0 h-[38rem] w-[38rem] rounded-full bg-indigo-500/10 blur-[170px]" />
-                    <div className="absolute right-0 top-10 h-[32rem] w-[32rem] rounded-full bg-fuchsia-500/10 blur-[170px]" />
-                    <div className="absolute bottom-0 left-1/3 h-[34rem] w-[34rem] rounded-full bg-cyan-500/5 blur-[180px]" />
+                    <div
+                        className="absolute inset-0 bg-[linear-gradient(to_right,rgba(109,94,245,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(109,94,245,0.08)_1px,transparent_1px)] bg-[size:72px_72px] opacity-20"/>
+                    <div
+                        className="absolute -top-40 left-0 h-[38rem] w-[38rem] rounded-full bg-indigo-500/10 blur-[170px]"/>
+                    <div
+                        className="absolute right-0 top-10 h-[32rem] w-[32rem] rounded-full bg-fuchsia-500/10 blur-[170px]"/>
+                    <div
+                        className="absolute bottom-0 left-1/3 h-[34rem] w-[34rem] rounded-full bg-cyan-500/5 blur-[180px]"/>
                 </div>
 
                 <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
                     <div className="mx-auto mt-10 flex max-w-5xl flex-col items-center text-center sm:mt-14">
                         {!isLoading && (
                             <>
-                                {isPro && (
-                                    <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/25 bg-amber-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-amber-700 shadow-sm">
-                    <Zap size={12} className="animate-pulse" />
+                                {isProUser && (
+                                    <span
+                                        className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/25 bg-amber-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-amber-700 shadow-sm">
+                                        <Zap size={12} className="animate-pulse"/>
                                         {content.heroBadgePro || "Pro Workspace Active"}
-                  </span>
+                                    </span>
+                                )}
+
+                                {isPlusUser && (
+                                    <span
+                                        className="inline-flex items-center gap-1.5 rounded-full border border-gray-500/25 bg-gray-300/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-gray-500 shadow-sm">
+                                        <Zap size={12} className="animate-pulse"/>
+                                        {content.heroBadgePlus || "Plus Workspace Active"}
+                                    </span>
                                 )}
 
                                 {isFreeUser && (
-                                    <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-indigo-600 shadow-sm">
-                    <Zap size={12} />
+                                    <span
+                                        className="inline-flex items-center gap-1.5 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-indigo-600 shadow-sm">
+                                        <Zap size={12}/>
                                         {content.heroBadgeFree || "Free Tier Active"}
-                  </span>
+                                    </span>
                                 )}
 
                                 {isGuest && (
-                                    <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-indigo-600 shadow-sm">
-                    <Sparkles size={12} className="animate-pulse" />
+                                    <span
+                                        className="inline-flex items-center gap-1.5 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-indigo-600 shadow-sm">
+                                        <Sparkles size={12} className="animate-pulse"/>
                                         {content.heroBadgeGuest || "Modern Document Platform"}
-                  </span>
+                                    </span>
                                 )}
                             </>
                         )}
 
                         <div className="mt-8 max-w-4xl">
                             <h1 className="text-balance text-4xl font-black tracking-tight sm:text-6xl lg:text-8xl">
-                                {!isLoading && (isPro || isFreeUser) ? content.heroWelcomeBack : "Platen"}
-                                <span className="mt-2 block bg-gradient-to-r from-[color:var(--foreground)] via-[#6d5ef5] to-[#ff61c7] bg-clip-text text-transparent">
-                  {!isLoading && (isPro || isFreeUser)
-                      ? isPro
-                          ? content.heroTitlePro
-                          : content.heroTitleGuest
-                      : "Modern Document Platform"}
-                </span>
+                                {!isLoading && (isProUser || isFreeUser || isPlusUser) ? content.heroWelcomeBack : "Platen"}
+                                <span
+                                    className="mt-2 block bg-gradient-to-r from-[color:var(--foreground)] via-[#6d5ef5] to-[#ff61c7] bg-clip-text text-transparent">
+                                    {!isLoading && (isProUser || isFreeUser || isPlusUser)
+                                        ? isProUser || isPlusUser
+                                            ? isProUser
+                                                ? content.heroTitlePro
+                                                : content.heroTitleGuest
+                                            : content.heroTitlePlus
+                                        : "Modern Document Platform"}
+                                </span>
                             </h1>
 
                             {!isLoading && (
                                 <div className="mx-auto mt-8 max-w-2xl">
-                                    {isPro && (
+                                    {isProUser && (
                                         <div
                                             className={`${subtlePanelClass} flex w-full flex-col items-center justify-between gap-4 p-4 sm:flex-row`}
                                         >
                                             <div className="flex items-center gap-2">
-                                                <CheckCircle2 className="text-emerald-500" size={18} />
-                                                <span className="text-sm font-medium text-[color:var(--muted-foreground)]">
-                          Access:{" "}
-                                                    <span className="font-bold uppercase text-[color:var(--foreground)]">
-                            All Premium Workspaces & Advanced Tools
-                          </span>
-                        </span>
+                                                <CheckCircle2 className="text-emerald-500" size={18}/>
+                                                <span
+                                                    className="text-sm font-medium text-[color:var(--muted-foreground)]">
+                                                    Access:{" "}
+                                                    <span
+                                                        className="font-bold uppercase text-[color:var(--foreground)]">
+                                                        All Premium Workspaces & Advanced Tools
+                                                    </span>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {isPlusUser && (
+                                        <div
+                                            className={`${subtlePanelClass} flex w-full flex-col items-center justify-between gap-4 p-4 sm:flex-row`}
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <CheckCircle2 className="text-emerald-500" size={18}/>
+                                                <span
+                                                    className="text-sm font-medium text-[color:var(--muted-foreground)]">
+                                                    Access:{" "}
+                                                    <span
+                                                        className="font-bold uppercase text-[color:var(--foreground)]">
+                                                        All Premium Workspaces & Advanced Tools
+                                                    </span>
+                                                </span>
                                             </div>
                                         </div>
                                     )}
@@ -201,22 +241,23 @@ export default function Home() {
                                             className={`${subtlePanelClass} flex w-full flex-col items-center justify-between gap-4 p-4 sm:flex-row`}
                                         >
                                             <div className="flex items-center gap-2">
-                                                <Zap className="text-indigo-500" size={18} />
-                                                <span className="text-sm font-medium text-[color:var(--muted-foreground)]">
-                          Daily Usage:{" "}
+                                                <Zap className="text-indigo-500" size={18}/>
+                                                <span
+                                                    className="text-sm font-medium text-[color:var(--muted-foreground)]">
+                                                    Daily Usage:{" "}
                                                     <span className="font-bold text-[color:var(--foreground)]">
-                            5 operations remaining today
-                          </span>
-                        </span>
+                                                        5 operations remaining today
+                                                    </span>
+                                                </span>
                                             </div>
 
-                                            <div className="hidden h-4 w-px bg-[color:var(--border)] sm:block" />
+                                            <div className="hidden h-4 w-px bg-[color:var(--border)] sm:block"/>
 
                                             <Link
-                                                href="/pricing"
+                                                href="/subscribe"
                                                 className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 transition hover:text-indigo-500 hover:underline"
                                             >
-                                                {content.authBannerFreeAction || "Upgrade"} <ArrowUpRight size={12} />
+                                                {content.authBannerFreeAction || "Upgrade"} <ArrowUpRight size={12}/>
                                             </Link>
                                         </div>
                                     )}
@@ -226,8 +267,8 @@ export default function Home() {
                                             {content.heroSubtitleGuest ||
                                                 "Edit, convert, secure, and organize documents online."}
                                             <span className="mt-2 block font-bold text-indigo-600">
-                        {content.heroSubtitleGuestBold || "Start free. Upgrade anytime."}
-                      </span>
+                                                {content.heroSubtitleGuestBold || "Start free. Upgrade anytime."}
+                                            </span>
                                         </p>
                                     )}
                                 </div>
@@ -238,8 +279,9 @@ export default function Home() {
                     {(isLoading || isGuest) && (
                         <div className="mt-20 grid gap-6 sm:grid-cols-2 md:grid-cols-3">
                             <div className={`${panelClass} p-6 text-center transition-all hover:-translate-y-0.5`}>
-                                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-500">
-                                    <Sparkles className="h-6 w-6" />
+                                <div
+                                    className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-500">
+                                    <Sparkles className="h-6 w-6"/>
                                 </div>
                                 <h3 className="text-lg font-bold text-[color:var(--foreground)]">
                                     {content.feature1Title || "Free Tier Included"}
@@ -251,8 +293,9 @@ export default function Home() {
                             </div>
 
                             <div className={`${panelClass} p-6 text-center transition-all hover:-translate-y-0.5`}>
-                                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-500/10 text-violet-500">
-                                    <Zap className="h-6 w-6" />
+                                <div
+                                    className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-500/10 text-violet-500">
+                                    <Zap className="h-6 w-6"/>
                                 </div>
                                 <h3 className="text-lg font-bold text-[color:var(--foreground)]">
                                     {content.feature2Title || "Pro Ecosystem"}
@@ -266,8 +309,9 @@ export default function Home() {
                             <div
                                 className={`${panelClass} p-6 text-center transition-all hover:-translate-y-0.5 sm:col-span-2 md:col-span-1`}
                             >
-                                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-500">
-                                    <Shield className="h-6 w-6" />
+                                <div
+                                    className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-500">
+                                    <Shield className="h-6 w-6"/>
                                 </div>
                                 <h3 className="text-lg font-bold text-[color:var(--foreground)]">
                                     {content.feature3Title || "Isolated Sandbox"}
@@ -283,7 +327,8 @@ export default function Home() {
                     <div className="mx-auto mt-16 max-w-2xl">
                         <div className={`${subtlePanelClass} p-3 transition-all focus-within:border-indigo-500/50`}>
                             <div className="relative">
-                                <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[color:var(--muted-foreground)]" />
+                                <Search
+                                    className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[color:var(--muted-foreground)]"/>
                                 <input
                                     type="text"
                                     value={search}
@@ -293,7 +338,8 @@ export default function Home() {
                                 />
                             </div>
 
-                            <div className="mt-3 text-center text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--muted-foreground)]">
+                            <div
+                                className="mt-3 text-center text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--muted-foreground)]">
                                 {filteredTools.length} {content.searchScopeSuffix || "tools matching your search"}
                             </div>
                         </div>
@@ -301,10 +347,12 @@ export default function Home() {
 
                     {search === "" && (
                         <section className="mx-auto mt-16 max-w-5xl">
-                            <div className="rounded-[28px] border border-indigo-500/15 bg-gradient-to-br from-[var(--card)] to-indigo-500/5 p-8 shadow-[0_20px_60px_rgba(0,0,0,0.08)] transition hover:border-indigo-500/30">
+                            <div
+                                className="rounded-[28px] border border-indigo-500/15 bg-gradient-to-br from-[var(--card)] to-indigo-500/5 p-8 shadow-[0_20px_60px_rgba(0,0,0,0.08)] transition hover:border-indigo-500/30">
                                 <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
                                     <div className="max-w-xl space-y-2">
-                    <span className="inline-flex items-center rounded-md bg-indigo-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-white">
+                    <span
+                        className="inline-flex items-center rounded-md bg-indigo-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-white">
                       Most Popular
                     </span>
                                         <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[color:var(--foreground)]">
@@ -320,7 +368,7 @@ export default function Home() {
                                         href="/merge-pdf"
                                         className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 px-6 py-3.5 text-sm font-bold whitespace-nowrap text-white shadow-md transition hover:brightness-105"
                                     >
-                                        {content.popularToolAction || "Try Merge PDF"} <ArrowUpRight size={16} />
+                                        {content.popularToolAction || "Try Merge PDF"} <ArrowUpRight size={16}/>
                                     </Link>
                                 </div>
                             </div>
@@ -328,7 +376,8 @@ export default function Home() {
                     )}
 
                     {filteredTools.length === 0 && (
-                        <div className="mx-auto mt-20 max-w-md rounded-[28px] border border-dashed border-[color:var(--border)] bg-[var(--card)] p-12 text-center">
+                        <div
+                            className="mx-auto mt-20 max-w-md rounded-[28px] border border-dashed border-[color:var(--border)] bg-[var(--card)] p-12 text-center">
                             <h3 className="text-lg font-bold text-[color:var(--foreground)]">
                                 {content.searchEmptyTitle || "No tools found"}
                             </h3>
