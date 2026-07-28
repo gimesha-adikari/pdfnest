@@ -486,7 +486,7 @@ export const NAV_TOOLS: ToolItem[] = [
 
         accept: "image/*, .png, .jpg, .jpeg, .webp, .gif",
 
-        multiple: false,
+        multiple: true,
 
         faq: [
             {

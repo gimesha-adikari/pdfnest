@@ -104,7 +104,7 @@ export default function SharedUploadPage() {
                     <PdfUploader
                         onFilesAccepted={handleFilesAccepted}
                         accept={toolConfig.accept || ".pdf"}
-                        multiple={!!toolConfig.multiple}
+                        multiple={toolConfig.multiple}
                         bypassEncryptionCheck={toolId === "unlock-pdf"}
                     />
                 )}
