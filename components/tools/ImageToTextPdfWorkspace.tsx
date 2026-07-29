@@ -18,7 +18,7 @@ import {
     ChevronDown,
     Check,
 } from "lucide-react";
-import { getBaseUrl, uploadAndDownloadFile } from "@/lib/api";
+import { getBaseUrl } from "@/lib/api";
 import { handleClientError } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
@@ -27,6 +27,11 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import { PdfProgressTracker } from "@/components/pdf/PdfProgressTracker";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { getOCRLanguages, type OCRLanguage } from "@/lib/ocr";
+import {
+    createStoragePrefix,
+    createUploadSessionId,
+    uploadFilesToR2,
+} from "@/lib/r2";
 
 interface ExtendedFile extends File {
     initialBatch?: File[];
@@ -61,6 +66,8 @@ const RECOMMENDED_LANGUAGE_CODES = [
     "tha",
     "ukr",
 ];
+
+const OCR_JOB_ENDPOINT = `${getBaseUrl()}/api/ocr/jobs`;
 
 function isSupportedImage(file: File) {
     const type = file.type.toLowerCase();
@@ -382,21 +389,55 @@ export default function ImageToTextPdfWorkspace() {
                 setSuccess(false);
                 setTaskId("");
 
-                const formData = new FormData();
-                images.forEach((item) => {
-                    formData.append("images", item.file);
+                const imageFiles = images.map((item) => item.file);
+                const nextLang = lang.trim() || defaultLang || "eng";
+
+                const sessionId = createUploadSessionId();
+                const prefix = createStoragePrefix({
+                    toolId,
+                    purpose: "image_to_text_pdf",
+                    sessionId,
                 });
-                formData.append("lang", lang.trim() || defaultLang || "eng");
 
-                const responseBlob = await uploadAndDownloadFile("/api/ocr/to-text-pdf-async", formData);
-                const jsonText = await responseBlob.text();
-                const data = JSON.parse(jsonText);
+                const uploaded = await uploadFilesToR2(imageFiles, {
+                    purpose: "image_to_text_pdf",
+                    prefix,
+                    credentials: "include",
+                });
 
-                if (data.taskId) {
-                    setTaskId(data.taskId);
-                } else {
-                    throw new Error(data.error || "Failed to acquire task queue tracker.");
+                const jobResponse = await fetch(OCR_JOB_ENDPOINT, {
+                    method: "POST",
+                    credentials: "include",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        tool: "image_to_text_pdf",
+                        lang: nextLang,
+                        sessionId,
+                        files: uploaded.map((item) => ({
+                            key: item.key,
+                            name: item.name,
+                            size: item.size,
+                            type: item.type,
+                        })),
+                    }),
+                });
+
+                if (!jobResponse.ok) {
+                    const text = await jobResponse.text().catch(() => "");
+                    throw new Error(text || `Failed to create OCR job (${jobResponse.status}).`);
                 }
+
+                const jobData = await jobResponse.json().catch(() => ({}));
+                const nextTaskId =
+                    jobData.taskId || jobData.jobId || jobData.id || jobData.task_id;
+
+                if (!nextTaskId) {
+                    throw new Error("The OCR job response did not include a task id.");
+                }
+
+                setTaskId(nextTaskId);
             } catch (err) {
                 console.error(err);
                 handleClientError(err);
@@ -670,7 +711,7 @@ export default function ImageToTextPdfWorkspace() {
                             ) : (
                                 <PdfActionButton
                                     text="Create Searchable PDF"
-                                    loadingText="Initializing OCR engine..."
+                                    loadingText="Uploading to R2 and creating job..."
                                     loading={isProcessing}
                                     disabled={!canProcess}
                                     onClick={handleConversion}
