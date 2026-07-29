@@ -22,6 +22,8 @@ import { PdfProgressTracker } from "@/components/pdf/PdfProgressTracker";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { getOCRLanguages, type OCRLanguage } from "@/lib/ocr";
 
+const AUTO_LANGUAGE: OCRLanguage = { code: "auto", name: "Auto detect" };
+
 export default function PdfToTextWorkspace() {
     const { requireAuth } = useAuth();
     const router = useRouter();
@@ -32,10 +34,11 @@ export default function PdfToTextWorkspace() {
     const [taskId, setTaskId] = useState<string>("");
 
     const [languages, setLanguages] = useState<OCRLanguage[]>([
+        AUTO_LANGUAGE,
         { code: "eng", name: "English" },
     ]);
-    const [defaultLang, setDefaultLang] = useState("eng");
-    const [lang, setLang] = useState("eng");
+    const [defaultLang, setDefaultLang] = useState("auto");
+    const [lang, setLang] = useState("auto");
     const [isLoadingLanguages, setIsLoadingLanguages] = useState(true);
     const [isLanguageOpen, setIsLanguageOpen] = useState(false);
     const [languageSearch, setLanguageSearch] = useState("");
@@ -56,17 +59,23 @@ export default function PdfToTextWorkspace() {
                     ? data.languages
                     : [{ code: "eng", name: "English" }];
 
-                const nextDefault = data.default || nextLanguages[0]?.code || "eng";
+                const nextLanguagesWithAuto = [
+                    AUTO_LANGUAGE,
+                    ...nextLanguages.filter((item) => item.code !== "auto"),
+                ];
 
-                setLanguages(nextLanguages);
-                setDefaultLang(nextDefault);
-                setLang(nextDefault);
+                setLanguages(nextLanguagesWithAuto);
+                setDefaultLang("auto");
+                setLang("auto");
             } catch (err) {
                 console.error(err);
                 if (!cancelled) {
-                    setLanguages([{ code: "eng", name: "English" }]);
-                    setDefaultLang("eng");
-                    setLang("eng");
+                    setLanguages([
+                        AUTO_LANGUAGE,
+                        { code: "eng", name: "English" },
+                    ]);
+                    setDefaultLang("auto");
+                    setLang("auto");
                 }
             } finally {
                 if (!cancelled) setIsLoadingLanguages(false);
@@ -127,7 +136,7 @@ export default function PdfToTextWorkspace() {
                     formData.append("file_password", (file as any).originalPassword);
                 }
 
-                formData.append("lang", lang.trim() || defaultLang || "eng");
+                formData.append("lang", lang.trim() || defaultLang || "auto");
 
                 const responseBlob = await uploadAndDownloadFile(
                     "/api/ocr/extract-text-async",
@@ -290,6 +299,12 @@ export default function PdfToTextWorkspace() {
                                     </div>
                                 )}
                             </div>
+
+                            {lang === "auto" && (
+                                <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-900 dark:text-amber-100">
+                                    <strong>Tip:</strong> Auto detect works well for documents with unknown or multiple languages, but it may not always choose the most accurate language pack. If you know the document's primary language, selecting it manually will usually produce better OCR results.
+                                </div>
+                            )}
 
                             <p className="mt-2 text-[11px] leading-5 text-[color:var(--muted)]">
                                 Choose the OCR language pack before extracting text.
