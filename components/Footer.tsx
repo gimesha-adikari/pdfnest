@@ -29,18 +29,35 @@ export default function Footer() {
                 }
             })
             .catch((err) => {
-                console.error("Failed fetching footer components layout from backend matrix, falling back:", err);
+                console.error(
+                    "Failed fetching footer components layout from backend matrix, falling back:",
+                    err
+                );
                 setToolsList(NAV_TOOLS);
             });
     }, []);
 
-    const organizeTools = toolsList.filter((t: BackendTool) => (t.Category || t.category) === "organize");
-    const editTools = toolsList.filter((t: BackendTool) => (t.Category || t.category) === "edit");
-    const convertTools = toolsList.filter((t: BackendTool) => (t.Category || t.category) === "convert");
-    const createTools = toolsList.filter((t: BackendTool) => (t.Category || t.category) === "create");
-    const securityTools = toolsList.filter((t: BackendTool) => (t.Category || t.category) === "security");
-    const optimizeTools = toolsList.filter((t: BackendTool) => (t.Category || t.category) === "optimize");
-    const studioTools = toolsList.filter((t: BackendTool) => (t.Category || t.category) === "studio");
+    const organizeTools = toolsList.filter(
+        (t: BackendTool) => (t.Category || t.category) === "organize"
+    );
+    const editTools = toolsList.filter(
+        (t: BackendTool) => (t.Category || t.category) === "edit"
+    );
+    const convertTools = toolsList.filter(
+        (t: BackendTool) => (t.Category || t.category) === "convert"
+    );
+    const createTools = toolsList.filter(
+        (t: BackendTool) => (t.Category || t.category) === "create"
+    );
+    const securityTools = toolsList.filter(
+        (t: BackendTool) => (t.Category || t.category) === "security"
+    );
+    const optimizeTools = toolsList.filter(
+        (t: BackendTool) => (t.Category || t.category) === "optimize"
+    );
+    const studioTools = toolsList.filter(
+        (t: BackendTool) => (t.Category || t.category) === "studio"
+    );
 
     return (
         <footer className="mt-auto border-t border-border bg-(--card)/50 backdrop-blur-md relative z-10">
@@ -64,28 +81,53 @@ export default function Footer() {
                         </h3>
 
                         <div className="flex flex-col gap-2 text-xs font-medium">
-                            <Link href="/privacy" className="text-muted hover:text-indigo-500 transition-colors">
+                            <Link
+                                href="/privacy"
+                                className="text-muted hover:text-indigo-500 transition-colors"
+                            >
                                 Privacy Policy
                             </Link>
 
-                            <Link href="/terms" className="text-muted hover:text-indigo-500 transition-colors">
+                            <Link
+                                href="/terms"
+                                className="text-muted hover:text-indigo-500 transition-colors"
+                            >
                                 Terms of Service
                             </Link>
 
-                            <Link href="/cookies" className="text-muted hover:text-indigo-500 transition-colors">
+                            <Link
+                                href="/cookies"
+                                className="text-muted hover:text-indigo-500 transition-colors"
+                            >
                                 Cookie Policy
                             </Link>
 
-                            <Link href="/refund" className="text-muted hover:text-indigo-500 transition-colors">
+                            <Link
+                                href="/refund"
+                                className="text-muted hover:text-indigo-500 transition-colors"
+                            >
                                 Refund Policy
                             </Link>
 
-                            <Link href="/acceptable-use" className="text-muted hover:text-indigo-500 transition-colors">
+                            <Link
+                                href="/acceptable-use"
+                                className="text-muted hover:text-indigo-500 transition-colors"
+                            >
                                 Acceptable Use
                             </Link>
 
-                            <Link href="/security" className="text-muted hover:text-indigo-500 transition-colors">
+                            <Link
+                                href="/security"
+                                className="text-muted hover:text-indigo-500 transition-colors"
+                            >
                                 Security
+                            </Link>
+
+                            <Link
+                                href="/contact"
+                                className="text-muted hover:text-indigo-500 transition-colors"
+                            >
+                                Contact
                             </Link>
                         </div>
                     </div>
@@ -128,10 +170,16 @@ export default function Footer() {
                     ))}
 
                     <div>
-                        <h4 className="font-bold text-xs uppercase tracking-widest text-[color:var(--foreground)] mb-3">Architecture Info</h4>
+                        <h4 className="font-bold text-xs uppercase tracking-widest text-[color:var(--foreground)] mb-3">
+                            Architecture Info
+                        </h4>
                         <div className="flex flex-col gap-2 text-xs font-medium text-[color:var(--muted)]">
-                            <span className="flex items-center gap-1.5">Isolated Security Run</span>
-                            <span className="flex items-center gap-1.5">Privacy Compliant Proxy</span>
+                            <span className="flex items-center gap-1.5">
+                                Isolated Security Run
+                            </span>
+                            <span className="flex items-center gap-1.5">
+                                Privacy Compliant Proxy
+                            </span>
 
                             <Link
                                 href="/about"
