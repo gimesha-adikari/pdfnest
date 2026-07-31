@@ -4,21 +4,34 @@ import React from "react";
 import { GoogleLogin } from "@react-oauth/google";
 import { fetchJson } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import {notify} from "@/lib/notify";
+import { notify } from "@/lib/notify";
 
 interface GoogleLoginButtonProps {
     onSuccessCallback?: () => void;
+    policyAccepted: boolean;
 }
 
-export default function GoogleLoginButton({ onSuccessCallback }: GoogleLoginButtonProps) {
+export default function GoogleLoginButton({
+                                              onSuccessCallback,
+                                              policyAccepted,
+                                          }: GoogleLoginButtonProps) {
     const { refreshSession } = useAuth();
 
     const handleGoogleSuccess = async (credentialResponse: any) => {
         try {
+            if (!policyAccepted) {
+                notify(
+                    "Please accept the Privacy Policy and Terms of Service before signing up with Google.",
+                    "error"
+                );
+                return;
+            }
+
             await fetchJson("/auth/google", {
                 method: "POST",
                 body: JSON.stringify({
-                    id_token: credentialResponse.credential,
+                    id_token: credentialResponse?.credential,
+                    policy_accepted: policyAccepted,
                 }),
             });
 
@@ -32,7 +45,16 @@ export default function GoogleLoginButton({ onSuccessCallback }: GoogleLoginButt
                 window.location.href = callbackUrl;
             }
         } catch (err: any) {
-            notify(`Authentication pipeline rejection layout: ${err.message}`,"error");
+            const msg = (err.message || "").toLowerCase();
+
+            if (msg.includes("policy")) {
+                notify(
+                    "Please accept the Privacy Policy and Terms of Service before signing up with Google.",
+                    "error"
+                );
+            } else {
+                notify(`Authentication failed: ${err.message}`, "error");
+            }
         }
     };
 

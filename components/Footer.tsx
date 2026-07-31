@@ -50,15 +50,44 @@ export default function Footer() {
                         <h3 className="text-md font-black tracking-tight bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent select-none">
                             Platen PDF Engine
                         </h3>
+
                         <p className="text-xs leading-relaxed text-muted font-medium">
-                            Files are processed inside secure, isolated execution environments. All structural data payloads are permanently wiped from sandbox tracks automatically immediately upon download completion.
+                            Files are processed inside secure, isolated execution environments.
+                            Uploaded and generated files are automatically deleted after processing.
+                            Platen PDF is designed with privacy and security as core principles.
                         </p>
-                        <Link
-                            href="/privacy"
-                            className="text-xs text-[color:var(--muted)] hover:text-indigo-500 transition-colors font-medium inline-block"
-                        >
-                            Privacy Policy
-                        </Link>
+                    </div>
+
+                    <div className="space-y-3">
+                        <h3 className="text-md font-black tracking-tight">
+                            Legal
+                        </h3>
+
+                        <div className="flex flex-col gap-2 text-xs font-medium">
+                            <Link href="/privacy" className="text-muted hover:text-indigo-500 transition-colors">
+                                Privacy Policy
+                            </Link>
+
+                            <Link href="/terms" className="text-muted hover:text-indigo-500 transition-colors">
+                                Terms of Service
+                            </Link>
+
+                            <Link href="/cookies" className="text-muted hover:text-indigo-500 transition-colors">
+                                Cookie Policy
+                            </Link>
+
+                            <Link href="/refund" className="text-muted hover:text-indigo-500 transition-colors">
+                                Refund Policy
+                            </Link>
+
+                            <Link href="/acceptable-use" className="text-muted hover:text-indigo-500 transition-colors">
+                                Acceptable Use
+                            </Link>
+
+                            <Link href="/security" className="text-muted hover:text-indigo-500 transition-colors">
+                                Security
+                            </Link>
+                        </div>
                     </div>
 
                     {[

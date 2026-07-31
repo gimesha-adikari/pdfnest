@@ -5,8 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import GoogleLoginButton from "@/components/auth/GoogleLoginButton";
+import PolicyConsentDialog from "@/components/auth/PolicyConsentDialog";
 import { ArrowLeft, CheckCircle2, Mail, Lock, Loader2 } from "lucide-react";
 import { fetchJson } from "@/lib/api";
+
+type PendingAction = "register" | null;
 
 function RegisterContent() {
     const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
@@ -26,32 +29,61 @@ function RegisterContent() {
     const [isResending, setIsResending] = useState(false);
     const [resendSuccess, setResendSuccess] = useState("");
 
+    const [policyAccepted, setPolicyAccepted] = useState(false);
+    const [policyDialogOpen, setPolicyDialogOpen] = useState(false);
+    const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+
     useEffect(() => {
         if (!isAuthLoading && isAuthenticated) {
             router.push(callbackUrl);
         }
     }, [isAuthenticated, isAuthLoading, router, callbackUrl]);
 
-    const handleManualRegister = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const submitManualRegister = async () => {
         setError("");
         setIsSubmitting(true);
 
         try {
             await fetchJson("/auth/register", {
                 method: "POST",
-                body: JSON.stringify({ email, password }),
+                body: JSON.stringify({
+                    email,
+                    password,
+                    policy_accepted: true,
+                }),
             });
 
-            router.push(
-                `/verify-email?email=${encodeURIComponent(email)}`
-            );
-
+            setRegisteredEmail(email);
+            setRegistrationComplete(true);
         } catch (err: any) {
             setError(err.message || "Failed to create account.");
         } finally {
             setIsSubmitting(false);
+            setPendingAction(null);
         }
+    };
+
+    const handleManualRegister = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (!policyAccepted) {
+            setPendingAction("register");
+            setPolicyDialogOpen(true);
+            return;
+        }
+
+        await submitManualRegister();
+    };
+
+    const handleConsentAccepted = () => {
+        setPolicyAccepted(true);
+        setPolicyDialogOpen(false);
+
+        if (pendingAction === "register") {
+            void submitManualRegister();
+        }
+
+        setPendingAction(null);
     };
 
     const handleResendEmail = async () => {
@@ -101,172 +133,224 @@ function RegisterContent() {
     }
 
     return (
-        <div className="min-h-screen flex flex-col md:flex-row bg-[var(--background)]">
-            <div className="hidden md:flex md:w-1/2 bg-indigo-500/5 border-r border-[color:var(--border)] flex-col justify-center p-12 lg:p-24 relative">
-                <Link href="/" className="absolute top-8 left-8 flex items-center gap-2 text-sm font-medium text-[color:var(--muted-foreground)] hover:text-indigo-500 transition-colors">
-                    <ArrowLeft size={16} /> Back to Home
-                </Link>
+        <>
+            <div className="min-h-screen flex flex-col md:flex-row bg-[var(--background)]">
+                <div className="hidden md:flex md:w-1/2 bg-indigo-500/5 border-r border-[color:var(--border)] flex-col justify-center p-12 lg:p-24 relative">
+                    <Link
+                        href="/"
+                        className="absolute top-8 left-8 flex items-center gap-2 text-sm font-medium text-[color:var(--muted-foreground)] hover:text-indigo-500 transition-colors"
+                    >
+                        <ArrowLeft size={16} /> Back to Home
+                    </Link>
 
-                <div className="max-w-md">
-                    <div className="relative h-12 w-12 mb-6 rounded-xl bg-indigo-500 flex items-center justify-center shadow-lg">
-                        <span className="text-xl font-black text-white">PN</span>
-                    </div>
-                    <h1 className="text-4xl font-black tracking-tight text-[color:var(--foreground)] mb-6">
-                        Start managing your PDFs like a pro.
-                    </h1>
-                    <ul className="space-y-4">
-                        <li className="flex items-center gap-3 text-[color:var(--muted-foreground)]">
-                            <CheckCircle2 className="text-indigo-500" size={20} />
-                            <span>Process up to 5 files daily for free</span>
-                        </li>
-                        <li className="flex items-center gap-3 text-[color:var(--muted-foreground)]">
-                            <CheckCircle2 className="text-indigo-500" size={20} />
-                            <span>Secure, local-first file locking</span>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-
-            <div className="flex-1 flex flex-col items-center justify-center p-6 relative">
-                <Link href="/" className="md:hidden absolute top-8 left-6 flex items-center gap-2 text-sm font-medium text-[color:var(--muted-foreground)]">
-                    <ArrowLeft size={16} /> Back
-                </Link>
-
-                <div className="w-full max-w-sm flex flex-col items-stretch">
-                    <div className="text-center mb-8">
-                        <h2 className="text-2xl font-black tracking-tight text-[color:var(--foreground)] mb-2">Create your account</h2>
-                        <p className="text-sm text-[color:var(--muted-foreground)]">Join Platen PDF to unlock your daily quota.</p>
-                    </div>
-
-                    {error && (
-                        <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm text-center font-medium">
-                            {error}
+                    <div className="max-w-md">
+                        <div className="relative h-12 w-12 mb-6 rounded-xl bg-indigo-500 flex items-center justify-center shadow-lg">
+                            <span className="text-xl font-black text-white">PN</span>
                         </div>
-                    )}
+                        <h1 className="text-4xl font-black tracking-tight text-[color:var(--foreground)] mb-6">
+                            Start managing your PDFs like a pro.
+                        </h1>
+                        <ul className="space-y-4">
+                            <li className="flex items-center gap-3 text-[color:var(--muted-foreground)]">
+                                <CheckCircle2 className="text-indigo-500" size={20} />
+                                <span>Process up to 5 files daily for free</span>
+                            </li>
+                            <li className="flex items-center gap-3 text-[color:var(--muted-foreground)]">
+                                <CheckCircle2 className="text-indigo-500" size={20} />
+                                <span>Secure, local-first file locking</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
 
-                    {registrationComplete ? (
-                        <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-8 text-center">
+                <div className="flex-1 flex flex-col items-center justify-center p-6 relative">
+                    <Link
+                        href="/"
+                        className="md:hidden absolute top-8 left-6 flex items-center gap-2 text-sm font-medium text-[color:var(--muted-foreground)]"
+                    >
+                        <ArrowLeft size={16} /> Back
+                    </Link>
 
-                            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10">
-                                <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+                    <div className="w-full max-w-sm flex flex-col items-stretch">
+                        <div className="text-center mb-8">
+                            <h2 className="text-2xl font-black tracking-tight text-[color:var(--foreground)] mb-2">
+                                Create your account
+                            </h2>
+                            <p className="text-sm text-[color:var(--muted-foreground)]">
+                                Join Platen PDF to unlock your daily quota.
+                            </p>
+                        </div>
+
+                        {error && (
+                            <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm text-center font-medium">
+                                {error}
                             </div>
+                        )}
 
-                            <h3 className="text-2xl font-bold mb-3">
-                                Account Created!
-                            </h3>
-
-                            <p className="text-[color:var(--muted-foreground)]">
-                                We&#39;ve sent a verification email to
-                            </p>
-
-                            <p className="font-bold text-lg mt-2 break-all">
-                                {registeredEmail}
-                            </p>
-
-                            <p className="mt-6 text-sm text-[color:var(--muted-foreground)]">
-                                Click the verification link in the email before signing in.
-                            </p>
-
-                            {resendSuccess && (
-                                <div className="mt-5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-600">
-                                    {resendSuccess}
+                        {registrationComplete ? (
+                            <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-8 text-center">
+                                <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10">
+                                    <CheckCircle2 className="h-8 w-8 text-emerald-500" />
                                 </div>
-                            )}
 
-                            <div className="mt-8 flex flex-col gap-3">
+                                <h3 className="text-2xl font-bold mb-3">
+                                    Account Created!
+                                </h3>
 
-                                {getMailProvider(registeredEmail) && (
-                                    <a
-                                        href={getMailProvider(registeredEmail)!}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="rounded-xl bg-indigo-500 py-3 font-semibold text-white hover:bg-indigo-600 transition"
-                                    >
-                                        Open Email Inbox
-                                    </a>
+                                <p className="text-[color:var(--muted-foreground)]">
+                                    We&apos;ve sent a verification email to
+                                </p>
+
+                                <p className="font-bold text-lg mt-2 break-all">
+                                    {registeredEmail}
+                                </p>
+
+                                <p className="mt-6 text-sm text-[color:var(--muted-foreground)]">
+                                    Click the verification link in the email before signing in.
+                                </p>
+
+                                {resendSuccess && (
+                                    <div className="mt-5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-600">
+                                        {resendSuccess}
+                                    </div>
                                 )}
 
-                                <button
-                                    type="button"
-                                    onClick={handleResendEmail}
-                                    disabled={isResending}
-                                    className="rounded-xl border border-[color:var(--border)] py-3 font-semibold hover:bg-[var(--background)] transition disabled:opacity-60"
-                                >
-                                    {isResending ? (
-                                        <Loader2 className="mx-auto animate-spin" size={18} />
-                                    ) : (
-                                        "Resend Verification Email"
+                                <div className="mt-8 flex flex-col gap-3">
+                                    {getMailProvider(registeredEmail) && (
+                                        <a
+                                            href={getMailProvider(registeredEmail)!}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="rounded-xl bg-indigo-500 py-3 font-semibold text-white hover:bg-indigo-600 transition"
+                                        >
+                                            Open Email Inbox
+                                        </a>
                                     )}
-                                </button>
 
-                                <Link
-                                    href="/login"
-                                    className="rounded-xl border border-[color:var(--border)] py-3 font-semibold hover:bg-[var(--background)] transition"
-                                >
-                                    Back to Login
-                                </Link>
+                                    <button
+                                        type="button"
+                                        onClick={handleResendEmail}
+                                        disabled={isResending}
+                                        className="rounded-xl border border-[color:var(--border)] py-3 font-semibold hover:bg-[var(--background)] transition disabled:opacity-60"
+                                    >
+                                        {isResending ? (
+                                            <Loader2 className="mx-auto animate-spin" size={18} />
+                                        ) : (
+                                            "Resend Verification Email"
+                                        )}
+                                    </button>
 
+                                    <Link
+                                        href="/login"
+                                        className="rounded-xl border border-[color:var(--border)] py-3 font-semibold hover:bg-[var(--background)] transition"
+                                    >
+                                        Back to Login
+                                    </Link>
+                                </div>
                             </div>
+                        ) : (
+                            <>
+                                <form onSubmit={handleManualRegister} className="space-y-4 mb-6">
+                                    <div className="relative">
+                                        <Mail
+                                            className="absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--muted-foreground)]"
+                                            size={18}
+                                        />
+                                        <input
+                                            type="email"
+                                            placeholder="Email address"
+                                            required
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            className="w-full pl-10 pr-4 py-2.5 bg-[var(--card)] border border-[color:var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                        />
+                                    </div>
 
-                        </div>
-                    ) : (
+                                    <div className="relative">
+                                        <Lock
+                                            className="absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--muted-foreground)]"
+                                            size={18}
+                                        />
+                                        <input
+                                            type="password"
+                                            placeholder="Create a password"
+                                            minLength={8}
+                                            required
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                            className="w-full pl-10 pr-4 py-2.5 bg-[var(--card)] border border-[color:var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                        />
+                                    </div>
 
-                        <form onSubmit={handleManualRegister} className="space-y-4 mb-6">
-                            <div className="relative">
-                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--muted-foreground)]" size={18} />
-                                <input
-                                    type="email"
-                                    placeholder="Email address"
-                                    required
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2.5 bg-[var(--card)] border border-[color:var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                                />
-                            </div>
-                            <div className="relative">
-                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--muted-foreground)]" size={18} />
-                                <input
-                                    type="password"
-                                    placeholder="Create a password"
-                                    minLength={6}
-                                    required
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2.5 bg-[var(--card)] border border-[color:var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                                />
-                            </div>
-                            <button
-                                type="submit"
-                                disabled={isSubmitting}
-                                className="w-full py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl text-sm font-bold flex justify-center items-center gap-2 disabled:opacity-70 transition-colors"
-                            >
-                                {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : "Sign Up"}
-                            </button>
-                        </form>
-                    )}
+                                    <button
+                                        type="submit"
+                                        disabled={isSubmitting}
+                                        className="w-full py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl text-sm font-bold flex justify-center items-center gap-2 disabled:opacity-70 transition-colors"
+                                    >
+                                        {isSubmitting ? (
+                                            <Loader2 size={16} className="animate-spin" />
+                                        ) : (
+                                            "Sign Up"
+                                        )}
+                                    </button>
+                                </form>
 
+                                <div className="relative flex items-center justify-center mb-6">
+                                    <div className="absolute inset-0 flex items-center">
+                                        <div className="w-full border-t border-[color:var(--border)]"></div>
+                                    </div>
+                                    <span className="relative bg-[var(--background)] px-4 text-xs font-semibold text-[color:var(--muted-foreground)] uppercase">
+                                        Or
+                                    </span>
+                                </div>
 
-                    <div className="relative flex items-center justify-center mb-6">
-                        <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-[color:var(--border)]"></div></div>
-                        <span className="relative bg-[var(--background)] px-4 text-xs font-semibold text-[color:var(--muted-foreground)] uppercase">Or</span>
-                    </div>
+                                <div className="w-full mb-8">
+                                    {!policyAccepted ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => setPolicyDialogOpen(true)}
+                                            className="w-full rounded-xl border border-[color:var(--border)] bg-[var(--card)] px-4 py-3 text-sm font-semibold text-[color:var(--foreground)] transition-colors hover:bg-[var(--background)]"
+                                        >
+                                            Continue with Google
+                                        </button>
+                                    ) : (
+                                        <GoogleLoginButton policyAccepted={policyAccepted} />
+                                    )}
+                                </div>
 
-                    <div className="w-full mb-8">
-                        <GoogleLoginButton />
-                    </div>
-
-                    <div className="text-sm text-[color:var(--muted-foreground)] text-center">
-                        Already have an account? <Link href={`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`} className="font-semibold text-indigo-500 hover:underline">Log in</Link>
+                                <div className="text-sm text-[color:var(--muted-foreground)] text-center">
+                                    Already have an account?{" "}
+                                    <Link
+                                        href={`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`}
+                                        className="font-semibold text-indigo-500 hover:underline"
+                                    >
+                                        Log in
+                                    </Link>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>
-        </div>
+
+            <PolicyConsentDialog
+                open={policyDialogOpen}
+                onOpenChange={setPolicyDialogOpen}
+                onAccept={handleConsentAccepted}
+            />
+        </>
     );
 }
 
 export default function RegisterPage() {
     return (
-        <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-[var(--background)]"><Loader2 className="animate-spin text-indigo-500" size={32} /></div>}>
+        <Suspense
+            fallback={
+                <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
+                    <Loader2 className="animate-spin text-indigo-500" size={32} />
+                </div>
+            }
+        >
             <RegisterContent />
         </Suspense>
     );

@@ -302,7 +302,7 @@ export default function PdfToTextWorkspace() {
 
                             {lang === "auto" && (
                                 <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-900 dark:text-amber-100">
-                                    <strong>Tip:</strong> Auto detect works well for documents with unknown or multiple languages, but it may not always choose the most accurate language pack. If you know the document's primary language, selecting it manually will usually produce better OCR results.
+                                    <strong>Tip:</strong> Auto detect works well for documents with unknown or multiple languages, but it may not always choose the most accurate language pack. If you know the document&#39;s primary language, selecting it manually will usually produce better OCR results.
                                 </div>
                             )}
 

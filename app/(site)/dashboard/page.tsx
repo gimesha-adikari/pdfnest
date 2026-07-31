@@ -1,4 +1,3 @@
-// file: /home/gimesha/My_Projects/next/pdfnest/app/(site)/dashboard/page.tsx
 "use client";
 
 import React, {useEffect, useState} from "react";
