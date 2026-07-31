@@ -365,3 +365,19 @@ export async function fetchJson<T = unknown>(endpoint: string, options: RequestI
     return response.json();
 
 }
+
+export async function submitContactTicket(formData: FormData): Promise<{ success: boolean; ticketNumber: string; message: string }> {
+    const url = `${getBaseUrl()}/api/contact`;
+
+    try {
+        const response = await axios.post(url, formData, {
+            withCredentials: true,
+            headers: {
+                "Content-Type": "multipart/form-data",
+            },
+        });
+        return response.data;
+    } catch (error: unknown) {
+        throw await handleAxiosError(error);
+    }
+}
