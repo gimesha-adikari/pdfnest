@@ -256,9 +256,14 @@ export default function AuthModal() {
 
                     <div className="w-full mb-6">
                         {isLoginView ? (
-                            <GoogleLoginButton onSuccessCallback={handleAuthModalSuccess} />
+                            <GoogleLoginButton
+                                policyAccepted={policyAccepted}
+                                onSuccessCallback={handleAuthModalSuccess} />
                         ) : policyAccepted ? (
-                            <GoogleLoginButton onSuccessCallback={handleAuthModalSuccess} />
+
+                            <GoogleLoginButton
+                                policyAccepted={policyAccepted}
+                                onSuccessCallback={handleAuthModalSuccess} />
                         ) : (
                             <div className="rounded-xl border border-dashed border-[color:var(--border)] px-4 py-3 text-center text-xs text-[color:var(--muted-foreground)]">
                                 Accept the policy above to enable Google sign up.
