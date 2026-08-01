@@ -1,4 +1,5 @@
 import ContactCard from "@/components/legal/ContactCard";
+import {EMAILS} from "@/lib/constants";
 
 export const metadata = {
     title: "Privacy Policy | Platen PDF",
@@ -23,11 +24,6 @@ const sections = [
     { id: "contact", title: "15. Contact Us" },
 ];
 
-const EMAILS = {
-    support: "support@platenpdf.com",
-    contact: "contact@platenpdf.com",
-    feedback: "feedback@platenpdf.com",
-};
 
 export default function PrivacyPolicyPage() {
     return (

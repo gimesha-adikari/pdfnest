@@ -381,3 +381,7 @@ export async function submitContactTicket(formData: FormData): Promise<{ success
         throw await handleAxiosError(error);
     }
 }
+
+export function getMailDomain(): string {
+    return process.env.MAIL_DOMAIN || "gimesha.dev";
+}

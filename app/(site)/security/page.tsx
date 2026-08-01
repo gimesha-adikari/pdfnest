@@ -10,6 +10,8 @@ import {
     Clock3,
     Shield,
 } from "lucide-react";
+import {EmailButton} from "@/components/ui/EmailButton";
+import {EMAILS} from "@/lib/constants";
 
 export const metadata = {
     title: "Security | Platen PDF",
@@ -218,12 +220,12 @@ export default function SecurityPage() {
                         helps us protect everyone using Platen PDF.
                     </p>
 
-                    <Link
-                        href="mailto:support@yourdomain.com"
-                        className="mt-8 inline-flex items-center rounded-xl bg-indigo-500 px-6 py-3 font-semibold text-white transition hover:bg-indigo-600"
+                    <EmailButton
+                        email={EMAILS.contact}
+                        className="inline-flex rounded-xl border px-5 py-3"
                     >
                         Report a Security Issue
-                    </Link>
+                    </EmailButton>
                 </section>
 
                 {/* Updates */}

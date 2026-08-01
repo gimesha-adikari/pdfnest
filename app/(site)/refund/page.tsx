@@ -9,6 +9,8 @@ import {
     Calendar,
     CheckCircle2,
 } from "lucide-react";
+import {EmailButton} from "@/components/ui/EmailButton";
+import {EMAILS} from "@/lib/constants";
 
 export const metadata = {
     title: "Refund Policy | Platen PDF",
@@ -49,7 +51,7 @@ export default function RefundPolicyPage() {
             <div className="mb-10 rounded-3xl border border-indigo-500/20 bg-indigo-500/5 p-8">
                 <p className="leading-8 text-[color:var(--muted-foreground)]">
                     We aim to provide fair and transparent billing. If you
-                    experience a payment issue, we'll work with you to resolve
+                    experience a payment issue, we&#39;ll work with you to resolve
                     it as quickly as possible.
                 </p>
             </div>
@@ -157,12 +159,12 @@ export default function RefundPolicyPage() {
                         ))}
                     </div>
 
-                    <Link
-                        href="mailto:support@yourdomain.com"
+                    <EmailButton
+                        email={EMAILS.support}
                         className="mt-8 inline-flex rounded-xl bg-indigo-500 px-5 py-3 font-semibold text-white transition hover:bg-indigo-600"
                     >
                         Contact Support
-                    </Link>
+                    </EmailButton>
                 </section>
 
                 {/* Processing */}
@@ -170,7 +172,7 @@ export default function RefundPolicyPage() {
                 <section className="rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8">
                     <div className="mb-6 flex items-center gap-3">
                         <Clock3 className="h-6 w-6 text-violet-500" />
-                        <h2 className="text-2xl font-black">
+                        <h2 className="text-2xmal font-black">
                             Refund Processing
                         </h2>
                     </div>
