@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Globe } from "lucide-react";
 
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
+import { useWorkflow } from "@/context/WorkflowContext";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfUploader from "@/components/pdf/PdfUploader";
@@ -16,9 +17,73 @@ interface ExtendedFile extends File {
 }
 
 export default function SharedUploadPage() {
-    const { toolId, toolConfig, setFile, isLoadingConfig } = useSharedTool();
+    const {
+        toolId,
+        toolConfig,
+        setFile,
+        file,
+        isLoadingConfig,
+    } = useSharedTool();
+
+    const { pendingTransfer, consumeTransfer } = useWorkflow();
     const router = useRouter();
     const [urlInput, setUrlInput] = useState("");
+    const handledTransferRef = useRef(false);
+
+    const currentToolHref = `/${toolId}`;
+    const shouldRestoreTransfer = pendingTransfer?.targetToolHref === currentToolHref;
+
+    useEffect(() => {
+        console.log("[upload] effect", {
+            toolId,
+            currentToolHref,
+            isLoadingConfig,
+            hasFile: !!file,
+            shouldRestoreTransfer,
+            pendingTransferTarget: pendingTransfer?.targetToolHref || null,
+        });
+
+        if (isLoadingConfig) return;
+        if (handledTransferRef.current) return;
+
+        if (shouldRestoreTransfer) {
+            handledTransferRef.current = true;
+
+            const transfer = consumeTransfer();
+            console.log("[upload] consumeTransfer result", transfer);
+
+            if (!transfer) return;
+
+            const restoredFile = new File([transfer.blob], transfer.fileName, {
+                type: transfer.mimeType || transfer.blob.type || "application/pdf",
+                lastModified: Date.now(),
+            }) as ExtendedFile;
+
+            console.log("[upload] restoring file into", currentToolHref, restoredFile.name);
+
+            setFile(restoredFile);
+            router.replace(`/${toolId}/workspace`);
+            return;
+        }
+
+        if (file) {
+            console.log("[upload] existing file detected, going workspace", {
+                toolId,
+                fileName: file.name,
+            });
+            router.replace(`/${toolId}/workspace`);
+        }
+    }, [
+        consumeTransfer,
+        currentToolHref,
+        file,
+        isLoadingConfig,
+        pendingTransfer,
+        router,
+        setFile,
+        shouldRestoreTransfer,
+        toolId,
+    ]);
 
     const handleFilesAccepted = (files: File[]) => {
         if (files && files.length > 0) {
@@ -28,6 +93,12 @@ export default function SharedUploadPage() {
                 baselineFile.initialBatch = files;
             }
 
+            console.log("[upload] user selected file", {
+                toolId,
+                fileName: baselineFile.name,
+            });
+
+            handledTransferRef.current = true;
             setFile(baselineFile);
             router.push(`/${toolId}/workspace`);
         }
@@ -43,11 +114,17 @@ export default function SharedUploadPage() {
 
         virtualFile.targetUrl = urlInput.trim();
 
+        console.log("[upload] url submitted", {
+            toolId,
+            url: urlInput.trim(),
+        });
+
+        handledTransferRef.current = true;
         setFile(virtualFile);
         router.push(`/${toolId}/workspace`);
     };
 
-    if (isLoadingConfig) {
+    if (isLoadingConfig || shouldRestoreTransfer) {
         return (
             <PdfToolLayout>
                 <div className="flex min-h-[60vh] items-center justify-center">

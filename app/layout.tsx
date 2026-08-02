@@ -5,6 +5,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/context/AuthContext";
 import { GoogleOAuthProvider } from "@react-oauth/google";
+import { WorkflowProvider } from "@/context/WorkflowContext";
 
 const SITE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://pdfnest.gimesha.dev").replace(/\/$/, "");
 
@@ -49,6 +50,7 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!;
+
     return (
         <html
             lang="en"
@@ -60,7 +62,9 @@ export default function RootLayout({
         <body className="min-h-full overflow-x-hidden bg-[var(--background)] text-[var(--foreground)] font-sans transition-colors duration-200">
         <ThemeProvider>
             <GoogleOAuthProvider clientId={googleClientId}>
-                <AuthProvider>{children}</AuthProvider>
+                <AuthProvider>
+                    <WorkflowProvider>{children}</WorkflowProvider>
+                </AuthProvider>
             </GoogleOAuthProvider>
         </ThemeProvider>
         </body>

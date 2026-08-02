@@ -53,6 +53,10 @@ export default function SharedWorkspacePage() {
         }
     }, [file, toolId, router, isLoadingConfig]);
 
+    useEffect(() => {
+        console.log("[workspace]", { toolId, hasFile: !!file, isLoadingConfig });
+    }, [toolId, file, isLoadingConfig]);
+
     if (isLoadingConfig) {
         return (
             <PdfToolLayout>

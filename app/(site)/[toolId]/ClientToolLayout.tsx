@@ -1,6 +1,13 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+    createContext,
+    useContext,
+    useEffect,
+    useMemo,
+    useState,
+    type ReactNode,
+} from "react";
 import { useParams } from "next/navigation";
 import { NAV_TOOLS } from "@/lib/toolsData";
 import ToolFAQ from "@/components/SEO/ToolFAQ";
@@ -16,6 +23,7 @@ interface ToolItem {
     multiple?: boolean;
     accept?: string;
     isNew?: boolean;
+    related?: string[];
 }
 
 interface BackendTool {
@@ -39,6 +47,8 @@ interface BackendTool {
     accept?: string;
     IsNew?: boolean;
     isNew?: boolean;
+    RelatedJson?: string;
+    related?: string[] | string;
 }
 
 interface ToolConfig {
@@ -71,11 +81,15 @@ export default function ClientToolLayout({ children }: { children: ReactNode }) 
     const params = useParams();
     const rawToolId = params?.toolId;
     const toolId = Array.isArray(rawToolId) ? rawToolId[0] : rawToolId || "";
+    const currentToolHref = `/${toolId}`;
 
-    const [file, setFile] = useState<File | null>(null);
+    const [fileState, setFileState] = useState<File | null>(null);
+    const [activeToolHref, setActiveToolHref] = useState<string | null>(null);
     const [downloadData, setDownloadData] = useState<{ blob: Blob; fileName: string } | null>(null);
 
-    const localFallback = NAV_TOOLS.find((t) => t.href === `/${toolId}`) as ToolItem | undefined;
+    const file = activeToolHref === currentToolHref ? fileState : null;
+
+    const localFallback = NAV_TOOLS.find((t) => t.href === currentToolHref) as ToolItem | undefined;
     const initialConfig: ToolConfig = {
         name: localFallback?.title || "PDF Tool",
         description: localFallback?.description || "Process your PDF files securely.",
@@ -96,11 +110,11 @@ export default function ClientToolLayout({ children }: { children: ReactNode }) 
             .then((data: unknown) => {
                 if (cancelled) return;
 
-                const activeFallback = NAV_TOOLS.find((t) => t.href === `/${toolId}`) as ToolItem | undefined;
+                const activeFallback = NAV_TOOLS.find((t) => t.href === currentToolHref) as ToolItem | undefined;
 
                 if (Array.isArray(data) && data.length > 0) {
                     const tools = data as BackendTool[];
-                    const found = tools.find((t) => (t.Href || t.href) === `/${toolId}`);
+                    const found = tools.find((t) => (t.Href || t.href) === currentToolHref);
 
                     if (found) {
                         setToolConfig({
@@ -143,7 +157,7 @@ export default function ClientToolLayout({ children }: { children: ReactNode }) 
                 if (cancelled) return;
 
                 console.error("Error fetching remote tool config, falling back:", err);
-                const activeFallback = NAV_TOOLS.find((t) => t.href === `/${toolId}`) as ToolItem | undefined;
+                const activeFallback = NAV_TOOLS.find((t) => t.href === currentToolHref) as ToolItem | undefined;
 
                 if (activeFallback) {
                     setToolConfig({
@@ -156,15 +170,23 @@ export default function ClientToolLayout({ children }: { children: ReactNode }) 
                 }
             })
             .finally(() => {
-                if (!cancelled) {
-                    setIsLoadingConfig(false);
-                }
+                if (!cancelled) setIsLoadingConfig(false);
             });
 
         return () => {
             cancelled = true;
         };
-    }, [toolId]);
+    }, [currentToolHref]);
+
+    const setFile = (nextFile: File | null) => {
+        setFileState(nextFile);
+        setActiveToolHref(nextFile ? currentToolHref : null);
+    };
+
+    const clearFile = () => {
+        setFileState(null);
+        setActiveToolHref(null);
+    };
 
     return (
         <ToolContext.Provider
@@ -172,7 +194,14 @@ export default function ClientToolLayout({ children }: { children: ReactNode }) 
                 toolId,
                 toolConfig,
                 file,
-                setFile,
+                setFile: nextFile => {
+                    if (nextFile) {
+                        setFileState(nextFile);
+                        setActiveToolHref(currentToolHref);
+                    } else {
+                        clearFile();
+                    }
+                },
                 downloadData,
                 setDownloadData,
                 isLoadingConfig,
