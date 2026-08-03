@@ -28,7 +28,7 @@ type ToolItem = {
     href?: string;
 };
 
-export function Home() {
+export default function Home() {
     const {isAuthenticated, subscription, isLoading} = useAuth();
     const [search, setSearch] = useState("");
     const [content, setContent] = useState<HomeContent>(fallbackHomeContent);
