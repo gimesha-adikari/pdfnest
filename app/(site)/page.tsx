@@ -40,6 +40,9 @@ export default function Home() {
     const isGuest = !isAuthenticated;
 
     useEffect(() => {
+
+        setToolsList(NAV_TOOLS as unknown as ToolItem[]);
+
         fetchJson("/site-content/home")
             .then((data: any) => {
                 if (data && typeof data === "object" && !("error" in data)) {
@@ -61,7 +64,6 @@ export default function Home() {
         //         setToolsList(NAV_TOOLS as unknown as ToolItem[]);
         //     });
 
-        setToolsList(NAV_TOOLS as unknown as ToolItem[]);
     }, []);
 
     const query = search.trim().toLowerCase();
