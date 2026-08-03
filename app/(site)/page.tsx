@@ -40,14 +40,14 @@ export function Home() {
     const isGuest = !isAuthenticated;
 
     useEffect(() => {
-        // fetchJson("/site-content/home")
-        //     .then((data: any) => {
-        //         if (data && typeof data === "object" && !("error" in data)) {
-        //             setContent((prev) => ({...prev, ...data}));
-        //         }
-        //     })
-        //     .catch((err) => console.error("Error loading home settings:", err));
-        //
+        fetchJson("/site-content/home")
+            .then((data: any) => {
+                if (data && typeof data === "object" && !("error" in data)) {
+                    setContent((prev) => ({...prev, ...data}));
+                }
+            })
+            .catch((err) => console.error("Error loading home settings:", err));
+
         // fetchJson("/site-content/tools")
         //     .then((data: any) => {
         //         if (Array.isArray(data) && data.length > 0) {
