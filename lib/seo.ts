@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { NAV_TOOLS } from "./toolsData";
 
-const BASE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://pdfnest.gimesha.dev").replace(/\/$/, "");
+const BASE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://platenpdf.com").replace(/\/$/, "");
 const OG_IMAGE = `${BASE_URL}/platen-og.png`;
 
 function buildAbsoluteUrl(pathname: string): string {

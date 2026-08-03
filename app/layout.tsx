@@ -7,7 +7,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { WorkflowProvider } from "@/context/WorkflowContext";
 
-const SITE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://pdfnest.gimesha.dev").replace(/\/$/, "");
+const SITE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://platenpdf.com").replace(/\/$/, "");
 
 const geistSans = Geist({
     variable: "--font-geist-sans",
