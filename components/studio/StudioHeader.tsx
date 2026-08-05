@@ -68,7 +68,13 @@ export default function StudioHeader({
                                          sidebarOpen,
                                      }: StudioHeaderProps) {
     const pathname = usePathname();
-    const { subscription, isAuthenticated, logout, user } = useAuth();
+    const {
+        subscription,
+        isLoggedIn,
+        isGuest,
+        logout,
+        user,
+    } = useAuth();
     const isPro = subscription?.tier === "pro";
 
     return (
@@ -161,7 +167,7 @@ export default function StudioHeader({
                     </div>
 
                     <div className="flex items-center gap-2">
-                        {isAuthenticated && !isPro && (
+                        {isLoggedIn && !isPro && (
                             <Link
                                 href="/subscribe"
                                 className="hidden sm:inline-flex items-center gap-1 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-1.5 text-xs font-bold text-amber-500 hover:bg-amber-500/10 transition"
@@ -171,7 +177,7 @@ export default function StudioHeader({
                             </Link>
                         )}
 
-                        {isAuthenticated && user?.role === "admin" && (
+                        {isLoggedIn && user?.role === "admin" && (
                             <Link
                                 href="/admin"
                                 className="hidden md:inline-flex items-center gap-1 rounded-xl border border-indigo-500/10 bg-indigo-500/5 px-3 py-1.5 text-xs font-bold text-indigo-500 hover:bg-indigo-500/10 transition"
@@ -181,7 +187,7 @@ export default function StudioHeader({
                             </Link>
                         )}
 
-                        {isAuthenticated ? (
+                        {isLoggedIn ? (
                             <>
                                 <Link
                                     href="/dashboard"
@@ -198,12 +204,23 @@ export default function StudioHeader({
                                 </button>
                             </>
                         ) : (
-                            <Link
-                                href={`/login?callbackUrl=${encodeURIComponent(pathname)}`}
-                                className="rounded-xl border border-[color:var(--border)] bg-[var(--background)] px-3 py-2 text-xs font-bold hover:bg-[var(--card)] transition"
-                            >
-                                Sign in
-                            </Link>
+                            <div className="flex items-center gap-2">
+                                {isGuest && (
+                                    <Link
+                                        href={`/register?callbackUrl=${encodeURIComponent(pathname)}`}
+                                        className="rounded-xl bg-indigo-500 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-600 transition"
+                                    >
+                                        Create Account
+                                    </Link>
+                                )}
+
+                                <Link
+                                    href={`/login?callbackUrl=${encodeURIComponent(pathname)}`}
+                                    className="rounded-xl border border-[color:var(--border)] bg-[var(--background)] px-3 py-2 text-xs font-bold hover:bg-[var(--card)] transition"
+                                >
+                                    Sign in
+                                </Link>
+                            </div>
                         )}
 
                         <ThemeToggle />

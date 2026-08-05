@@ -38,7 +38,13 @@ type BillingPortalResponse = {
 };
 
 export default function SettingsPage() {
-    const { isAuthenticated, isLoading, user, subscription, logout } = useAuth();
+    const {
+        isLoggedIn,
+        isLoading,
+        user,
+        subscription,
+        logout,
+    } = useAuth();
     const router = useRouter();
 
     const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
@@ -64,7 +70,7 @@ export default function SettingsPage() {
     });
 
     useEffect(() => {
-        if (!isAuthenticated || !user) return;
+        if (!isLoggedIn || !user) return;
 
         const loadSettings = async () => {
             setLoadingPreferences(true);
@@ -87,7 +93,7 @@ export default function SettingsPage() {
         };
 
         loadSettings();
-    }, [isAuthenticated, user]);
+    }, [isLoggedIn, user]);
 
     if (isLoading) {
         return (
@@ -97,7 +103,7 @@ export default function SettingsPage() {
         );
     }
 
-    if (!isAuthenticated || !user) return null;
+    if (!isLoggedIn || !user) return null;
 
     const handlePasswordUpdate = async (e: React.FormEvent) => {
         e.preventDefault();

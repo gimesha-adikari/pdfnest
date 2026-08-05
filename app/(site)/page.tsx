@@ -29,15 +29,26 @@ type ToolItem = {
 };
 
 export default function Home() {
-    const {isAuthenticated, subscription, isLoading} = useAuth();
+    const {
+        isLoggedIn,
+        isGuest,
+        subscription,
+        isLoading,
+    } = useAuth();
+
     const [search, setSearch] = useState("");
     const [content, setContent] = useState<HomeContent>(fallbackHomeContent);
     const [toolsList, setToolsList] = useState<ToolItem[]>([]);
 
-    const isProUser = isAuthenticated && subscription?.tier === "pro";
-    const isFreeUser = isAuthenticated && (!subscription || subscription.tier == "free");
-    const isPlusUser = isAuthenticated && (!subscription || subscription.tier == "plus");
-    const isGuest = !isAuthenticated;
+    const isProUser =
+        isLoggedIn && subscription?.tier === "pro";
+
+    const isPlusUser =
+        isLoggedIn && subscription?.tier === "plus";
+
+    const isFreeUser =
+        isLoggedIn &&
+        (!subscription || subscription.tier === "free");
 
     useEffect(() => {
 
@@ -188,15 +199,19 @@ export default function Home() {
 
                         <div className="mt-8 max-w-4xl">
                             <h1 className="text-balance text-4xl font-black tracking-tight sm:text-6xl lg:text-8xl">
-                                {!isLoading && (isProUser || isFreeUser || isPlusUser) ? content.heroWelcomeBack : "Platen"}
+                                {!isLoading && isLoggedIn
+                                    ? content.heroWelcomeBack
+                                    : "Platen"}
                                 <span
                                     className="mt-2 block bg-gradient-to-r from-[color:var(--foreground)] via-[#6d5ef5] to-[#ff61c7] bg-clip-text text-transparent">
-                                    {!isLoading && (isProUser || isFreeUser || isPlusUser)
-                                        ? isProUser || isPlusUser
-                                            ? isProUser
-                                                ? content.heroTitlePro
-                                                : content.heroTitleGuest
-                                            : content.heroTitlePlus
+                                    {!isLoading
+                                        ? isProUser
+                                            ? content.heroTitlePro
+                                            : isPlusUser
+                                                ? content.heroTitlePlus
+                                                : isFreeUser
+                                                    ? content.heroTitleGuest
+                                                    : "Modern Document Platform"
                                         : "Modern Document Platform"}
                                 </span>
                             </h1>

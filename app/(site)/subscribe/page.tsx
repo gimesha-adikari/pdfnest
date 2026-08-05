@@ -16,13 +16,19 @@ interface CheckoutResponse {
 }
 
 export default function SubscribePage() {
-    const {isAuthenticated, subscription, requireAuth} = useAuth();
+    const {
+        isGuest,
+        isLoggedIn,
+        subscription,
+        requireAuth,
+    } = useAuth();
     const [isProcessing, setIsProcessing] = useState(false);
     const [activeFaq, setActiveFaq] = useState<number | null>(null);
     const [content, setContent] = useState<SubscribeContent>(fallbackSubscribeContent);
 
-    const currentTier = subscription?.tier || "free";
-    const isGuest = !isAuthenticated;
+    const currentTier = isLoggedIn
+        ? (subscription?.tier ?? "free")
+        : "guest";
 
     useEffect(() => {
         fetchJson("/site-content/subscribe")
@@ -341,10 +347,10 @@ export default function SubscribePage() {
                         <>
                             <h3 className="text-xl font-black text-[color:var(--foreground)]">{content.ctaGuestTitle}</h3>
                             <Link
-                                href="/login"
+                                href="/register"
                                 className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-3 text-xs font-bold text-white transition-transform hover:scale-[1.02]"
                             >
-                                Get Started Free <ArrowUpRight size={14}/>
+                                Create Free Account <ArrowUpRight size={14}/>
                             </Link>
                         </>
                     )}

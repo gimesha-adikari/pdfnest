@@ -12,7 +12,10 @@ import { fetchJson } from "@/lib/api";
 type PendingAction = "register" | null;
 
 function RegisterContent() {
-    const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+    const {
+        isLoggedIn,
+        isLoading: isAuthLoading,
+    } = useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -34,10 +37,10 @@ function RegisterContent() {
     const [pendingAction, setPendingAction] = useState<PendingAction>(null);
 
     useEffect(() => {
-        if (!isAuthLoading && isAuthenticated) {
+        if (!isAuthLoading && isLoggedIn) {
             router.push(callbackUrl);
         }
-    }, [isAuthenticated, isAuthLoading, router, callbackUrl]);
+    }, [isLoggedIn, isAuthLoading, router, callbackUrl]);
 
     const submitManualRegister = async () => {
         setError("");
@@ -124,7 +127,7 @@ function RegisterContent() {
         }
     };
 
-    if (isAuthLoading || isAuthenticated) {
+    if (isAuthLoading || isLoggedIn) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
                 <Loader2 className="animate-spin text-indigo-500" size={32} />

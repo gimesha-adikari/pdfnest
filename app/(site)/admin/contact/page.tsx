@@ -7,17 +7,17 @@ import { useAuth } from "@/context/AuthContext";
 import ContactCenter from "@/components/admin/ContactCenter";
 
 export default function AdminContactPage() {
-    const { isAuthenticated, isLoading, user } = useAuth();
+    const { isLoggedIn, isLoading, user } = useAuth();
     const router = useRouter();
 
     React.useEffect(() => {
         if (isLoading) return;
-        if (!isAuthenticated || user?.role !== "admin") {
+        if (!isLoggedIn || user?.role !== "admin") {
             router.push("/");
         }
-    }, [isLoading, isAuthenticated, user, router]);
+    }, [isLoading, isLoggedIn, user, router]);
 
-    if (isLoading || !isAuthenticated || user?.role !== "admin") {
+    if (isLoading || !isLoggedIn || user?.role !== "admin") {
         return (
             <div className="flex min-h-screen items-center justify-center bg-[var(--background)]">
                 <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />

@@ -8,7 +8,12 @@ import {ArrowUpRight, CheckCircle2, Coins, History, Loader2, Sparkles, Zap, Sett
 import {notify} from "@/lib/notify";
 
 export default function UserDashboard() {
-    const {isAuthenticated, isLoading, subscription, refreshSession} = useAuth();
+    const {
+        isLoggedIn,
+        isLoading,
+        subscription,
+        refreshSession,
+    } = useAuth();
     const [transactions, setTransactions] = useState<any[]>([]);
     const [isFetching, setIsFetching] = useState(true);
     const [isBuyingCredits, setIsBuyingCredits] = useState(false);
@@ -24,11 +29,11 @@ export default function UserDashboard() {
     ];
 
     useEffect(() => {
-        if (!isLoading && isAuthenticated) {
+        if (!isLoading && isLoggedIn) {
             // eslint-disable-next-line react-hooks/immutability
             fetchTransactions();
         }
-    }, [isLoading, isAuthenticated]);
+    }, [isLoading, isLoggedIn]);
 
     const fetchTransactions = async () => {
         try {
@@ -70,7 +75,7 @@ export default function UserDashboard() {
             className="animate-spin text-indigo-500" size={32}/></div>;
     }
 
-    if (!isAuthenticated || !subscription) return null;
+    if (!isLoggedIn || !subscription) return null;
 
     const currentTier = subscription.tier; // "free", "plus", "pro"
     const hasActiveSubscription = currentTier === "plus" || currentTier === "pro";

@@ -10,7 +10,11 @@ import { ArrowLeft, Mail, Lock, Loader2 } from "lucide-react";
 import { fetchJson } from "@/lib/api";
 
 function LoginContent() {
-    const { isAuthenticated, isLoading: isAuthLoading, refreshSession } = useAuth();
+    const {
+        isLoggedIn,
+        isLoading: isAuthLoading,
+        refreshSession,
+    } = useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -38,10 +42,10 @@ function LoginContent() {
     }, [verified]);
 
     useEffect(() => {
-        if (!isAuthLoading && isAuthenticated) {
+        if (!isAuthLoading && isLoggedIn) {
             router.push(callbackUrl);
         }
-    }, [isAuthenticated, isAuthLoading, router, callbackUrl]);
+    }, [isLoggedIn, isAuthLoading, router, callbackUrl]);
 
     const handleManualLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -96,7 +100,7 @@ function LoginContent() {
         setPolicyDialogOpen(false);
     };
 
-    if (isAuthLoading || isAuthenticated) {
+    if (isAuthLoading || isLoggedIn) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
                 <Loader2 className="animate-spin text-indigo-500" size={32} />

@@ -58,7 +58,12 @@ interface InteractionState {
 }
 
 export default function ImagesToPdfWorkspace() {
-    const {requireAuth, subscription, isAuthenticated} = useAuth();
+    const {
+        requireAuth,
+        subscription,
+        isGuest,
+        isLoggedIn,
+    } = useAuth();
     const router = useRouter();
     const {toolId, file, setFile, setDownloadData} = useSharedTool();
 
@@ -514,7 +519,7 @@ export default function ImagesToPdfWorkspace() {
                         <button
                             type="button"
                             onClick={() => {
-                                if (!isAuthenticated) {
+                                if (isGuest) {
                                     setShowLoginAd(true);
                                     return;
                                 }
@@ -523,6 +528,7 @@ export default function ImagesToPdfWorkspace() {
                                     setShowUpgradeAd(true);
                                     return;
                                 }
+
                                 setActiveTab("custom");
                             }}
                             className={`pb-3 px-4 text-sm font-bold flex items-center gap-2 border-b-2 transition relative ${
@@ -983,12 +989,12 @@ export default function ImagesToPdfWorkspace() {
                         </span>
 
                         <h3 className="text-2xl font-black text-[color:var(--foreground)] tracking-tight leading-snug">
-                            Unlock Interactive <br/> Custom Canvas
+                            Create a Free Account
                         </h3>
 
                         <p className="mt-3 text-xs leading-relaxed text-[color:var(--muted)] font-medium px-2">
-                            Multi-page vector scaling transformations, layer orders (Z-index properties), border
-                            customizations, and matrix positioning configurations are restricted to Pro tier accounts.
+                            Create a free account to unlock your personal workspace, save your usage history,
+                            and upgrade to Pro whenever you need advanced editing tools.
                         </p>
 
                         <div className="mt-6 flex flex-col gap-2 w-full">
@@ -1049,10 +1055,16 @@ export default function ImagesToPdfWorkspace() {
 
                         <div className="mt-6 flex flex-col gap-2 w-full">
                             <Link
-                                href="/login"
+                                href="/register"
                                 className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-5 py-3 text-xs font-bold text-white shadow-md shadow-amber-600/10 hover:opacity-95 transition-all"
                             >
-                                Login to Pro Account
+                                Create Free Account
+                            </Link>
+                            <Link
+                                href="/login"
+                                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-[color:var(--border)] px-5 py-3 text-xs font-bold hover:bg-[var(--background)] transition-all"
+                            >
+                                Already have an account? Sign in
                             </Link>
                             <button
                                 type="button"

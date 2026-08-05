@@ -17,7 +17,7 @@ import { notify } from "@/lib/notify";
 type ActiveTabSection = "home" | "subscribe" | "about" | "tools";
 
 export default function AdminContentEditor() {
-    const { isAuthenticated, isLoading, user } = useAuth();
+    const { isLoggedIn, isLoading, user } = useAuth();
     const router = useRouter();
 
     const [activeSection, setActiveSection] = useState<ActiveTabSection>("home");
@@ -33,7 +33,7 @@ export default function AdminContentEditor() {
     useEffect(() => {
         if (isLoading) return;
 
-        if (!isAuthenticated || user?.role !== "admin") {
+        if (!isLoggedIn || user?.role !== "admin") {
             router.push("/");
             return;
         }
@@ -41,7 +41,7 @@ export default function AdminContentEditor() {
         // eslint-disable-next-line react-hooks/immutability
         loadAllPlatformContent();
         // eslint-disable-next-line react-hooks/immutability
-    }, [isLoading, isAuthenticated, user, router]);
+    }, [isLoading, isLoggedIn, user, router]);
 
     const loadAllPlatformContent = async () => {
         setIsFetching(true);

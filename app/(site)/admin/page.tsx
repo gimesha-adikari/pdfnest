@@ -41,7 +41,7 @@ import {MessageSquareReply} from "lucide-react";
 import {notify} from "@/lib/notify";
 
 export default function AdminPage() {
-    const {isAuthenticated, isLoading, user} = useAuth();
+    const {isLoggedIn, isLoading, user} = useAuth();
     const router = useRouter();
 
     const [activeTab, setActiveTab] = useState<"users" | "subscriptions" | "metrics">("users");
@@ -76,12 +76,12 @@ export default function AdminPage() {
 
     useEffect(() => {
         if (isLoading) return;
-        if (!isAuthenticated || user?.role !== "admin") {
+        if (!isLoggedIn || user?.role !== "admin") {
             router.push("/");
             return;
         }
         fetchData();
-    }, [isLoading, isAuthenticated, user, router]);
+    }, [isLoading, isLoggedIn, user, router]);
 
     const fetchData = async () => {
         setIsFetching(true);

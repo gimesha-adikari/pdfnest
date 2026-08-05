@@ -14,7 +14,13 @@ import { useTheme } from "next-themes";
 import Logo from "@/components/ui/Logo";
 
 export default function Header() {
-    const {subscription, isAuthenticated, logout, user} = useAuth();
+    const {
+        subscription,
+        isLoggedIn,
+        isGuest,
+        logout,
+        user,
+    } = useAuth();
     const pathname = usePathname();
     const [forceHide, setForceHide] = useState(false);
     const [toolsList, setToolsList] = useState<any[]>([]);
@@ -269,7 +275,7 @@ export default function Header() {
 
                         <ToolSearch/>
 
-                        {isAuthenticated && !isPro && (
+                        {isLoggedIn && !isPro && (
                             <Link
                                 href="/subscribe"
                                 className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold border border-amber-500/20 bg-amber-500/5 text-amber-500 hover:bg-amber-500/10 transition shadow-sm"
@@ -292,7 +298,7 @@ export default function Header() {
                             About
                         </Link>
 
-                        {isAuthenticated && user?.role === "admin" && (
+                        {isLoggedIn && user?.role === "admin" && (
                             <Link
                                 href="/admin"
                                 className="
@@ -314,7 +320,7 @@ export default function Header() {
                     </nav>
 
                     <div className="flex items-center gap-4">
-                        {isAuthenticated && subscription ? (
+                        {isLoggedIn && subscription ? (
                             <div className="flex items-center gap-3">
                                 <Link
                                     href="/dashboard"
@@ -339,13 +345,26 @@ export default function Header() {
                             </div>
                         ) : (
                             <div className="flex items-center gap-3">
-                                <Link href="/subscribe"
-                                      className="text-xs font-bold text-indigo-500 hover:underline md:hidden">
+                                <Link
+                                    href="/subscribe"
+                                    className="text-xs font-bold text-indigo-500 hover:underline md:hidden"
+                                >
                                     Upgrade
                                 </Link>
-                                {/* UPDATED TO INJECT CALLBACK URL HERE */}
-                                <Link href={`/login?callbackUrl=${encodeURIComponent(pathname)}`}
-                                      className="text-sm font-semibold hover:text-indigo-500 transition-colors">
+
+                                {isGuest && (
+                                    <Link
+                                        href={`/register?callbackUrl=${encodeURIComponent(pathname)}`}
+                                        className="rounded-xl bg-indigo-500 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-600 transition"
+                                    >
+                                        Create Account
+                                    </Link>
+                                )}
+
+                                <Link
+                                    href={`/login?callbackUrl=${encodeURIComponent(pathname)}`}
+                                    className="text-sm font-semibold hover:text-indigo-500 transition-colors"
+                                >
                                     Sign In
                                 </Link>
                             </div>
