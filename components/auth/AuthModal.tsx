@@ -12,12 +12,13 @@ type PendingAction = "register" | "google" | null;
 export default function AuthModal() {
     const {
         isAuthModalOpen,
+        authModalView,
         closeAuthModal,
         handleAuthModalSuccess,
         refreshSession,
     } = useAuth();
 
-    const [isLoginView, setIsLoginView] = useState(false);
+    const [isLoginView, setIsLoginView] = useState(authModalView === "login");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [policyAccepted, setPolicyAccepted] = useState(false);
@@ -29,8 +30,10 @@ export default function AuthModal() {
     const [pendingAction, setPendingAction] = useState<PendingAction>(null);
 
     useEffect(() => {
-        if (!isAuthModalOpen) {
-            setIsLoginView(false);
+        if (isAuthModalOpen) {
+            setIsLoginView(authModalView === "login");
+        } else {
+            setIsLoginView(authModalView === "login");
             setEmail("");
             setPassword("");
             setPolicyAccepted(false);
@@ -40,7 +43,7 @@ export default function AuthModal() {
             setPolicyDialogOpen(false);
             setPendingAction(null);
         }
-    }, [isAuthModalOpen]);
+    }, [authModalView, isAuthModalOpen]);
 
     if (!isAuthModalOpen) return null;
 
@@ -166,12 +169,12 @@ export default function AuthModal() {
 
                     <div className="mb-6 text-center">
                         <h2 className="text-2xl font-black tracking-tight text-[color:var(--foreground)]">
-                            {isLoginView ? "Welcome back" : "Unlock Platen PDF"}
+                            {isLoginView ? "Welcome back" : "Create your free account"}
                         </h2>
                         <p className="text-sm text-[color:var(--muted-foreground)] mt-1">
                             {isLoginView
-                                ? "Sign in to process your file."
-                                : "Create a free account to process this file instantly."}
+                                ? "Sign in to continue."
+                                : "Create a free account to keep going and get higher usage."}
                         </p>
                     </div>
 
@@ -258,12 +261,13 @@ export default function AuthModal() {
                         {isLoginView ? (
                             <GoogleLoginButton
                                 policyAccepted={policyAccepted}
-                                onSuccessCallback={handleAuthModalSuccess} />
+                                onSuccessCallback={handleAuthModalSuccess}
+                            />
                         ) : policyAccepted ? (
-
                             <GoogleLoginButton
                                 policyAccepted={policyAccepted}
-                                onSuccessCallback={handleAuthModalSuccess} />
+                                onSuccessCallback={handleAuthModalSuccess}
+                            />
                         ) : (
                             <div className="rounded-xl border border-dashed border-[color:var(--border)] px-4 py-3 text-center text-xs text-[color:var(--muted-foreground)]">
                                 Accept the policy above to enable Google sign up.

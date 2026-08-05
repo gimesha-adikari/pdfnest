@@ -1,6 +1,14 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, {
+    createContext,
+    useCallback,
+    useContext,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
 import { fetchJson } from "@/lib/api";
 
 interface SubscriptionStatus {
@@ -28,100 +36,290 @@ interface User {
     updated_at?: string;
 }
 
+interface Guest {
+    id: string;
+    trust: number;
+    created_at?: string;
+    last_seen_at?: string;
+}
+
+interface SessionResponse {
+    authenticated: boolean;
+    type: "guest" | "user";
+    user?: User | null;
+    guest?: Guest | null;
+    subscription?: SubscriptionStatus | null;
+}
+
+type AuthModalView = "login" | "register";
+
 interface AuthContextType {
     user: User | null;
+    guest: Guest | null;
     subscription: SubscriptionStatus | null;
+
     isAuthenticated: boolean;
+    isLoggedIn: boolean;
+    isGuest: boolean;
     isLoading: boolean;
+
     refreshSession: () => Promise<void>;
+    ensureGuestSession: () => Promise<void>;
     logout: () => Promise<void>;
 
     isAuthModalOpen: boolean;
+    authModalView: AuthModalView;
+    openAuthModal: (view?: AuthModalView) => void;
     requireAuth: (action: () => void) => void;
+    requireLogin: (action: () => void) => void;
     closeAuthModal: () => void;
     handleAuthModalSuccess: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+type WindowWithPlaten = Window & {
+    __PLATEN_SESSION__?: {
+        authenticated: boolean;
+        type: "guest" | "user";
+        tier: "guest" | "free" | "plus" | "pro";
+        isGuest: boolean;
+        isLoggedIn: boolean;
+        userId?: string;
+        guestId?: string;
+    };
+    __PLATEN_OPEN_AUTH_MODAL__?: (mode?: AuthModalView) => void;
+};
+
+function syncWindowSession(session: WindowWithPlaten["__PLATEN_SESSION__"] | null) {
+    if (typeof window === "undefined") return;
+    const w = window as WindowWithPlaten;
+
+    if (session) {
+        w.__PLATEN_SESSION__ = session;
+    } else {
+        delete w.__PLATEN_SESSION__;
+    }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-    const [user, setUser] = useState<AuthContextType["user"]>(null);
+    const [user, setUser] = useState<User | null>(null);
+    const [guest, setGuest] = useState<Guest | null>(null);
     const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
+
     const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const [isGuest, setIsGuest] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
 
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-    const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+    const [authModalView, setAuthModalView] = useState<AuthModalView>("login");
 
-    const refreshSession = async () => {
-        try {
-            const subData = await fetchJson<SubscriptionStatus>("/billing/status");
-            setSubscription(subData);
-            setIsAuthenticated(true);
-            setUser({ id: "active-session", email: "Active User", role: subData.role || "user" });
-        } catch (err) {
-            setUser(null);
-            setSubscription(null);
-            setIsAuthenticated(false);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    const pendingAction = useRef<(() => void) | null>(null);
 
-    const logout = async () => {
-        try {
-            await fetchJson("/auth/logout", { method: "POST" }).catch(() => {});
-        } finally {
-            setUser(null);
-            setSubscription(null);
-            setIsAuthenticated(false);
-            window.location.href = "/login";
-        }
-    };
+    const applyGuest = useCallback((guestData: Guest) => {
+        setGuest(guestData);
+        setUser(null);
+        setSubscription(null);
 
-    const requireAuth = (action: () => void) => {
-        if (isAuthenticated) {
-            action();
-        } else {
-            setPendingAction(() => action);
-            setIsAuthModalOpen(true);
-        }
-    };
+        setIsAuthenticated(true);
+        setIsLoggedIn(false);
+        setIsGuest(true);
 
-    const closeAuthModal = () => {
-        setIsAuthModalOpen(false);
-        setPendingAction(null);
-    };
-
-    const handleAuthModalSuccess = () => {
-        setIsAuthModalOpen(false);
-        if (pendingAction) {
-            pendingAction();
-            setPendingAction(null);
-        }
-    };
-
-    useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        refreshSession();
+        syncWindowSession({
+            authenticated: true,
+            type: "guest",
+            tier: "guest",
+            isGuest: true,
+            isLoggedIn: false,
+            guestId: guestData.id,
+        });
     }, []);
 
-    return (
-        <AuthContext.Provider value={{
+    const applyUser = useCallback((session: SessionResponse) => {
+        setUser(session.user ?? null);
+        setGuest(null);
+        setSubscription(session.subscription ?? null);
+
+        setIsAuthenticated(true);
+        setIsLoggedIn(true);
+        setIsGuest(false);
+
+        syncWindowSession({
+            authenticated: true,
+            type: "user",
+            tier: session.subscription?.tier ?? "free",
+            isGuest: false,
+            isLoggedIn: true,
+            userId: session.user?.id,
+        });
+    }, []);
+
+    const openAuthModal = useCallback((view: AuthModalView = "login") => {
+        setAuthModalView(view);
+        setIsAuthModalOpen(true);
+    }, []);
+
+    const refreshSession = useCallback(async () => {
+        setIsLoading(true);
+
+        try {
+            const session = await fetchJson<SessionResponse>("/auth/session");
+
+            if (session.type === "user" && session.user) {
+                applyUser(session);
+            } else {
+                applyGuest(
+                    session.guest ?? {
+                        id: "guest",
+                        trust: 1,
+                    }
+                );
+            }
+        } catch {
+            setUser(null);
+            setGuest(null);
+            setSubscription(null);
+
+            setIsAuthenticated(false);
+            setIsLoggedIn(false);
+            setIsGuest(false);
+
+            syncWindowSession(null);
+        } finally {
+            setIsLoading(false);
+
+            const action = pendingAction.current;
+            if (action) {
+                pendingAction.current = null;
+                action();
+            }
+        }
+    }, [applyGuest, applyUser]);
+
+    const ensureGuestSession = useCallback(async () => {
+        if (isLoggedIn) return;
+        if (isGuest) return;
+
+        await refreshSession();
+    }, [isGuest, isLoggedIn, refreshSession]);
+
+    const logout = useCallback(async () => {
+        try {
+            await fetchJson("/auth/logout", {
+                method: "POST",
+            }).catch(() => {});
+        } finally {
+            setUser(null);
+            setGuest(null);
+            setSubscription(null);
+
+            setIsAuthenticated(false);
+            setIsLoggedIn(false);
+            setIsGuest(false);
+
+            syncWindowSession(null);
+
+            await refreshSession();
+        }
+    }, [refreshSession]);
+
+    const requireAuth = useCallback(
+        (action: () => void) => {
+            if (isAuthenticated) {
+                action();
+                return;
+            }
+
+            pendingAction.current = action;
+            void refreshSession();
+        },
+        [isAuthenticated, refreshSession]
+    );
+
+    const requireLogin = useCallback(
+        (action: () => void) => {
+            if (isLoggedIn) {
+                action();
+                return;
+            }
+
+            pendingAction.current = action;
+            openAuthModal("login");
+        },
+        [isLoggedIn, openAuthModal]
+    );
+
+    const closeAuthModal = useCallback(() => {
+        setIsAuthModalOpen(false);
+        pendingAction.current = null;
+    }, []);
+
+    const handleAuthModalSuccess = useCallback(() => {
+        setIsAuthModalOpen(false);
+        void refreshSession();
+    }, [refreshSession]);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+
+        const w = window as WindowWithPlaten;
+        w.__PLATEN_OPEN_AUTH_MODAL__ = openAuthModal;
+
+        return () => {
+            if (w.__PLATEN_OPEN_AUTH_MODAL__ === openAuthModal) {
+                delete w.__PLATEN_OPEN_AUTH_MODAL__;
+            }
+        };
+    }, [openAuthModal]);
+
+    useEffect(() => {
+        void refreshSession();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const value = useMemo<AuthContextType>(
+        () => ({
             user,
+            guest,
             subscription,
             isAuthenticated,
+            isLoggedIn,
+            isGuest,
             isLoading,
             refreshSession,
+            ensureGuestSession,
             logout,
             isAuthModalOpen,
+            authModalView,
+            openAuthModal,
             requireAuth,
+            requireLogin,
             closeAuthModal,
-            handleAuthModalSuccess
-        }}>
-            {children}
-        </AuthContext.Provider>
+            handleAuthModalSuccess,
+        }),
+        [
+            authModalView,
+            closeAuthModal,
+            ensureGuestSession,
+            handleAuthModalSuccess,
+            isAuthenticated,
+            isAuthModalOpen,
+            isGuest,
+            isLoading,
+            isLoggedIn,
+            logout,
+            openAuthModal,
+            refreshSession,
+            requireAuth,
+            requireLogin,
+            subscription,
+            user,
+            guest,
+        ]
     );
+
+    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
