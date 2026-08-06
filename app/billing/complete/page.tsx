@@ -1,4 +1,3 @@
-// app/billing/complete/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -11,7 +10,6 @@ export default function BillingCompletePage() {
     const { refreshSession, subscription, isLoading } = useAuth();
     const [attempts, setAttempts] = useState(0);
 
-    // Keep asking the backend until the webhook has updated the subscription.
     useEffect(() => {
         let cancelled = false;
         let intervalId: ReturnType<typeof setInterval> | null = null;

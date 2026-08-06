@@ -383,5 +383,5 @@ export async function submitContactTicket(formData: FormData): Promise<{ success
 }
 
 export function getMailDomain(): string {
-    return process.env.MAIL_DOMAIN || "gimesha.dev";
+    return process.env.MAIL_DOMAIN || "platenpdf.com";
 }

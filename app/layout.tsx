@@ -26,9 +26,6 @@ export const metadata: Metadata = {
         template: "%s | Platen PDF",
     },
     description: "Merge, split, rotate, convert PDFs and images directly in your browser for free.",
-    alternates: {
-        canonical: "/",
-    },
     verification: {
         google: "cqwXOOqo2LotVxmcp8Hgtahz0-pcYaZ4J15J_Yl7PvU",
     },
