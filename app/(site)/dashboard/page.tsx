@@ -77,7 +77,7 @@ export default function UserDashboard() {
 
     if (!isLoggedIn || !subscription) return null;
 
-    const currentTier = subscription.tier; // "free", "plus", "pro"
+    const currentTier = subscription.tier;
     const hasActiveSubscription = currentTier === "plus" || currentTier === "pro";
 
     const getTierLabel = () => {

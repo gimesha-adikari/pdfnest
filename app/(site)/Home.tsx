@@ -61,20 +61,6 @@ export default function Home() {
                 }
             })
             .catch((err) => console.error("Error loading home settings:", err));
-
-        // fetchJson("/site-content/tools")
-        //     .then((data: any) => {
-        //         if (Array.isArray(data) && data.length > 0) {
-        //             setToolsList(data);
-        //         } else {
-        //             setToolsList(NAV_TOOLS as unknown as ToolItem[]);
-        //         }
-        //     })
-        //     .catch((err) => {
-        //         console.error("Error loading tools data, falling back to front end data:", err);
-        //         setToolsList(NAV_TOOLS as unknown as ToolItem[]);
-        //     });
-
     }, []);
 
     const query = search.trim().toLowerCase();

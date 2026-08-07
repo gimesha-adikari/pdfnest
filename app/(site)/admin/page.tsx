@@ -62,7 +62,6 @@ export default function AdminPage() {
 
     const MASTER_EMAIL = "gimeshaadikari23@gmail.com";
 
-    // Stop body from scrolling when the panel is open
     useEffect(() => {
         if (selectedUserDetail) {
             document.body.style.overflow = 'hidden';
