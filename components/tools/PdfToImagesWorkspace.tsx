@@ -158,7 +158,7 @@ export default function PdfToImagesWorkspace() {
                                 text={`Extract as ${selectedOption.label}`}
                                 loadingText={`Processing as ${selectedOption.label}...`}
                                 loading={isProcessing}
-                                disabled={!file}
+                                disabled={!file || isProcessing}
                                 onClick={handleUniversalConversion}
                             />
 

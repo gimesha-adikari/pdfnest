@@ -731,7 +731,7 @@ export default function ImageToTextPdfWorkspace() {
                                     text="Create Searchable PDF"
                                     loadingText="Uploading to R2 and creating job..."
                                     loading={isProcessing}
-                                    disabled={!canProcess}
+                                    disabled={isProcessing || !canProcess}
                                     onClick={handleConversion}
                                 />
                             )}

@@ -316,7 +316,7 @@ export default function RedactPdfWorkspace() {
                             text="Execute Secure Binary Redaction"
                             loadingText="Purging document contents..."
                             loading={isProcessing}
-                            disabled={!keywords.trim() && drawnBoxes.length === 0}
+                            disabled={isProcessing || (!keywords.trim() && drawnBoxes.length === 0)}
                             onClick={handleRedactionSubmit}
                         />
                     </div>

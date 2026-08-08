@@ -950,7 +950,7 @@ export default function ImagesToPdfWorkspace() {
                                 text={`Compile ${images.length} Image${images.length > 1 ? "s" : ""} into PDF`}
                                 loadingText="Processing Image Matrix Conversion..."
                                 loading={isProcessing}
-                                disabled={images.length === 0}
+                                disabled={isProcessing || images.length === 0}
                                 onClick={handleCompilePdf}
                             />
                         </div>

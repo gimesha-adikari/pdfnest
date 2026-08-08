@@ -330,7 +330,7 @@ export default function PdfToTextWorkspace() {
                                 text="Extract Text Layer (OCR)"
                                 loadingText="Initializing OCR engine..."
                                 loading={isProcessing && !taskId}
-                                disabled={!file || isLoadingLanguages}
+                                disabled={!file || isLoadingLanguages || isProcessing}
                                 onClick={handleOcrExtraction}
                             />
 

@@ -197,7 +197,7 @@ export default function ReorderPagesWorkspace() {
                                 text="Save Page Setup"
                                 loadingText="Compiling Vector Streams on Backend..."
                                 loading={isProcessing}
-                                disabled={!file || pageOrder.length === 0}
+                                disabled={!file || pageOrder.length === 0 || isProcessing}
                                 onClick={handleReorderSubmission}
                             />
                         </div>
