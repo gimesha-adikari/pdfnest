@@ -114,7 +114,7 @@ export async function waitForStructureJob(
 }
 
 export async function downloadStructureJob(jobId: string): Promise<Blob> {
-    const response = await axios.get(buildUrl(`/api/msrkup/jobs/${jobId}/download`), {
+    const response = await axios.get(buildUrl(`/api/markup/jobs/${jobId}/download`), {
         withCredentials: true,
         responseType: "blob",
     });
