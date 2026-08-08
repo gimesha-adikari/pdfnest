@@ -122,6 +122,14 @@ export async function downloadStructureJob(jobId: string): Promise<Blob> {
     return response.data;
 }
 
+export async function cancelStructureJob(jobId: string): Promise<JobRecord> {
+    const response = await axios.post<JobRecord>(buildUrl(`/api/v1/jobs/${jobId}/cancel`), {}, {
+        withCredentials: true,
+    });
+
+    return response.data;
+}
+
 export function getStructureJobProgress(job: JobRecord | null, uploadProgress: number): number {
     if (job) return Math.max(0, Math.min(100, job.progress ?? 0));
     return Math.max(0, Math.min(100, uploadProgress));

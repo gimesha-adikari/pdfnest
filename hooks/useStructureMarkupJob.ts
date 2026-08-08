@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+    cancelStructureJob,
     downloadStructureJob,
     getStructureJobProgress,
     submitStructureJob,
@@ -137,13 +138,28 @@ export function useStructureMarkupJob({
         }
     };
 
-    const reset = () => {
-        window.localStorage.removeItem(storageKey);
-        setJobId("");
-        setJob(null);
-        setUploadProgress(0);
-        setIsSubmitting(false);
-        setError(null);
+    const reset = async () => {
+        if (jobId) {
+            const currentJobId = jobId;
+            window.localStorage.removeItem(storageKey);
+            setJobId("");
+            setJob(null);
+            setUploadProgress(0);
+            setIsSubmitting(false);
+            setError(null);
+            try {
+                await cancelStructureJob(currentJobId);
+            } catch {
+                // Ignore cancellation network errors
+            }
+        } else {
+            window.localStorage.removeItem(storageKey);
+            setJobId("");
+            setJob(null);
+            setUploadProgress(0);
+            setIsSubmitting(false);
+            setError(null);
+        }
     };
 
     const progress = getStructureJobProgress(job, uploadProgress);

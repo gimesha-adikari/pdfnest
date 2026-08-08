@@ -130,11 +130,32 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
         idempotencyKeyRef.current = "";
     };
 
+    const cancelTask = async (): Promise<void> => {
+        if (!taskId) return;
+        const currentId = taskId;
+        removeStoredTask(currentId);
+        setTaskId("");
+        setError(null);
+        setIsSubmitting(false);
+        idempotencyKeyRef.current = "";
+
+        const baseApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+        try {
+            await fetch(`${baseApiUrl}/api/v1/tasks/${currentId}`, {
+                method: "DELETE",
+                credentials: "include",
+            });
+        } catch {
+            // Ignore cancellation network errors
+        }
+    };
+
     return {
         taskId,
         isSubmitting,
         error,
         submitTask,
         resetTask,
+        cancelTask,
     };
 }
