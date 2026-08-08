@@ -59,7 +59,9 @@ export default function MarkdownToPdfWorkspace() {
 
     const handleTaskComplete = async (downloadUrl: string) => {
         try {
-            const response = await fetch(`${getBaseUrl()}${downloadUrl}`);
+            const response = await fetch(`${getBaseUrl()}${downloadUrl}`, {
+                credentials: "include",
+            });
             if (!response.ok) throw new Error("Re-download framework pipeline error.");
 
             const pdfBlob = await response.blob();

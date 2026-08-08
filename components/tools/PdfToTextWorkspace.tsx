@@ -162,7 +162,9 @@ export default function PdfToTextWorkspace() {
 
     const handleTaskComplete = async (downloadUrl: string) => {
         try {
-            const response = await fetch(`${getBaseUrl()}${downloadUrl}`);
+            const response = await fetch(`${getBaseUrl()}${downloadUrl}`, {
+                credentials: "include",
+            });
             if (!response.ok) {
                 throw new Error("Could not download compiled plaintext payload.");
             }

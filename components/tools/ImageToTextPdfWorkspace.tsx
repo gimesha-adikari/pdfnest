@@ -459,7 +459,9 @@ export default function ImageToTextPdfWorkspace() {
 
     const handleTaskComplete = async (downloadUrl: string) => {
         try {
-            const response = await fetch(`${getBaseUrl()}${downloadUrl}`);
+            const response = await fetch(`${getBaseUrl()}${downloadUrl}`, {
+                credentials: "include",
+            });
             if (!response.ok) throw new Error("Could not download compiled async file payload.");
 
             const responseBlob = await response.blob();
