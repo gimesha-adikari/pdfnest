@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "npx playwright test",
+    "test:smoke": "npx playwright test smoke.spec.ts",
+    "test:ui": "npx playwright test --ui",
+    "test:fixtures": "npx tsx tests/generate-fixtures.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -40,9 +44,12 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "docx": "^9.7.1",
     "eslint": "^9",
     "eslint-config-next": "16.2.7",
+    "pdf-lib": "^1.17.1",
     "tailwindcss": "^4",
+    "tsx": "^4.23.11",
     "typescript": "^5"
   }
 }
