@@ -1,22 +1,44 @@
 import type { Metadata } from "next";
 import { NAV_TOOLS } from "./toolsData";
 
-const BASE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://platenpdf.com").replace(/\/$/, "");
-const OG_IMAGE = `${BASE_URL}/platen-og.png`;
+const BASE_URL = (
+    process.env.NEXT_PUBLIC_APP_URL ?? "https://www.platenpdf.com"
+).replace(/\/$/, "");
 
-function buildAbsoluteUrl(pathname: string): string {
-    return new URL(pathname.startsWith("/") ? pathname : `/${pathname}`, BASE_URL).toString();
+function buildCanonicalUrl(baseUrl: string): string {
+    const url = new URL(baseUrl);
+    const hostname = url.hostname;
+    const parts = hostname.split(".");
+
+    const isApexDomain = parts.length === 2 && !hostname.startsWith("www.");
+
+    if (isApexDomain) {
+        url.hostname = `www.${hostname}`;
+    }
+
+    return url.toString().replace(/\/$/, "");
 }
 
-function buildBaseMetadata(): Metadata {
+const CANONICAL_URL = buildCanonicalUrl(BASE_URL);
+const OG_IMAGE = new URL("/platen-og.png", CANONICAL_URL).toString();
+
+function buildAbsoluteUrl(pathname: string): string {
+    return new URL(
+        pathname.startsWith("/") ? pathname : `/${pathname}`,
+        CANONICAL_URL
+    ).toString();
+}
+
+function buildCommonMetadata(
+    title: string,
+    description: string,
+    url: string,
+    imageAlt: string
+): Metadata {
     return {
-        metadataBase: new URL(BASE_URL),
-        title: {
-            default: "Platen PDF - Free PDF Tools Online",
-            template: "%s | Platen PDF",
-        },
-        description:
-            "Merge, split, rotate, convert, compress, edit, and secure PDF documents directly in your browser.",
+        metadataBase: new URL(CANONICAL_URL),
+        title,
+        description,
         applicationName: "Platen PDF",
         category: "productivity",
         creator: "Platen",
@@ -27,17 +49,6 @@ function buildBaseMetadata(): Metadata {
             address: false,
             telephone: false,
         },
-        keywords: [
-            "PDF tools",
-            "free PDF tools",
-            "online PDF editor",
-            "merge PDF",
-            "split PDF",
-            "rotate PDF",
-            "compress PDF",
-            "PDF to images",
-            "images to PDF",
-        ],
         robots: {
             index: true,
             follow: true,
@@ -50,13 +61,12 @@ function buildBaseMetadata(): Metadata {
             },
         },
         alternates: {
-            canonical: BASE_URL,
+            canonical: url,
         },
         openGraph: {
-            title: "Platen PDF - Free PDF Tools Online",
-            description:
-                "Merge, split, rotate, convert, compress, edit, and secure PDF documents directly in your browser.",
-            url: BASE_URL,
+            title,
+            description,
+            url,
             siteName: "Platen PDF",
             locale: "en_US",
             type: "website",
@@ -65,21 +75,45 @@ function buildBaseMetadata(): Metadata {
                     url: OG_IMAGE,
                     width: 1200,
                     height: 630,
-                    alt: "Platen PDF",
+                    alt: imageAlt,
                 },
             ],
         },
         twitter: {
             card: "summary_large_image",
-            title: "Platen PDF - Free PDF Tools Online",
-            description:
-                "Merge, split, rotate, convert, compress, edit, and secure PDF documents directly in your browser.",
+            title,
+            description,
             images: [OG_IMAGE],
         },
         icons: {
             icon: "/favicon.ico",
             apple: "/apple-touch-icon.png",
         },
+    };
+}
+
+function buildBaseMetadata(): Metadata {
+    const title = "Platen PDF - Free PDF Tools Online";
+    const description =
+        "Merge, split, rotate, convert, compress, edit, and secure PDF documents directly in your browser.";
+
+    return {
+        ...buildCommonMetadata(title, description, CANONICAL_URL, "Platen PDF"),
+        title: {
+            default: title,
+            template: "%s | Platen PDF",
+        },
+        keywords: [
+            "PDF tools",
+            "free PDF tools",
+            "online PDF editor",
+            "merge PDF",
+            "split PDF",
+            "rotate PDF",
+            "compress PDF",
+            "PDF to images",
+            "images to PDF",
+        ],
     };
 }
 
@@ -107,59 +141,7 @@ export function getToolMetadata(toolHref: string): Metadata {
     const url = buildAbsoluteUrl(tool.href);
 
     return {
-        metadataBase: new URL(BASE_URL),
-        title,
-        description,
+        ...buildCommonMetadata(title, description, url, title),
         keywords,
-        applicationName: "Platen PDF",
-        category: "productivity",
-        creator: "Platen",
-        publisher: "Platen",
-        referrer: "origin-when-cross-origin",
-        formatDetection: {
-            email: false,
-            address: false,
-            telephone: false,
-        },
-        alternates: {
-            canonical: url,
-        },
-        robots: {
-            index: true,
-            follow: true,
-            googleBot: {
-                index: true,
-                follow: true,
-                "max-image-preview": "large",
-                "max-snippet": -1,
-                "max-video-preview": -1,
-            },
-        },
-        openGraph: {
-            title,
-            description,
-            url,
-            siteName: "Platen PDF",
-            locale: "en_US",
-            type: "website",
-            images: [
-                {
-                    url: OG_IMAGE,
-                    width: 1200,
-                    height: 630,
-                    alt: title,
-                },
-            ],
-        },
-        twitter: {
-            card: "summary_large_image",
-            title,
-            description,
-            images: [OG_IMAGE],
-        },
-        icons: {
-            icon: "/favicon.ico",
-            apple: "/apple-touch-icon.png",
-        },
     };
 }
