@@ -49,16 +49,35 @@ export default function UrlToPdfWorkspace() {
             const pdfBlob = await response.blob();
             setFinalBlob(pdfBlob);
 
+            let cleanName = "web_capture";
+            try {
+                if (url) {
+                    const parsedDomain = new URL(url);
+                    cleanName = parsedDomain.hostname.replace("www.", "") + "_layout";
+                }
+            } catch (_) {}
+
+            setDownloadData({
+                blob: pdfBlob,
+                fileName: `${cleanName}.pdf`,
+            });
+
             const previewFormData = new FormData();
             previewFormData.append("file", new File([pdfBlob], "web_snapshot.pdf", { type: "application/pdf" }));
 
-            const imageBlob = await uploadAndDownloadFile("/api/conversion/preview/page", previewFormData);
+            uploadAndDownloadFile("/api/conversion/preview/page", previewFormData)
+                .then((imageBlob) => {
+                    if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+                    setPreviewUrl(window.URL.createObjectURL(imageBlob));
+                })
+                .catch(() => {});
 
-            if (previewUrl) window.URL.revokeObjectURL(previewUrl);
-            setPreviewUrl(window.URL.createObjectURL(imageBlob));
+            setSuccess(true);
+            setIsPreviewLoadingLocal(false);
+            router.push(`/${toolId}/download`);
         } catch (err) {
+            console.error(err);
             notify("Failed to collect final generated binary asset stream from backend cluster nodes safely.", "error");
-        } finally {
             setIsPreviewLoadingLocal(false);
         }
     };
@@ -82,7 +101,7 @@ export default function UrlToPdfWorkspace() {
 
     const generateLiveWebPreview = useCallback(async () => {
         requireAuth(async () => {
-            if (!url) return;
+            if (!url || taskStatus === "PENDING" || taskStatus === "PROCESSING" || isSubmitting) return;
 
             try {
                 setIsPreviewLoadingLocal(true);
@@ -131,16 +150,16 @@ export default function UrlToPdfWorkspace() {
                 setIsPreviewLoadingLocal(false);
             }
         });
-    }, [url, paperSize, margins, requireAuth, submitTask, registerSubmission]);
+    }, [url, paperSize, margins, requireAuth, submitTask, registerSubmission, taskStatus, isSubmitting]);
 
     useEffect(() => {
-        if (url && url.startsWith("http") && url.length > 12) {
+        if (url && url.startsWith("http") && url.length > 12 && !taskId && !taskStatus) {
             const delayDebounceHook = setTimeout(() => {
                 generateLiveWebPreview();
             }, 800);
             return () => clearTimeout(delayDebounceHook);
         }
-    }, [url, paperSize, margins.top, margins.bottom, margins.left, margins.right, generateLiveWebPreview]);
+    }, [url, paperSize, margins.top, margins.bottom, margins.left, margins.right, taskId, taskStatus, generateLiveWebPreview]);
 
     const handleFinalDownload = (e: React.FormEvent) => {
         e.preventDefault();

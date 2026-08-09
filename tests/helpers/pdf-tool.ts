@@ -11,24 +11,136 @@ export interface DownloadResult {
 export class PdfToolHelper {
   private authenticated = false;
 
+  // Diagnostic State Tracking
+  public taskId: string | null = null;
+  public lastKnownStatus: string | null = null;
+  public lastProgress: number | null = null;
+  public pollingAttempts = 0;
+  public lastPollingEndpoint: string | null = null;
+  public lastPollingHttpStatus: number | null = null;
+  public count429Responses = 0;
+  public first429Timestamp: string | null = null;
+  public last429Timestamp: string | null = null;
+  public retryAttemptCount = 0;
+  public startTimeMs = Date.now();
+  public lastApiError: string | null = null;
+  public taskError: string | null = null;
+  public browserConsoleErrors: string[] = [];
+  public failedNetworkRequests: string[] = [];
+
   constructor(
     public page: Page,
     public toolId: string
   ) {
-    // Attach browser console & error listeners for full failure diagnostics
+    // Console error logging
     this.page.on('console', msg => {
-      if (msg.type() === 'error' || msg.text().includes('error') || msg.text().includes('API')) {
-        console.log(`[BROWSER CONSOLE ${msg.type().toUpperCase()}] ${msg.text()}`);
+      if (msg.type() === 'error' || msg.text().includes('API Error')) {
+        const text = msg.text();
+        this.browserConsoleErrors.push(text);
+        if (this.browserConsoleErrors.length > 20) this.browserConsoleErrors.shift();
       }
     });
 
+    // Unhandled error logging
     this.page.on('pageerror', err => {
-      console.log(`[BROWSER UNHANDLED ERROR] ${err.stack || err.message}`);
+      this.browserConsoleErrors.push(`Unhandled: ${err.stack || err.message}`);
     });
 
+    // Network failure tracking
     this.page.on('requestfailed', req => {
-      console.log(`[BROWSER REQUEST FAILED] ${req.method()} ${req.url()} - ${req.failure()?.errorText}`);
+      const info = `${req.method()} ${req.url()} - ${req.failure()?.errorText || 'Unknown failure'}`;
+      this.failedNetworkRequests.push(info);
+      if (this.failedNetworkRequests.length > 20) this.failedNetworkRequests.shift();
     });
+
+    // HTTP response monitoring for status polling, task creation, and rate limiting
+    this.page.on('response', async res => {
+      const url = res.url();
+      const status = res.status();
+      const nowStr = new Date().toISOString();
+
+      if (status === 429) {
+        this.count429Responses++;
+        if (!this.first429Timestamp) this.first429Timestamp = nowStr;
+        this.last429Timestamp = nowStr;
+        console.warn(`[DIAGNOSTICS 429 DETECTED] HTTP 429 Too Many Requests on ${url}`);
+      }
+
+      if (status >= 400) {
+        this.lastApiError = `${status} ${res.statusText()} on ${url}`;
+      }
+
+      // Intercept task status polling requests (/api/v1/tasks/:id)
+      if (url.includes('/api/v1/tasks/')) {
+        this.pollingAttempts++;
+        this.lastPollingEndpoint = url;
+        this.lastPollingHttpStatus = status;
+
+        const urlParts = url.split('/api/v1/tasks/');
+        if (urlParts[1]) {
+          this.taskId = urlParts[1].split('?')[0];
+        }
+
+        if (res.ok()) {
+          try {
+            const data = await res.json();
+            if (data && typeof data === 'object') {
+              if (data.status) this.lastKnownStatus = data.status;
+              if (typeof data.progress === 'number') this.lastProgress = data.progress;
+              if (data.error) this.taskError = data.error;
+            }
+          } catch (_) {
+            // Safe fallback if JSON parsing fails
+          }
+        }
+      }
+
+      // Intercept initial async task creation responses
+      if ((url.includes('-async') || url.includes('/api/ocr/jobs')) && res.ok()) {
+        try {
+          const data = await res.json();
+          if (data && data.taskId) {
+            this.taskId = data.taskId;
+          }
+        } catch (_) {}
+      }
+    });
+  }
+
+  /**
+   * Outputs comprehensive diagnostic debugging details when an async operation fails.
+   */
+  async printAsyncFailureDiagnostics(error: any, timeoutMs: number): Promise<void> {
+    const currentUrl = this.page.url();
+    const elapsedTimeMs = Date.now() - this.startTimeMs;
+    const bodySnippet = await this.page.innerText('body').catch(() => 'N/A');
+    const trackerText = await this.page.locator('.font-mono, [class*="progress"]').first().innerText().catch(() => 'N/A');
+
+    console.error(`\n======================================================================`);
+    console.error(`[E2E DIAGNOSTIC REPORT] Async Task Failure Detected!`);
+    console.error(`----------------------------------------------------------------------`);
+    console.error(`  Tool ID:                 ${this.toolId}`);
+    console.error(`  Task ID:                 ${this.taskId || 'Not Captured'}`);
+    console.error(`  Current URL:             ${currentUrl}`);
+    console.error(`  Total Elapsed Time:      ${elapsedTimeMs}ms (Timeout limit: ${timeoutMs}ms)`);
+    console.error(`  Last Known Task Status:  ${this.lastKnownStatus || 'Unknown'}`);
+    console.error(`  Last Recorded Progress:  ${this.lastProgress !== null ? `${this.lastProgress}%` : 'N/A'}`);
+    console.error(`  Polling Attempt Count:   ${this.pollingAttempts}`);
+    console.error(`  Last Polling Endpoint:   ${this.lastPollingEndpoint || 'N/A'}`);
+    console.error(`  Last Polling HTTP Status:${this.lastPollingHttpStatus ?? 'N/A'}`);
+    console.error(`  HTTP 429 Responses:      ${this.count429Responses}`);
+    console.error(`  First 429 Timestamp:     ${this.first429Timestamp || 'N/A'}`);
+    console.error(`  Last 429 Timestamp:      ${this.last429Timestamp || 'N/A'}`);
+    console.error(`  Retry Attempt Count:     ${this.retryAttemptCount}`);
+    console.error(`  Last API Error:          ${this.lastApiError || 'None'}`);
+    console.error(`  Task Error (Backend):    ${this.taskError || 'None'}`);
+    console.error(`  UI Tracker Snippet:      ${trackerText.slice(0, 150)}`);
+    console.error(`  Browser Console Errors (${this.browserConsoleErrors.length}):`);
+    this.browserConsoleErrors.forEach(err => console.error(`    - ${err}`));
+    console.error(`  Failed Network Requests (${this.failedNetworkRequests.length}):`);
+    this.failedNetworkRequests.forEach(req => console.error(`    - ${req}`));
+    console.error(`  Visible Page Text Snippet:\n${bodySnippet.slice(0, 400)}`);
+    console.error(`======================================================================\n`);
   }
 
   /**
@@ -132,20 +244,28 @@ export class PdfToolHelper {
 
   /**
    * Waits for synchronous processing to finish and transition to the download page.
+   * Bounded retry: max 1 retry attempt to avoid indefinite loops on 429 or navigation delay.
    */
   async waitForSyncDownload(timeoutMs = 60_000): Promise<void> {
     console.log(`[PdfToolHelper] Waiting for transition to download page /${this.toolId}/download`);
     try {
       await expect(this.page).toHaveURL(new RegExp(`/${this.toolId}/download`), { timeout: timeoutMs });
     } catch (err) {
-      console.log(`[PdfToolHelper] Navigation timeout, checking for rate limit retry...`);
-      await this.page.waitForTimeout(3000);
-      const actionBtn = this.page.locator('main button.from-indigo-500, main button:has-text("Convert"), main button:has-text("Process")').first();
-      if (await actionBtn.isVisible()) {
-        console.log(`[PdfToolHelper] Retrying action click after backoff...`);
-        await actionBtn.click();
-        await expect(this.page).toHaveURL(new RegExp(`/${this.toolId}/download`), { timeout: timeoutMs });
+      if (this.retryAttemptCount < 1) {
+        this.retryAttemptCount++;
+        console.log(`[PdfToolHelper] Navigation timeout (attempt 1/1), checking for rate limit retry...`);
+        await this.page.waitForTimeout(3000);
+        const actionBtn = this.page.locator('main button.from-indigo-500, main button:has-text("Convert"), main button:has-text("Process")').first();
+        if (await actionBtn.isVisible()) {
+          console.log(`[PdfToolHelper] Retrying action click after backoff...`);
+          await actionBtn.click();
+          await expect(this.page).toHaveURL(new RegExp(`/${this.toolId}/download`), { timeout: timeoutMs });
+        } else {
+          await this.printAsyncFailureDiagnostics(err, timeoutMs);
+          throw err;
+        }
       } else {
+        await this.printAsyncFailureDiagnostics(err, timeoutMs);
         throw err;
       }
     }
@@ -157,10 +277,15 @@ export class PdfToolHelper {
    * Waits for async task to complete and transition to the download page.
    */
   async waitForAsyncComplete(timeoutMs = 90_000): Promise<void> {
-    console.log(`[PdfToolHelper] Waiting for async task completion and download page transition`);
-    await expect(this.page).toHaveURL(new RegExp(`/${this.toolId}/download`), { timeout: timeoutMs });
-    await expect(this.page.locator('h2:has-text("Task completed successfully!")')).toBeVisible({ timeout: 10000 });
-    console.log(`[PdfToolHelper] Async task completed successfully.`);
+    console.log(`[PdfToolHelper] Waiting for async task completion and download page transition (tool: ${this.toolId}, timeout: ${timeoutMs}ms)`);
+    try {
+      await expect(this.page).toHaveURL(new RegExp(`/${this.toolId}/download`), { timeout: timeoutMs });
+      await expect(this.page.locator('h2:has-text("Task completed successfully!")')).toBeVisible({ timeout: 10000 });
+      console.log(`[PdfToolHelper] Async task completed successfully.`);
+    } catch (err: any) {
+      await this.printAsyncFailureDiagnostics(err, timeoutMs);
+      throw err;
+    }
   }
 
   /**
