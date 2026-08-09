@@ -141,6 +141,9 @@ async function submitStrikeoutJob(
 
     const response = await fetch(buildApiUrl("/api/markup/strikeout"), {
         method: "POST",
+        headers: {
+            "Idempotency-Key": crypto.randomUUID(),
+        },
         body: formData,
         credentials: "include",
     });
