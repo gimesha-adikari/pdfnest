@@ -2,6 +2,8 @@ export interface StoredAsyncTask {
     taskId: string;
     tool: string;
     createdAt: number;
+    status?: string;
+    error?: string;
 }
 
 const STORAGE_KEY = "pdfnest:async-tasks";
@@ -29,12 +31,28 @@ export function getStoredTasks(): StoredAsyncTask[] {
     }
 }
 
-export function addStoredTask(taskId: string, tool: string): void {
+export function addStoredTask(taskId: string, tool: string, status?: string, error?: string): void {
     if (typeof window === "undefined" || !taskId) return;
     try {
         const current = getStoredTasks();
         const filtered = current.filter((t) => t.taskId !== taskId);
-        const updated = [{ taskId, tool, createdAt: Date.now() }, ...filtered].slice(0, MAX_TASKS);
+        const updated = [{ taskId, tool, createdAt: Date.now(), status, error }, ...filtered].slice(0, MAX_TASKS);
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    } catch {
+        // Ignore localStorage write failures
+    }
+}
+
+export function updateStoredTask(taskId: string, updates: { status?: string; error?: string }): void {
+    if (typeof window === "undefined" || !taskId) return;
+    try {
+        const current = getStoredTasks();
+        const updated = current.map((t) => {
+            if (t.taskId === taskId) {
+                return { ...t, ...updates };
+            }
+            return t;
+        });
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     } catch {
         // Ignore localStorage write failures

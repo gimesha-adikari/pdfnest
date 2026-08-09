@@ -21,6 +21,7 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import { PdfProgressTracker } from "@/components/pdf/PdfProgressTracker";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { getOCRLanguages, type OCRLanguage } from "@/lib/ocr";
+import { useAsyncTask } from "@/hooks/useAsyncTask";
 
 const AUTO_LANGUAGE: OCRLanguage = { code: "auto", name: "Auto detect" };
 
@@ -29,9 +30,8 @@ export default function PdfToTextWorkspace() {
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
 
-    const [isProcessing, setIsProcessing] = useState(false);
+    const [isProcessingLocal, setIsProcessingLocal] = useState(false);
     const [success, setSuccess] = useState(false);
-    const [taskId, setTaskId] = useState<string>("");
 
     const [languages, setLanguages] = useState<OCRLanguage[]>([
         AUTO_LANGUAGE,
@@ -120,46 +120,6 @@ export default function PdfToTextWorkspace() {
         );
     }, [languageSearch, languages]);
 
-    const handleOcrExtraction = async () => {
-        requireAuth(async () => {
-            if (!file) return;
-
-            try {
-                setIsProcessing(true);
-                setSuccess(false);
-                setTaskId("");
-
-                const formData = new FormData();
-                formData.append("file", file);
-
-                if ((file as any).originalPassword) {
-                    formData.append("file_password", (file as any).originalPassword);
-                }
-
-                formData.append("lang", lang.trim() || defaultLang || "auto");
-
-                const responseBlob = await uploadAndDownloadFile(
-                    "/api/ocr/extract-text-async",
-                    formData
-                );
-
-                const jsonText = await responseBlob.text();
-                const data = JSON.parse(jsonText);
-
-                if (data.taskId) {
-                    setTaskId(data.taskId);
-                } else {
-                    throw new Error(data.error || "Failed to acquire task queue tracker.");
-                }
-            } catch (err) {
-                console.error(err);
-                handleClientError(err);
-                setIsProcessing(false);
-                setTaskId("");
-            }
-        });
-    };
-
     const handleTaskComplete = async (downloadUrl: string) => {
         try {
             const response = await fetch(`${getBaseUrl()}${downloadUrl}`, {
@@ -178,14 +138,86 @@ export default function PdfToTextWorkspace() {
             });
 
             setSuccess(true);
-            setIsProcessing(false);
-            setTaskId("");
+            setIsProcessingLocal(false);
             router.push(`/${toolId}/download`);
         } catch (err) {
             console.error(err);
             notify("Failed to cache processed plain text asset locally.", "error");
-            setIsProcessing(false);
+            setIsProcessingLocal(false);
         }
+    };
+
+    const {
+        taskId,
+        status: taskStatus,
+        progress,
+        error: taskError,
+        isSubmitting,
+        isCancelling,
+        canRestart,
+        submitTask,
+        cancelTask,
+        restartTask,
+        resetTask,
+        registerSubmission,
+    } = useAsyncTask("pdf-to-text", handleTaskComplete);
+
+    const isProcessing = isProcessingLocal || isSubmitting || taskStatus === "PENDING" || taskStatus === "PROCESSING";
+
+    const handleOcrExtraction = async () => {
+        requireAuth(async () => {
+            if (!file) return;
+
+            try {
+                setIsProcessingLocal(true);
+                setSuccess(false);
+
+                const targetFile = file;
+                const password = (file as any).originalPassword;
+                const selectedLang = lang.trim() || defaultLang || "auto";
+
+                const submitFn = async () => {
+                    const formData = new FormData();
+                    formData.append("file", targetFile);
+
+                    if (password) {
+                        formData.append("file_password", password);
+                    }
+
+                    formData.append("lang", selectedLang);
+
+                    const responseBlob = await uploadAndDownloadFile(
+                        "/api/ocr/extract-text-async",
+                        formData
+                    );
+
+                    const jsonText = await responseBlob.text();
+                    const data = JSON.parse(jsonText);
+
+                    if (data.taskId) {
+                        return data.taskId;
+                    } else {
+                        throw new Error(data.error || "Failed to acquire task queue tracker.");
+                    }
+                };
+
+                registerSubmission(submitFn);
+
+                const formData = new FormData();
+                formData.append("file", targetFile);
+                if (password) {
+                    formData.append("file_password", password);
+                }
+                formData.append("lang", selectedLang);
+
+                await submitTask("/api/ocr/extract-text-async", formData, submitFn);
+            } catch (err) {
+                console.error(err);
+                handleClientError(err);
+            } finally {
+                setIsProcessingLocal(false);
+            }
+        });
     };
 
     if (!file) return null;
@@ -351,12 +383,23 @@ export default function PdfToTextWorkspace() {
                     </div>
 
                     <div className="lg:col-span-7 flex flex-col items-center justify-center bg-[color:var(--background)]/30 border border-dashed border-[color:var(--border)] rounded-2xl p-8 text-center min-h-[260px] relative overflow-hidden">
-                        {isProcessing && taskId ? (
+                        {taskId || taskStatus ? (
                             <div className="w-full flex flex-col items-center justify-center space-y-4">
-                                <p className="text-sm font-bold text-[color:var(--foreground)]">
-                                    Analyzing Typography Shapes...
-                                </p>
-                                <PdfProgressTracker taskId={taskId} onComplete={handleTaskComplete} />
+                                <PdfProgressTracker
+                                    taskId={taskId}
+                                    status={taskStatus || undefined}
+                                    progress={progress}
+                                    error={taskError}
+                                    isCancelling={isCancelling}
+                                    canRestart={canRestart}
+                                    onCancel={cancelTask}
+                                    onRestart={restartTask}
+                                    onReupload={() => {
+                                        resetTask();
+                                        setFile(null);
+                                    }}
+                                    onComplete={handleTaskComplete}
+                                />
                             </div>
                         ) : isProcessing ? (
                             <div className="space-y-3 flex flex-col items-center justify-center text-[color:var(--muted)] animate-pulse">

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FileCode, ShieldCheck, Loader2, Eye, Sliders } from "lucide-react";
-import {getBaseUrl, uploadAndDownloadFile} from "@/lib/api";
+import { getBaseUrl, uploadAndDownloadFile } from "@/lib/api";
 import { notify } from "@/lib/notify";
 import { PdfProgressTracker } from "@/components/pdf/PdfProgressTracker";
 import { useAuth } from "@/context/AuthContext";
@@ -11,6 +11,7 @@ import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
+import { useAsyncTask } from "@/hooks/useAsyncTask";
 
 export default function MarkdownToPdfWorkspace() {
     const { requireAuth } = useAuth();
@@ -18,44 +19,13 @@ export default function MarkdownToPdfWorkspace() {
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
 
     const [isProcessing, setIsProcessing] = useState(false);
-    const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+    const [isPreviewLoadingLocal, setIsPreviewLoadingLocal] = useState(false);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
     const [finalBlob, setFinalBlob] = useState<Blob | null>(null);
 
-    const [taskId, setTaskId] = useState<string>("");
     const [paperSize, setPaperSize] = useState("A4");
     const [margins, setMargins] = useState({ top: 0.0, bottom: 0.0, left: 0.0, right: 0.0 });
-
-    const generateLivePreview = async (targetFile: File) => {
-        try {
-            setIsPreviewLoading(true);
-            setTaskId("");
-
-            const formData = new FormData();
-            formData.append("file", targetFile);
-            formData.append("orientation", "portrait");
-            formData.append("paperSize", paperSize);
-            formData.append("marginTop", margins.top.toString());
-            formData.append("marginBottom", margins.bottom.toString());
-            formData.append("marginLeft", margins.left.toString());
-            formData.append("marginRight", margins.right.toString());
-
-            const responseBlob = await uploadAndDownloadFile("/api/conversion/markdown-to-pdf-async", formData);
-            const jsonText = await responseBlob.text();
-            const data = JSON.parse(jsonText);
-
-            if (data.taskId) {
-                setTaskId(data.taskId);
-            } else {
-                throw new Error(data.error || "Failed to acquire task queue tracker.");
-            }
-        } catch (err) {
-            console.error(err);
-            notify("Could not update document layout preview coordinates.","error");
-            setIsPreviewLoading(false);
-        }
-    };
 
     const handleTaskComplete = async (downloadUrl: string) => {
         try {
@@ -77,8 +47,72 @@ export default function MarkdownToPdfWorkspace() {
         } catch (err) {
             notify("Failed to collect final compiled asset frames from cluster nodes.", "error");
         } finally {
-            setIsPreviewLoading(false);
-            setTaskId("");
+            setIsPreviewLoadingLocal(false);
+        }
+    };
+
+    const {
+        taskId,
+        status: taskStatus,
+        progress,
+        error: taskError,
+        isSubmitting,
+        isCancelling,
+        canRestart,
+        submitTask,
+        cancelTask,
+        restartTask,
+        resetTask,
+        registerSubmission,
+    } = useAsyncTask("markdown-to-pdf", handleTaskComplete);
+
+    const isPreviewLoading = isPreviewLoadingLocal || isSubmitting || taskStatus === "PENDING" || taskStatus === "PROCESSING";
+
+    const generateLivePreview = async (targetFile: File) => {
+        try {
+            setIsPreviewLoadingLocal(true);
+
+            const currentPaperSize = paperSize;
+            const currentMargins = { ...margins };
+
+            const submitFn = async () => {
+                const formData = new FormData();
+                formData.append("file", targetFile);
+                formData.append("orientation", "portrait");
+                formData.append("paperSize", currentPaperSize);
+                formData.append("marginTop", currentMargins.top.toString());
+                formData.append("marginBottom", currentMargins.bottom.toString());
+                formData.append("marginLeft", currentMargins.left.toString());
+                formData.append("marginRight", currentMargins.right.toString());
+
+                const responseBlob = await uploadAndDownloadFile("/api/conversion/markdown-to-pdf-async", formData);
+                const jsonText = await responseBlob.text();
+                const data = JSON.parse(jsonText);
+
+                if (data.taskId) {
+                    return data.taskId;
+                } else {
+                    throw new Error(data.error || "Failed to acquire task queue tracker.");
+                }
+            };
+
+            registerSubmission(submitFn);
+
+            const formData = new FormData();
+            formData.append("file", targetFile);
+            formData.append("orientation", "portrait");
+            formData.append("paperSize", currentPaperSize);
+            formData.append("marginTop", currentMargins.top.toString());
+            formData.append("marginBottom", currentMargins.bottom.toString());
+            formData.append("marginLeft", currentMargins.left.toString());
+            formData.append("marginRight", currentMargins.right.toString());
+
+            await submitTask("/api/conversion/markdown-to-pdf-async", formData, submitFn);
+        } catch (err) {
+            console.error(err);
+            notify("Could not update document layout preview coordinates.", "error");
+        } finally {
+            setIsPreviewLoadingLocal(false);
         }
     };
 
@@ -126,7 +160,7 @@ export default function MarkdownToPdfWorkspace() {
                                 setPreviewUrl(null);
                                 setFinalBlob(null);
                                 setSuccess(false);
-                                setTaskId("");
+                                resetTask();
                                 router.push(`/${toolId}`);
                             }} />
                         </div>
@@ -186,10 +220,23 @@ export default function MarkdownToPdfWorkspace() {
                         </h2>
 
                         <div className="relative w-full aspect-[3/4] rounded-2xl border border-[color:var(--border)] bg-[color:var(--background)] overflow-hidden flex items-center justify-center p-4">
-                            {isPreviewLoading && taskId ? (
+                            {taskId || taskStatus ? (
                                 <div className="absolute inset-0 bg-[color:var(--card)]/60 backdrop-blur-sm z-10 flex flex-col items-center justify-center p-6">
-                                    <p className="text-xs font-bold text-[color:var(--foreground)] mb-3">Compiling Markdown Layout Ast Trees...</p>
-                                    <PdfProgressTracker taskId={taskId} onComplete={handleTaskComplete} />
+                                    <PdfProgressTracker
+                                        taskId={taskId}
+                                        status={taskStatus || undefined}
+                                        progress={progress}
+                                        error={taskError}
+                                        isCancelling={isCancelling}
+                                        canRestart={canRestart}
+                                        onCancel={cancelTask}
+                                        onRestart={restartTask}
+                                        onReupload={() => {
+                                            resetTask();
+                                            setFile(null);
+                                        }}
+                                        onComplete={handleTaskComplete}
+                                    />
                                 </div>
                             ) : isPreviewLoading ? (
                                 <div className="absolute inset-0 bg-[color:var(--card)]/60 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-3">

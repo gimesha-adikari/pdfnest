@@ -26,7 +26,9 @@ import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import { PdfProgressTracker } from "@/components/pdf/PdfProgressTracker";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
+import { useAsyncTask } from "@/hooks/useAsyncTask";
 import { getOCRLanguages, type OCRLanguage } from "@/lib/ocr";
+import { addStoredTask } from "@/lib/taskStorage";
 import {
     createStoragePrefix,
     createUploadSessionId,
@@ -141,10 +143,127 @@ export default function ImageToTextPdfWorkspace() {
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
 
     const [images, setImages] = useState<ImageItem[]>([]);
-    const [isProcessing, setIsProcessing] = useState(false);
+    const [isProcessingLocal, setIsProcessingLocal] = useState(false);
     const [success, setSuccess] = useState(false);
-    const [taskId, setTaskId] = useState<string>("");
     const [sortMode, setSortMode] = useState<SortMode>("none");
+
+    const handleTaskComplete = async (downloadUrl: string) => {
+        try {
+            const response = await fetch(`${getBaseUrl()}${downloadUrl}`, {
+                credentials: "include",
+            });
+            if (!response.ok) throw new Error("Could not download compiled async file payload.");
+
+            const responseBlob = await response.blob();
+
+            setDownloadData({
+                blob: responseBlob,
+                fileName: "ocr-extracted-text.pdf",
+            });
+
+            setSuccess(true);
+            setIsProcessingLocal(false);
+            router.push(`/${toolId}/download`);
+        } catch (err) {
+            console.error(err);
+            handleClientError(err);
+            setIsProcessingLocal(false);
+        }
+    };
+
+    const {
+        taskId,
+        status: taskStatus,
+        progress,
+        error: taskError,
+        isSubmitting,
+        isCancelling,
+        canRestart,
+        submitTask,
+        cancelTask,
+        restartTask,
+        resetTask,
+        registerSubmission,
+        setTaskId,
+        setStatus,
+    } = useAsyncTask("image-to-text-pdf", handleTaskComplete);
+
+    const isProcessing = isProcessingLocal || isSubmitting || taskStatus === "PENDING" || taskStatus === "PROCESSING";
+
+    const handleConversion = async () => {
+        requireAuth(async () => {
+            if (!canProcess) return;
+
+            try {
+                setIsProcessingLocal(true);
+                setSuccess(false);
+
+                const targetImages = [...images];
+                const imageFiles = targetImages.map((item) => item.file);
+                const nextLang = lang.trim() || defaultLang || "auto";
+
+                const submitFn = async () => {
+                    const sessionId = createUploadSessionId();
+                    const prefix = createStoragePrefix({
+                        toolId,
+                        purpose: "image_to_text_pdf",
+                        sessionId,
+                    });
+
+                    const uploaded = await uploadFilesToR2(imageFiles, {
+                        purpose: "image_to_text_pdf",
+                        prefix,
+                        credentials: "include",
+                    });
+
+                    const jobResponse = await fetch(OCR_JOB_ENDPOINT, {
+                        method: "POST",
+                        credentials: "include",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            tool: "image_to_text_pdf",
+                            lang: nextLang,
+                            sessionId,
+                            files: uploaded.map((item) => ({
+                                key: item.key,
+                                name: item.name,
+                                size: item.size,
+                                type: item.type,
+                            })),
+                        }),
+                    });
+
+                    if (!jobResponse.ok) {
+                        const text = await jobResponse.text().catch(() => "");
+                        throw new Error(text || `Failed to create OCR job (${jobResponse.status}).`);
+                    }
+
+                    const jobData = await jobResponse.json().catch(() => ({}));
+                    const nextTaskId =
+                        jobData.taskId || jobData.jobId || jobData.id || jobData.task_id;
+
+                    if (!nextTaskId) {
+                        throw new Error("The OCR job response did not include a task id.");
+                    }
+
+                    setTaskId(nextTaskId);
+                    setStatus("PENDING");
+                    addStoredTask(nextTaskId, "image-to-text-pdf", "PENDING");
+                    return nextTaskId;
+                };
+
+                registerSubmission(submitFn);
+                await submitFn();
+            } catch (err) {
+                console.error(err);
+                handleClientError(err);
+            } finally {
+                setIsProcessingLocal(false);
+            }
+        });
+    };
 
     const [languages, setLanguages] = useState<OCRLanguage[]>([
         AUTO_LANGUAGE,
@@ -390,98 +509,6 @@ export default function ImageToTextPdfWorkspace() {
         setLanguageSearch("");
     };
 
-    const handleConversion = async () => {
-        requireAuth(async () => {
-            if (images.length === 0) return;
-
-            try {
-                setIsProcessing(true);
-                setSuccess(false);
-                setTaskId("");
-
-                const imageFiles = images.map((item) => item.file);
-                const nextLang = lang.trim() || defaultLang || "auto";
-
-                const sessionId = createUploadSessionId();
-                const prefix = createStoragePrefix({
-                    toolId,
-                    purpose: "image_to_text_pdf",
-                    sessionId,
-                });
-
-                const uploaded = await uploadFilesToR2(imageFiles, {
-                    purpose: "image_to_text_pdf",
-                    prefix,
-                    credentials: "include",
-                });
-
-                const jobResponse = await fetch(OCR_JOB_ENDPOINT, {
-                    method: "POST",
-                    credentials: "include",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        tool: "image_to_text_pdf",
-                        lang: nextLang,
-                        sessionId,
-                        files: uploaded.map((item) => ({
-                            key: item.key,
-                            name: item.name,
-                            size: item.size,
-                            type: item.type,
-                        })),
-                    }),
-                });
-
-                if (!jobResponse.ok) {
-                    const text = await jobResponse.text().catch(() => "");
-                    throw new Error(text || `Failed to create OCR job (${jobResponse.status}).`);
-                }
-
-                const jobData = await jobResponse.json().catch(() => ({}));
-                const nextTaskId =
-                    jobData.taskId || jobData.jobId || jobData.id || jobData.task_id;
-
-                if (!nextTaskId) {
-                    throw new Error("The OCR job response did not include a task id.");
-                }
-
-                setTaskId(nextTaskId);
-            } catch (err) {
-                console.error(err);
-                handleClientError(err);
-                setIsProcessing(false);
-                setTaskId("");
-            }
-        });
-    };
-
-    const handleTaskComplete = async (downloadUrl: string) => {
-        try {
-            const response = await fetch(`${getBaseUrl()}${downloadUrl}`, {
-                credentials: "include",
-            });
-            if (!response.ok) throw new Error("Could not download compiled async file payload.");
-
-            const responseBlob = await response.blob();
-
-            setDownloadData({
-                blob: responseBlob,
-                fileName: "ocr-extracted-text.pdf",
-            });
-
-            setSuccess(true);
-            setIsProcessing(false);
-            setTaskId("");
-            router.push(`/${toolId}/download`);
-        } catch (err) {
-            console.error(err);
-            handleClientError(err);
-            setIsProcessing(false);
-        }
-    };
-
     const canProcess = images.length > 0 && !isProcessing;
 
     if (!file) return null;
@@ -718,13 +745,23 @@ export default function ImageToTextPdfWorkspace() {
                         )}
 
                         <div className="w-full space-y-4">
-                            {isProcessing && taskId ? (
+                            {taskId || taskStatus ? (
                                 <div className="flex flex-col items-center justify-center space-y-3 py-4 border rounded-xl border-dashed">
-                                    <Loader2 className="animate-spin text-indigo-500" size={24} />
-                                    <p className="text-xs font-mono text-muted-foreground animate-pulse">
-                                        Tracking task: {taskId}
-                                    </p>
-                                    <PdfProgressTracker taskId={taskId} onComplete={handleTaskComplete} />
+                                    <PdfProgressTracker
+                                        taskId={taskId}
+                                        status={taskStatus || undefined}
+                                        progress={progress}
+                                        error={taskError}
+                                        isCancelling={isCancelling}
+                                        canRestart={canRestart}
+                                        onCancel={cancelTask}
+                                        onRestart={restartTask}
+                                        onReupload={() => {
+                                            resetTask();
+                                            clearAll();
+                                        }}
+                                        onComplete={handleTaskComplete}
+                                    />
                                 </div>
                             ) : (
                                 <PdfActionButton
