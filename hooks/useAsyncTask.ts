@@ -284,9 +284,31 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
         setStatus(null);
         setProgress(0);
         setError(null);
+        setIsSubmitting(true);
 
-        // Execute original submission function (which creates NEW task ID with NEW idempotency key)
-        return lastSubmissionRef.current();
+        try {
+            const newTaskId = await lastSubmissionRef.current();
+            if (newTaskId) {
+                setTaskId(newTaskId);
+                setStatus("PENDING");
+                setProgress(0);
+                setError(null);
+                addStoredTask(newTaskId, toolName, "PENDING");
+                return newTaskId;
+            } else {
+                setStatus("FAILED");
+                setError("Failed to create a new task on restart.");
+                return null;
+            }
+        } catch (err) {
+            console.error("Restart task error:", err);
+            const errMsg = err instanceof Error ? err.message : "Restart task submission failed";
+            setError(errMsg);
+            setStatus("FAILED");
+            return null;
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const resetTask = () => {
