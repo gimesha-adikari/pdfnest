@@ -17,6 +17,7 @@ import {
     Search,
     ChevronDown,
     Check,
+    XCircle,
 } from "lucide-react";
 import { getBaseUrl } from "@/lib/api";
 import { handleClientError } from "@/lib/errorHandler";
@@ -188,14 +189,41 @@ export default function ImageToTextPdfWorkspace() {
         setStatus,
     } = useAsyncTask("image-to-text-pdf", handleTaskComplete);
 
-    const isProcessing = isProcessingLocal || isSubmitting || taskStatus === "PENDING" || taskStatus === "PROCESSING";
+    const [isUploadingR2, setIsUploadingR2] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
+    const [isCancellingUpload, setIsCancellingUpload] = useState(false);
+    const uploadAbortControllerRef = useRef<AbortController | null>(null);
+
+    // Unmount cleanup: automatically abort any active R2 upload on navigation
+    useEffect(() => {
+        return () => {
+            if (uploadAbortControllerRef.current) {
+                uploadAbortControllerRef.current.abort();
+                uploadAbortControllerRef.current = null;
+            }
+        };
+    }, []);
+
+    const cancelUpload = () => {
+        if (!uploadAbortControllerRef.current || isCancellingUpload) return;
+        setIsCancellingUpload(true);
+        uploadAbortControllerRef.current.abort();
+    };
+
+    const isProcessing = isProcessingLocal || isSubmitting || isUploadingR2 || taskStatus === "PENDING" || taskStatus === "PROCESSING";
 
     const handleConversion = async () => {
         requireAuth(async () => {
             if (!canProcess) return;
 
+            const controller = new AbortController();
+            uploadAbortControllerRef.current = controller;
+
             try {
                 setIsProcessingLocal(true);
+                setIsUploadingR2(true);
+                setIsCancellingUpload(false);
+                setUploadProgress({ current: 0, total: images.length });
                 setSuccess(false);
 
                 const targetImages = [...images];
@@ -214,11 +242,22 @@ export default function ImageToTextPdfWorkspace() {
                         purpose: "image_to_text_pdf",
                         prefix,
                         credentials: "include",
+                        signal: controller.signal,
+                        onProgress: (completed, total) => {
+                            setUploadProgress({ current: completed, total });
+                        },
                     });
+
+                    if (controller.signal.aborted) {
+                        throw new DOMException("Upload cancelled", "AbortError");
+                    }
+
+                    setIsUploadingR2(false);
 
                     const jobResponse = await fetch(OCR_JOB_ENDPOINT, {
                         method: "POST",
                         credentials: "include",
+                        signal: controller.signal,
                         headers: {
                             "Content-Type": "application/json",
                         },
@@ -234,6 +273,10 @@ export default function ImageToTextPdfWorkspace() {
                             })),
                         }),
                     });
+
+                    if (controller.signal.aborted) {
+                        throw new DOMException("Upload cancelled", "AbortError");
+                    }
 
                     if (!jobResponse.ok) {
                         const text = await jobResponse.text().catch(() => "");
@@ -256,10 +299,21 @@ export default function ImageToTextPdfWorkspace() {
 
                 registerSubmission(submitFn);
                 await submitFn();
-            } catch (err) {
-                console.error(err);
-                handleClientError(err);
+            } catch (err: any) {
+                if (
+                    err.name === "AbortError" ||
+                    (err instanceof Error && (err.message.includes("aborted") || err.message.includes("cancelled")))
+                ) {
+                    console.log("[R2 UPLOAD] Upload cancelled cleanly by user or unmount.");
+                } else {
+                    console.error(err);
+                    handleClientError(err);
+                }
             } finally {
+                uploadAbortControllerRef.current = null;
+                setIsUploadingR2(false);
+                setIsCancellingUpload(false);
+                setUploadProgress(null);
                 setIsProcessingLocal(false);
             }
         });
@@ -745,7 +799,55 @@ export default function ImageToTextPdfWorkspace() {
                         )}
 
                         <div className="w-full space-y-4">
-                            {taskId || taskStatus ? (
+                            {isUploadingR2 ? (
+                                <div className="w-full p-6 bg-[var(--card)] border border-[color:var(--border)] rounded-2xl shadow-md transition-all">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center space-x-2">
+                                            <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />
+                                            <span className="text-sm font-semibold text-[color:var(--foreground)]">
+                                                {isCancellingUpload
+                                                    ? "Cancelling upload..."
+                                                    : `Uploading images to storage (${uploadProgress?.current || 0}/${uploadProgress?.total || images.length})...`}
+                                            </span>
+                                        </div>
+                                        <span className="text-xs text-[color:var(--muted)] font-mono">
+                                            {uploadProgress
+                                                ? Math.round((uploadProgress.current / (uploadProgress.total || 1)) * 100)
+                                                : 0}%
+                                        </span>
+                                    </div>
+
+                                    <div className="w-full bg-[color:var(--border)]/40 h-2.5 rounded-full overflow-hidden mb-4">
+                                        <div
+                                            className="h-full bg-indigo-500 transition-all duration-300 ease-out"
+                                            style={{
+                                                width: `${uploadProgress ? Math.round((uploadProgress.current / (uploadProgress.total || 1)) * 100) : 0}%`,
+                                            }}
+                                        />
+                                    </div>
+
+                                    <div className="flex items-center justify-end space-x-2 mt-3">
+                                        <button
+                                            type="button"
+                                            onClick={cancelUpload}
+                                            disabled={isCancellingUpload}
+                                            className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-lg text-red-500 bg-red-500/10 hover:bg-red-500/20 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                        >
+                                            {isCancellingUpload ? (
+                                                <>
+                                                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                                                    Cancelling...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <XCircle className="w-3.5 h-3.5 mr-1.5" />
+                                                    Cancel Upload
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : taskId || taskStatus ? (
                                 <div className="flex flex-col items-center justify-center space-y-3 py-4 border rounded-xl border-dashed">
                                     <PdfProgressTracker
                                         taskId={taskId}

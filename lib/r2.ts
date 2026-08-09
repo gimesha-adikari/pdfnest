@@ -26,6 +26,8 @@ export interface R2UploadOptions {
     prefix: string;
     endpoint?: string;
     credentials?: RequestCredentials;
+    signal?: AbortSignal;
+    onProgress?: (completed: number, total: number) => void;
 }
 
 function randomId(): string {
@@ -90,12 +92,17 @@ export async function requestR2PresignedUploads(
     files: FileLike[],
     options: R2UploadOptions
 ): Promise<R2UploadItem[]> {
+    if (options.signal?.aborted) {
+        throw new DOMException("Upload cancelled", "AbortError");
+    }
+
     const endpoint =
         options.endpoint || `${getBaseUrl()}/api/storage/r2/presign`;
 
     const response = await fetch(endpoint, {
         method: "POST",
         credentials: options.credentials ?? "include",
+        signal: options.signal,
         headers: {
             "Content-Type": "application/json",
         },
@@ -170,9 +177,27 @@ export async function requestR2PresignedUploads(
     return normalized;
 }
 
-export function uploadFileToPresignedUrl(file: File, target: R2UploadItem): Promise<void> {
+export function uploadFileToPresignedUrl(
+    file: File,
+    target: R2UploadItem,
+    signal?: AbortSignal
+): Promise<void> {
     return new Promise((resolve, reject) => {
+        if (signal?.aborted) {
+            reject(new DOMException("Upload cancelled", "AbortError"));
+            return;
+        }
+
         const xhr = new XMLHttpRequest();
+
+        const onAbort = () => {
+            xhr.abort();
+            reject(new DOMException("Upload cancelled", "AbortError"));
+        };
+
+        if (signal) {
+            signal.addEventListener("abort", onAbort, { once: true });
+        }
 
         xhr.open(target.method || "PUT", target.uploadUrl, true);
 
@@ -181,6 +206,7 @@ export function uploadFileToPresignedUrl(file: File, target: R2UploadItem): Prom
         });
 
         xhr.onload = () => {
+            if (signal) signal.removeEventListener("abort", onAbort);
             if (xhr.status >= 200 && xhr.status < 300) {
                 resolve();
                 return;
@@ -193,8 +219,20 @@ export function uploadFileToPresignedUrl(file: File, target: R2UploadItem): Prom
             );
         };
 
-        xhr.onerror = () => reject(new Error(`Network error while uploading ${file.name} to R2.`));
-        xhr.onabort = () => reject(new Error(`Upload aborted for ${file.name}.`));
+        xhr.onerror = () => {
+            if (signal) signal.removeEventListener("abort", onAbort);
+            if (signal?.aborted) {
+                reject(new DOMException("Upload cancelled", "AbortError"));
+            } else {
+                reject(new Error(`Network error while uploading ${file.name} to R2.`));
+            }
+        };
+
+        xhr.onabort = () => {
+            if (signal) signal.removeEventListener("abort", onAbort);
+            reject(new DOMException("Upload cancelled", "AbortError"));
+        };
+
         xhr.send(file);
     });
 }
@@ -203,10 +241,28 @@ export async function uploadFilesToR2(
     files: File[],
     options: R2UploadOptions
 ): Promise<R2UploadItem[]> {
+    if (options.signal?.aborted) {
+        throw new DOMException("Upload cancelled", "AbortError");
+    }
+
     const presigned = await requestR2PresignedUploads(files, options);
 
+    if (options.signal?.aborted) {
+        throw new DOMException("Upload cancelled", "AbortError");
+    }
+
+    let completedCount = 0;
+    options.onProgress?.(0, files.length);
+
     await Promise.all(
-        files.map((file, index) => uploadFileToPresignedUrl(file, presigned[index]))
+        files.map(async (file, index) => {
+            if (options.signal?.aborted) {
+                throw new DOMException("Upload cancelled", "AbortError");
+            }
+            await uploadFileToPresignedUrl(file, presigned[index], options.signal);
+            completedCount += 1;
+            options.onProgress?.(completedCount, files.length);
+        })
     );
 
     return presigned;
