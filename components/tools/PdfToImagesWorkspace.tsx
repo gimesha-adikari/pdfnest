@@ -1,4 +1,3 @@
-// file: /home/gimesha/My_Projects/next/pdfnest/components/tools/PdfToImagesWorkspace.tsx
 "use client";
 
 import { useState } from "react";

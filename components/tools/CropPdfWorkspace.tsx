@@ -181,10 +181,8 @@ export default function CropPdfWorkspace() {
                 const ctx = canvas.getContext("2d");
                 if (!ctx) return;
 
-                // FIX 1: Capture unscaled base point guidelines for geometry matrix tracking
                 const baseViewport = page.getViewport({ scale: 1.0 });
 
-                // FIX 2: Render sharp separate view layers at scale 1.5 without stretching memory
                 const renderViewport = page.getViewport({ scale: 1.5 });
 
                 canvas.width = renderViewport.width;
@@ -246,7 +244,7 @@ export default function CropPdfWorkspace() {
         }
     }, [pdfDimensions]);
 
-    // Translate coordinates: PDF points -> Browser Top-Left origin layout styling
+    // Convert PDF coordinates to the browser's top-left-origin preview space.
     const overlayStyles = useMemo(() => {
         if (pdfDimensions.width === 0 || displayDimensions.width === 0) return { display: "none" };
 

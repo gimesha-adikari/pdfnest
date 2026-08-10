@@ -97,7 +97,6 @@ export default function OfficeConverter({targetFormat, title, description, icon}
 
     return (
         <div className="mt-4 grid grid-cols-1 lg:grid-cols-12 gap-8 w-full animate-in fade-in">
-            {/* Control Panel Column */}
             <div className="lg:col-span-5 space-y-6">
                 <PdfFileInfo file={file} onClear={() => {
                     setFile(null);
@@ -138,7 +137,6 @@ export default function OfficeConverter({targetFormat, title, description, icon}
                 />
             </div>
 
-            {/* Status Visualization Block */}
             <div
                 className="lg:col-span-7 flex flex-col items-center justify-center bg-(--background)/30 border
                 border-border rounded-2xl p-8 text-center min-h-65 relative overflow-hidden">

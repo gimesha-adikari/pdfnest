@@ -17,12 +17,11 @@ export default function PdfThumbnailGrid({
     const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
 
     const handleThumbnailClick = (pageNumber: number, e: React.MouseEvent) => {
-        // Stop default browser text selections from breaking layouts during Shift hold
         if (e.shiftKey) {
             e.preventDefault();
         }
 
-        // Handle Shift range multi-select if a prior page has been selected and setter exists
+        // Shift adds the inclusive range to the existing selection.
         if (e.shiftKey && lastSelectedIndex !== null && setSelectedPages) {
             const start = Math.min(lastSelectedIndex, pageNumber);
             const end = Math.max(lastSelectedIndex, pageNumber);
@@ -39,7 +38,6 @@ export default function PdfThumbnailGrid({
             return;
         }
 
-        // Default: Fallback to single page toggle state
         onTogglePage(pageNumber);
         setLastSelectedIndex(pageNumber);
     };

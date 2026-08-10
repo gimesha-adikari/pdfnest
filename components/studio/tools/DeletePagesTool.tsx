@@ -1,4 +1,3 @@
-// file: components/studio/tools/DeletePagesTool.tsx
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";

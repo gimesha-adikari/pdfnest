@@ -17,7 +17,8 @@ interface StoredToolTransfer {
 const DB_NAME = "platen-tool-transfers";
 const STORE_NAME = "transfers";
 const DB_VERSION = 1;
-const TRANSFER_TTL_MS = 30 * 60 * 1000; // 30 minutes
+// Transfers are transient handoffs between tool workspaces, not persistent storage.
+const TRANSFER_TTL_MS = 30 * 60 * 1000;
 
 function openDb(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {

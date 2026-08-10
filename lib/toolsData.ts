@@ -29,7 +29,6 @@ export interface ToolItem {
     accept?: string;
     multiple?: boolean;
 }
-// export const NAV_TOOLS: ToolItem[] =[];
 export const NAV_TOOLS: ToolItem[] = [
     {
         title: "Merge PDF",

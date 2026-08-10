@@ -1,5 +1,4 @@
 "use client";
-
 import {useEffect, useMemo, useState} from "react";
 import {useAuth} from "@/context/AuthContext";
 import {uploadAndDownloadFile} from "@/lib/api";
@@ -88,7 +87,6 @@ export default function DuplicatePagesTool({
         setSuccess(false);
         setPageSelection((prev) => (prev.trim() ? prev : "1"));
     }, [baseFile]);
-
     const applyPreset = (type: "current" | "all" | "even" | "odd") => {
         if (totalPages === 0) return;
 
@@ -118,7 +116,6 @@ export default function DuplicatePagesTool({
         for (let i = 1; i <= totalPages; i += 2) odds.push(i);
         setPageSelection(odds.join(", ") || "1");
     };
-
     function getSelectedPageCount(selection: string): number {
         let count = 0;
 

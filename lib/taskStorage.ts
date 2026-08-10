@@ -8,7 +8,8 @@ export interface StoredAsyncTask {
 
 const STORAGE_KEY = "pdfnest:async-tasks";
 const MAX_TASKS = 10;
-const MAX_AGE_MS = 2 * 60 * 60 * 1000; // 2 hours
+// Stored tasks only support short-lived recovery after navigation or refresh.
+const MAX_AGE_MS = 2 * 60 * 60 * 1000;
 
 export function getStoredTasks(): StoredAsyncTask[] {
     if (typeof window === "undefined") return [];
@@ -39,7 +40,6 @@ export function addStoredTask(taskId: string, tool: string, status?: string, err
         const updated = [{ taskId, tool, createdAt: Date.now(), status, error }, ...filtered].slice(0, MAX_TASKS);
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     } catch {
-        // Ignore localStorage write failures
     }
 }
 
@@ -55,7 +55,6 @@ export function updateStoredTask(taskId: string, updates: { status?: string; err
         });
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     } catch {
-        // Ignore localStorage write failures
     }
 }
 
@@ -66,6 +65,5 @@ export function removeStoredTask(taskId: string): void {
         const updated = current.filter((t) => t.taskId !== taskId);
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     } catch {
-        // Ignore localStorage write failures
     }
 }

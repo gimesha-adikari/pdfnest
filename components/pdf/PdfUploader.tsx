@@ -1,9 +1,7 @@
 "use client";
-
 import React, { useState, useCallback } from "react";
 import { UploadCloud, Lock, Loader2 } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
-
 const checkEncryption = async (file: File): Promise<boolean> => {
     try {
         const pdfjs = await import("pdfjs-dist");
@@ -52,7 +50,6 @@ export default function PdfUploader({
     const [password, setPassword] = useState("");
     const [isUnlocking, setIsUnlocking] = useState(false);
     const [error, setError] = useState<string | null>(null);
-
     const handleFiles = useCallback(
         async (files: File[]) => {
             if (files.length === 0) return;
@@ -112,7 +109,6 @@ export default function PdfUploader({
         },
         []
     );
-
     const handleUnlock = useCallback(async () => {
         if (!queue || queue.remaining.length === 0 || !password) return;
         setIsUnlocking(true);

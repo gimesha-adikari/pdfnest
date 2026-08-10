@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { submitContactTicket, ClientError } from "@/lib/api"; // Adjust import path if needed
+import { submitContactTicket, ClientError } from "@/lib/api";
 import {
     Mail,
     MessageSquare,
@@ -49,7 +49,7 @@ export default function ContactForm() {
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
-            // Convert FileList to Array and limit to 5 (matching backend)
+            // Match the backend attachment limit before constructing the request.
             const selectedFiles = Array.from(e.target.files).slice(0, 5);
             setFiles(selectedFiles);
         }
@@ -68,14 +68,13 @@ export default function ContactForm() {
         payload.append("message", formData.message);
 
         files.forEach((file) => {
-            payload.append("attachments", file); // Backend expects "attachments" slice
+            payload.append("attachments", file);
         });
 
         try {
             const res = await submitContactTicket(payload);
             setStatus("success");
             setSuccessMessage(`Ticket #${res.ticketNumber}: ${res.message}`);
-            // Reset form
             setFormData({ name: "", email: "", category: "General Support", subject: "", message: "" });
             setFiles([]);
         } catch (err) {
@@ -267,9 +266,7 @@ export default function ContactForm() {
                     </form>
                 </section>
 
-                {/* Sidebar (Kept identical to original) */}
                 <aside className="space-y-6">
-                    {/* ... (Keep all sidebar content exactly the same as your original file) ... */}
                     <div className="rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-7">
                         <div className="flex items-center gap-3">
                             <Clock3 className="h-6 w-6 text-emerald-500" />

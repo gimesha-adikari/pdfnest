@@ -34,7 +34,6 @@ export default function PageNumbersWorkspace() {
     const [error, setError] = useState<string | null>(null);
     const isCancelled = useRef(false);
 
-    // EXACT Existing PDF.js logic
     useEffect(() => {
         if (!file) {
             queueMicrotask(() => setThumbnailSrc(""));
@@ -89,7 +88,6 @@ export default function PageNumbersWorkspace() {
         return () => { isCancelled.current = true; };
     }, [file]);
 
-    // EXACT Existing API Logic, modified to route to download page instead of auto-download
     const handleNumberingProcessing = async () => {
         requireAuth(async () => {
             if (!file) return;
@@ -112,13 +110,11 @@ export default function PageNumbersWorkspace() {
 
                 const responseBlob = await uploadAndDownloadFile("/api/structure/add-page-numbers", formData);
 
-                // Store result in global layout context
                 setDownloadData({
                     blob: responseBlob,
                     fileName: `numbered_${file.name}`
                 });
 
-                // Navigate to Step 3
                 router.push(`/${toolId}/download`);
 
             } catch (err) {
@@ -145,7 +141,6 @@ export default function PageNumbersWorkspace() {
                     <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/50 lg:col-span-7">
                         <h3 className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Stylistic Typeface Profiles</h3>
 
-                        {/* EXACT Existing Controls UI */}
                         <div className="mt-4 space-y-3">
                             {STYLISTIC_FONTS.map((font) => (
                                 <button
@@ -196,7 +191,6 @@ export default function PageNumbersWorkspace() {
                         </div>
                     </div>
 
-                    {/* EXACT Existing Preview Panel */}
                     <div className="flex flex-col items-center justify-between rounded-2xl border border-gray-100 bg-gray-50/50 p-6 dark:border-zinc-800/50 dark:bg-zinc-900/20 lg:col-span-5">
                         <div className="w-full">
                             <PdfFileInfo file={file} onClear={() => { setFile(null); router.push(`/${toolId}`); }} />

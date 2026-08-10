@@ -1,5 +1,4 @@
 "use client";
-
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {ChevronLeft, ChevronRight, Loader2, PenTool, Plus, ShieldCheck} from "lucide-react";
 import {useAuth} from "@/context/AuthContext";
@@ -42,7 +41,6 @@ interface SignPdfToolProps {
     baseFile: File | null;
     onSignedFile: (file: File) => Promise<void>;
 }
-
 async function loadPdfJs() {
     const pdfjs = await import("pdfjs-dist");
     pdfjs.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
@@ -281,7 +279,7 @@ export default function SignPdfTool({baseFile, onSignedFile}: SignPdfToolProps) 
                 if (!img) throw new Error("Preview image missing");
 
                 const rect = img.getBoundingClientRect();
-
+                // Convert preview-space stamp coordinates to PDF page coordinates.
                 const backendStamps = stamps.map((stamp) => {
                     const pageDim = pageDimensions[stamp.page];
                     if (!pageDim) {
@@ -367,7 +365,6 @@ export default function SignPdfTool({baseFile, onSignedFile}: SignPdfToolProps) 
                                 Create Signature</h2>
                             <div
                                 className="rounded-2xl border border-border bg-(--background)/40 p-2">
-                                {/* SignaturePad from your existing components can be dropped in here */}
                                 <div
                                     className="rounded-xl border border-dashed border-border p-4 text-xs text-muted">
                                     <SignaturePad onSignatureChange={setSignatureBlob}/>
@@ -517,4 +514,3 @@ export default function SignPdfTool({baseFile, onSignedFile}: SignPdfToolProps) 
         </div>
     );
 }
-

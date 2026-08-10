@@ -1,5 +1,4 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import { ChevronDown } from "lucide-react";
 import { NAV_TOOLS } from "@/lib/toolsData";
@@ -11,7 +10,7 @@ interface FAQItem {
 }
 
 interface BackendTool {
-    // Structural case fallbacks for your DB properties
+    // Backend responses may use either naming convention during the schema migration.
     Href?: string;
     href?: string;
     FaqJson?: string;

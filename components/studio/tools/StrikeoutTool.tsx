@@ -155,7 +155,6 @@ async function submitStrikeoutJob(
             const parsed = JSON.parse(text);
             message = parsed.message || parsed.error || message;
         } catch {
-            // keep raw text
         }
         throw new Error(message);
     }

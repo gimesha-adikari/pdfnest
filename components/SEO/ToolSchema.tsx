@@ -25,7 +25,7 @@ export default function ToolSchema({
 }) {
     const localTool = NAV_TOOLS.find((t) => t.href === toolHref);
 
-    // Hydrate default structure with local configurations to maintain valid SEO schema on immediate mount
+    // Render valid JSON-LD before the optional backend metadata request resolves.
     const [toolData, setToolData] = useState({
         title: localTool?.title || "PDF Tool",
         description: localTool?.description || "Free secure online document tools",

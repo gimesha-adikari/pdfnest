@@ -56,7 +56,7 @@ export default function WatermarkPdfWorkspace() {
     const [isRenderingCanvas, setIsRenderingCanvas] = useState<boolean>(false);
 
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
-    const renderTaskRef = useRef<any>(null); // Tracks the active worker rendering frame task
+    const renderTaskRef = useRef<any>(null);
 
     useEffect(() => {
         return () => {
@@ -104,7 +104,7 @@ export default function WatermarkPdfWorkspace() {
             try {
                 setIsRenderingCanvas(true);
 
-                // Cancel the active render task execution thread before loading next iteration
+                // PDF.js renders asynchronously; cancel stale work before rendering another page.
                 if (renderTaskRef.current) {
                     renderTaskRef.current.cancel();
                 }
@@ -129,7 +129,6 @@ export default function WatermarkPdfWorkspace() {
                 await renderTask.promise;
                 renderTaskRef.current = null;
             } catch (err: any) {
-                // Ignore structural cleanup cancellation errors intentionally thrown by pdfjs
                 if (err?.name !== "RenderingCancelledException") {
                     console.error("Canvas raster generation skipped:", err);
                 }

@@ -43,7 +43,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
         return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
     }, []);
 
-    // Restore active task from localStorage on mount
+    // Restore an in-flight task after navigation or a browser refresh.
     useEffect(() => {
         const stored = getStoredTasks();
         const existing = stored.find((t) => t.tool === toolName);
@@ -82,7 +82,6 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
                 }
             })
             .catch(() => {
-                // Network error during recovery check
             });
 
         return () => {
@@ -90,7 +89,6 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
         };
     }, [toolName, getBaseApiUrl]);
 
-    // Polling effect for active tasks (PENDING / PROCESSING)
     useEffect(() => {
         if (!taskId) return;
         if (status !== "PENDING" && status !== "PROCESSING") return;
@@ -138,7 +136,6 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
                     setStatus(data.status);
                 }
             } catch {
-                // Ignore transient polling fetch error
             }
         }, 1000);
 
@@ -164,7 +161,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
             lastSubmissionRef.current = submitFn;
         }
 
-        // Always generate a new idempotency key for fresh submission
+        // Retries reuse this key; a later user submission must not reuse its result.
         idempotencyKeyRef.current = crypto.randomUUID();
 
         for (let attempt = 0; attempt < 5; attempt++) {
@@ -179,7 +176,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
                 });
 
                 if (res.status === 409) {
-                    // HTTP 409 Conflict: Retry same idempotency key
+                    // The request may still be creating its task, so retry with the same key.
                     const retryAfter = parseInt(res.headers.get("Retry-After") || "2", 10);
                     await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
                     continue;
@@ -202,7 +199,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
                 setStatus("PENDING");
                 setProgress(0);
                 addStoredTask(newTaskId, toolName, "PENDING");
-                idempotencyKeyRef.current = ""; // Clear for next logical submission
+                idempotencyKeyRef.current = "";
                 setIsSubmitting(false);
                 return newTaskId;
             } catch (err) {
@@ -245,7 +242,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
                 }
                 updateStoredTask(taskId, { status: finalStatus, error: data.error });
             } else if (res.status === 409 || res.status === 404 || res.status === 410) {
-                // Task was completed/gone before cancellation processed; fetch actual status
+                // Cancellation races with completion; resolve the server's terminal state.
                 const checkRes = await fetch(`${getBaseApiUrl()}/api/v1/tasks/${taskId}`);
                 if (checkRes.ok) {
                     const data: TaskStatusResponse = await checkRes.json();
@@ -274,7 +271,6 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
         if (isSubmitting || isCancelling) return null;
         if (!lastSubmissionRef.current) return null;
 
-        // Clear current task state before creating a NEW task
         const oldTaskId = taskId;
         if (oldTaskId) {
             removeStoredTask(oldTaskId);
