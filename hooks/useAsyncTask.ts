@@ -94,7 +94,12 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
         if (status !== "PENDING" && status !== "PROCESSING") return;
 
         let isMounted = true;
-        const intervalId = setInterval(async () => {
+        let timeoutId: ReturnType<typeof setTimeout>;
+        let currentInterval = 1000;
+        const MAX_INTERVAL = 8000;
+        let lastProgress = -1;
+
+        const poll = async () => {
             try {
                 const res = await fetch(`${getBaseApiUrl()}/api/v1/tasks/${taskId}`);
                 if (!isMounted) return;
@@ -103,11 +108,13 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
                     setStatus("FAILED");
                     setError("Task expired or no longer available.");
                     removeStoredTask(taskId);
-                    clearInterval(intervalId);
                     return;
                 }
 
-                if (!res.ok) return;
+                if (!res.ok) {
+                    scheduleNext();
+                    return;
+                }
 
                 const data: TaskStatusResponse = await res.json();
                 if (!isMounted) return;
@@ -119,29 +126,50 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
                     setProgress(100);
                     updateStoredTask(taskId, { status: "COMPLETED" });
                     onCompleteRef.current?.(`/api/v1/download/${data.id || taskId}`);
-                    clearInterval(intervalId);
+                    return;
                 } else if (data.status === "FAILED") {
                     setStatus("FAILED");
                     const errStr = data.error || "Task processing failed.";
                     setError(errStr);
                     updateStoredTask(taskId, { status: "FAILED", error: errStr });
-                    clearInterval(intervalId);
+                    return;
                 } else if (data.status === "CANCELLED") {
                     setStatus("CANCELLED");
                     const errStr = data.error || "Task was cancelled.";
                     setError(errStr);
                     updateStoredTask(taskId, { status: "CANCELLED", error: errStr });
-                    clearInterval(intervalId);
+                    return;
                 } else {
                     setStatus(data.status);
                 }
+
+                // Reset backoff when progress advances, so the UI
+                // stays responsive during active processing.
+                if ((data.progress || 0) !== lastProgress) {
+                    lastProgress = data.progress || 0;
+                    currentInterval = 1000;
+                } else {
+                    currentInterval = Math.min(currentInterval * 1.5, MAX_INTERVAL);
+                }
+
+                scheduleNext();
             } catch {
+                scheduleNext();
             }
-        }, 1000);
+        };
+
+        const scheduleNext = () => {
+            if (isMounted) {
+                timeoutId = setTimeout(poll, currentInterval);
+            }
+        };
+
+        // Start polling immediately.
+        timeoutId = setTimeout(poll, currentInterval);
 
         return () => {
             isMounted = false;
-            clearInterval(intervalId);
+            clearTimeout(timeoutId);
         };
     }, [taskId, status, getBaseApiUrl]);
 

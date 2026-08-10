@@ -213,7 +213,9 @@ export default function RotateTool({ baseFile, onRotatedFile }: RotateToolProps)
                         }).promise;
                         const imgData = canvas.toDataURL("image/jpeg", 0.6);
                         loadedThumbnails.push(imgData);
-                        setThumbnails([...loadedThumbnails]);
+                        if (i % 10 === 0 || i === totalPages) {
+                            setThumbnails([...loadedThumbnails]);
+                        }
                     }
 
                     canvas.width = 0;
