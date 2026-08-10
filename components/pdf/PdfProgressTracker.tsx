@@ -53,7 +53,10 @@ export function PdfProgressTracker({
                 }
 
                 if (data.status === "COMPLETED" || data.progress === 100) {
-                    onComplete?.(`/api/v1/download/${taskId}`);
+                    const downloadUrl = data.downloadToken
+                        ? `/api/v1/download/${taskId}?token=${encodeURIComponent(data.downloadToken)}`
+                        : `/api/v1/download/${taskId}`;
+                    onComplete?.(downloadUrl);
                     ws.close();
                 }
             } catch (err) {

@@ -21,6 +21,14 @@ export interface TaskStatusResponse {
     progress: number;
     resultUrl?: string;
     error?: string;
+    downloadToken?: string;
+}
+
+function buildDownloadUrl(taskId: string, downloadToken?: string): string {
+    if (downloadToken) {
+        return `/api/v1/download/${taskId}?token=${encodeURIComponent(downloadToken)}`;
+    }
+    return `/api/v1/download/${taskId}`;
 }
 
 export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string) => void) {
@@ -67,7 +75,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
                 if (data.status === "COMPLETED") {
                     setStatus("COMPLETED");
                     setProgress(100);
-                    onCompleteRef.current?.(`/api/v1/download/${data.id || existing.taskId}`);
+                    onCompleteRef.current?.(buildDownloadUrl(data.id || existing.taskId, data.downloadToken));
                 } else if (data.status === "FAILED") {
                     setStatus("FAILED");
                     setError(data.error || "Task failed");
@@ -125,7 +133,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
                     setStatus("COMPLETED");
                     setProgress(100);
                     updateStoredTask(taskId, { status: "COMPLETED" });
-                    onCompleteRef.current?.(`/api/v1/download/${data.id || taskId}`);
+                    onCompleteRef.current?.(buildDownloadUrl(data.id || taskId, data.downloadToken));
                     return;
                 } else if (data.status === "FAILED") {
                     setStatus("FAILED");
@@ -266,7 +274,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
                     setError("Task was cancelled.");
                 } else if (finalStatus === "COMPLETED") {
                     setProgress(100);
-                    onCompleteRef.current?.(`/api/v1/download/${taskId}`);
+                    onCompleteRef.current?.(buildDownloadUrl(data.id || taskId, data.downloadToken));
                 }
                 updateStoredTask(taskId, { status: finalStatus, error: data.error });
             } else if (res.status === 409 || res.status === 404 || res.status === 410) {
@@ -277,7 +285,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
                     setStatus(data.status);
                     if (data.status === "COMPLETED") {
                         setProgress(100);
-                        onCompleteRef.current?.(`/api/v1/download/${taskId}`);
+                        onCompleteRef.current?.(buildDownloadUrl(data.id || taskId, data.downloadToken));
                     }
                     updateStoredTask(taskId, { status: data.status, error: data.error });
                 } else {
