@@ -24,6 +24,7 @@ import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
+import { usePdfPreview } from "@/hooks/usePdfPreview";
 
 interface CustomPdfFile extends File {
     originalPassword?: string;
@@ -269,9 +270,7 @@ export default function UnderlinePdfWorkspace() {
     const [analysisLoaded, setAnalysisLoaded] = useState<boolean>(false);
     const [analysisError, setAnalysisError] = useState<string | null>(null);
 
-    const [previewImageSrc, setPreviewImageSrc] = useState<string>("");
-    const [isRenderingPreview, setIsRenderingPreview] = useState<boolean>(false);
-    const [previewCacheToken, setPreviewCacheToken] = useState<string>("");
+
 
     const [jobId, setJobId] = useState<string>("");
     const [job, setJob] = useState<JobRecord | null>(null);
@@ -305,6 +304,15 @@ export default function UnderlinePdfWorkspace() {
     const isMixedPage = pageKind === "mixed";
     const canUseSmartMode = pageKind !== "scanned" && pageKind !== "blank";
     const currentPageBoxes = useMemo(() => boxes.filter((b) => b.page === currentPage), [boxes, currentPage]);
+
+    // ─── Session-based preview for scanned pages ─────────────────────────────
+    const { previewSrc: scannedPreviewSrc, isLoading: scannedPreviewLoading } = usePdfPreview({
+        file,
+        pageNumber: currentPage,
+        scale: "2.0",
+        enabled: isScannedPage,
+        onError: () => console.error("Failed to render scanned page preview."),
+    });
 
     const updateBoxesStateWithHistory = (
         nextState: UnderlineBox[] | ((prev: UnderlineBox[]) => UnderlineBox[])
@@ -376,9 +384,7 @@ export default function UnderlinePdfWorkspace() {
             setAnalysisLoaded(false);
             setAnalysisError(null);
             setIsAnalyzing(false);
-            if (previewImageSrc) URL.revokeObjectURL(previewImageSrc);
-            setPreviewImageSrc("");
-            setPreviewCacheToken("");
+
             setJobId("");
             setJob(null);
             setUploadProgress(0);
@@ -396,7 +402,6 @@ export default function UnderlinePdfWorkspace() {
                 setPdfDocument(pdf as unknown as PdfJsDocument);
                 setTotalPages(pdf.numPages);
                 setCurrentPage(1);
-                setPreviewCacheToken(Math.random().toString(36).slice(2));
             } catch (err) {
                 console.error("Failed to parse document context framework:", err);
             } finally {
@@ -485,80 +490,8 @@ export default function UnderlinePdfWorkspace() {
         }
     }, [currentPageAnalysis, underlineMode]);
 
-    let baseUrl = getBaseUrl();
 
-    useEffect(() => {
-        if (!file || !pdfDocument) return;
 
-        const isScanned = currentPageAnalysis?.kind === "scanned";
-
-        if (!isScanned) {
-            if (previewImageSrc) {
-                URL.revokeObjectURL(previewImageSrc);
-                setPreviewImageSrc("");
-            }
-            return;
-        }
-
-        const abortController = new AbortController();
-
-        const fetchScannedPreview = async () => {
-            setIsRenderingPreview(true);
-
-            try {
-                const formData = new FormData();
-                const tempFile = new File([file], file.name, { type: "application/pdf" });
-
-                formData.append("file", tempFile);
-                formData.append("page", String(currentPage));
-                formData.append("scale", "2.0");
-                formData.append("cacheBuster", previewCacheToken);
-
-                const password = (file as CustomPdfFile).originalPassword;
-                if (password) {
-                    formData.append("file_password", password);
-                }
-
-                const response = await fetch(buildApiUrl("/api/conversion/preview/page"), {
-                    method: "POST",
-                    body: formData,
-                    credentials: "include",
-                    signal: abortController.signal,
-                });
-
-                if (!response.ok) {
-                    throw new Error(`Preview failed with status ${response.status}`);
-                }
-
-                const imgBlob = await response.blob();
-
-                setPreviewImageSrc((prev) => {
-                    if (prev) URL.revokeObjectURL(prev);
-                    return URL.createObjectURL(imgBlob);
-                });
-            } catch (err: any) {
-                if (err?.name !== "AbortError") {
-                    console.error("Failed to render scanned page preview:", err);
-                }
-            } finally {
-                if (!abortController.signal.aborted) {
-                    setIsRenderingPreview(false);
-                }
-            }
-        };
-
-        fetchScannedPreview();
-
-        return () => {
-            abortController.abort();
-        };
-    }, [file, pdfDocument, currentPage, currentPageAnalysis?.kind, previewCacheToken, baseUrl]);
-
-    useEffect(() => {
-        return () => {
-            if (previewImageSrc) URL.revokeObjectURL(previewImageSrc);
-        };
-    }, [previewImageSrc]);
 
     useEffect(() => {
         const handleKeyboardShortcuts = (e: KeyboardEvent) => {
@@ -1108,7 +1041,7 @@ export default function UnderlinePdfWorkspace() {
                     </div>
 
                     <div className="lg:col-span-7 flex flex-col bg-[color:var(--background)]/30 border border-[color:var(--border)] rounded-2xl p-6 relative w-full">
-                        {(isRenderingCanvas || isRenderingPreview) && (
+                        {(isRenderingCanvas || scannedPreviewLoading) && (
                             <div className="absolute inset-0 bg-[color:var(--background)]/40 backdrop-blur-sm rounded-2xl z-20 flex flex-col items-center justify-center text-xs font-medium text-[color:var(--muted)]">
                                 <Loader2 className="animate-spin text-indigo-500 mb-2" size={24} />
                                 {isScannedPage ? "Loading scanned preview..." : "Synchronizing view matrix framework..."}
@@ -1170,15 +1103,15 @@ export default function UnderlinePdfWorkspace() {
                                     }`}
                                 />
 
-                                {isScannedPage && previewImageSrc && (
+                                {isScannedPage && scannedPreviewSrc && (
                                     <img
-                                        src={previewImageSrc}
+                                        src={scannedPreviewSrc}
                                         alt={`Scanned page preview ${currentPage}`}
                                         className="absolute inset-0 w-full h-full object-contain rounded pointer-events-none"
                                     />
                                 )}
 
-                                {isScannedPage && !previewImageSrc && (
+                                {isScannedPage && !scannedPreviewSrc && (
                                     <div className="absolute inset-0 flex items-center justify-center text-xs text-[color:var(--muted)]">
                                         Preparing scanned preview...
                                     </div>

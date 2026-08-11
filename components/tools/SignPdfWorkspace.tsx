@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { PenTool, ShieldCheck, FileText, Loader2, Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { PenTool, ShieldCheck, Loader2, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
@@ -10,9 +10,9 @@ import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import SignaturePad from "@/components/pdf/SignaturePad";
-import { Rnd } from "react-rnd";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import {DraggableSignaturePlaceholder} from "@/components/pdf/DraggableSignaturePlaceholder";
+import { usePdfPreview } from "@/hooks/usePdfPreview";
 
 type Stamp = {
     id: number;
@@ -37,13 +37,19 @@ export default function SignPdfWorkspace() {
 
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
-    const [pagePreviewUrl, setPagePreviewUrl] = useState<string | null>(null);
-    const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [success, setSuccess] = useState(false);
     const previewContainerRef = useRef<HTMLDivElement>(null);
 
     const [stamps, setStamps] = useState<Stamp[]>([]);
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [success, setSuccess] = useState(false);
+
+    // ─── Session-based preview hook ───────────────────────────────────────────
+    const { previewSrc: pagePreviewUrl, isLoading: isPreviewLoading } = usePdfPreview({
+        file,
+        pageNumber: currentPage,
+        scale: "2.0",
+        onError: (msg) => notify(msg, "error"),
+    });
 
     useEffect(() => {
         if (signatureBlob) {
@@ -57,28 +63,11 @@ export default function SignPdfWorkspace() {
         }
     }, [signatureBlob]);
 
-    const fetchPreview = useCallback(async (targetFile: File, pageNum: number) => {
-        try {
-            setIsPreviewLoading(true);
-            const formData = new FormData();
-            formData.append("file", targetFile);
-            formData.append("page", pageNum.toString());
-
-            const previewBlob = await uploadAndDownloadFile("/api/conversion/preview/page", formData);
-            setPagePreviewUrl(URL.createObjectURL(previewBlob));
-        } catch (err) {
-            notify("Could not load preview for page " + pageNum,"error");
-        } finally {
-            setIsPreviewLoading(false);
-        }
-    }, []);
-
+    // Load PDF with PDF.js only to extract page count and dimensions for coordinate mapping.
     useEffect(() => {
         if (!file) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
             setCurrentPage(1);
             setTotalPages(1);
-            setPagePreviewUrl(null);
             setStamps([]);
             return;
         }
@@ -112,18 +101,15 @@ export default function SignPdfWorkspace() {
                 console.warn("Could not read PDF page count", err);
                 setTotalPages(999);
             }
-
-            await fetchPreview(file, 1);
         };
 
         parsePdfLength();
-    }, [file, fetchPreview]);
+    }, [file]);
 
-    const handlePageChange = async (newPage: number) => {
+    const handlePageChange = useCallback((newPage: number) => {
         if (newPage < 1 || newPage > totalPages || !file) return;
         setCurrentPage(newPage);
-        await fetchPreview(file, newPage);
-    };
+    }, [file, totalPages]);
 
     const handleAddStamp = () => {
         if (!signatureUrl) return;
@@ -270,7 +256,6 @@ export default function SignPdfWorkspace() {
                     <div className="space-y-4">
                         <PdfFileInfo file={file} onClear={() => {
                             setFile(null);
-                            setPagePreviewUrl(null);
                             setStamps([]);
                             router.push(`/${toolId}`);
                         }} />
