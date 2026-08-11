@@ -19,6 +19,7 @@ import { getBaseUrl } from "@/lib/api";
 import { getFriendlyErrorMessage, handleClientError } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
+import { usePdfPreview } from "@/hooks/usePdfPreview";
 
 interface CustomPdfFile extends File {
     originalPassword?: string;
@@ -260,9 +261,8 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
     const [analysisLoaded, setAnalysisLoaded] = useState(false);
     const [analysisError, setAnalysisError] = useState<string | null>(null);
 
-    const [previewImageSrc, setPreviewImageSrc] = useState("");
-    const [isRenderingPreview, setIsRenderingPreview] = useState(false);
-    const [previewCacheToken, setPreviewCacheToken] = useState("");
+
+
 
     const [jobId, setJobId] = useState<string>("");
     const [job, setJob] = useState<JobRecord | null>(null);
@@ -290,6 +290,15 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
     const isMixedPage = pageKind === "mixed";
     const canUseSmartMode = pageKind !== "scanned" && pageKind !== "blank";
     const currentPageBoxes = useMemo(() => boxes.filter((b) => b.page === currentPage), [boxes, currentPage]);
+
+    // ─── Session-based preview for scanned pages ─────────────────────────────
+    const { previewSrc: scannedPreviewSrc, isLoading: scannedPreviewLoading } = usePdfPreview({
+        file: baseFile,
+        pageNumber: currentPage,
+        scale: "2.0",
+        enabled: isScannedPage,
+        onError: () => console.error("Failed to render scanned page preview."),
+    });
 
     const updateBoxesStateWithHistory = useCallback(
         (nextState: StrikeoutBox[] | ((prev: StrikeoutBox[]) => StrikeoutBox[])) => {
@@ -367,10 +376,6 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
         setAnalysisError(null);
         setIsAnalyzing(false);
 
-        if (previewImageSrc) URL.revokeObjectURL(previewImageSrc);
-        setPreviewImageSrc("");
-        setPreviewCacheToken("");
-
         if (!baseFile) return;
 
         let cancelled = false;
@@ -387,7 +392,6 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                 setPdfDocument(pdf as unknown as PdfJsDocument);
                 setTotalPages(pdf.numPages);
                 setCurrentPage(1);
-                setPreviewCacheToken(Math.random().toString(36).slice(2));
             } catch (err) {
                 console.error("Failed to parse document context framework:", err);
             } finally {
@@ -473,66 +477,6 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
         }
     }, [currentPageAnalysis, strikeoutMode]);
 
-    useEffect(() => {
-        if (!baseFile || !pdfDocument) return;
-
-        const isScanned = currentPageAnalysis?.kind === "scanned";
-        if (!isScanned) {
-            if (previewImageSrc) {
-                URL.revokeObjectURL(previewImageSrc);
-                setPreviewImageSrc("");
-            }
-            return;
-        }
-
-        const abortController = new AbortController();
-
-        const fetchScannedPreview = async () => {
-            setIsRenderingPreview(true);
-            try {
-                const formData = new FormData();
-                formData.append("file", new File([baseFile], baseFile.name, { type: "application/pdf" }));
-                formData.append("page", String(currentPage));
-                formData.append("scale", "2.0");
-                formData.append("cacheBuster", previewCacheToken);
-
-                const password = (baseFile as CustomPdfFile).originalPassword;
-                if (password) formData.append("file_password", password);
-
-                const response = await fetch(buildApiUrl("/api/conversion/preview/page"), {
-                    method: "POST",
-                    body: formData,
-                    credentials: "include",
-                    signal: abortController.signal,
-                });
-
-                if (!response.ok) {
-                    throw new Error(`Preview failed with status ${response.status}`);
-                }
-
-                const imgBlob = await response.blob();
-                setPreviewImageSrc((prev) => {
-                    if (prev) URL.revokeObjectURL(prev);
-                    return URL.createObjectURL(imgBlob);
-                });
-            } catch (err: unknown) {
-                if ((err as Error)?.name !== "AbortError") {
-                    console.error("Failed to render scanned page preview:", err);
-                }
-            } finally {
-                if (!abortController.signal.aborted) setIsRenderingPreview(false);
-            }
-        };
-
-        void fetchScannedPreview();
-        return () => abortController.abort();
-    }, [baseFile, currentPage, currentPageAnalysis?.kind, pdfDocument, previewCacheToken]);
-
-    useEffect(() => {
-        return () => {
-            if (previewImageSrc) URL.revokeObjectURL(previewImageSrc);
-        };
-    }, [previewImageSrc]);
 
     useEffect(() => {
         if (!pdfDocument || !canvasRef.current) return;
@@ -1091,7 +1035,7 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                         className="relative flex min-h-[420px] w-full items-start justify-start overflow-auto rounded-xl border border-border bg-gray-500/5 p-4 dark:bg-black/20"
                         onClick={() => setActiveId(null)}
                     >
-                        {(isRenderingCanvas || isRenderingPreview) && (
+                        {(isRenderingCanvas || scannedPreviewLoading) && (
                             <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-xl bg-background/40 text-xs font-medium text-muted backdrop-blur-sm">
                                 <Loader2 className="mb-2 animate-spin text-indigo-500" size={24} />
                                 {isScannedPage ? "Loading scanned preview..." : "Synchronizing view matrix framework..."}
@@ -1113,15 +1057,15 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                                 }`}
                             />
 
-                            {isScannedPage && previewImageSrc && (
+                            {isScannedPage && scannedPreviewSrc && (
                                 <img
-                                    src={previewImageSrc}
+                                    src={scannedPreviewSrc}
                                     alt={`Scanned page preview ${currentPage}`}
                                     className="pointer-events-none absolute inset-0 h-full w-full rounded object-contain"
                                 />
                             )}
 
-                            {isScannedPage && !previewImageSrc && (
+                            {isScannedPage && !scannedPreviewSrc && (
                                 <div className="absolute inset-0 flex items-center justify-center text-xs text-muted">
                                     Preparing scanned preview...
                                 </div>

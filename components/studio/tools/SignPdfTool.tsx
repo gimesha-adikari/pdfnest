@@ -7,6 +7,7 @@ import {notify} from "@/lib/notify";
 import {getFriendlyErrorMessage} from "@/lib/errorHandler";
 import SignaturePad from "@/components/pdf/SignaturePad";
 import {DraggableSignaturePlaceholder} from "@/components/pdf/DraggableSignaturePlaceholder";
+import {usePdfPreview} from "@/hooks/usePdfPreview";
 
 interface PageDimensions {
     width: number;
@@ -55,45 +56,25 @@ export default function SignPdfTool({baseFile, onSignedFile}: SignPdfToolProps) 
     const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
-    const [pagePreviewUrl, setPagePreviewUrl] = useState<string | null>(null);
-    const [isPreviewLoading, setIsPreviewLoading] = useState(false);
     const [stamps, setStamps] = useState<Stamp[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const previewContainerRef = useRef<HTMLDivElement>(null);
-    const previewUrlRef = useRef<string | null>(null);
-    const pdfDocumentRef = useRef<PdfJsDocument | null>(null);
+
+    // ─── Session-based preview hook ───────────────────────────────────────────
+    const {previewSrc: pagePreviewUrl, isLoading: isPreviewLoading} = usePdfPreview({
+        file: baseFile,
+        pageNumber: currentPage,
+        scale: "2.0",
+        onError: (msg) => notify(msg, "error"),
+    });
 
     const currentPageStamps = useMemo(
         () => stamps.filter((s) => s.page === currentPage),
         [stamps, currentPage]
     );
-
-    const cleanupPreviewUrl = useCallback(() => {
-        if (previewUrlRef.current) {
-            URL.revokeObjectURL(previewUrlRef.current);
-            previewUrlRef.current = null;
-        }
-    }, []);
-
-    const setPreviewBlob = useCallback(
-        (blob: Blob) => {
-            cleanupPreviewUrl();
-            const url = URL.createObjectURL(blob);
-            previewUrlRef.current = url;
-            setPagePreviewUrl(url);
-        },
-        [cleanupPreviewUrl]
-    );
-
-    useEffect(() => {
-        return () => {
-            cleanupPreviewUrl();
-            if (signatureUrl) URL.revokeObjectURL(signatureUrl);
-        };
-    }, [cleanupPreviewUrl, signatureUrl]);
 
     useEffect(() => {
         if (!signatureBlob) {
@@ -107,34 +88,15 @@ export default function SignPdfTool({baseFile, onSignedFile}: SignPdfToolProps) 
         return () => URL.revokeObjectURL(url);
     }, [signatureBlob]);
 
-    const fetchPreview = useCallback(async (targetFile: File, pageNum: number) => {
-        try {
-            setIsPreviewLoading(true);
-            const formData = new FormData();
-            formData.append("file", targetFile);
-            formData.append("page", pageNum.toString());
-
-            const previewBlob = await uploadAndDownloadFile("/api/conversion/preview/page", formData);
-            setPreviewBlob(previewBlob);
-        } catch (err) {
-            console.error(err);
-            notify(`Could not load preview for page ${pageNum}`,"error");
-        } finally {
-            setIsPreviewLoading(false);
-        }
-    }, [setPreviewBlob]);
-
+    // Load PDF with PDF.js only to extract page dimensions for coordinate mapping.
     useEffect(() => {
         if (!baseFile) {
             setCurrentPage(1);
             setTotalPages(1);
-            setPagePreviewUrl(null);
             setStamps([]);
             setPageDimensions({});
             setSuccess(false);
             setError(null);
-            pdfDocumentRef.current = null;
-            cleanupPreviewUrl();
             return;
         }
 
@@ -146,12 +108,10 @@ export default function SignPdfTool({baseFile, onSignedFile}: SignPdfToolProps) 
                 setError(null);
                 setStamps([]);
                 setCurrentPage(1);
-                setIsPreviewLoading(true);
 
                 const pdfjs = await loadPdfJs();
                 const arrayBuffer = await baseFile.arrayBuffer();
                 const pdfDoc = await pdfjs.getDocument({data: arrayBuffer}).promise;
-                pdfDocumentRef.current = pdfDoc as unknown as PdfJsDocument;
 
                 if (cancelled) return;
 
@@ -167,18 +127,12 @@ export default function SignPdfTool({baseFile, onSignedFile}: SignPdfToolProps) 
                 if (!cancelled) {
                     setPageDimensions(dims);
                 }
-
-                await fetchPreview(baseFile, 1);
             } catch (err) {
                 console.error(err);
                 if (!cancelled) {
                     setError(getFriendlyErrorMessage(err));
                     setTotalPages(999);
-                    notify("Could not read PDF pages.","error");
-                }
-            } finally {
-                if (!cancelled) {
-                    setIsPreviewLoading(false);
+                    notify("Could not read PDF pages.", "error");
                 }
             }
         };
@@ -188,15 +142,13 @@ export default function SignPdfTool({baseFile, onSignedFile}: SignPdfToolProps) 
         return () => {
             cancelled = true;
         };
-    }, [baseFile, fetchPreview, cleanupPreviewUrl]);
+    }, [baseFile]);
 
-    const handlePageChange = async (newPage: number) => {
+    const handlePageChange = useCallback((newPage: number) => {
         if (!baseFile) return;
         if (newPage < 1 || newPage > totalPages) return;
-
         setCurrentPage(newPage);
-        await fetchPreview(baseFile, newPage);
-    };
+    }, [baseFile, totalPages]);
 
 
     const handleAddStamp = () => {
@@ -263,7 +215,7 @@ export default function SignPdfTool({baseFile, onSignedFile}: SignPdfToolProps) 
     const handleSignDocument = () => {
         requireAuth(async () => {
             if (!baseFile || !signatureBlob || stamps.length === 0) {
-                notify("Please place at least one signature on the document.","warning");
+                notify("Please place at least one signature on the document.", "warning");
                 return;
             }
 
@@ -308,7 +260,7 @@ export default function SignPdfTool({baseFile, onSignedFile}: SignPdfToolProps) 
 
                 await onSignedFile(signedFile);
                 setSuccess(true);
-                notify("Signed PDF loaded into Studio.","success");
+                notify("Signed PDF loaded into Studio.", "success");
             } catch (err: any) {
                 if (err==null)
                     return
