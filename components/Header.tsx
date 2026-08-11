@@ -10,7 +10,7 @@ import {NAV_TOOLS} from "@/lib/toolsData";
 import {ChevronDown, LogOut, ShieldAlert, Sparkles, Zap} from "lucide-react";
 import {useAuth} from "@/context/AuthContext";
 import {fetchJson} from "@/lib/api";
-import { useTheme } from "next-themes";
+import {useTheme} from "next-themes";
 import Logo from "@/components/ui/Logo";
 
 export default function Header() {
@@ -23,36 +23,22 @@ export default function Header() {
     } = useAuth();
     const pathname = usePathname();
     const [forceHide, setForceHide] = useState(false);
-    const [toolsList, setToolsList] = useState<any[]>([]);
-    const { resolvedTheme } = useTheme();
+    const {resolvedTheme} = useTheme();
 
-    useEffect(() => {
-        fetchJson("/site-content/tools")
-            .then((data: any) => {
-                if (Array.isArray(data) && data.length > 0) {
-                    setToolsList(data);
-                } else {
-                    setToolsList(NAV_TOOLS);
-                }
-            })
-            .catch((err) => {
-                console.error("Failed fetching header tools from database, falling back:", err);
-                setToolsList(NAV_TOOLS);
-            });
-    }, []);
+    const toolsList = NAV_TOOLS;
 
     const closeMenu = () => {
         setForceHide(true);
         setTimeout(() => setForceHide(false), 150);
     };
 
-    const organizeTools = toolsList.filter((tool) => (tool.Category || tool.category) === "organize");
-    const editTools = toolsList.filter((tool) => (tool.Category || tool.category) === "edit");
-    const convertTools = toolsList.filter((tool) => (tool.Category || tool.category) === "convert");
-    const createTools = toolsList.filter((tool) => (tool.Category || tool.category) === "create");
-    const securityTools = toolsList.filter((tool) => (tool.Category || tool.category) === "security");
-    const optimizeTools = toolsList.filter((tool) => (tool.Category || tool.category) === "optimize");
-    const studioTools = toolsList.filter((tool) => (tool.Category || tool.category) === "studio");
+    const organizeTools = toolsList.filter((tool) => (tool.category) === "organize");
+    const editTools = toolsList.filter((tool) => (tool.category) === "edit");
+    const convertTools = toolsList.filter((tool) => (tool.category) === "convert");
+    const createTools = toolsList.filter((tool) => (tool.category) === "create");
+    const securityTools = toolsList.filter((tool) => (tool.category) === "security");
+    const optimizeTools = toolsList.filter((tool) => (tool.category) === "optimize");
+    const studioTools = toolsList.filter((tool) => (tool.category) === "studio");
 
     const isPro = subscription?.tier === "pro";
 
@@ -230,14 +216,14 @@ export default function Header() {
                                             <div className="space-y-1">
                                                 {group.tools.map((tool, idx) => (
                                                     <Link
-                                                        key={tool.Href || tool.href || idx}
-                                                        href={tool.Href || tool.href}
+                                                        key={tool.href || idx}
+                                                        href={tool.href}
                                                         onClick={closeMenu}
                                                         className="flex items-center justify-between rounded-xl px-3 py-2 text-sm hover:bg-[color:var(--background)]"
                                                     >
-                                                        <span>{tool.Title || tool.title}</span>
+                                                        <span>{tool.title}</span>
 
-                                                        {(tool.IsNew || tool.isNew) && (
+                                                        {(tool.isNew) && (
                                                             <span
                                                                 className="rounded-md bg-indigo-500 px-1.5 py-0.5 text-[9px] font-black uppercase text-white">
                                 New
