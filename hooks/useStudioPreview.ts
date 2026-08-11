@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 interface PreviewOptions {
     activeFile: File | null;
@@ -8,8 +8,29 @@ interface PreviewOptions {
     onError: (message: string) => void;
 }
 
-function getPreviewKey(file: File, pageNumber: number, scale: string) {
-    return [file.name, file.size, file.lastModified, pageNumber, scale].join("|");
+interface PreviewSession {
+    sessionId: string;
+    pageCount: number;
+}
+
+function getFileIdentity(file: File) {
+    return [
+        file.name,
+        file.size,
+        file.lastModified,
+    ].join("|");
+}
+
+function getPreviewKey(
+    sessionId: string,
+    pageNumber: number,
+    scale: string,
+) {
+    return [
+        sessionId,
+        pageNumber,
+        scale,
+    ].join("|");
 }
 
 export function useStudioPreview({
@@ -19,82 +40,280 @@ export function useStudioPreview({
                                  }: PreviewOptions) {
     const [previewSrc, setPreviewSrc] = useState("");
     const [isRendering, setIsRendering] = useState(false);
+    const [session, setSession] =
+        useState<PreviewSession | null>(null);
 
-    const cacheRef = useRef<Map<string, string>>(new Map());
-
-    const baseUrl = useMemo(
-        () => process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080",
-        []
+    const cacheRef = useRef<Map<string, string>>(
+        new Map(),
     );
 
-    const clearPreview = () => {
-        setPreviewSrc("");
-    };
+    const sessionRef =
+        useRef<PreviewSession | null>(null);
 
-    const clearPreviewCache = () => {
-        for (const url of cacheRef.current.values()) {
-            URL.revokeObjectURL(url);
+    const sessionPromiseRef =
+        useRef<Promise<PreviewSession> | null>(null);
+
+    const activeFileIdentityRef =
+        useRef<string | null>(null);
+
+    const onErrorRef =
+        useRef(onError);
+
+    const baseUrl = useMemo(
+        () =>
+            process.env.NEXT_PUBLIC_API_URL ??
+            "http://localhost:8080",
+        [],
+    );
+
+    const scale = "2.0";
+
+    useEffect(() => {
+        onErrorRef.current = onError;
+    }, [onError]);
+
+    const revokeCache = useCallback(() => {
+        for (const objectUrl of cacheRef.current.values()) {
+            URL.revokeObjectURL(objectUrl);
         }
-        cacheRef.current.clear();
-        setPreviewSrc("");
-    };
 
-    const resetPreview = () => {
-        clearPreviewCache();
-    };
+        cacheRef.current.clear();
+    }, []);
+
+    const clearPreview = useCallback(() => {
+        setPreviewSrc("");
+    }, []);
+
+    const clearPreviewCache = useCallback(() => {
+        revokeCache();
+        setPreviewSrc("");
+    }, [revokeCache]);
+
+    const resetPreview = useCallback(() => {
+        revokeCache();
+        setPreviewSrc("");
+        setSession(null);
+        sessionRef.current = null;
+        sessionPromiseRef.current = null;
+        activeFileIdentityRef.current = null;
+    }, [revokeCache]);
+
+    const createSession = useCallback(
+        async (file: File): Promise<PreviewSession> => {
+            const formData = new FormData();
+            formData.append("file", file);
+
+            const response = await fetch(
+                `${baseUrl}/api/conversion/preview/session`,
+                {
+                    method: "POST",
+                    body: formData,
+                    credentials: "include",
+                },
+            );
+
+            if (!response.ok) {
+                throw new Error(
+                    `Preview session creation failed (${response.status})`,
+                );
+            }
+
+            const data = await response.json();
+
+            if (
+                !data ||
+                typeof data.session_id !== "string" ||
+                !data.session_id
+            ) {
+                throw new Error(
+                    "Preview session response did not contain a valid session ID.",
+                );
+            }
+
+            return {
+                sessionId: data.session_id,
+                pageCount: Number(data.page_count ?? 0),
+            };
+        },
+        [baseUrl],
+    );
+
+    const ensureSession = useCallback(
+        async (file: File): Promise<PreviewSession> => {
+            const identity = getFileIdentity(file);
+
+            if (
+                activeFileIdentityRef.current !== identity
+            ) {
+                revokeCache();
+
+                setPreviewSrc("");
+                setSession(null);
+
+                sessionRef.current = null;
+                sessionPromiseRef.current = null;
+
+                activeFileIdentityRef.current = identity;
+            }
+
+            const existing = sessionRef.current;
+
+            if (existing) {
+                return existing;
+            }
+
+            if (sessionPromiseRef.current) {
+                return sessionPromiseRef.current;
+            }
+
+            const promise = createSession(file);
+
+            sessionPromiseRef.current = promise;
+
+            try {
+                const nextSession = await promise;
+
+                sessionRef.current = nextSession;
+                setSession(nextSession);
+
+                return nextSession;
+            } finally {
+                sessionPromiseRef.current = null;
+            }
+        },
+        [createSession, revokeCache],
+    );
+
+    const loadPreview = useCallback(
+        async (
+            file: File,
+            requestedPage: number,
+        ) => {
+            const currentSession =
+                await ensureSession(file);
+
+            const cacheKey = getPreviewKey(
+                currentSession.sessionId,
+                requestedPage,
+                scale,
+            );
+
+            const cached =
+                cacheRef.current.get(cacheKey);
+
+            if (cached) {
+                setPreviewSrc(cached);
+                return;
+            }
+
+            const requestPage = async (
+                activeSession: PreviewSession,
+            ) => {
+                const response = await fetch(
+                    `${baseUrl}/api/conversion/preview/session/` +
+                    `${encodeURIComponent(
+                        activeSession.sessionId,
+                    )}/page/${requestedPage}` +
+                    `?scale=${encodeURIComponent(scale)}`,
+                    {
+                        method: "GET",
+                        credentials: "include",
+                    },
+                );
+
+                return response;
+            };
+
+            let response = await requestPage(
+                currentSession,
+            );
+
+            if (response.status === 404) {
+                sessionRef.current = null;
+                sessionPromiseRef.current = null;
+                setSession(null);
+
+                revokeCache();
+
+                const recreatedSession =
+                    await createSession(file);
+
+                sessionRef.current =
+                    recreatedSession;
+
+                setSession(recreatedSession);
+
+                response = await requestPage(
+                    recreatedSession,
+                );
+            }
+
+            if (!response.ok) {
+                throw new Error(
+                    `Preview failed (${response.status})`,
+                );
+            }
+
+            const blob = await response.blob();
+
+            const objectUrl =
+                URL.createObjectURL(blob);
+
+            cacheRef.current.set(
+                getPreviewKey(
+                    sessionRef.current!.sessionId,
+                    requestedPage,
+                    scale,
+                ),
+                objectUrl,
+            );
+
+            setPreviewSrc(objectUrl);
+        },
+        [
+            baseUrl,
+            createSession,
+            ensureSession,
+            revokeCache,
+            scale,
+        ],
+    );
 
     useEffect(() => {
         if (!activeFile) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            clearPreviewCache();
+            revokeCache();
+            setPreviewSrc("");
+            setSession(null);
+
+            sessionRef.current = null;
+            sessionPromiseRef.current = null;
+            activeFileIdentityRef.current = null;
+
             return;
         }
 
-        let cancelled = false;
         const file = activeFile;
-        const scale = "2.0";
-        const cacheKey = getPreviewKey(file, pageNumber, scale);
+        let cancelled = false;
 
-        const cached = cacheRef.current.get(cacheKey);
-        if (cached) {
-            setPreviewSrc(cached);
-            setIsRendering(false);
-            return;
-        }
-
-        async function renderPreview() {
+        async function run() {
             setIsRendering(true);
 
             try {
-                const formData = new FormData();
-                formData.append("file", file);
-                formData.append("page", String(pageNumber));
-                formData.append("scale", scale);
+                await loadPreview(file, pageNumber);
 
-                const response = await fetch(
-                    `${baseUrl}/api/conversion/preview/page`,
-                    {
-                        method: "POST",
-                        body: formData,
-                        credentials: "include",
-                    }
+                if (cancelled) {
+                    return;
+                }
+            } catch (error) {
+                if (cancelled) {
+                    return;
+                }
+
+                console.error("Studio preview failed:", error);
+
+                onErrorRef.current(
+                    "Failed to load preview for the selected page.",
                 );
-
-                if (!response.ok) {
-                    throw new Error(`Preview failed (${response.status})`);
-                }
-
-                const blob = await response.blob();
-                if (cancelled) return;
-
-                const objectUrl = URL.createObjectURL(blob);
-                cacheRef.current.set(cacheKey, objectUrl);
-                setPreviewSrc(objectUrl);
-            } catch (err) {
-                if (!cancelled) {
-                    console.error(err);
-                    onError("Failed to load preview for the selected page.");
-                }
             } finally {
                 if (!cancelled) {
                     setIsRendering(false);
@@ -102,22 +321,29 @@ export function useStudioPreview({
             }
         }
 
-        renderPreview();
+        run();
 
         return () => {
             cancelled = true;
         };
-    }, [activeFile, pageNumber, baseUrl, onError]);
+    }, [
+        activeFile,
+        pageNumber,
+        loadPreview,
+        revokeCache,
+    ]);
 
     useEffect(() => {
         return () => {
-            clearPreviewCache();
+            revokeCache();
         };
-    }, []);
+    }, [revokeCache]);
 
     return {
         previewSrc,
         isRendering,
+        sessionId: session?.sessionId ?? null,
+        pageCount: session?.pageCount ?? 0,
         clearPreview,
         resetPreview,
         clearPreviewCache,
