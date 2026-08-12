@@ -457,7 +457,189 @@ npx tsc --project tsconfig.json --noEmit        → 0 errors across Studio annot
 
 - `useStudioPreview` (consumed by `useStudio.ts` for main Studio canvas preview) is the last remaining legacy preview hook in the codebase and will be migrated in Phase 2 Milestone 5.
 
+---
 
+## Phase 2 — Milestone 5: Studio Main Canvas Preview Migration — COMPLETED
 
+### Architecture Discovered
 
+The Studio main-canvas preview is implemented across three layers:
 
+1. **`hooks/useStudioPreview.ts`** (351 lines): Legacy hook owning its own session creation, page fetching, Object URL management, and per-page cache (`Map<string, string>`). Scale hardcoded to `"2.0"`. Always uses server-side backend. Returns `previewSrc`, `isRendering`, `sessionId`, `pageCount`, `clearPreview`, `clearPreviewCache`, `resetPreview`.
+
+2. **`hooks/useStudio.ts`**: Composite hook calling `useStudioPreview` and exposing `preview` as the raw result object to `app/studio/page.tsx`.
+
+3. **`components/studio/Preview.tsx` (`StudioCanvasPreview`)**: Accepts `previewSrc: string` and renders it as `<img src={previewSrc}>`. Reads `img.naturalWidth/naturalHeight` for aspect-ratio calculation. Applies CSS zoom. **No direct canvas element access required.**
+
+**Key finding**: Despite the name "Studio Canvas Preview", the component consumes a plain **image URL string** (`previewSrc: string`), not an `HTMLCanvasElement`. The resource produced by `ServerPdfRenderer` (`type: "image-url", url: blob:...`) satisfies this contract exactly.
+
+**External API surface actually consumed** by `app/studio/page.tsx`:
+- `preview.previewSrc` → `<StudioCanvasPreview previewSrc={...}>`
+- `preview.isRendering` → `<StudioCanvasPreview isRendering={...}>`
+- `preview.clearPreviewCache()` → called in `resumeRecovery`, after `openProject`, and in `commitDocument`
+- `preview.resetPreview()` → called in `resetStudio`
+
+`preview.sessionId` and `preview.pageCount` are returned by `useStudioPreview` but **never consumed** by any caller.
+
+### Migration Decision
+
+**Option D — Keep `usePreview` as-is; adapt `useStudio` through a thin API-shape mapping.**
+
+Rationale:
+- `StudioCanvasPreview` requires only a `string` image URL — no canvas element needed
+- `usePreview` already provides `src: string` and `isLoading: boolean` via `ServerPdfRenderer`
+- `usePreview.reset()` covers both `clearPreviewCache` and `resetPreview` semantics: unsubscribes the active handle, releases retained resources to `PreviewCache`, and clears component state
+- No new hook, cache, session manager, or renderer required
+- The external API shape (`previewSrc`, `isRendering`, `clearPreviewCache`, `resetPreview`) is preserved through a local alias object in `useStudio.ts`, so `app/studio/page.tsx` requires **zero changes**
+
+### Files Changed
+
+| File | Change |
+|---|---|
+| [`hooks/useStudio.ts`](file:///home/gimesha/My_Projects/platen/pdfnest/hooks/useStudio.ts) | Replace `useStudioPreview` with `usePreview`; re-expose same field names via local `preview` alias |
+| [`tests/unit/studioPreviewMigration.test.ts`](file:///home/gimesha/My_Projects/platen/pdfnest/tests/unit/studioPreviewMigration.test.ts) | **[NEW]** 12 focused tests for Studio canvas migration behavioral contract |
+
+Files **not** modified:
+- `app/studio/page.tsx` — zero changes needed (API shape preserved)
+- `components/studio/Preview.tsx` — zero changes needed
+- `hooks/useStudioPreview.ts` — retained as dead code (no active imports)
+- `lib/preview/usePreview.ts` / `PreviewManager` / `PreviewCache` / renderers — unchanged
+
+### Exact Implementation
+
+```ts
+// hooks/useStudio.ts — changed block
+const _preview = usePreview({
+    file: document.activeFile,
+    page: document.currentPageIndex + 1,
+    scale: 2.0,
+    renderer: "server",
+    onError: (err) => document.setErrorMessage(err.message),
+});
+
+const preview = {
+    previewSrc: _preview.src,
+    isRendering: _preview.isLoading,
+    clearPreviewCache: _preview.reset,
+    resetPreview: _preview.reset,
+};
+```
+
+### Renderer / Scale / Mode
+
+- `renderer: "server"` — explicit, matches legacy `useStudioPreview` which always called the backend
+- `scale: 2.0` — explicit, matches `useStudioPreview` hardcoded `scale = "2.0"`
+- `mode: "page"` — default
+
+### Resource Ownership / Lifecycle
+
+| Concern | Previous (useStudioPreview) | New (usePreview + PreviewManager) |
+|---|---|---|
+| Session creation | Per-hook `createSession()` REST call | `ServerPdfRenderer._createSession()` via `PreviewManager` |
+| Session deduplication | `sessionPromiseRef` per hook instance | `PreviewManager` in-flight deduplication across all consumers |
+| Page image caching | `Map<string, string>` inside hook | `PreviewCache` (LRU, capacity 32, shared singleton) |
+| Object URL creation | `URL.createObjectURL(blob)` per hook | `ServerPdfRenderer.render()` → stored in `PreviewCache` |
+| Object URL revocation | Manual `URL.revokeObjectURL()` in `revokeCache()` | `PreviewCache.safeRevoke()` at eviction or `dispose()` |
+| Cancellation | `cancelled = true` local boolean | `AbortController` via `PreviewManager.inflight` |
+| Cross-consumer sharing | None (each hook has its own session) | Automatic via `PreviewManager` request deduplication |
+
+### Coordinate / Zoom / Dimension Preservation
+
+No coordinate or dimension logic is in `useStudioPreview` or `useStudio`. The Studio's zoom, page dimensions, and aspect ratio are computed entirely in `StudioCanvasPreview` from the `<img>` element's `naturalWidth`/`naturalHeight` on load. These are unaffected by the migration.
+
+### Tests Added
+
+**[`tests/unit/studioPreviewMigration.test.ts`](file:///home/gimesha/My_Projects/platen/pdfnest/tests/unit/studioPreviewMigration.test.ts)** — 12 tests covering:
+1. No file → no request, empty state
+2. Server image URL delivered to `src`
+3. Scale 2.0 forwarded to renderer
+4. `renderer: "server"` preference forwarded
+5. Page change triggers new request (Studio navigation)
+6. File change triggers new request (document replacement)
+7. `reset()` clears state (`clearPreviewCache`/`resetPreview` semantic)
+8. Unmount releases handle (no state update after unmount)
+9. Stale request does not overwrite newer result
+10. Error state and `onError` callback with structured `PreviewError`
+11. Concurrent instances share single render invocation (deduplication)
+12. Resource not revoked while second subscriber holds reference (cache lifecycle)
+
+### Validation Results
+
+```
+npx tsx tests/unit/studioPreviewMigration.test.ts  → Results: 12 passed, 0 failed
+npx tsx tests/unit/usePreview.test.ts              → Results: 25 passed, 0 failed
+npx tsx tests/unit/previewCache.test.ts            → Results: 21 passed, 0 failed
+npx tsx tests/unit/previewManager.test.ts          → Results: 21 passed, 0 failed
+npx tsx tests/unit/clientPdfRenderer.test.ts       → Results: 8 passed, 0 failed
+npx tsx tests/unit/serverPdfRenderer.test.ts       → Results: 16 passed, 0 failed
+npx tsc --project tsconfig.json --noEmit            → 0 errors
+```
+
+**Total**: 103 tests, 0 failures.
+
+### Remaining Legacy Preview References
+
+Repository-wide search result for `usePdfPreview` and `useStudioPreview` (excluding their own definition files):
+
+```
+(no results — zero active consumers)
+```
+
+`hooks/usePdfPreview.ts` and `hooks/useStudioPreview.ts` still exist as dead code. They have no active imports anywhere in the codebase and can be removed in a future cleanup pass. They are not removed in this milestone to minimize diff scope.
+
+### Final Legacy Preview Consumer Status
+
+| Hook | Status |
+|---|---|
+| `usePdfPreview` | **Dead code** — retired |
+| `useStudioPreview` | **Dead code** — retired |
+| `usePreview` | **Active** — all 8 consumers migrated |
+
+---
+
+## Phase 3 — Cleanup: Legacy Preview Hook Removal — COMPLETED
+
+### Dependency Analysis
+
+A comprehensive repository-wide dependency analysis was performed across all `.ts`, `.tsx`, `.js`, `.jsx`, `.json`, and `.md` files prior to file deletion:
+- **Direct Imports**: Verified 0 active imports of `hooks/usePdfPreview` or `hooks/useStudioPreview`.
+- **Dynamic Imports**: Verified 0 `import()` statements referencing legacy hooks.
+- **Re-exports & Barrel Files**: Verified no `index.ts` or barrel export files exist in `hooks/`.
+- **String & Comment References**: Confirmed no runtime or build-time strings depend on legacy hook files.
+- **Build & Framework Safety**: Confirmed deletion cannot break Next.js compilation, routing, or page rendering.
+
+### Deleted Files
+
+1. **`hooks/usePdfPreview.ts`** (377 lines deleted)
+2. **`hooks/useStudioPreview.ts`** (351 lines deleted)
+
+Total dead code removed: **728 lines**.
+
+### Post-Deletion Reference Check
+
+Repository-wide search for `usePdfPreview` and `useStudioPreview` in codebase source files (`*.ts`, `*.tsx`):
+- `usePdfPreview`: **0 code matches** (only historical documentation entries)
+- `useStudioPreview`: **0 active code matches** (1 informative comment in `hooks/useStudio.ts`)
+
+### Validation Results
+
+```
+npx tsx tests/unit/studioPreviewMigration.test.ts  → Results: 12 passed, 0 failed
+npx tsx tests/unit/usePreview.test.ts              → Results: 25 passed, 0 failed
+npx tsx tests/unit/previewCache.test.ts            → Results: 21 passed, 0 failed
+npx tsx tests/unit/previewManager.test.ts          → Results: 21 passed, 0 failed
+npx tsx tests/unit/clientPdfRenderer.test.ts       → Results: 8 passed, 0 failed
+npx tsx tests/unit/serverPdfRenderer.test.ts       → Results: 16 passed, 0 failed
+npx tsc --project tsconfig.json --noEmit            → 0 errors
+npm run build (Next.js Turbopack production build) → ✓ Compiled successfully (31/31 routes)
+```
+
+### Final Preview Architecture
+
+- **Unified React Bridge**: [`lib/preview/usePreview.ts`](file:///home/gimesha/My_Projects/platen/pdfnest/lib/preview/usePreview.ts)
+- **Central Orchestrator**: [`lib/preview/PreviewManager.ts`](file:///home/gimesha/My_Projects/platen/pdfnest/lib/preview/PreviewManager.ts)
+- **LRU Cache & Refcounting**: [`lib/preview/PreviewCache.ts`](file:///home/gimesha/My_Projects/platen/pdfnest/lib/preview/PreviewCache.ts)
+- **Client Renderer Adapter**: [`lib/preview/ClientPdfRenderer.ts`](file:///home/gimesha/My_Projects/platen/pdfnest/lib/preview/ClientPdfRenderer.ts)
+- **Server Session Adapter**: [`lib/preview/ServerPdfRenderer.ts`](file:///home/gimesha/My_Projects/platen/pdfnest/lib/preview/ServerPdfRenderer.ts)
+
+**All 9 active preview consumers across Platen PDF tools & Studio are 100% migrated to `usePreview`. Legacy preview hooks are fully removed.**
