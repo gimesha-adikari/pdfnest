@@ -16,8 +16,9 @@ import { uploadAndDownloadFile } from "@/lib/api";
 import { notify } from "@/lib/notify";
 import PdfUploader from "@/components/pdf/PdfUploader";
 
+import { usePreviews } from "@/lib/preview/usePreviews";
+
 type FileMeta = {
-    thumbnail?: string;
     pageCount?: number;
 };
 
@@ -44,33 +45,7 @@ async function inspectPdf(file: File): Promise<FileMeta> {
         const typedArray = new Uint8Array(arrayBuffer);
         const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
 
-        const pageCount = pdf.numPages;
-        let thumbnail: string | undefined;
-
-        if (pageCount > 0) {
-            const page = await pdf.getPage(1);
-            const viewport = page.getViewport({ scale: 0.2 });
-
-            const canvas = document.createElement("canvas");
-            const ctx = canvas.getContext("2d");
-
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
-
-            if (ctx) {
-                await page.render({
-                    canvas,
-                    canvasContext: ctx,
-                    viewport,
-                }).promise;
-
-                thumbnail = canvas.toDataURL("image/jpeg", 0.65);
-            }
-
-            canvas.remove();
-        }
-
-        return { pageCount, thumbnail };
+        return { pageCount: pdf.numPages };
     } catch (error) {
         console.error("Failed to inspect PDF:", error);
         return {};
@@ -80,6 +55,7 @@ async function inspectPdf(file: File): Promise<FileMeta> {
 function MiniFileCard({
                           file,
                           meta,
+                          thumbnail,
                           index,
                           onMoveUp,
                           onMoveDown,
@@ -89,6 +65,7 @@ function MiniFileCard({
                       }: {
     file: File;
     meta?: FileMeta;
+    thumbnail?: string;
     index: number;
     onMoveUp: () => void;
     onMoveDown: () => void;
@@ -99,9 +76,9 @@ function MiniFileCard({
     return (
         <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3">
             <div className="relative h-14 w-11 shrink-0 overflow-hidden rounded-xl border border-border bg-background">
-                {meta?.thumbnail ? (
+                {thumbnail ? (
                     <img
-                        src={meta.thumbnail}
+                        src={thumbnail}
                         alt={file.name}
                         className="h-full w-full object-cover"
                     />
@@ -170,13 +147,27 @@ export function MergeTool({baseFile, onMergedFile}: MergeToolProps) {
     const [stagedFiles, setStagedFiles] = useState<File[]>([]);
     const [metadata, setMetadata] = useState<MetaMap>({});
     const [isMerging, setIsMerging] = useState(false);
-    const [isGeneratingPreviews, setIsGeneratingPreviews] = useState(false);
 
     const allFiles = useMemo(() => {
         return [...(baseFile ? [baseFile] : []), ...stagedFiles];
     }, [baseFile, stagedFiles]);
 
+    const previewRequests = useMemo(
+        () =>
+            allFiles.map((file) => ({
+                file,
+                page: 1,
+                scale: 0.2,
+                renderer: "client" as const,
+                enabled: true,
+            })),
+        [allFiles]
+    );
+
+    const previewResults = usePreviews(previewRequests);
+
     const baseMeta = baseFile ? metadata[getFileKey(baseFile)] : undefined;
+    const baseThumbnail = baseFile ? previewResults[0]?.src : undefined;
 
     const totalSizeMB = useMemo(() => {
         const totalBytes =
@@ -204,11 +195,8 @@ export function MergeTool({baseFile, onMergedFile}: MergeToolProps) {
             const missing = allFiles.filter((file) => !metadata[getFileKey(file)]);
 
             if (missing.length === 0) {
-                setIsGeneratingPreviews(false);
                 return;
             }
-
-            setIsGeneratingPreviews(true);
 
             for (const file of missing) {
                 if (cancelled) return;
@@ -221,10 +209,6 @@ export function MergeTool({baseFile, onMergedFile}: MergeToolProps) {
                     ...prev,
                     [getFileKey(file)]: result,
                 }));
-            }
-
-            if (!cancelled) {
-                setIsGeneratingPreviews(false);
             }
         };
 
@@ -412,9 +396,9 @@ export function MergeTool({baseFile, onMergedFile}: MergeToolProps) {
                         <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-2.5">
                             <div className="relative h-16 w-12 shrink-0 overflow-hidden rounded-xl border border-border
                             bg-background">
-                                {baseMeta?.thumbnail ? (
+                                {baseThumbnail ? (
                                     <img
-                                        src={baseMeta.thumbnail}
+                                        src={baseThumbnail}
                                         alt={baseFile.name}
                                         className="h-full w-full object-cover"
                                     />
@@ -455,7 +439,7 @@ export function MergeTool({baseFile, onMergedFile}: MergeToolProps) {
                             </p>
                         </div>
 
-                        {(isGeneratingPreviews || isMerging) && (
+                        {isMerging && (
                             <Loader2 className="animate-spin text-indigo-500" size={16}/>
                         )}
                     </div>
@@ -470,6 +454,7 @@ export function MergeTool({baseFile, onMergedFile}: MergeToolProps) {
                             stagedFiles.map((file, index) => {
                                 const key = getFileKey(file);
                                 const fileMeta = metadata[key];
+                                const fileThumbnail = previewResults[baseFile ? index + 1 : index]?.src;
                                 const isFirst = index === 0;
                                 const isLast = index === stagedFiles.length - 1;
 
@@ -478,6 +463,7 @@ export function MergeTool({baseFile, onMergedFile}: MergeToolProps) {
                                         key={key}
                                         file={file}
                                         meta={fileMeta}
+                                        thumbnail={fileThumbnail}
                                         index={index}
                                         onMoveUp={() => moveUp(index)}
                                         onMoveDown={() => moveDown(index)}
@@ -522,7 +508,7 @@ export function MergeTool({baseFile, onMergedFile}: MergeToolProps) {
                 <button
                     type="button"
                     onClick={mergePdfs}
-                    disabled={!canMerge || isMerging || isGeneratingPreviews}
+                    disabled={!canMerge || isMerging}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4
                     py-3 text-sm font-bold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed
                     disabled:opacity-50"

@@ -16,6 +16,8 @@ import { uploadAndDownloadFile } from "@/lib/api";
 import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 
+import { usePreviews } from "@/lib/preview/usePreviews";
+
 interface ReorderPagesToolProps {
     baseFile: File | null;
     onReorderedFile: (file: File) => Promise<void>;
@@ -30,45 +32,6 @@ function moveItem<T>(items: T[], from: number, to: number) {
     const [item] = next.splice(from, 1);
     next.splice(to, 0, item);
     return next;
-}
-
-async function inspectFirstPage(file: File): Promise<{ pageCount: number; thumbnail?: string }> {
-    if (typeof window === "undefined") {
-        return { pageCount: 0 };
-    }
-
-    const pdfjsLib = await import("pdfjs-dist");
-    pdfjsLib.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
-
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
-
-    let thumbnail: string | undefined;
-
-    if (pdf.numPages > 0) {
-        const page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: 0.2 });
-
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
-
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-
-        if (ctx) {
-            await page.render({
-                canvas,
-                canvasContext: ctx,
-                viewport,
-            }).promise;
-
-            thumbnail = canvas.toDataURL("image/jpeg", 0.65);
-        }
-
-        canvas.remove();
-    }
-
-    return { pageCount: pdf.numPages, thumbnail };
 }
 
 function PageCard({
@@ -143,11 +106,24 @@ export default function ReorderPagesTool({ baseFile, onReorderedFile }: ReorderP
     const { requireAuth } = useAuth();
 
     const [pageOrder, setPageOrder] = useState<number[]>([]);
-    const [thumbnails, setThumbnails] = useState<string[]>([]);
     const [pageCount, setPageCount] = useState(0);
-    const [isLoadingElements, setIsLoadingElements] = useState(false);
+    const [isReadingTotal, setIsReadingTotal] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
+
+    const previewRequests = useMemo(
+        () =>
+            Array.from({ length: pageCount }, (_, index) => ({
+                file: baseFile,
+                page: index + 1,
+                scale: 0.3,
+                renderer: "client" as const,
+                enabled: Boolean(baseFile),
+            })),
+        [baseFile, pageCount]
+    );
+
+    const previewResults = usePreviews(previewRequests);
 
     const totalSizeMB = useMemo(() => {
         if (!baseFile) return "0.00";
@@ -160,15 +136,13 @@ export default function ReorderPagesTool({ baseFile, onReorderedFile }: ReorderP
         const loadPdfPages = async () => {
             if (!baseFile) {
                 setPageOrder([]);
-                setThumbnails([]);
                 setPageCount(0);
                 setSuccess(false);
                 return;
             }
 
-            setIsLoadingElements(true);
+            setIsReadingTotal(true);
             setSuccess(false);
-            setThumbnails([]);
             setPageOrder([]);
             setPageCount(0);
 
@@ -190,53 +164,13 @@ export default function ReorderPagesTool({ baseFile, onReorderedFile }: ReorderP
                 setPageCount(totalPages);
                 setPageOrder(dynamicOrderArray);
 
-                const generatedImages: string[] = [];
-
-                for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
-                    if (cancelled) return;
-
-                    try {
-                        const page = await pdf.getPage(pageNum);
-                        const viewport = page.getViewport({ scale: 0.3 });
-
-                        const canvas = document.createElement("canvas");
-                        const ctx = canvas.getContext("2d");
-
-                        canvas.width = viewport.width;
-                        canvas.height = viewport.height;
-
-                        if (ctx) {
-                            await page.render({
-                                canvas,
-                                canvasContext: ctx,
-                                viewport,
-                            }).promise;
-
-                            generatedImages.push(canvas.toDataURL("image/jpeg", 0.7));
-                        } else {
-                            generatedImages.push("");
-                        }
-
-                        canvas.width = 0;
-                        canvas.height = 0;
-                        canvas.remove();
-                    } catch (pageError) {
-                        console.error(`Page ${pageNum} rendering error:`, pageError);
-                        generatedImages.push("");
-                    }
-                }
-
-                if (!cancelled) {
-                    setThumbnails(generatedImages);
-                }
-
                 await loadingTask.destroy();
             } catch (error) {
                 console.error("Root document processing exception:", error);
                 notify("Could not load document preview grids.", "error");
             } finally {
                 if (!cancelled) {
-                    setIsLoadingElements(false);
+                    setIsReadingTotal(false);
                 }
             }
         };
@@ -309,7 +243,7 @@ export default function ReorderPagesTool({ baseFile, onReorderedFile }: ReorderP
                 <button
                     type="button"
                     onClick={resetOrder}
-                    disabled={isLoadingElements || isProcessing || pageOrder.length === 0}
+                    disabled={isReadingTotal || isProcessing || pageOrder.length === 0}
                     className="rounded-xl border border-[color:var(--border)] bg-[var(--background)] p-2 text-[color:var(--muted)] transition hover:bg-[var(--card)] hover:text-[color:var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"
                     title="Reset order"
                 >
@@ -336,9 +270,9 @@ export default function ReorderPagesTool({ baseFile, onReorderedFile }: ReorderP
 
                     <div className="mt-3 flex items-center gap-3 rounded-2xl border border-[color:var(--border)] bg-[var(--card)] p-2.5">
                         <div className="relative h-16 w-12 shrink-0 overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--background)]">
-                            {thumbnails[0] ? (
+                            {previewResults[0]?.src ? (
                                 <img
-                                    src={thumbnails[0]}
+                                    src={previewResults[0].src}
                                     alt={baseFile.name}
                                     className="h-full w-full object-cover"
                                 />
@@ -404,7 +338,7 @@ export default function ReorderPagesTool({ baseFile, onReorderedFile }: ReorderP
                         </div>
                     </div>
 
-                    {isLoadingElements ? (
+                    {isReadingTotal ? (
                         <div className="flex flex-col items-center justify-center py-10 text-[color:var(--muted)]">
                             <Loader2 size={30} className="mb-3 animate-spin text-indigo-500" />
                             <p className="text-sm font-medium">Building page preview grid...</p>
@@ -412,7 +346,7 @@ export default function ReorderPagesTool({ baseFile, onReorderedFile }: ReorderP
                     ) : (
                         <div className="space-y-2">
                             {pageOrder.map((pageNum, index) => {
-                                const thumbnail = thumbnails[pageNum - 1];
+                                const thumbnail = previewResults[pageNum - 1]?.src;
 
                                 return (
                                     <PageCard
@@ -437,7 +371,7 @@ export default function ReorderPagesTool({ baseFile, onReorderedFile }: ReorderP
                 <button
                     type="button"
                     onClick={handleReorderSubmission}
-                    disabled={isProcessing || isLoadingElements || pageOrder.length === 0}
+                    disabled={isProcessing || isReadingTotal || pageOrder.length === 0}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     {isProcessing ? (

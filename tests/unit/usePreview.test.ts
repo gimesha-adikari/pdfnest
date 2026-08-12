@@ -7,6 +7,7 @@ import assert from "assert";
 import { usePreview, UsePreviewOptions, UsePreviewResult } from "../../lib/preview/usePreview";
 import { PreviewManager } from "../../lib/preview/PreviewManager";
 import { PreviewCache } from "../../lib/preview/PreviewCache";
+import { ClientPdfRenderer } from "../../lib/preview/ClientPdfRenderer";
 import {
     PreviewRequest,
     PreviewResource,
@@ -728,6 +729,51 @@ async function test25_multipleHookInstancesShareResource(): Promise<void> {
     assert.equal(revoked, true, "Resource should be revoked once cache is cleared and subscribers are gone");
 }
 
+async function test26_clientRendererDeliversSrc(): Promise<void> {
+    const mockPdfDoc = {
+        getPage: async () => ({
+            getViewport: ({ scale }: { scale: number }) => ({
+                width: 400 * scale,
+                height: 600 * scale,
+            }),
+            render: () => ({
+                promise: Promise.resolve(),
+                cancel: () => {},
+            }),
+        }),
+        destroy: () => {},
+    };
+
+    const mockPdfJs = {
+        getDocument: () => ({
+            promise: Promise.resolve(mockPdfDoc),
+            destroy: () => {},
+        }),
+    };
+
+    const manager = new PreviewManager();
+    const clientRenderer = new ClientPdfRenderer({ pdfjsLoader: async () => mockPdfJs });
+    manager.registerRenderer(clientRenderer);
+
+    const file = new File([new Blob(["%PDF-1.4 mock"])], "test.pdf", { type: "application/pdf" });
+    const h = await renderHook(usePreview, {
+        file,
+        page: 1,
+        scale: 2.0,
+        renderer: "client",
+        manager,
+    });
+
+    assert.equal(h.result.current.isLoading, false, "26: render should complete and finish loading");
+    assert.ok(
+        typeof h.result.current.src === "string" && h.result.current.src.length > 0,
+        "26: usePreview with renderer:'client' exposes ClientPdfRenderer resource URL through src"
+    );
+    assert.equal(h.result.current.error, null, "26: should have no error");
+
+    await h.unmount();
+}
+
 // ─── Runner ───────────────────────────────────────────────────────────────────
 
 async function runTests(): Promise<void> {
@@ -757,6 +803,7 @@ async function runTests(): Promise<void> {
         ["23: Stale request cannot overwrite newer request", test23_staleRequestCannotOverwriteNewerRequest],
         ["24: React Strict Mode mount cleanup", test24_reactStrictModeMountCleanup],
         ["25: Multiple hook instances share resource without premature release", test25_multipleHookInstancesShareResource],
+        ["26: ClientPdfRenderer delivers resource URL through usePreview src", test26_clientRendererDeliversSrc],
     ];
 
     let passed = 0;

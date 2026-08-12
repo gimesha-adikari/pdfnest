@@ -12,6 +12,7 @@ import { useAuth } from "@/context/AuthContext";
 import { uploadAndDownloadFile } from "@/lib/api";
 import {handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
+import { usePreviews } from "@/lib/preview/usePreviews";
 import type { MouseEvent } from "react";
 
 type FileMeta = {
@@ -136,64 +137,36 @@ export default function DeletePagesTool({ baseFile, onDeletedFile }: DeletePages
     const { requireAuth } = useAuth();
 
     const [pageCount, setPageCount] = useState(0);
-    const [thumbnails, setThumbnails] = useState<string[]>([]);
     const [metadata, setMetadata] = useState<MetaMap>({});
     const [pagesToDelete, setPagesToDelete] = useState<Set<number>>(new Set());
     const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isReadingTotal, setIsReadingTotal] = useState(false);
-    const [isGeneratingPreviews, setIsGeneratingPreviews] = useState(false);
     const [success, setSuccess] = useState(false);
+
+    const previewRequests = useMemo(
+        () =>
+            Array.from({ length: pageCount }, (_, index) => ({
+                file: baseFile,
+                page: index + 1,
+                scale: 0.3,
+                renderer: "client" as const,
+                enabled: Boolean(baseFile),
+            })),
+        [baseFile, pageCount]
+    );
+
+    const previewResults = usePreviews(previewRequests);
 
     const totalSizeMB = useMemo(() => {
         if (!baseFile) return "0.00";
         return (baseFile.size / 1024 / 1024).toFixed(2);
     }, [baseFile]);
 
-    const generateThumbnails = useCallback(async (pdf: any, totalPages: number) => {
-        setIsGeneratingPreviews(true);
-        const loadedThumbnails: string[] = [];
-
-        try {
-            for (let i = 1; i <= totalPages; i++) {
-                const page = await pdf.getPage(i);
-                const viewport = page.getViewport({ scale: 0.3 });
-
-                const canvas = document.createElement("canvas");
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
-                const ctx = canvas.getContext("2d");
-
-                if (ctx) {
-                    await page.render({
-                        canvas,
-                        canvasContext: ctx,
-                        viewport,
-                    }).promise;
-
-                    const imgData = canvas.toDataURL("image/jpeg", 0.6);
-                    loadedThumbnails.push(imgData);
-                    if (i % 10 === 0 || i === totalPages) {
-                        setThumbnails([...loadedThumbnails]);
-                    }
-                }
-
-                canvas.width = 0;
-                canvas.height = 0;
-                canvas.remove();
-            }
-        } catch (error) {
-            console.error("Visual grid generation warning:", error);
-        } finally {
-            setIsGeneratingPreviews(false);
-        }
-    }, []);
-
     useEffect(() => {
         if (!baseFile) {
             // eslint-disable-next-line react-hooks/set-state-in-effect
             setPageCount(0);
-            setThumbnails([]);
             setMetadata({});
             setPagesToDelete(new Set());
             setLastSelectedIndex(null);
@@ -204,7 +177,6 @@ export default function DeletePagesTool({ baseFile, onDeletedFile }: DeletePages
             setSuccess(false);
             setPagesToDelete(new Set());
             setLastSelectedIndex(null);
-            setThumbnails([]);
             setMetadata({});
             setIsReadingTotal(true);
 
@@ -226,8 +198,6 @@ export default function DeletePagesTool({ baseFile, onDeletedFile }: DeletePages
                 const totalPages = pdf.numPages;
                 setPageCount(totalPages);
                 setIsReadingTotal(false);
-
-                await generateThumbnails(pdf, totalPages);
             } catch (error) {
                 console.error(error);
                 notify("Could not read the structural metadata of this document.","error");
@@ -236,7 +206,7 @@ export default function DeletePagesTool({ baseFile, onDeletedFile }: DeletePages
         };
 
         void loadPdfMetadata();
-    }, [baseFile, generateThumbnails]);
+    }, [baseFile]);
 
     const togglePageDeletion = (pageNum: number, event: React.MouseEvent) => {
         if (event.shiftKey) {
@@ -456,7 +426,7 @@ export default function DeletePagesTool({ baseFile, onDeletedFile }: DeletePages
                                 {Array.from({ length: pageCount }).map((_, idx) => {
                                     const pageNum = idx + 1;
                                     const selected = pagesToDelete.has(pageNum);
-                                    const thumbnailSrc = thumbnails[idx];
+                                    const thumbnailSrc = previewResults[idx]?.src;
 
                                     return (
                                         <PageCard
@@ -489,7 +459,7 @@ export default function DeletePagesTool({ baseFile, onDeletedFile }: DeletePages
                     <button
                         type="button"
                         onClick={handleDeleteProcessing}
-                        disabled={pagesToDelete.size === 0 || isProcessing || isGeneratingPreviews}
+                        disabled={pagesToDelete.size === 0 || isProcessing}
                         className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-red-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         {isProcessing ? (

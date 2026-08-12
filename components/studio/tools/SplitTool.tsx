@@ -14,26 +14,40 @@ import {handleClientError} from "@/lib/errorHandler";
 import { uploadAndDownloadFile } from "@/lib/api";
 import { notify } from "@/lib/notify";
 
+import { usePreviews } from "@/lib/preview/usePreviews";
+
 function formatMB(bytes: number) {
     return (bytes / 1024 / 1024).toFixed(2);
 }
 
 export default function SplitTool({
-                                      baseFile,
-                                      onSplitFile,
-                                  }: {
+                                       baseFile,
+                                       onSplitFile,
+                                   }: {
     baseFile: File | null;
     onSplitFile: (file: File) => Promise<void>;
 }) {
     const { requireAuth } = useAuth();
 
     const [pageCount, setPageCount] = useState(0);
-    const [thumbnails, setThumbnails] = useState<string[]>([]);
     const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
     const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isReadingTotal, setIsReadingTotal] = useState(false);
-    const [isGeneratingPreviews, setIsGeneratingPreviews] = useState(false);
+
+    const previewRequests = useMemo(
+        () =>
+            Array.from({ length: pageCount }, (_, index) => ({
+                file: baseFile,
+                page: index + 1,
+                scale: 0.3,
+                renderer: "client" as const,
+                enabled: Boolean(baseFile),
+            })),
+        [baseFile, pageCount]
+    );
+
+    const previewResults = usePreviews(previewRequests);
 
     const fileSizeMB = useMemo(() => {
         if (!baseFile) return "0.00";
@@ -46,42 +60,9 @@ export default function SplitTool({
 
     const selectedCount = selectedPages.size;
 
-    const generateThumbnails = useCallback(async (pdf: any, totalPages: number) => {
-        setIsGeneratingPreviews(true);
-        const loadedThumbnails: string[] = [];
-
-        try {
-            for (let i = 1; i <= totalPages; i++) {
-                const page = await pdf.getPage(i);
-                const viewport = page.getViewport({ scale: 0.3 });
-
-                const canvas = document.createElement("canvas");
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
-                const ctx = canvas.getContext("2d");
-
-                if (ctx) {
-                    await page.render({ canvasContext: ctx, viewport }).promise;
-                    const imgData = canvas.toDataURL("image/jpeg", 0.6);
-                    loadedThumbnails.push(imgData);
-                    setThumbnails([...loadedThumbnails]);
-                }
-
-                canvas.width = 0;
-                canvas.height = 0;
-                canvas.remove();
-            }
-        } catch (error) {
-            console.error("Visual selector frame compilation failed:", error);
-        } finally {
-            setIsGeneratingPreviews(false);
-        }
-    }, []);
-
     useEffect(() => {
         if (!baseFile) {
             setPageCount(0);
-            setThumbnails([]);
             setSelectedPages(new Set());
             setLastSelectedIndex(null);
             return;
@@ -90,7 +71,6 @@ export default function SplitTool({
         const loadPdfStructure = async () => {
             setSelectedPages(new Set());
             setLastSelectedIndex(null);
-            setThumbnails([]);
             setIsReadingTotal(true);
 
             try {
@@ -106,8 +86,6 @@ export default function SplitTool({
                 const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
                 const totalPages = pdf.numPages;
                 setPageCount(totalPages);
-
-                await generateThumbnails(pdf, totalPages);
             } catch (error) {
                 console.error(error);
                 notify("Could not read the structure of this document.","error");
@@ -117,7 +95,7 @@ export default function SplitTool({
         };
 
         void loadPdfStructure();
-    }, [baseFile, generateThumbnails]);
+    }, [baseFile]);
 
     const togglePageSelection = (pageNum: number, event: React.MouseEvent) => {
         if (event.shiftKey) {
@@ -310,7 +288,7 @@ export default function SplitTool({
                                 {Array.from({ length: pageCount }).map((_, idx) => {
                                     const pageNum = idx + 1;
                                     const isSelected = selectedPages.has(pageNum);
-                                    const thumbnailSrc = thumbnails[idx];
+                                    const thumbnailSrc = previewResults[idx]?.src;
 
                                     return (
                                         <button
@@ -388,7 +366,7 @@ export default function SplitTool({
                 <button
                     type="button"
                     onClick={handleSplitProcessing}
-                    disabled={selectedPages.size === 0 || isProcessing || isGeneratingPreviews}
+                    disabled={selectedPages.size === 0 || isProcessing}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     {isProcessing ? (

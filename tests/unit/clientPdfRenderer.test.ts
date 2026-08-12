@@ -100,6 +100,20 @@ function makeMockPdfJs(options: {
     };
 }
 
+// Mock URL tracking
+const createObjectURLCalls: Blob[] = [];
+const revokeObjectURLCalls: string[] = [];
+
+(globalThis as any).URL = {
+    createObjectURL: (blob: Blob) => {
+        createObjectURLCalls.push(blob);
+        return `blob:mock-client-url/${createObjectURLCalls.length}`;
+    },
+    revokeObjectURL: (url: string) => {
+        revokeObjectURLCalls.push(url);
+    },
+};
+
 async function test1_identityAndCapabilities(): Promise<void> {
     const renderer = new ClientPdfRenderer();
     assert(renderer.id === "client-pdfjs", "1: identity must be client-pdfjs");
@@ -138,6 +152,7 @@ async function test3_missingFileThrows(): Promise<void> {
 }
 
 async function test4_pageNumberAndScale(): Promise<void> {
+    const initialCreateCount = createObjectURLCalls.length;
     const { mockLib, getTracker } = makeMockPdfJs({ pageWidth: 500, pageHeight: 700 });
     const renderer = new ClientPdfRenderer({ pdfjsLoader: async () => mockLib });
     const req: PreviewRequest = {
@@ -151,7 +166,9 @@ async function test4_pageNumberAndScale(): Promise<void> {
 
     assert(tracker.requestedPageNum === 4, "4: page number 4 passed to getPage");
     assert(tracker.passedScale === 2.0, "4: explicit scale 2.0 respected");
-    assert(resource.type === "canvas", "4: resource type is canvas");
+    assert(resource.type === "image-url", "4: resource type is image-url");
+    assert(typeof resource.url === "string" && resource.url.length > 0, "4: resource.url is a valid non-empty string");
+    assert(createObjectURLCalls.length === initialCreateCount + 1, "4: URL.createObjectURL called with Blob");
     assert(resource.width === 1000, "4: width calculated from scale (500 * 2)");
     assert(resource.height === 1400, "4: height calculated from scale (700 * 2)");
     assert(resource.renderedBy === "client-pdfjs", "4: renderedBy is client-pdfjs");
@@ -218,6 +235,7 @@ async function test7_pdfJsErrorPropagation(): Promise<void> {
 }
 
 async function test8_revokeBehavior(): Promise<void> {
+    const initialRevokeCount = revokeObjectURLCalls.length;
     const { mockLib } = makeMockPdfJs();
     const renderer = new ClientPdfRenderer({ pdfjsLoader: async () => mockLib });
     const req: PreviewRequest = {
@@ -227,9 +245,42 @@ async function test8_revokeBehavior(): Promise<void> {
 
     const resource = await renderer.render(req, new AbortController().signal);
     assert(typeof resource.revoke === "function", "8: revoke callback exists");
+
+    const targetUrl = resource.url;
     resource.revoke!();
+    assert(revokeObjectURLCalls.length === initialRevokeCount + 1, "8: URL.revokeObjectURL called exactly once");
+    assert(revokeObjectURLCalls[revokeObjectURLCalls.length - 1] === targetUrl, "8: revoked correct URL");
     assert(resource.canvas?.width === 0, "8: canvas width reset to 0 on revoke");
     assert(resource.canvas?.height === 0, "8: canvas height reset to 0 on revoke");
+
+    // Idempotency check
+    resource.revoke!();
+    assert(revokeObjectURLCalls.length === initialRevokeCount + 1, "8: second revoke call does nothing (idempotent)");
+}
+
+async function test9_blobConversionFailure(): Promise<void> {
+    const { mockLib } = makeMockPdfJs();
+    const renderer = new ClientPdfRenderer({ pdfjsLoader: async () => mockLib });
+    // Override _canvasToBlob to simulate a conversion failure
+    (renderer as any)._canvasToBlob = async () => {
+        throw new Error("Canvas toBlob conversion failed: produced null");
+    };
+
+    const req: PreviewRequest = {
+        document: { id: "doc1", version: "v1", pageCount: 10, file: makeMockFile() },
+        page: 1,
+    };
+
+    let threw = false;
+    const initialCreateCount = createObjectURLCalls.length;
+    try {
+        await renderer.render(req, new AbortController().signal);
+    } catch (e: any) {
+        threw = true;
+        assert(e.message.includes("produced null"), "9: blob conversion failure error propagated");
+    }
+    assert(threw, "9: rendering rejects cleanly when blob conversion fails");
+    assert(createObjectURLCalls.length === initialCreateCount, "9: URL.createObjectURL is not called if blob conversion fails");
 }
 
 async function runTests(): Promise<void> {
@@ -241,7 +292,8 @@ async function runTests(): Promise<void> {
         ["5: derived scale from width", test5_derivedScaleFromWidthHeight],
         ["6: AbortSignal cancellation", test6_abortSignalCancellation],
         ["7: PDF.js error propagation", test7_pdfJsErrorPropagation],
-        ["8: revoke behavior", test8_revokeBehavior],
+        ["8: revoke behavior & idempotency", test8_revokeBehavior],
+        ["9: blob conversion failure", test9_blobConversionFailure],
     ];
 
     let passed = 0;

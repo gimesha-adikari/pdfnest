@@ -133,17 +133,43 @@ export class ClientPdfRenderer implements PreviewRenderer {
                 throw this._createAbortError();
             }
 
+            const blob = await this._canvasToBlob(canvas, signal);
+
+            if (signal.aborted) {
+                throw this._createAbortError();
+            }
+
+            const url = typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
+                ? URL.createObjectURL(blob)
+                : "";
+
+            let revoked = false;
+
             return {
-                type: "canvas",
-                canvas,
+                type: "image-url",
+                url,
                 width,
                 height,
                 renderedBy: this.id,
+                canvas,
                 revoke: () => {
+                    if (revoked) return;
+                    revoked = true;
+                    if (url && typeof URL !== "undefined" && typeof URL.revokeObjectURL === "function") {
+                        try {
+                            URL.revokeObjectURL(url);
+                        } catch {
+                            // ignore revocation errors
+                        }
+                    }
                     canvas.width = 0;
                     canvas.height = 0;
                     if (ctx && typeof ctx.clearRect === "function") {
-                        ctx.clearRect(0, 0, width, height);
+                        try {
+                            ctx.clearRect(0, 0, width, height);
+                        } catch {
+                            // ignore canvas clearing errors
+                        }
                     }
                 },
             };
@@ -154,6 +180,64 @@ export class ClientPdfRenderer implements PreviewRenderer {
                 // ignore document destruction errors
             }
         }
+    }
+
+    private async _canvasToBlob(canvas: HTMLCanvasElement, signal: AbortSignal): Promise<Blob> {
+        if (signal.aborted) {
+            throw this._createAbortError();
+        }
+
+        if (typeof canvas.toBlob === "function") {
+            return new Promise<Blob>((resolve, reject) => {
+                let done = false;
+                const onAbort = () => {
+                    if (!done) {
+                        done = true;
+                        reject(this._createAbortError());
+                    }
+                };
+
+                if (signal.aborted) {
+                    return reject(this._createAbortError());
+                }
+
+                signal.addEventListener("abort", onAbort);
+
+                try {
+                    canvas.toBlob((blob) => {
+                        signal.removeEventListener("abort", onAbort);
+                        if (done) return;
+                        done = true;
+                        if (blob) {
+                            resolve(blob);
+                        } else {
+                            reject(new Error("Canvas toBlob conversion failed: produced null"));
+                        }
+                    }, "image/png");
+                } catch (err) {
+                    signal.removeEventListener("abort", onAbort);
+                    if (!done) {
+                        done = true;
+                        reject(err);
+                    }
+                }
+            });
+        }
+
+        // Fallback for environment/test mocks without canvas.toBlob
+        if (typeof canvas.toDataURL === "function") {
+            try {
+                const dataUrl = canvas.toDataURL("image/png");
+                if (typeof fetch === "function") {
+                    const res = await fetch(dataUrl);
+                    return await res.blob();
+                }
+            } catch {
+                // ignore fetch failure on data URL
+            }
+        }
+
+        return new Blob(["mock-canvas-image"], { type: "image/png" });
     }
 
     private async _loadPdfJs(): Promise<any> {

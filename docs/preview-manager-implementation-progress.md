@@ -643,3 +643,30 @@ npm run build (Next.js Turbopack production build) → ✓ Compiled successfully
 - **Server Session Adapter**: [`lib/preview/ServerPdfRenderer.ts`](file:///home/gimesha/My_Projects/platen/pdfnest/lib/preview/ServerPdfRenderer.ts)
 
 **All 9 active preview consumers across Platen PDF tools & Studio are 100% migrated to `usePreview`. Legacy preview hooks are fully removed.**
+
+---
+
+## Phase 4 — Step 0: ClientPdfRenderer Contract Adaptation — COMPLETED
+
+### Summary
+
+Made `ClientPdfRenderer` compatible with `usePreview` without altering `usePreview`'s public API surface or `PreviewManager`/`PreviewCache` semantics:
+1. **Blob + Object URL Conversion**: Updated `ClientPdfRenderer.render()` to asynchronously convert rendered canvas output to a Blob via `_canvasToBlob()` and generate an Object URL via `URL.createObjectURL(blob)`.
+2. **Resource Output**: Returned resource has `type: "image-url"`, `url` set to the Object URL, `renderedBy: "client-pdfjs"`, `width`, `height`, `canvas`, and an idempotent `revoke()` method.
+3. **Framework Independence**: Preserved zero framework/React dependencies inside `ClientPdfRenderer.ts`.
+4. **Idempotent Revocation**: `revoke()` revokes `URL.revokeObjectURL(url)` exactly once, resets canvas width/height to 0, and clears context safely.
+5. **Cancellation & Error Handling**: AbortSignal cancellation cleans up PDF.js tasks cleanly without creating or leaking Object URLs. Canvas blob conversion failures reject cleanly.
+
+### Validation Results
+
+```
+npx tsx tests/unit/clientPdfRenderer.test.ts       → Results: 9 passed, 0 failed
+npx tsx tests/unit/usePreview.test.ts              → Results: 26 passed, 0 failed
+npx tsx tests/unit/previewCache.test.ts            → Results: 21 passed, 0 failed
+npx tsx tests/unit/previewManager.test.ts          → Results: 21 passed, 0 failed
+npx tsx tests/unit/serverPdfRenderer.test.ts       → Results: 16 passed, 0 failed
+npx tsx tests/unit/studioPreviewMigration.test.ts  → Results: 12 passed, 0 failed
+npx tsc --project tsconfig.json --noEmit            → 0 errors
+```
+
+**Total**: 105 tests, 0 failures.
