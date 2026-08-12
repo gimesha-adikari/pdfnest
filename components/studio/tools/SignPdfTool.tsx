@@ -7,7 +7,8 @@ import {notify} from "@/lib/notify";
 import {getFriendlyErrorMessage} from "@/lib/errorHandler";
 import SignaturePad from "@/components/pdf/SignaturePad";
 import {DraggableSignaturePlaceholder} from "@/components/pdf/DraggableSignaturePlaceholder";
-import {usePdfPreview} from "@/hooks/usePdfPreview";
+import {usePreview} from "@/lib/preview/usePreview";
+import type {PreviewError} from "@/lib/preview/types";
 
 interface PageDimensions {
     width: number;
@@ -64,11 +65,11 @@ export default function SignPdfTool({baseFile, onSignedFile}: SignPdfToolProps) 
     const previewContainerRef = useRef<HTMLDivElement>(null);
 
     // ─── Session-based preview hook ───────────────────────────────────────────
-    const {previewSrc: pagePreviewUrl, isLoading: isPreviewLoading} = usePdfPreview({
+    const {src: pagePreviewUrl, isLoading: isPreviewLoading} = usePreview({
         file: baseFile,
-        pageNumber: currentPage,
-        scale: "2.0",
-        onError: (msg) => notify(msg, "error"),
+        page: currentPage,
+        scale: 2.0,
+        onError: (err: PreviewError) => notify(err.message, "error"),
     });
 
     const currentPageStamps = useMemo(

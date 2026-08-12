@@ -315,6 +315,48 @@ npx tsc --project tsconfig.json --noEmit        → 0 errors across SignPdfWorks
 
 ### Remaining Limitations
 
-- `SignPdfTool` (the studio version of the signing tool) and remaining tool workspaces (`HighlightPdfWorkspace`, `UnderlinePdfWorkspace`, `StrikeoutPdfWorkspace`, etc.) still use legacy preview hooks and will be migrated in subsequent Phase 2 milestones.
+- Existing preview consumers (other than `SignPdfWorkspace` and `SignPdfTool`) are not yet migrated to `usePreview` (scheduled for subsequent Phase 2 milestones).
+
+---
+
+## Phase 2 — Milestone 2: `SignPdfTool` Migration — COMPLETED
+
+### Migration Summary
+
+**[`components/studio/tools/SignPdfTool.tsx`](file:///home/gimesha/My_Projects/platen/pdfnest/components/studio/tools/SignPdfTool.tsx)**
+
+Migrated `SignPdfTool` (the Studio version of the signing tool) to consume `usePreview` instead of legacy `usePdfPreview`:
+- **Old preview logic removed**: Direct reference to `usePdfPreview` hook.
+- **`usePreview` Integration**:
+  ```ts
+  const { src: pagePreviewUrl, isLoading: isPreviewLoading } = usePreview({
+      file: baseFile,
+      page: currentPage,
+      scale: 2.0,
+      onError: (err: PreviewError) => notify(err.message, "error"),
+  });
+  ```
+- **Renderer / Mode / Scale Rationale**:
+  - `renderer`: `"server"` (default). Page previews use `ServerPdfRenderer` backend sessions.
+  - `mode`: `"page"` (default).
+  - `scale`: `2.0` (explicit). Renders 144 DPI equivalent page background for interactive signature stamp placement.
+- **Lifecycle & Resource Ownership**: `SignPdfTool` relies completely on `usePreview` and `PreviewManager` for backend session creation, page fetching, reference counting, and resource cleanup. Object URLs are managed exclusively by `PreviewManager` / `PreviewCache`.
+- **Preserved Functionality**: Signature pad drawing (`signatureBlob`, `signatureUrl`), stamp dragging/dropping, PDF.js page coordinate dimension extraction (`loadDocument`), backend signing submission via `/api/structure/sign`, callback to `onSignedFile(signedFile)`, and all Studio tool panel UI layout remain 100% unchanged.
+
+### Validation Results
+
+```
+npx tsx tests/unit/usePreview.test.ts          → Results: 25 passed, 0 failed
+npx tsx tests/unit/previewCache.test.ts        → Results: 21 passed, 0 failed
+npx tsx tests/unit/previewManager.test.ts      → Results: 21 passed, 0 failed
+npx tsx tests/unit/clientPdfRenderer.test.ts   → Results: 8 passed, 0 failed
+npx tsx tests/unit/serverPdfRenderer.test.ts   → Results: 16 passed, 0 failed
+npx tsc --project tsconfig.json --noEmit        → 0 errors across SignPdfTool & preview subsystem
+```
+
+### Remaining Limitations
+
+- Remaining tool workspaces and studio tools (`HighlightPdfWorkspace`, `UnderlinePdfWorkspace`, `StrikeoutPdfWorkspace`, `HighlightTool`, `UnderlineTool`, `StrikeoutTool`, `useStudioPreview`) still use legacy preview hooks and will be migrated in subsequent Phase 2 milestones.
+
 
 
