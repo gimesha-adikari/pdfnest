@@ -78,6 +78,11 @@ export interface PreviewResult {
 
 export interface PreviewRenderer {
     readonly id: string;
+    /** Renderer capability flags */
+    readonly capabilities: {
+        client: boolean; // can render client‑side preview
+        server: boolean; // can render server‑side preview
+    };
 
     canRender(request: PreviewRequest): boolean;
 

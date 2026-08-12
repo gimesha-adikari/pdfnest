@@ -12,7 +12,8 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import SignaturePad from "@/components/pdf/SignaturePad";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import {DraggableSignaturePlaceholder} from "@/components/pdf/DraggableSignaturePlaceholder";
-import { usePdfPreview } from "@/hooks/usePdfPreview";
+import { usePreview } from "@/lib/preview/usePreview";
+import type { PreviewError } from "@/lib/preview/types";
 
 type Stamp = {
     id: number;
@@ -44,11 +45,11 @@ export default function SignPdfWorkspace() {
     const [stamps, setStamps] = useState<Stamp[]>([]);
 
     // ─── Session-based preview hook ───────────────────────────────────────────
-    const { previewSrc: pagePreviewUrl, isLoading: isPreviewLoading } = usePdfPreview({
+    const { src: pagePreviewUrl, isLoading: isPreviewLoading } = usePreview({
         file,
-        pageNumber: currentPage,
-        scale: "2.0",
-        onError: (msg) => notify(msg, "error"),
+        page: currentPage,
+        scale: 2.0,
+        onError: (err: PreviewError) => notify(err.message, "error"),
     });
 
     useEffect(() => {
