@@ -356,7 +356,108 @@ npx tsc --project tsconfig.json --noEmit        → 0 errors across SignPdfTool 
 
 ### Remaining Limitations
 
-- Remaining tool workspaces and studio tools (`HighlightPdfWorkspace`, `UnderlinePdfWorkspace`, `StrikeoutPdfWorkspace`, `HighlightTool`, `UnderlineTool`, `StrikeoutTool`, `useStudioPreview`) still use legacy preview hooks and will be migrated in subsequent Phase 2 milestones.
+- Studio annotation tools (`HighlightTool`, `UnderlineTool`, `StrikeoutTool`) and `useStudioPreview` / Studio canvas still use legacy preview hooks and will be migrated in subsequent Phase 2 milestones.
+
+---
+
+## Phase 2 — Milestone 3: Annotation Workspace Migration — COMPLETED
+
+### Migration Summary
+
+**Workspaces Migrated**:
+- **[`components/tools/HighlightPdfWorkspace.tsx`](file:///home/gimesha/My_Projects/platen/pdfnest/components/tools/HighlightPdfWorkspace.tsx)**
+- **[`components/tools/UnderlinePdfWorkspace.tsx`](file:///home/gimesha/My_Projects/platen/pdfnest/components/tools/UnderlinePdfWorkspace.tsx)**
+- **[`components/tools/StrikeoutPdfWorkspace.tsx`](file:///home/gimesha/My_Projects/platen/pdfnest/components/tools/StrikeoutPdfWorkspace.tsx)**
+
+Migrated all 3 standalone annotation tool workspaces from legacy `usePdfPreview` to `usePreview`:
+- **Old preview logic removed**: Legacy `usePdfPreview` hook calls and import references.
+- **`usePreview` Integration**:
+  ```ts
+  const { src: scannedPreviewSrc, isLoading: scannedPreviewLoading } = usePreview({
+      file,
+      page: currentPage,
+      scale: 2.0,
+      enabled: isScannedPage,
+      onError: (err: PreviewError) => console.error("Failed to render scanned page preview:", err.message),
+  });
+  ```
+- **Configuration & Rationale**:
+  - `renderer`: `"server"` (default). Uses `ServerPdfRenderer` backend sessions.
+  - `mode`: `"page"` (default).
+  - `scale`: `2.0` (explicit). Renders 144 DPI equivalent page background for manual annotation box creation over scanned pages.
+  - `enabled`: `isScannedPage` (boolean). When `isScannedPage` is `false` (text/vector pages), `usePreview` receives `enabled: false` and makes zero preview requests. When `isScannedPage` is `true`, `usePreview` conditionally requests a scale 2.0 image preview.
+- **Lifecycle & Resource Ownership**: All session creation, page fetching, reference counting, and Object URL revocation are managed entirely by `PreviewManager` / `PreviewCache`. Workspaces do not perform manual Object URL revocation.
+- **Preserved Functionality**: Text selection rendering, text layer parsing, page type classification (`isScannedPage`, `isTextPage`, `isMixedPage`), smart mode box creation, drawing drag-to-size handlers, annotation box overlays, history undo/redo, and backend annotation submission logic remain 100% unchanged.
+
+### Validation Results
+
+```
+npx tsx tests/unit/usePreview.test.ts          → Results: 25 passed, 0 failed
+npx tsx tests/unit/previewCache.test.ts        → Results: 21 passed, 0 failed
+npx tsx tests/unit/previewManager.test.ts      → Results: 21 passed, 0 failed
+npx tsx tests/unit/clientPdfRenderer.test.ts   → Results: 8 passed, 0 failed
+npx tsx tests/unit/serverPdfRenderer.test.ts   → Results: 16 passed, 0 failed
+npx tsc --project tsconfig.json --noEmit        → 0 errors across migrated annotation workspaces & preview subsystem
+```
+
+### Remaining Limitations
+
+- Studio main canvas (`useStudioPreview` / `useStudio.ts`) still uses the legacy studio preview hook and is scheduled for Phase 2 Milestone 5.
+
+---
+
+## Phase 2 — Milestone 4: Studio Annotation Preview Migration — COMPLETED
+
+### Architectural Discovery
+
+Inspection of the Studio architecture revealed that:
+1. **Tool Independence**: `HighlightTool.tsx`, `UnderlineTool.tsx`, and `StrikeoutTool.tsx` render vector text pages using client-side PDF.js, BUT call `usePdfPreview` directly for scanned pages (`isScannedPage`). They do **not** use `useStudioPreview`.
+2. **`usePdfPreview` Elimination**: With the completion of Milestone 4, **zero** active consumers of `usePdfPreview` remain in the entire codebase.
+3. **`useStudioPreview` Scope**: `useStudioPreview.ts` is only consumed by `useStudio.ts` for the main Studio canvas preview (`StudioCanvasPreview`).
+
+### Migration Summary
+
+**Files Migrated**:
+- **[`components/studio/tools/HighlightTool.tsx`](file:///home/gimesha/My_Projects/platen/pdfnest/components/studio/tools/HighlightTool.tsx)**
+- **[`components/studio/tools/UnderlineTool.tsx`](file:///home/gimesha/My_Projects/platen/pdfnest/components/studio/tools/UnderlineTool.tsx)**
+- **[`components/studio/tools/StrikeoutTool.tsx`](file:///home/gimesha/My_Projects/platen/pdfnest/components/studio/tools/StrikeoutTool.tsx)**
+
+Migrated all 3 Studio annotation tools from legacy `usePdfPreview` to `usePreview`:
+- **Old preview logic removed**: Direct references to `usePdfPreview` hook calls and imports.
+- **`usePreview` Integration**:
+  ```ts
+  const { src: scannedPreviewSrc, isLoading: scannedPreviewLoading } = usePreview({
+      file: baseFile,
+      page: currentPage,
+      scale: 2.0,
+      enabled: isScannedPage,
+      onError: (err: PreviewError) => console.error("Failed to render scanned page preview:", err.message),
+  });
+  ```
+- **Configuration & Rationale**:
+  - `renderer`: `"server"` (default). Uses `ServerPdfRenderer` backend sessions.
+  - `mode`: `"page"` (default).
+  - `scale`: `2.0` (explicit). Renders 144 DPI equivalent page background for manual annotation box creation over scanned pages.
+  - `enabled`: `isScannedPage` (boolean). When `isScannedPage` is `false` (text/vector pages), `usePreview` receives `enabled: false` and makes zero preview requests. When `isScannedPage` is `true`, `usePreview` conditionally requests a scale 2.0 image preview.
+- **Lifecycle & Resource Ownership**: All session creation, page fetching, reference counting, and Object URL revocation are managed entirely by `PreviewManager` / `PreviewCache`. Workspaces do not perform manual Object URL revocation.
+- **Preserved Functionality**: Text selection rendering, text layer parsing, page type classification (`isScannedPage`, `isTextPage`, `isMixedPage`), smart mode box creation, drawing drag-to-size handlers, annotation box overlays, history undo/redo, and backend annotation submission logic remain 100% unchanged.
+
+### Validation Results
+
+```
+npx tsx tests/unit/usePreview.test.ts          → Results: 25 passed, 0 failed
+npx tsx tests/unit/previewCache.test.ts        → Results: 21 passed, 0 failed
+npx tsx tests/unit/previewManager.test.ts      → Results: 21 passed, 0 failed
+npx tsx tests/unit/clientPdfRenderer.test.ts   → Results: 8 passed, 0 failed
+npx tsx tests/unit/serverPdfRenderer.test.ts   → Results: 16 passed, 0 failed
+npx tsc --project tsconfig.json --noEmit        → 0 errors across Studio annotation tools & preview subsystem
+```
+
+### Remaining Limitations
+
+- `useStudioPreview` (consumed by `useStudio.ts` for main Studio canvas preview) is the last remaining legacy preview hook in the codebase and will be migrated in Phase 2 Milestone 5.
+
+
 
 
 

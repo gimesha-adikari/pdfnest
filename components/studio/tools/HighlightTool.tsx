@@ -19,7 +19,8 @@ import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/lib/notify";
 import { getFriendlyErrorMessage, handleClientError } from "@/lib/errorHandler";
 import { getBaseUrl } from "@/lib/api";
-import { usePdfPreview } from "@/hooks/usePdfPreview";
+import { usePreview } from "@/lib/preview/usePreview";
+import type { PreviewError } from "@/lib/preview/types";
 
 interface CustomPdfFile extends File {
     originalPassword?: string;
@@ -298,12 +299,12 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
     const currentPageBoxes = useMemo(() => boxes.filter((b) => b.page === currentPage), [boxes, currentPage]);
 
     // ─── Session-based preview for scanned pages ─────────────────────────────
-    const { previewSrc: scannedPreviewSrc, isLoading: scannedPreviewLoading } = usePdfPreview({
+    const { src: scannedPreviewSrc, isLoading: scannedPreviewLoading } = usePreview({
         file: baseFile,
-        pageNumber: currentPage,
-        scale: "2.0",
+        page: currentPage,
+        scale: 2.0,
         enabled: isScannedPage,
-        onError: () => console.error("Failed to render scanned page preview."),
+        onError: (err: PreviewError) => console.error("Failed to render scanned page preview:", err.message),
     });
 
     const updateBoxesStateWithHistory = useCallback(
