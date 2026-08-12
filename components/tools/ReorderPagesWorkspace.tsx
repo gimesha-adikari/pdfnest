@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Layers, Loader2, ShieldCheck } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
@@ -14,28 +14,44 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { FileWithPassword } from "@/lib/types";
 
+import { usePreviews } from "@/lib/preview/usePreviews";
+
 export default function ReorderPagesWorkspace() {
     const { requireAuth } = useAuth();
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
 
     const [pageOrder, setPageOrder] = useState<number[]>([]);
-    const [thumbnails, setThumbnails] = useState<string[]>([]);
+    const [pageCount, setPageCount] = useState<number>(0);
     const [isLoadingElements, setIsLoadingElements] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
 
+    const previewRequests = useMemo(
+        () =>
+            Array.from({ length: pageCount }, (_, index) => ({
+                file,
+                page: index + 1,
+                scale: 0.3,
+                renderer: "client" as const,
+                enabled: Boolean(file),
+            })),
+        [file, pageCount]
+    );
+
+    const previewResults = usePreviews(previewRequests);
+    const thumbnails = useMemo(() => previewResults.map((r) => r.src), [previewResults]);
+
     useEffect(() => {
         if (!file) {
             setPageOrder([]);
-            setThumbnails([]);
+            setPageCount(0);
             return;
         }
 
         const loadPdfPages = async () => {
             setIsLoadingElements(true);
             setSuccess(false);
-            setThumbnails([]);
 
             try {
                 const pdfjsLib = await import("pdfjs-dist");
@@ -48,39 +64,10 @@ export default function ReorderPagesWorkspace() {
                 const pdf = await loadingTask.promise;
                 const totalPages = pdf.numPages;
 
+                setPageCount(totalPages);
                 const dynamicOrderArray = Array.from({ length: totalPages }, (_, i) => i + 1);
                 setPageOrder(dynamicOrderArray);
 
-                const generatedImages: string[] = [];
-
-                for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
-                    try {
-                        const page = await pdf.getPage(pageNum);
-                        const viewport = page.getViewport({ scale: 0.4 });
-
-                        const canvas = document.createElement("canvas");
-                        canvas.width = viewport.width;
-                        canvas.height = viewport.height;
-
-                        const ctx = canvas.getContext("2d");
-                        if (ctx) {
-                            await page.render({
-                                canvas,
-                                canvasContext: ctx,
-                                viewport: viewport
-                            }).promise;
-
-                            generatedImages.push(canvas.toDataURL("image/jpeg", 0.7));
-                        }
-                        canvas.width = 0;
-                        canvas.height = 0;
-                    } catch (pageError) {
-                        console.error(`Page ${pageNum} frame rendering collision:`, pageError);
-                        generatedImages.push("data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7");
-                    }
-                }
-
-                setThumbnails(generatedImages);
                 await loadingTask.destroy();
             } catch (error) {
                 console.error("Root Document Processing Exception:", error);
@@ -92,14 +79,6 @@ export default function ReorderPagesWorkspace() {
 
         loadPdfPages();
     }, [file]);
-
-    useEffect(() => {
-        return () => {
-            thumbnails.forEach(src => {
-                if (src.startsWith("blob:")) URL.revokeObjectURL(src);
-            });
-        };
-    }, [thumbnails]);
 
     const handleReorderSubmission = async () => {
         requireAuth(async () => {

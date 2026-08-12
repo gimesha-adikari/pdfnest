@@ -1,17 +1,18 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Hash, Loader2, FileText } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
 import { getFriendlyErrorMessage } from "@/lib/errorHandler";
 import { FileWithPassword } from "@/lib/types";
 import { useAuth } from "@/context/AuthContext";
-import { RenderParameters } from "pdfjs-dist/types/src/display/api";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
+
+import { usePreview } from "@/lib/preview/usePreview";
 
 const STYLISTIC_FONTS = [
     { id: "Helvetica", name: "Sans-Serif Modern (Helvetica)", cssClass: "font-sans font-bold" },
@@ -28,65 +29,16 @@ export default function PageNumbersWorkspace() {
     const [fontSize, setFontSize] = useState<number>(12);
     const [position, setPosition] = useState<string>("bc");
 
-    const [thumbnailSrc, setThumbnailSrc] = useState<string>("");
-    const [isRenderingThumbnail, setIsRenderingThumbnail] = useState<boolean>(false);
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
-    const isCancelled = useRef(false);
 
-    useEffect(() => {
-        if (!file) {
-            queueMicrotask(() => setThumbnailSrc(""));
-            return;
-        }
-
-        isCancelled.current = false;
-
-        const renderPreview = async () => {
-            setIsRenderingThumbnail(true);
-            setError(null);
-
-            try {
-                const pdfjs = await import("pdfjs-dist");
-                pdfjs.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
-
-                const arrayBuffer = await file.arrayBuffer();
-                const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
-
-                if (pdf.numPages === 0) throw new Error("Empty PDF document context.");
-
-                const page = await pdf.getPage(1);
-                const viewport = page.getViewport({ scale: 0.4 });
-
-                const canvas = document.createElement("canvas");
-                const context = canvas.getContext("2d");
-
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
-
-                if (!context || isCancelled.current) return;
-
-                const renderContext: RenderParameters = { canvasContext: context, viewport, canvas };
-                await page.render(renderContext).promise;
-
-                if (!isCancelled.current) {
-                    setThumbnailSrc(canvas.toDataURL("image/jpeg", 0.85));
-                }
-
-                canvas.remove();
-            } catch (err) {
-                if (!isCancelled.current) {
-                    console.error(err);
-                    setThumbnailSrc("");
-                }
-            } finally {
-                if (!isCancelled.current) setIsRenderingThumbnail(false);
-            }
-        };
-
-        renderPreview();
-        return () => { isCancelled.current = true; };
-    }, [file]);
+    const preview = usePreview({
+        file,
+        page: 1,
+        scale: 0.4,
+        mode: "thumbnail",
+        renderer: "client",
+    });
 
     const handleNumberingProcessing = async () => {
         requireAuth(async () => {
@@ -197,14 +149,14 @@ export default function PageNumbersWorkspace() {
                         </div>
 
                         <div className="relative my-auto flex h-64 w-full items-center justify-center rounded-xl bg-white/50 p-4 shadow-inner dark:bg-zinc-900/50">
-                            {isRenderingThumbnail ? (
+                            {preview.isLoading ? (
                                 <div className="flex flex-col items-center gap-2">
                                     <Loader2 className="animate-spin text-blue-500" size={24} />
                                     <span className="text-xs text-gray-400">Rasterizing structural layers...</span>
                                 </div>
-                            ) : thumbnailSrc ? (
+                            ) : preview.src ? (
                                 <div className="relative shadow-lg border border-gray-200/60 dark:border-zinc-800">
-                                    <img src={thumbnailSrc} alt="Document Preview Frame" className="max-h-56 object-contain" />
+                                    <img src={preview.src} alt="Document Preview Frame" className="max-h-56 object-contain" />
                                     <div className={`absolute inset-x-0 p-2 text-[10px] font-bold text-blue-600 flex ${position.startsWith('t') ? 'top-0' : 'bottom-0'} ${position.endsWith('l') ? 'justify-start pl-4' : position.endsWith('r') ? 'justify-end pr-4' : 'justify-center'}`}>
                                         <span className="bg-blue-100 px-1 rounded shadow-sm border border-blue-300 animate-pulse">Page 1</span>
                                     </div>

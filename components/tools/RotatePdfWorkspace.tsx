@@ -12,6 +12,8 @@ import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 
+import { usePreviews } from "@/lib/preview/usePreviews";
+
 function formatMB(bytes: number) {
     return (bytes / 1024 / 1024).toFixed(2);
 }
@@ -22,55 +24,29 @@ export default function RotatePdfWorkspace() {
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
 
     const [pageCount, setPageCount] = useState<number>(0);
-    const [thumbnails, setThumbnails] = useState<string[]>([]);
     const [pageRotations, setPageRotations] = useState<Record<number, number>>({});
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [isReadingTotal, setIsReadingTotal] = useState(false);
-    const [isGeneratingPreviews, setIsGeneratingPreviews] = useState(false);
     const [success, setSuccess] = useState(false);
 
-    const generateThumbnails =
-        useCallback(
-            async (pdf: any, totalPages: number) => {
-        setIsGeneratingPreviews(true);
-        const loadedThumbnails: string[] = [];
+    const previewRequests = useMemo(
+        () =>
+            Array.from({ length: pageCount }, (_, index) => ({
+                file,
+                page: index + 1,
+                scale: 0.3,
+                renderer: "client" as const,
+                enabled: Boolean(file),
+            })),
+        [file, pageCount]
+    );
 
-        try {
-            for (let i = 1; i <= totalPages; i++) {
-                const page = await pdf.getPage(i);
-                const viewport = page.getViewport({ scale: 0.3 });
-
-                const canvas = document.createElement("canvas");
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
-                const ctx = canvas.getContext("2d");
-
-                if (ctx) {
-                    await page.render({ canvasContext: ctx, viewport }).promise;
-                    const imgData = canvas.toDataURL("image/jpeg", 0.6);
-                    loadedThumbnails.push(imgData);
-
-                    if (i % 10 === 0 || i === totalPages) {
-                        setThumbnails([...loadedThumbnails]);
-                    }
-                }
-
-                canvas.width = 0;
-                canvas.height = 0;
-                canvas.remove();
-            }
-        } catch (error) {
-            console.error("Page preview compilation failed:", error);
-        } finally {
-            setIsGeneratingPreviews(false);
-        }
-    }, []);
+    const previewResults = usePreviews(previewRequests);
 
     useEffect(() => {
         if (!file) {
             setPageCount(0);
-            setThumbnails([]);
             setPageRotations({});
             return;
         }
@@ -78,7 +54,6 @@ export default function RotatePdfWorkspace() {
         const parsePdfGeometry = async () => {
             setSuccess(false);
             setPageRotations({});
-            setThumbnails([]);
             setIsReadingTotal(true);
 
             try {
@@ -92,8 +67,6 @@ export default function RotatePdfWorkspace() {
                 const totalPages = pdf.numPages;
                 setPageCount(totalPages);
                 setIsReadingTotal(false);
-
-                generateThumbnails(pdf, totalPages);
             } catch (error) {
                 console.error(error);
                 notify("Could not read the structural metadata of this document.","error");
@@ -102,7 +75,7 @@ export default function RotatePdfWorkspace() {
         };
 
         parsePdfGeometry();
-    }, [file, generateThumbnails]);
+    }, [file]);
 
     const fileExtractedSize = useMemo(() => {
         if (!file) return "0.00";
@@ -219,7 +192,7 @@ export default function RotatePdfWorkspace() {
                                 {Array.from({ length: pageCount }).map((_, idx) => {
                                     const pageNum = idx + 1;
                                     const rotation = pageRotations[pageNum] || 0;
-                                    const thumbnailSrc = thumbnails[idx];
+                                    const thumbnailSrc = previewResults[idx]?.src;
 
                                     return (
                                         <div
@@ -299,7 +272,7 @@ export default function RotatePdfWorkspace() {
                         text="Apply Rotation Matrices"
                         loadingText="Processing Vector Orientations on Backend Node..."
                         loading={isProcessing}
-                        disabled={Object.values(pageRotations).filter(deg => deg > 0).length === 0 || isGeneratingPreviews}
+                        disabled={Object.values(pageRotations).filter(deg => deg > 0).length === 0}
                         onClick={handleRotateProcessing}
                     />
                 </div>

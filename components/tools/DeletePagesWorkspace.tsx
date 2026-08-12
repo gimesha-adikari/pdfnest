@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2, ShieldCheck, Loader2, FileText } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
@@ -14,6 +14,8 @@ import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 
+import { usePreviews } from "@/lib/preview/usePreviews";
+
 function formatMB(bytes: number) {
     return (bytes / 1024 / 1024).toFixed(2);
 }
@@ -24,61 +26,34 @@ export default function DeletePagesWorkspace() {
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
 
     const [pageCount, setPageCount] = useState<number>(0);
-    const [thumbnails, setThumbnails] = useState<string[]>([]);
     const [pagesToDelete, setPagesToDelete] = useState<Set<number>>(new Set());
     const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [isReadingTotal, setIsReadingTotal] = useState(false);
-    const [isGeneratingPreviews, setIsGeneratingPreviews] = useState(false);
     const [success, setSuccess] = useState(false);
 
-    const generateThumbnails = async (pdf: PDFDocumentProxy, totalPages: number) => {
-        setIsGeneratingPreviews(true);
-        const loadedThumbnails: string[] = [];
+    const previewRequests = useMemo(
+        () =>
+            Array.from({ length: pageCount }, (_, index) => ({
+                file,
+                page: index + 1,
+                scale: 0.3,
+                renderer: "client" as const,
+                enabled: Boolean(file),
+            })),
+        [file, pageCount]
+    );
 
-        try {
-            for (let i = 1; i <= totalPages; i++) {
-                const page = await pdf.getPage(i);
-                const viewport = page.getViewport({ scale: 0.3 });
+    const previewResults = usePreviews(previewRequests);
 
-                const canvas = document.createElement("canvas");
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
-                const ctx = canvas.getContext("2d");
-
-                if (ctx) {
-                    await page.render({
-                        canvas,
-                        canvasContext: ctx,
-                        viewport
-                    }).promise;
-                    const imgData = canvas.toDataURL("image/jpeg", 0.6);
-                    loadedThumbnails.push(imgData);
-                    if (i % 10 === 0 || i === totalPages) {
-                        setThumbnails([...loadedThumbnails]);
-                    }
-                }
-
-                canvas.width = 0;
-                canvas.height = 0;
-                canvas.remove();
-            }
-        } catch (error) {
-            console.error("Visual grid generation warning:", error);
-        } finally {
-            setIsGeneratingPreviews(false);
-        }
-    };
-
-    useMemo(() => {
+    useEffect(() => {
         if (!file) return;
 
         const loadPdfMetadata = async () => {
             setSuccess(false);
             setPagesToDelete(new Set());
             setLastSelectedIndex(null);
-            setThumbnails([]);
             setIsReadingTotal(true);
 
             try {
@@ -92,8 +67,6 @@ export default function DeletePagesWorkspace() {
                 const totalPages = pdf.numPages;
                 setPageCount(totalPages);
                 setIsReadingTotal(false);
-
-                generateThumbnails(pdf, totalPages);
             } catch (error) {
                 console.error(error);
                 notify("Could not read the structural metadata of this document.", "error");
@@ -242,7 +215,7 @@ export default function DeletePagesWorkspace() {
                                     {Array.from({ length: pageCount }).map((_, idx) => {
                                         const pageNum = idx + 1;
                                         const isSelectedForDeletion = pagesToDelete.has(pageNum);
-                                        const thumbnailSrc = thumbnails[idx];
+                                        const thumbnailSrc = previewResults[idx]?.src;
 
                                         return (
                                             <button

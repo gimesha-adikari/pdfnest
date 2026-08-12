@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { CopyPlus, Loader2, ShieldCheck, ChevronLeft, ChevronRight, Eye, AlertCircle, Sparkles } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
@@ -12,23 +12,10 @@ import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 
+import { usePreview } from "@/lib/preview/usePreview";
+
 interface CustomPdfFile extends File {
     originalPassword?: string;
-}
-
-interface PdfJsRenderTask {
-    cancel: () => void;
-    promise: Promise<void>;
-}
-
-interface PdfJsPage {
-    getViewport: (options: { scale: number }) => { width: number; height: number };
-    render: (options: { canvasContext: CanvasRenderingContext2D; viewport: unknown }) => PdfJsRenderTask;
-}
-
-interface PdfJsDocument {
-    numPages: number;
-    getPage: (pageNumber: number) => Promise<PdfJsPage>;
 }
 
 function formatMB(bytes: number) {
@@ -46,13 +33,16 @@ export default function DuplicatePagesWorkspace() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
 
-    const [pdfDocument, setPdfDocument] = useState<PdfJsDocument | null>(null);
     const [currentPage, setCurrentPage] = useState<number>(1);
     const [totalPages, setTotalPages] = useState<number>(0);
-    const [isRenderingCanvas, setIsRenderingCanvas] = useState<boolean>(false);
 
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
-    const renderTaskRef = useRef<PdfJsRenderTask | null>(null);
+    const preview = usePreview({
+        file,
+        page: currentPage,
+        scale: 1.2,
+        mode: "page",
+        renderer: "client",
+    });
 
     const fileExtractedSize = useMemo(() => {
         if (!file) return "0.00";
@@ -87,7 +77,6 @@ export default function DuplicatePagesWorkspace() {
     useEffect(() => {
         if (!file) {
             // eslint-disable-next-line react-hooks/set-state-in-effect
-            setPdfDocument(null);
             setTotalPages(0);
             setCurrentPage(1);
             return;
@@ -95,7 +84,6 @@ export default function DuplicatePagesWorkspace() {
 
         const loadPdf = async () => {
             try {
-                setIsRenderingCanvas(true);
                 const pdfjsLib = await import("pdfjs-dist");
                 pdfjsLib.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
 
@@ -104,65 +92,15 @@ export default function DuplicatePagesWorkspace() {
                 const loadingTask = pdfjsLib.getDocument({ data: typedArray });
                 const pdf = await loadingTask.promise;
 
-                setPdfDocument(pdf as unknown as PdfJsDocument);
                 setTotalPages(pdf.numPages);
                 setCurrentPage(1);
             } catch (err) {
                 console.error("Failed to parse document context:", err);
-            } finally {
-                setIsRenderingCanvas(false);
             }
         };
 
         loadPdf();
     }, [file]);
-
-    useEffect(() => {
-        if (!pdfDocument || !canvasRef.current) return;
-
-        const renderPage = async () => {
-            try {
-                setIsRenderingCanvas(true);
-
-                if (renderTaskRef.current) {
-                    renderTaskRef.current.cancel();
-                }
-
-                const page = await pdfDocument.getPage(currentPage);
-                const canvas = canvasRef.current;
-                if (!canvas) return;
-
-                const ctx = canvas.getContext("2d");
-                if (!ctx) return;
-
-                const viewport = page.getViewport({ scale: 1.2 });
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
-
-                const renderTask = page.render({
-                    canvasContext: ctx,
-                    viewport: viewport
-                });
-                renderTaskRef.current = renderTask;
-
-                await renderTask.promise;
-                renderTaskRef.current = null;
-            } catch (err: unknown) {
-                const errorObj = err as Error;
-                if (errorObj?.name !== "RenderingCancelledException") {
-                    console.error("Canvas raster generation skipped:", err);
-                }
-            } finally {
-                setIsRenderingCanvas(false);
-            }
-        };
-
-        renderPage();
-
-        return () => {
-            if (renderTaskRef.current) renderTaskRef.current.cancel();
-        };
-    }, [pdfDocument, currentPage]);
 
     const applyPreset = (type: "current" | "all" | "even" | "odd") => {
         if (totalPages === 0) return;
@@ -355,14 +293,14 @@ export default function DuplicatePagesWorkspace() {
                             text="Duplicate Pages Now"
                             loadingText="Cloning Target Elements..."
                             loading={isProcessing}
-                            disabled={isProcessing || isRenderingCanvas || !!validationError}
+                            disabled={isProcessing || preview.isLoading || !!validationError}
                             onClick={handleDuplicateProcessing}
                         />
                     </div>
 
                     {/* Simulator Preview Area */}
                     <div className="lg:col-span-7 flex flex-col bg-[color:var(--background)]/30 border border-[color:var(--border)] rounded-2xl p-6 relative w-full">
-                        {isRenderingCanvas && (
+                        {preview.isLoading && (
                             <div className="absolute inset-0 bg-[color:var(--background)]/40 backdrop-blur-sm rounded-2xl z-20 flex flex-col items-center justify-center text-xs font-medium text-[color:var(--muted)]">
                                 <Loader2 className="animate-spin text-indigo-500 mb-2" size={24} />
                                 Rendering Document Preview Matrix...
@@ -382,7 +320,13 @@ export default function DuplicatePagesWorkspace() {
 
                         <div className="w-full flex flex-col items-center justify-center bg-gray-500/5 dark:bg-black/20 rounded-xl border border-[color:var(--border)] p-4 relative overflow-hidden min-h-[420px] group">
                             <div className="relative shadow-xl rounded border border-gray-400/20 bg-white max-w-full h-auto">
-                                <canvas ref={canvasRef} className="max-w-full h-auto block rounded" />
+                                {preview.src ? (
+                                    <img src={preview.src} alt={`Page ${currentPage}`} className="max-w-full h-auto block rounded" />
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center p-12 text-[color:var(--muted)] opacity-50">
+                                        <Loader2 size={24} className="animate-spin mb-2 text-indigo-500" />
+                                    </div>
+                                )}
                             </div>
 
                             {/* "Use This Page" Overlay Helper */}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, FileText } from "lucide-react";
 import { getFriendlyErrorMessage } from "@/lib/errorHandler";
@@ -13,16 +13,30 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 
+import { usePreviews } from "@/lib/preview/usePreviews";
+
 export default function MergePdfWorkspace() {
     const { requireAuth } = useAuth();
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
 
     const [files, setFiles] = useState<File[]>([]);
-    const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
     const [isMerging, setIsMerging] = useState(false);
-    const [isGeneratingPreviews, setIsGeneratingPreviews] = useState(false);
     const [fileMeta] = useState<Record<string, { originalPassword?: string }>>({});
+
+    const previewRequests = useMemo(
+        () =>
+            files.map((item) => ({
+                file: item,
+                page: 1,
+                scale: 0.2,
+                renderer: "client" as const,
+                enabled: true,
+            })),
+        [files]
+    );
+
+    const previewResults = usePreviews(previewRequests);
 
     // Automatically ingest the initial full files collection matrix
     useEffect(() => {
@@ -35,49 +49,6 @@ export default function MergePdfWorkspace() {
             }
         }
     }, [file]);
-
-    const generateFileThumbnail = async (targetFile: File) => {
-        try {
-            const pdfjsLib = await import("pdfjs-dist");
-            pdfjsLib.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
-
-            const arrayBuffer = await targetFile.arrayBuffer();
-            const typedArray = new Uint8Array(arrayBuffer);
-            const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
-
-            if (pdf.numPages > 0) {
-                const page = await pdf.getPage(1);
-                const viewport = page.getViewport({ scale: 0.2 });
-
-                const canvas = document.createElement("canvas");
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
-                const ctx = canvas.getContext("2d");
-
-                if (ctx) {
-                    await page.render({
-                        canvas,
-                        canvasContext: ctx,
-                        viewport,
-                    }).promise;
-
-                    const imgData = canvas.toDataURL("image/jpeg", 0.5);
-                    const fileKey = `${targetFile.name}-${targetFile.size}-${targetFile.lastModified}`;
-
-                    setThumbnails(prev => ({
-                        ...prev,
-                        [fileKey]: imgData
-                    }));
-                }
-
-                canvas.width = 0;
-                canvas.height = 0;
-                canvas.remove();
-            }
-        } catch (error) {
-            console.error("Failed to generate file preview:", error);
-        }
-    };
 
     const addFiles = async (newFiles: File[]) => {
         const MAX_FILE_SIZE = 50 * 1024 * 1024;
@@ -105,12 +76,6 @@ export default function MergePdfWorkspace() {
                     )
             );
         });
-
-        setIsGeneratingPreviews(true);
-        for (const target of incomingUniqueFiles) {
-            await generateFileThumbnail(target);
-        }
-        setIsGeneratingPreviews(false);
     };
 
     const removeFile = (indexToRemove: number) => {
@@ -124,7 +89,6 @@ export default function MergePdfWorkspace() {
 
     const clearFiles = () => {
         setFiles([]);
-        setThumbnails({});
         setFile(null);
         router.push(`/${toolId}`);
     };
@@ -206,7 +170,7 @@ export default function MergePdfWorkspace() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
                         {files.map((item, idx) => {
                             const fileKey = `${item.name}-${item.size}-${item.lastModified}`;
-                            const thumbSrc = thumbnails[fileKey];
+                            const thumbSrc = previewResults[idx]?.src;
 
                             return (
                                 <div key={fileKey} className="relative group border border-[color:var(--border)] bg-[color:var(--background)] p-2 rounded-2xl flex flex-col items-center justify-between aspect-[1/1.3] overflow-hidden shadow-sm">
