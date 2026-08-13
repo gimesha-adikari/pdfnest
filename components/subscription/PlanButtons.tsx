@@ -22,29 +22,34 @@ export default function PlanButtons({
                          trialText,
                      }: PlanButtonsProps) {
     return (
-        <div className="grid gap-3 sm:grid-cols-2">
-            <button
-                onClick={() => onUpgrade(tier, "monthly")}
-                disabled={isProcessing || currentTier === tier}
-                className="rounded-xl border border-border bg-background
-                px-4 py-3 text-left text-xs font-semibold text-foreground transition hover:border-indigo-500
-                hover:text-indigo-500 disabled:opacity-50"
-            >
-                <div className="font-bold">Monthly</div>
-                <div>${monthlyPrice} / month</div>
-                <div>{trialText}</div>
-            </button>
+        <div className="space-y-2">
+            <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                    onClick={() => onUpgrade(tier, "monthly")}
+                    disabled={isProcessing || currentTier === tier}
+                    className="rounded-xl border border-border bg-background
+                    px-4 py-3 text-left text-xs font-semibold text-foreground transition hover:border-indigo-500
+                    hover:text-indigo-500 disabled:opacity-50"
+                >
+                    <div className="font-bold">Monthly</div>
+                    <div>${monthlyPrice} / month</div>
+                    <div className="text-[11px] font-medium text-indigo-500">{trialText}</div>
+                </button>
 
-            <button
-                onClick={() => onUpgrade(tier, "yearly")}
-                disabled={isProcessing || currentTier === tier}
-                className="rounded-xl border border-border bg-background px-4 py-3 text-left text-xs font-semibold
-                text-foreground transition hover:border-indigo-500 hover:text-indigo-500 disabled:opacity-50"
-            >
-                <div className="font-bold">Yearly</div>
-                <div>${yearlyPrice} / year</div>
-                <div>{trialText}</div>
-            </button>
+                <button
+                    onClick={() => onUpgrade(tier, "yearly")}
+                    disabled={isProcessing || currentTier === tier}
+                    className="rounded-xl border border-border bg-background px-4 py-3 text-left text-xs font-semibold
+                    text-foreground transition hover:border-indigo-500 hover:text-indigo-500 disabled:opacity-50"
+                >
+                    <div className="font-bold">Yearly</div>
+                    <div>${yearlyPrice} / year</div>
+                    <div className="text-[11px] font-medium text-indigo-500">{trialText}</div>
+                </button>
+            </div>
+            <p className="text-[11px] text-[color:var(--muted)] font-medium text-center leading-tight">
+                7-day free trial. Then ${monthlyPrice}/month unless canceled before the trial ends.
+            </p>
         </div>
     );
 }
