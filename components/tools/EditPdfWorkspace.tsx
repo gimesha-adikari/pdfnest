@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
     AlertTriangle,
@@ -23,8 +23,6 @@ import {
     ZoomIn,
     ZoomOut,
 } from "lucide-react";
-import type { PDFDocumentProxy } from "pdfjs-dist";
-
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
@@ -38,7 +36,7 @@ import {
 } from "@/lib/editorJobs";
 import { notify } from "@/lib/notify";
 import { handleClientError } from "@/lib/errorHandler";
-import { loadPdfJs } from "../shared/LoadPdfJs";
+import { usePreviews } from "@/lib/preview/usePreviews";
 
 interface ElementStyle {
     bold?: boolean;
@@ -102,29 +100,6 @@ interface PDFAnalysis {
     pages: PageAnalysis[];
 }
 
-interface PdfJsPage {
-    rotate: number;
-    getViewport: (options: { scale: number; rotation?: number }) => { width: number; height: number };
-    render: (options: {
-        canvasContext: CanvasRenderingContext2D;
-        viewport: unknown;
-        canvas?: HTMLCanvasElement;
-    }) => {
-        promise: Promise<void>;
-        cancel: () => void;
-    };
-}
-
-interface PdfJsDocument {
-    numPages: number;
-    getPage: (pageNumber: number) => Promise<PdfJsPage>;
-}
-
-interface PdfRenderTask {
-    promise: Promise<void>;
-    cancel: () => void;
-}
-
 interface CustomPdfFile extends File {
     fileId?: string;
     tracker?: string;
@@ -156,8 +131,21 @@ function EditPdfWorkspace() {
     const [isCompiling, setIsCompiling] = useState(false);
     const [compileJobId, setCompileJobId] = useState<string | null>(null);
 
-    const [pdfDocument, setPdfDocument] = useState<PdfJsDocument | null>(null);
     const [analysis, setAnalysis] = useState<PDFAnalysis | null>(null);
+
+    const previewRequests = useMemo(
+        () =>
+            pages.map((page) => ({
+                file,
+                page: page.page_num,
+                scale: 2.0,
+                renderer: "server" as const,
+                enabled: Boolean(file),
+            })),
+        [file, pages]
+    );
+
+    const previewResults = usePreviews(previewRequests);
 
     const [error, setError] = useState<string | null>(null);
 
@@ -411,35 +399,7 @@ function EditPdfWorkspace() {
         };
     }, [extractJobId]);
 
-    // Load PDF.js for preview canvas
-    useEffect(() => {
-        if (!file) return;
 
-        let cancelled = false;
-
-        const loadPdf = async () => {
-            try {
-                const pdfjs = await loadPdfJs();
-                const buffer = await file.arrayBuffer();
-                const loadingTask = pdfjs.getDocument({ data: buffer });
-                const pdf = (await loadingTask.promise) as unknown as PdfJsDocument;
-
-                if (!cancelled) {
-                    setPdfDocument(pdf);
-                }
-            } catch (e) {
-                if (!cancelled) {
-                    console.error("Failed to render PDF preview canvas:", e);
-                }
-            }
-        };
-
-        void loadPdf();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [file]);
 
     // Poll compile job.
     //
@@ -777,7 +737,8 @@ function EditPdfWorkspace() {
                                             <div className="relative overflow-hidden rounded-xl border border-gray-300 shadow-2xl dark:border-zinc-800">
                                                 <PdfCanvasPage
                                                     page={page}
-                                                    pdfDocument={pdfDocument}
+                                                    previewSrc={previewResults[pageIdx]?.src}
+                                                    isPreviewLoading={previewResults[pageIdx]?.isLoading}
                                                     pageIdx={pageIdx}
                                                     zoomScale={zoomScale}
                                                     selectedElementIdx={selectedElementIdx}
@@ -989,7 +950,8 @@ function FormattingToolbar({ element, position, onStyleChange }: FormattingToolb
 
 interface PdfCanvasPageProps {
     page: PageData;
-    pdfDocument: PdfJsDocument | null;
+    previewSrc?: string;
+    isPreviewLoading?: boolean;
     pageIdx: number;
     zoomScale: number;
     selectedElementIdx: number | null;
@@ -1007,7 +969,8 @@ interface PdfCanvasPageProps {
 
 function PdfCanvasPage({
                            page,
-                           pdfDocument,
+                           previewSrc,
+                           isPreviewLoading,
                            pageIdx,
                            zoomScale,
                            selectedElementIdx,
@@ -1015,9 +978,6 @@ function PdfCanvasPage({
                            handleInputChange,
                            handleStyleChange,
                        }: PdfCanvasPageProps) {
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const renderTaskRef = useRef<PdfRenderTask | null>(null);
-
     const [toolbarPosition, setToolbarPosition] = useState<ToolbarPosition | null>(null);
     const activeInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -1056,60 +1016,23 @@ function PdfCanvasPage({
         };
     }, [updateToolbarPosition]);
 
-    useEffect(() => {
-        if (!pdfDocument) return;
-
-        let isCancelled = false;
-
-        const renderPage = async () => {
-            try {
-                const pdfPage = await pdfDocument.getPage(page.page_num);
-                if (isCancelled) return;
-
-                const viewport = pdfPage.getViewport({ scale: 1.0 * zoomScale });
-                const canvas = canvasRef.current;
-                if (!canvas) return;
-
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
-
-                const ctx = canvas.getContext("2d");
-                if (!ctx) return;
-
-                if (renderTaskRef.current) {
-                    renderTaskRef.current.cancel();
-                }
-
-                const task = pdfPage.render({
-                    canvasContext: ctx,
-                    viewport,
-                }) as unknown as PdfRenderTask;
-
-                renderTaskRef.current = task;
-                await task.promise;
-            } catch (e: unknown) {
-                if ((e as { name?: string })?.name !== "RenderingCancelledException") {
-                    console.error("PDF.js render error:", e);
-                }
-            }
-        };
-
-        void renderPage();
-
-        return () => {
-            isCancelled = true;
-            if (renderTaskRef.current) {
-                renderTaskRef.current.cancel();
-            }
-        };
-    }, [pdfDocument, page.page_num, zoomScale]);
-
     return (
         <div
-            className="relative bg-white dark:bg-zinc-950"
+            className="relative bg-white dark:bg-zinc-950 rounded-xl"
             style={{ width: `${scaledWidth}px`, height: `${scaledHeight}px` }}
         >
-            <canvas ref={canvasRef} className="absolute left-0 top-0 z-0 rounded-xl" />
+            {previewSrc ? (
+                <img
+                    src={previewSrc}
+                    alt={`Page ${page.page_num}`}
+                    className="absolute left-0 top-0 z-0 h-full w-full object-fill rounded-xl select-none"
+                    draggable={false}
+                />
+            ) : (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-zinc-900 rounded-xl">
+                    <Loader2 className="animate-spin text-indigo-500" size={24} />
+                </div>
+            )}
 
             <div className="absolute left-0 top-0 z-10 h-full w-full pointer-events-none">
                 {page.elements.map((element: LayoutElement, elementIdx: number) => {
