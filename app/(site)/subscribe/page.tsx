@@ -293,6 +293,13 @@ export default function SubscribePage() {
                     </div>
                 </div>
 
+                <div className="mt-8 text-center text-xs text-[color:var(--muted)] font-medium max-w-xl mx-auto">
+                    <p>
+                        Subscriptions auto-renew automatically at the end of each billing cycle (monthly or yearly) until canceled.
+                        You may cancel anytime from your account dashboard or by contacting support before your renewal date.
+                    </p>
+                </div>
+
                 <div className="mt-28 border-t border-[color:var(--border)] pt-20 max-w-4xl mx-auto text-center">
                     <h3 className="text-xl font-black tracking-tight mb-2">{content.securityTitle}</h3>
                     <p className="text-xs text-[color:var(--muted)] max-w-lg mx-auto font-medium">{content.securitySubtitle}</p>
