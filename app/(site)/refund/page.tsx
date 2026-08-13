@@ -172,16 +172,23 @@ export default function RefundPolicyPage() {
                 <section className="rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8">
                     <div className="mb-6 flex items-center gap-3">
                         <Clock3 className="h-6 w-6 text-violet-500" />
-                        <h2 className="text-2xmal font-black">
-                            Refund Processing
+                        <h2 className="text-2xl font-black">
+                            Refund Processing & Merchant of Record
                         </h2>
                     </div>
 
                     <p className="leading-8 text-[color:var(--muted-foreground)]">
-                        If a refund is approved, it will be processed using the
-                        original payment method whenever possible. Processing
-                        times may vary depending on your payment provider or
-                        financial institution.
+                        All payments and order transactions are handled securely by Paddle.com as our Merchant of Record.
+                        If a refund is approved, it will be processed through Paddle to your original payment method.
+                        For order, billing, or transaction inquiries, you may also contact Paddle Buyer Support directly at{" "}
+                        <a
+                            href="https://paddle.net"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-bold text-indigo-500 hover:underline"
+                        >
+                            https://paddle.net
+                        </a>.
                     </p>
                 </section>
 
