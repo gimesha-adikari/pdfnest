@@ -8,7 +8,7 @@ import {
     useState,
     type ReactNode,
 } from "react";
-import { useParams } from "next/navigation";
+import { useParams, notFound } from "next/navigation";
 import { NAV_TOOLS } from "@/lib/toolsData";
 import ToolFAQ from "@/components/SEO/ToolFAQ";
 import { fetchJson } from "@/lib/api";
@@ -151,7 +151,11 @@ export default function ClientToolLayout({ children }: { children: ReactNode }) 
                         multiple: activeFallback.multiple || false,
                         accept: activeFallback.accept || ".pdf",
                     });
+                    return;
                 }
+
+                // Path matches neither remote tool database nor local NAV_TOOLS array: trigger 404
+                notFound();
             })
             .catch((err) => {
                 if (cancelled) return;
@@ -167,6 +171,8 @@ export default function ClientToolLayout({ children }: { children: ReactNode }) 
                         multiple: activeFallback.multiple || false,
                         accept: activeFallback.accept || ".pdf",
                     });
+                } else {
+                    notFound();
                 }
             })
             .finally(() => {
