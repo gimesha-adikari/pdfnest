@@ -103,7 +103,7 @@ export default function ContactForm() {
                     </div>
                     <div className="inline-flex items-center gap-2 rounded-xl border border-[color:var(--border)] bg-[var(--card)] px-4 py-2 text-sm">
                         <Calendar className="h-4 w-4 text-indigo-500" />
-                        Monday – Friday
+                        Monday – Friday (Sri Lanka Time, UTC+5:30)
                     </div>
                 </div>
             </section>
@@ -293,10 +293,10 @@ export default function ContactForm() {
                         <div className="mt-6 space-y-3">
                             {[
                                 { href: "/security", label: "Security" },
-                                { href: "/refund-policy", label: "Refund Policy" },
+                                { href: "/refund", label: "Refund Policy" },
                                 { href: "/privacy", label: "Privacy Policy" },
                                 { href: "/terms", label: "Terms of Service" },
-                                { href: "/faq", label: "Frequently Asked Questions" },
+                                { href: "/about", label: "About Platen PDF" },
                             ].map((item) => (
                                 <Link
                                     key={item.href}
