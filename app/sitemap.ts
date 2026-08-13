@@ -25,6 +25,16 @@ export default function sitemap(): MetadataRoute.Sitemap {
             priority: 0.9,
         },
         {
+            url: url("/pricing"),
+            changeFrequency: "weekly",
+            priority: 0.9,
+        },
+        {
+            url: url("/subscribe"),
+            changeFrequency: "weekly",
+            priority: 0.8,
+        },
+        {
             url: url("/privacy"),
             changeFrequency: "monthly",
             priority: 0.3,
