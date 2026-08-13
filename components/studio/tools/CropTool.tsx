@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { uploadAndDownloadFile } from "@/lib/api";
 import { handleClientError } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
+import { usePreview } from "@/lib/preview/usePreview";
 import {
     ArrowLeft,
     ArrowRight,
@@ -18,14 +19,8 @@ interface CustomPdfFile extends File {
     originalPassword?: string;
 }
 
-interface PdfJsRenderTask {
-    cancel: () => void;
-    promise: Promise<void>;
-}
-
 interface PdfJsPage {
     getViewport: (options: { scale: number }) => { width: number; height: number };
-    render: (options: unknown) => PdfJsRenderTask;
 }
 
 interface PdfJsDocument {
@@ -83,9 +78,16 @@ export default function CropTool({ baseFile, onCroppedFile }: CropToolProps) {
     const [pageCount, setPageCount] = useState(0);
     const [currentPage, setCurrentPage] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
-    const [isRenderingCanvas, setIsRenderingCanvas] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
+
+    const preview = usePreview({
+        file: baseFile,
+        page: currentPage,
+        scale: 1.2,
+        mode: "page",
+        renderer: "server",
+    });
 
     const [xmin, setXmin] = useState(50);
     const [ymin, setYmin] = useState(50);
@@ -112,9 +114,8 @@ export default function CropTool({ baseFile, onCroppedFile }: CropToolProps) {
         ymax: 0,
     });
 
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const imgRef = useRef<HTMLImageElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
-    const renderTaskRef = useRef<PdfJsRenderTask | null>(null);
     const didInitBoxRef = useRef(false);
 
     const [pageSelectionMode, setPageSelectionMode] = useState<PageSelectionMode>("current");
@@ -149,7 +150,6 @@ export default function CropTool({ baseFile, onCroppedFile }: CropToolProps) {
         setYmax(500);
         setSuccess(false);
         setIsLoading(false);
-        setIsRenderingCanvas(false);
         setPageSelectionMode("current");
         setCustomPagesInput("");
         didInitBoxRef.current = false;
@@ -203,79 +203,37 @@ export default function CropTool({ baseFile, onCroppedFile }: CropToolProps) {
     }, [baseFile, resetCropState]);
 
     useEffect(() => {
-        if (!pdfDocument || !canvasRef.current) return;
+        if (!pdfDocument) return;
 
         let cancelled = false;
 
-        const renderPage = async () => {
+        const syncPdfDimensions = async () => {
             try {
-                setIsRenderingCanvas(true);
-
-                if (renderTaskRef.current) {
-                    renderTaskRef.current.cancel();
-                }
-
                 const page = await pdfDocument.getPage(currentPage);
-                const canvas = canvasRef.current;
-                if (!canvas) return;
-
-                const ctx = canvas.getContext("2d");
-                if (!ctx) return;
-
-                const baseViewport = page.getViewport({ scale: 1.0 });
-                const renderViewport = page.getViewport({ scale: 1.2 });
-
-                canvas.width = renderViewport.width;
-                canvas.height = renderViewport.height;
-
-                const renderTask = page.render({
-                    canvasContext: ctx,
-                    viewport: renderViewport,
-                } as unknown);
-
-                renderTaskRef.current = renderTask;
-                await renderTask.promise;
-                renderTaskRef.current = null;
-
                 if (cancelled) return;
-
-                const syncLayoutMetrics = () => {
-                    if (cancelled) return;
-                    if (canvasRef.current && canvasRef.current.clientWidth > 0) {
-                        setPdfDimensions({
-                            width: baseViewport.width,
-                            height: baseViewport.height,
-                        });
-
-                        setDisplayDimensions({
-                            width: canvasRef.current.clientWidth,
-                            height: canvasRef.current.clientHeight,
-                        });
-                    } else {
-                        requestAnimationFrame(syncLayoutMetrics);
-                    }
-                };
-
-                requestAnimationFrame(syncLayoutMetrics);
-            } catch (err: unknown) {
-                const errorObj = err as Error;
-                if (errorObj?.name !== "RenderingCancelledException") {
-                    console.error("Canvas render failed:", err);
-                }
-            } finally {
-                if (!cancelled) {
-                    setIsRenderingCanvas(false);
-                }
+                const baseViewport = page.getViewport({ scale: 1.0 });
+                setPdfDimensions({
+                    width: baseViewport.width,
+                    height: baseViewport.height,
+                });
+            } catch (err) {
+                console.error("Failed to fetch PDF dimensions:", err);
             }
         };
 
-        renderPage();
+        void syncPdfDimensions();
 
+        return () => {
+            cancelled = true;
+        };
+    }, [pdfDocument, currentPage]);
+
+    useEffect(() => {
         const updateDisplaySize = () => {
-            if (canvasRef.current && canvasRef.current.clientWidth > 0) {
+            if (imgRef.current && imgRef.current.clientWidth > 0) {
                 setDisplayDimensions({
-                    width: canvasRef.current.clientWidth,
-                    height: canvasRef.current.clientHeight,
+                    width: imgRef.current.clientWidth,
+                    height: imgRef.current.clientHeight,
                 });
             }
         };
@@ -283,11 +241,9 @@ export default function CropTool({ baseFile, onCroppedFile }: CropToolProps) {
         window.addEventListener("resize", updateDisplaySize);
 
         return () => {
-            cancelled = true;
             window.removeEventListener("resize", updateDisplaySize);
-            if (renderTaskRef.current) renderTaskRef.current.cancel();
         };
-    }, [pdfDocument, currentPage]);
+    }, []);
 
     useEffect(() => {
         if (pdfDimensions.width > 0 && !didInitBoxRef.current) {
@@ -567,7 +523,7 @@ export default function CropTool({ baseFile, onCroppedFile }: CropToolProps) {
 
                 <button
                     onClick={handleApplyCrop}
-                    disabled={isProcessing || isRenderingCanvas || isLoading || pdfDimensions.width === 0}
+                    disabled={isProcessing || preview.isLoading || isLoading || pdfDimensions.width === 0}
                     className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-4 rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
                     {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <Crop size={18} />}
@@ -582,7 +538,7 @@ export default function CropTool({ baseFile, onCroppedFile }: CropToolProps) {
             </div>
 
             <div className="lg:col-span-8 flex flex-col bg-[color:var(--background)]/30 border border-[color:var(--border)] rounded-2xl p-4 relative h-[65vh] min-h-[400px]">
-                {(isRenderingCanvas || isLoading) && (
+                {(preview.isLoading || isLoading) && (
                     <div className="absolute inset-0 bg-[color:var(--background)]/40 backdrop-blur-sm rounded-2xl z-20 flex flex-col items-center justify-center text-xs font-medium text-[color:var(--muted)]">
                         <Loader2 className="animate-spin text-indigo-500 mb-2" size={24} />
                         Synchronizing view...
@@ -623,7 +579,20 @@ export default function CropTool({ baseFile, onCroppedFile }: CropToolProps) {
                         ref={containerRef}
                         className="relative shadow-xl rounded border border-gray-400/20 bg-white max-w-full max-h-full flex items-center justify-center"
                     >
-                        <canvas ref={canvasRef} className="max-w-full max-h-[52vh] object-contain block rounded" />
+                        <img
+                            ref={imgRef}
+                            src={preview.src}
+                            alt="PDF Page Preview"
+                            className="max-w-full max-h-[52vh] object-contain block rounded"
+                            onLoad={() => {
+                                if (imgRef.current && imgRef.current.clientWidth > 0) {
+                                    setDisplayDimensions({
+                                        width: imgRef.current.clientWidth,
+                                        height: imgRef.current.clientHeight,
+                                    });
+                                }
+                            }}
+                        />
 
                         <div
                             style={overlayStyles}

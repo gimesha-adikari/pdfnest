@@ -11,19 +11,14 @@ import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
+import { usePreview } from "@/lib/preview/usePreview";
 
 interface CustomPdfFile extends File {
     originalPassword?: string;
 }
 
-interface PdfJsRenderTask {
-    cancel: () => void;
-    promise: Promise<void>;
-}
-
 interface PdfJsPage {
     getViewport: (options: { scale: number }) => { width: number; height: number };
-    render: (options: { canvasContext: CanvasRenderingContext2D; viewport: unknown }) => PdfJsRenderTask;
 }
 
 interface PdfJsDocument {
@@ -66,7 +61,14 @@ export default function CropPdfWorkspace() {
     const [pdfDocument, setPdfDocument] = useState<PdfJsDocument | null>(null);
     const [currentPage, setCurrentPage] = useState<number>(1);
     const [totalPages, setTotalPages] = useState<number>(0);
-    const [isRenderingCanvas, setIsRenderingCanvas] = useState<boolean>(false);
+
+    const preview = usePreview({
+        file,
+        page: currentPage,
+        scale: 1.5,
+        mode: "page",
+        renderer: "server",
+    });
 
     // Track baseline PDF point dimensions (unscaled)
     const [pdfDimensions, setPdfDimensions] = useState({ width: 0, height: 0 });
@@ -83,9 +85,8 @@ export default function CropPdfWorkspace() {
         ymax: 0,
     });
 
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const imgRef = useRef<HTMLImageElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
-    const renderTaskRef = useRef<PdfJsRenderTask | null>(null);
 
     const [pageSelectionMode, setPageSelectionMode] = useState<PageSelectionMode>("current");
     const [customPagesInput, setCustomPagesInput] = useState<string>("");
@@ -140,7 +141,6 @@ export default function CropPdfWorkspace() {
 
         const loadPdf = async () => {
             try {
-                setIsRenderingCanvas(true);
                 const pdfjsLib = await import("pdfjs-dist");
                 pdfjsLib.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
 
@@ -155,8 +155,6 @@ export default function CropPdfWorkspace() {
                 setPageSelectionMode("current");
             } catch (err) {
                 console.error("Failed to parse document context framework:", err);
-            } finally {
-                setIsRenderingCanvas(false);
             }
         };
 
@@ -164,65 +162,34 @@ export default function CropPdfWorkspace() {
     }, [file]);
 
     useEffect(() => {
-        if (!pdfDocument || !canvasRef.current) return;
+        if (!pdfDocument) return;
 
-        const renderPage = async () => {
+        let cancelled = false;
+
+        const syncPdfDimensions = async () => {
             try {
-                setIsRenderingCanvas(true);
-
-                if (renderTaskRef.current) {
-                    renderTaskRef.current.cancel();
-                }
-
                 const page = await pdfDocument.getPage(currentPage);
-                const canvas = canvasRef.current;
-                if (!canvas) return;
-
-                const ctx = canvas.getContext("2d");
-                if (!ctx) return;
-
+                if (cancelled) return;
                 const baseViewport = page.getViewport({ scale: 1.0 });
-
-                const renderViewport = page.getViewport({ scale: 1.5 });
-
-                canvas.width = renderViewport.width;
-                canvas.height = renderViewport.height;
-
-                const renderTask = page.render({
-                    canvasContext: ctx,
-                    viewport: renderViewport,
-                });
-                renderTaskRef.current = renderTask;
-
-                await renderTask.promise;
-                renderTaskRef.current = null;
-
-                setTimeout(() => {
-                    if (canvasRef.current) {
-                        setPdfDimensions({ width: baseViewport.width, height: baseViewport.height });
-                        setDisplayDimensions({
-                            width: canvasRef.current.clientWidth,
-                            height: canvasRef.current.clientHeight,
-                        });
-                    }
-                }, 0);
-            } catch (err: unknown) {
-                const errorObj = err as Error;
-                if (errorObj?.name !== "RenderingCancelledException") {
-                    console.error("Canvas raster generation skipped:", err);
-                }
-            } finally {
-                setIsRenderingCanvas(false);
+                setPdfDimensions({ width: baseViewport.width, height: baseViewport.height });
+            } catch (err) {
+                console.error("Failed to fetch PDF dimensions:", err);
             }
         };
 
-        renderPage();
+        syncPdfDimensions();
 
+        return () => {
+            cancelled = true;
+        };
+    }, [pdfDocument, currentPage]);
+
+    useEffect(() => {
         const updateDisplaySize = () => {
-            if (canvasRef.current) {
+            if (imgRef.current && imgRef.current.clientWidth > 0) {
                 setDisplayDimensions({
-                    width: canvasRef.current.clientWidth,
-                    height: canvasRef.current.clientHeight,
+                    width: imgRef.current.clientWidth,
+                    height: imgRef.current.clientHeight,
                 });
             }
         };
@@ -230,9 +197,8 @@ export default function CropPdfWorkspace() {
         window.addEventListener("resize", updateDisplaySize);
         return () => {
             window.removeEventListener("resize", updateDisplaySize);
-            if (renderTaskRef.current) renderTaskRef.current.cancel();
         };
-    }, [pdfDocument, currentPage]);
+    }, []);
 
     useEffect(() => {
         if (pdfDimensions.width > 0) {
@@ -534,14 +500,14 @@ export default function CropPdfWorkspace() {
                             text="Crop PDF Document"
                             loadingText="Cropping Canvas Space..."
                             loading={isProcessing}
-                            disabled={isProcessing || isRenderingCanvas}
+                            disabled={isProcessing || preview.isLoading}
                             onClick={handleCropProcessing}
                         />
                     </div>
 
                     {/* Simulator Workspace */}
                     <div className="lg:col-span-7 flex flex-col bg-[color:var(--background)]/30 border border-[color:var(--border)] rounded-2xl p-6 relative w-full">
-                        {isRenderingCanvas && (
+                        {preview.isLoading && (
                             <div className="absolute inset-0 bg-[color:var(--background)]/40 backdrop-blur-sm rounded-2xl z-20 flex flex-col items-center justify-center text-xs font-medium text-[color:var(--muted)]">
                                 <Loader2 className="animate-spin text-indigo-500 mb-2" size={24} />
                                 Synchronizing document view matrix...
@@ -577,7 +543,22 @@ export default function CropPdfWorkspace() {
 
                         <div className="w-full flex items-center justify-center bg-gray-500/5 dark:bg-black/20 rounded-xl border border-[color:var(--border)] p-4 relative overflow-hidden">
                             <div ref={containerRef} className="relative shadow-xl rounded border border-gray-400/20 bg-white max-w-full h-auto">
-                                <canvas ref={canvasRef} className="max-w-full h-auto block rounded" />
+                                {preview.src ? (
+                                    <img
+                                        ref={imgRef}
+                                        src={preview.src}
+                                        alt="PDF Page Preview"
+                                        className="max-w-full h-auto block rounded"
+                                        onLoad={() => {
+                                            if (imgRef.current && imgRef.current.clientWidth > 0) {
+                                                setDisplayDimensions({
+                                                    width: imgRef.current.clientWidth,
+                                                    height: imgRef.current.clientHeight,
+                                                });
+                                            }
+                                        }}
+                                    />
+                                ) : null}
 
                                 {/* Interactive Resizing Bounding Overlay Selector */}
                                 <div
@@ -645,3 +626,4 @@ export default function CropPdfWorkspace() {
         </>
     );
 }
+
