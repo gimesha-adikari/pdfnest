@@ -202,81 +202,79 @@ export default function Home() {
                                 </span>
                             </h1>
 
-                            {!isLoading && (
-                                <div className="mx-auto mt-8 max-w-2xl">
-                                    {isProUser && (
-                                        <div
-                                            className={`${subtlePanelClass} flex w-full flex-col items-center justify-between gap-4 p-4 sm:flex-row`}
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                <CheckCircle2 className="text-emerald-500" size={18}/>
+                            <div className="mx-auto mt-8 max-w-2xl">
+                                {!isLoading && isProUser && (
+                                    <div
+                                        className={`${subtlePanelClass} flex w-full flex-col items-center justify-between gap-4 p-4 sm:flex-row`}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <CheckCircle2 className="text-emerald-500" size={18}/>
+                                            <span
+                                                className="text-sm font-medium text-[color:var(--muted-foreground)]">
+                                                Access:{" "}
                                                 <span
-                                                    className="text-sm font-medium text-[color:var(--muted-foreground)]">
-                                                    Access:{" "}
-                                                    <span
-                                                        className="font-bold uppercase text-[color:var(--foreground)]">
-                                                        All Premium Workspaces & Advanced Tools
-                                                    </span>
+                                                    className="font-bold uppercase text-[color:var(--foreground)]">
+                                                    All Premium Workspaces & Advanced Tools
                                                 </span>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {isPlusUser && (
-                                        <div
-                                            className={`${subtlePanelClass} flex w-full flex-col items-center justify-between gap-4 p-4 sm:flex-row`}
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                <CheckCircle2 className="text-emerald-500" size={18}/>
-                                                <span
-                                                    className="text-sm font-medium text-[color:var(--muted-foreground)]">
-                                                    Access:{" "}
-                                                    <span
-                                                        className="font-bold uppercase text-[color:var(--foreground)]">
-                                                        All Premium Workspaces & Advanced Tools
-                                                    </span>
-                                                </span>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {isFreeUser && (
-                                        <div
-                                            className={`${subtlePanelClass} flex w-full flex-col items-center justify-between gap-4 p-4 sm:flex-row`}
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                <Zap className="text-indigo-500" size={18}/>
-                                                <span
-                                                    className="text-sm font-medium text-[color:var(--muted-foreground)]">
-                                                    Daily Usage:{" "}
-                                                    <span className="font-bold text-[color:var(--foreground)]">
-                                                        5 operations remaining today
-                                                    </span>
-                                                </span>
-                                            </div>
-
-                                            <div className="hidden h-4 w-px bg-[color:var(--border)] sm:block"/>
-
-                                            <Link
-                                                href="/subscribe"
-                                                className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 transition hover:text-indigo-500 hover:underline"
-                                            >
-                                                {content.authBannerFreeAction || "Upgrade"} <ArrowUpRight size={12}/>
-                                            </Link>
-                                        </div>
-                                    )}
-
-                                    {isGuest && (
-                                        <p className="text-pretty text-base leading-relaxed text-[color:var(--muted-foreground)] sm:text-lg">
-                                            {content.heroSubtitleGuest ||
-                                                "Edit, convert, secure, and organize documents online."}
-                                            <span className="mt-2 block font-bold text-indigo-600">
-                                                {content.heroSubtitleGuestBold || "Start free. Upgrade anytime."}
                                             </span>
-                                        </p>
-                                    )}
-                                </div>
-                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {!isLoading && isPlusUser && (
+                                    <div
+                                        className={`${subtlePanelClass} flex w-full flex-col items-center justify-between gap-4 p-4 sm:flex-row`}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <CheckCircle2 className="text-emerald-500" size={18}/>
+                                            <span
+                                                className="text-sm font-medium text-[color:var(--muted-foreground)]">
+                                                Access:{" "}
+                                                <span
+                                                    className="font-bold uppercase text-[color:var(--foreground)]">
+                                                    All Premium Workspaces & Advanced Tools
+                                                </span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {!isLoading && isFreeUser && (
+                                    <div
+                                        className={`${subtlePanelClass} flex w-full flex-col items-center justify-between gap-4 p-4 sm:flex-row`}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <Zap className="text-indigo-500" size={18}/>
+                                            <span
+                                                className="text-sm font-medium text-[color:var(--muted-foreground)]">
+                                                Daily Usage:{" "}
+                                                <span className="font-bold text-[color:var(--foreground)]">
+                                                    5 operations remaining today
+                                                </span>
+                                            </span>
+                                        </div>
+
+                                        <div className="hidden h-4 w-px bg-[color:var(--border)] sm:block"/>
+
+                                        <Link
+                                            href="/subscribe"
+                                            className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 transition hover:text-indigo-500 hover:underline"
+                                        >
+                                            {content.authBannerFreeAction || "Upgrade"} <ArrowUpRight size={12}/>
+                                        </Link>
+                                    </div>
+                                )}
+
+                                {(isLoading || isGuest) && (
+                                    <p className="text-pretty text-base leading-relaxed text-[color:var(--muted-foreground)] sm:text-lg">
+                                        {content.heroSubtitleGuest ||
+                                            "Edit, convert, secure, and organize documents online."}
+                                        <span className="mt-2 block font-bold text-indigo-600">
+                                            {content.heroSubtitleGuestBold || "Start free. Upgrade anytime."}
+                                        </span>
+                                    </p>
+                                )}
+                            </div>
                         </div>
                     </div>
 
