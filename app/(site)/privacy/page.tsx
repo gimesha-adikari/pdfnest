@@ -1,5 +1,5 @@
 import ContactCard from "@/components/legal/ContactCard";
-import {EMAILS} from "@/lib/constants";
+import { EMAILS, LEGAL_OPERATOR } from "@/lib/constants";
 
 export const metadata = {
     title: "Privacy Policy | Platen PDF",
@@ -49,10 +49,10 @@ export default function PrivacyPolicyPage() {
                                 Effective Date: July 31, 2026
                             </div>
                             <div className="rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
-                                Operated by Platen
+                                Operated by {LEGAL_OPERATOR.legalName}
                             </div>
                             <div className="rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
-                                Sri Lanka
+                                {LEGAL_OPERATOR.country}
                             </div>
                         </div>
                     </div>
@@ -79,7 +79,7 @@ export default function PrivacyPolicyPage() {
                     <article className="space-y-6">
                         <section className="rounded-2xl border border-border/60 bg-card/60 p-6 sm:p-7 shadow-sm">
                             <p className="text-sm leading-7 text-foreground/90">
-                                Platen PDF is operated by Platen (&#34;we&#34;, &#34;us&#34;, or &#34;our&#34;), an individual based in Sri Lanka.
+                                Platen PDF is operated by {LEGAL_OPERATOR.legalName}, trading as {LEGAL_OPERATOR.tradingAs}, located at {LEGAL_OPERATOR.fullAddress} (&#34;we&#34;, &#34;us&#34;, or &#34;our&#34;).
                                 We respect your privacy and are committed to protecting your personal information. This Privacy
                                 Policy explains what information we collect, how we use it, how we store it, and the choices you
                                 have regarding your data.
