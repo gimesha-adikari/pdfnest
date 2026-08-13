@@ -227,6 +227,7 @@ export default function MobileNav() {
                                 text="All Tools"
                                 close={closeSidebar}
                             />
+                            <MobileLink href="/pricing" icon={<Zap size={18} />} text="Pricing" close={closeSidebar} />
                             <MobileLink href="/about" icon={<Info size={18} />} text="About" close={closeSidebar} />
                         </div>
 
