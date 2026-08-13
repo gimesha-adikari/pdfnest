@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 
 import { EmailButton } from "@/components/ui/EmailButton";
-import { EMAILS } from "@/lib/constants";
+import { EMAILS, LEGAL_OPERATOR } from "@/lib/constants";
 
 export const metadata = {
     title: "Terms of Service | Platen PDF",
@@ -137,7 +137,7 @@ export default function TermsPage() {
 
                             <p className="mt-6 max-w-3xl text-base leading-8 text-[color:var(--muted)] md:text-lg">
                                 These Terms of Service govern your access to and use of Platen PDF,
-                                operated by Platen, an individual based in Sri Lanka.
+                                operated by {LEGAL_OPERATOR.legalName}, trading as {LEGAL_OPERATOR.tradingAs}, located at {LEGAL_OPERATOR.fullAddress}.
                             </p>
 
                             <div className="mt-8 flex flex-wrap gap-3">
@@ -259,7 +259,8 @@ export default function TermsPage() {
 
                     <SectionCard icon={HandCoins} title="6. Subscriptions and Billing" accent="slate">
                         <p>
-                            Some features may require a paid subscription. Payments are processed through Paddle.
+                            Some features may require a paid subscription. Our order process is conducted by our online reseller Paddle.com.
+                            Paddle.com is the Merchant of Record for all our orders. Paddle provides all customer service inquiries and returns.
                         </p>
                     </SectionCard>
 
