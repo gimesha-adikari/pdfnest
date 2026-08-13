@@ -65,27 +65,42 @@ export default function AboutPage() {
         );
     }
 
-    if (!data) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-[color:var(--background)] text-[color:var(--foreground)] px-4">
-                <div className="max-w-md rounded-3xl border border-[color:var(--border)] bg-[var(--card)]/40 p-8 text-center shadow-sm">
-                    <h1 className="text-2xl font-black tracking-tight">
-                        About content not ready
-                    </h1>
-                    <p className="mt-3 text-sm text-[color:var(--muted)] leading-relaxed">
-                        Content is currently being configured by the administrator.
-                    </p>
-                    <Link
-                        href="/contact"
-                        className="mt-6 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700"
-                    >
-                        <Mail size={16} />
-                        Contact Platen PDF
-                    </Link>
-                </div>
-            </div>
-        );
-    }
+    const fallbackData: AboutData = {
+        HeroTag: "Next-Gen PDF Infrastructure",
+        HeroTitle: "Built for Secure & Fast Document Processing",
+        HeroDescription: "Platen PDF is an online document engine designed for fast, private, and powerful PDF management directly in your browser or isolated sandbox environments.",
+        StatsJson: JSON.stringify([]),
+        SectionTitle: "Core Platform Philosophy",
+        SectionSubtitle: "Designed with privacy, performance, and simplicity as first principles.",
+        HighlightsJson: JSON.stringify([
+            { title: "Browser & Isolated Processing", description: "Files are processed inside secure execution containers or locally in your browser." },
+            { title: "Automated Data Lifecycle", description: "Uploaded documents and generated files are automatically deleted after processing." },
+            { title: "Modular Toolsuite", description: "Comprehensive utilities to merge, split, compress, edit, redact, and convert documents." }
+        ]),
+        StudioTitle: "PDF Studio Workspace",
+        StudioDescription: "A unified interactive editor enabling visual layout reordering, content annotation, and multi-tool chain operations.",
+        StudioFeaturesJson: JSON.stringify([
+            "Visual drag-and-drop page sorting grid",
+            "Multi-tool operation chaining",
+            "Real-time page preview & rotation"
+        ]),
+        CanvasTitle: "Interactive Document Canvas",
+        CanvasDescription: "Work with vector overlays, watermark positioning, page number pagination, and document metadata editing.",
+        CanvasFeaturesJson: JSON.stringify([
+            "Custom text & logo watermarking",
+            "Precision pagination positioning",
+            "Metadata property editing"
+        ]),
+        SecurityTitle: "Security & Privacy Guarantee",
+        SecurityDescription: "We strictly protect user data. All processing sandboxes clear cache automatically, and no uploaded document content is permanently stored.",
+        RoadmapTitle: "Platform Capabilities",
+        RoadmapDescription: "Continuously expanding PDF engine utilities.",
+        RoadmapJson: JSON.stringify(["Fast OCR Engine", "Batch Conversion", "High-DPI Render", "Cloudflare R2 Sync"]),
+        MissionTitle: "Our Mission",
+        MissionDescription: "Provide high-performance document tools accessible anywhere without compromising user privacy or file security."
+    };
+
+    const activeData = data || fallbackData;
 
     const totalToolsCount = toolsList.length;
     const uniqueCategories = new Set(
@@ -109,12 +124,12 @@ export default function AboutPage() {
         }
     };
 
-    const highlights = parse(data.HighlightsJson);
-    const studioFeatures = parse(data.StudioFeaturesJson);
-    const canvasFeatures = parse(data.CanvasFeaturesJson);
-    const roadmapItems = parse(data.RoadmapJson);
+    const highlights = parse(activeData.HighlightsJson);
+    const studioFeatures = parse(activeData.StudioFeaturesJson);
+    const canvasFeatures = parse(activeData.CanvasFeaturesJson);
+    const roadmapItems = parse(activeData.RoadmapJson);
 
-    const heroParts = data.HeroTitle.trim().split(/\s+/);
+    const heroParts = activeData.HeroTitle.trim().split(/\s+/);
     const heroLead =
         heroParts.length > 2 ? heroParts.slice(0, -2).join(" ") : heroParts[0] || "";
     const heroAccent =
@@ -126,7 +141,7 @@ export default function AboutPage() {
                 <header className="text-center">
                     <div className="inline-flex items-center gap-2 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-400">
                         <Flame size={12} />
-                        {data.HeroTag}
+                        {activeData.HeroTag}
                     </div>
 
                     <h1 className="mt-8 text-4xl font-black tracking-tight sm:text-6xl">
@@ -139,7 +154,7 @@ export default function AboutPage() {
                     </h1>
 
                     <p className="mx-auto mt-8 max-w-3xl text-base leading-relaxed text-[color:var(--muted)] md:text-lg">
-                        {data.HeroDescription}
+                        {activeData.HeroDescription}
                     </p>
 
                     <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
@@ -179,9 +194,9 @@ export default function AboutPage() {
 
                 <section className="mt-24">
                     <div className="text-center mb-12">
-                        <h2 className="text-3xl font-black">{data.SectionTitle}</h2>
+                        <h2 className="text-3xl font-black">{activeData.SectionTitle}</h2>
                         <p className="mt-4 text-[color:var(--muted)]">
-                            {data.SectionSubtitle}
+                            {activeData.SectionSubtitle}
                         </p>
                     </div>
 
@@ -205,10 +220,10 @@ export default function AboutPage() {
                 <section className="mt-24 grid gap-8 lg:grid-cols-2">
                     <div className="rounded-3xl border border-[color:var(--border)] bg-[var(--card)]/30 p-8">
                         <h3 className="text-2xl font-bold mb-4">
-                            {data.StudioTitle}
+                            {activeData.StudioTitle}
                         </h3>
                         <p className="text-[color:var(--muted)] mb-6 leading-relaxed">
-                            {data.StudioDescription}
+                            {activeData.StudioDescription}
                         </p>
                         <ul className="space-y-3 text-sm text-[color:var(--muted)]">
                             {studioFeatures.map((f: string, i: number) => (
@@ -221,10 +236,10 @@ export default function AboutPage() {
 
                     <div className="rounded-3xl border border-[color:var(--border)] bg-[var(--card)]/30 p-8">
                         <h3 className="text-2xl font-bold mb-4">
-                            {data.CanvasTitle}
+                            {activeData.CanvasTitle}
                         </h3>
                         <p className="text-[color:var(--muted)] mb-6 leading-relaxed">
-                            {data.CanvasDescription}
+                            {activeData.CanvasDescription}
                         </p>
                         <ul className="space-y-3 text-sm text-[color:var(--muted)]">
                             {canvasFeatures.map((f: string, i: number) => (
@@ -239,10 +254,10 @@ export default function AboutPage() {
                 <section className="mt-24 rounded-3xl border border-[color:var(--border)] bg-emerald-500/[0.02] p-10">
                     <h2 className="mb-4 flex items-center gap-2 text-2xl font-bold">
                         <ShieldCheck className="text-emerald-500" />
-                        {data.SecurityTitle}
+                        {activeData.SecurityTitle}
                     </h2>
                     <p className="max-w-3xl text-[color:var(--muted)] leading-relaxed">
-                        {data.SecurityDescription}
+                        {activeData.SecurityDescription}
                     </p>
                 </section>
 
@@ -250,7 +265,7 @@ export default function AboutPage() {
                     <div className="rounded-3xl border border-[color:var(--border)] bg-[var(--card)]/30 p-10">
                         <h2 className="mb-6 flex items-center gap-2 text-2xl font-bold">
                             <Rocket className="text-indigo-400" />
-                            {data.RoadmapTitle}
+                            {activeData.RoadmapTitle}
                         </h2>
                         <div className="grid grid-cols-2 gap-4">
                             {roadmapItems.map((item: string, i: number) => (
@@ -266,10 +281,10 @@ export default function AboutPage() {
 
                     <div className="rounded-3xl border border-[color:var(--border)] bg-[var(--card)]/30 p-10">
                         <h2 className="mb-6 text-2xl font-bold">
-                            {data.MissionTitle}
+                            {activeData.MissionTitle}
                         </h2>
                         <p className="text-[color:var(--muted)] leading-relaxed">
-                            {data.MissionDescription}
+                            {activeData.MissionDescription}
                         </p>
 
                         <div className="mt-8 rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-5">
