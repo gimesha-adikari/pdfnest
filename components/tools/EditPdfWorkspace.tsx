@@ -1,13 +1,32 @@
 "use client";
 
-import {useEffect, useRef, useState} from "react";
-import Link from "next/link";
-import {useRouter} from "next/navigation";
-import {AlertTriangle, Download, FileEdit, Loader2, RefreshCw, RotateCw,} from "lucide-react";
-import type {PDFDocumentProxy} from "pdfjs-dist";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import {
+    AlertTriangle,
+    Bold,
+    ChevronLeft,
+    ChevronRight,
+    Download,
+    Highlighter,
+    Italic,
+    Loader2,
+    Maximize2,
+    Palette,
+    Redo2,
+    RefreshCw,
+    RotateCw,
+    Strikethrough,
+    Type,
+    Underline,
+    Undo2,
+    ZoomIn,
+    ZoomOut,
+} from "lucide-react";
+import type { PDFDocumentProxy } from "pdfjs-dist";
 
-import {useAuth} from "@/context/AuthContext";
-import {useSharedTool} from "@/app/(site)/[toolId]/ClientToolLayout";
+import { useAuth } from "@/context/AuthContext";
+import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import JobProgressCard from "@/components/studio/ui/JobProgressCard";
 import {
@@ -17,13 +36,30 @@ import {
     submitEditorExtract,
     waitForEditorJob,
 } from "@/lib/editorJobs";
-import {getBaseUrl} from "@/lib/api";
-import {notify} from "@/lib/notify";
-import {handleClientError} from "@/lib/errorHandler";
-import {loadPdfJs} from "../shared/LoadPdfJs";
+import { notify } from "@/lib/notify";
+import { handleClientError } from "@/lib/errorHandler";
+import { loadPdfJs } from "../shared/LoadPdfJs";
+
+interface ElementStyle {
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
+    strikethrough?: boolean;
+    color?: string;
+    fontSize?: number;
+    fontFamily?: string;
+    background?: {
+        enabled?: boolean;
+        color?: string;
+    } | string;
+}
 
 interface LayoutElement {
     text: string;
+    original_text?: string;
+    target_substring?: string;
+    selection_start?: number;
+    selection_end?: number;
     x: number;
     y: number;
     width: number;
@@ -32,6 +68,7 @@ interface LayoutElement {
     font: string;
     bg_color?: string;
     text_color?: string;
+    style?: ElementStyle;
 }
 
 interface PageData {
@@ -39,6 +76,14 @@ interface PageData {
     width: number;
     height: number;
     elements: LayoutElement[];
+}
+
+interface ActiveSelection {
+    pageIdx: number;
+    elementIdx: number;
+    selectionStart: number;
+    selectionEnd: number;
+    targetSubstring: string;
 }
 
 interface PageAnalysis {
@@ -81,311 +126,409 @@ interface PdfRenderTask {
 }
 
 interface CustomPdfFile extends File {
-    originalPassword?: string;
+    fileId?: string;
+    tracker?: string;
+    uprightTracker?: string;
 }
 
-function hasScannedLikePages(analysis: PDFAnalysis | null): number[] {
-    if (!analysis?.pages?.length) return [];
-
-    return analysis.pages
-        .filter((page) => page.kind === "scanned" || page.kind === "blank" || !page.hasSelectableText)
-        .map((page) => page.page);
+interface ToolbarPosition {
+    top: number;
+    left: number;
 }
 
 function EditPdfWorkspace() {
-    const {requireAuth} = useAuth();
+    const { requireAuth } = useAuth();
     const router = useRouter();
-    const {toolId, file, setFile, setDownloadData} = useSharedTool();
+    const { file: sharedFile, setDownloadData, toolId } = useSharedTool();
+    const file = sharedFile as CustomPdfFile | null;
+
+    const [isExtracting, setIsExtracting] = useState(false);
+    const [extractJobId, setExtractJobId] = useState<string | null>(null);
+    const [extractJob, setExtractJob] = useState<EditorJobRecord | null>(null);
 
     const [pages, setPages] = useState<PageData[]>([]);
+    const [history, setHistory] = useState<PageData[][]>([]);
+    const [historyIndex, setHistoryIndex] = useState<number>(-1);
+
     const [sourceTracker, setSourceTracker] = useState<string>("");
     const [uprightTracker, setUprightTracker] = useState<string>("");
-    const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
-    const [analysis, setAnalysis] = useState<PDFAnalysis | null>(null);
-    const [scannedPages, setScannedPages] = useState<number[]>([]);
-    const [isDocumentRotated, setIsDocumentRotated] = useState(false);
-    const [isExtracting, setIsExtracting] = useState(false);
+
     const [isCompiling, setIsCompiling] = useState(false);
-    const [success, setSuccess] = useState(false);
+    const [compileJobId, setCompileJobId] = useState<string | null>(null);
+
+    const [pdfDocument, setPdfDocument] = useState<PdfJsDocument | null>(null);
+    const [analysis, setAnalysis] = useState<PDFAnalysis | null>(null);
+
     const [error, setError] = useState<string | null>(null);
 
-    const [extractJobId, setExtractJobId] = useState<string>("");
-    const [compileJobId, setCompileJobId] = useState<string>("");
-    const [extractJob, setExtractJob] = useState<EditorJobRecord | null>(null);
-    const [compileJob, setCompileJob] = useState<EditorJobRecord | null>(null);
+    // Zoom & Navigation UX State
+    const [zoomScale, setZoomScale] = useState<number>(1.0);
+    const [currentPage, setCurrentPage] = useState<number>(1);
+    const [selectedElementIdx, setSelectedElementIdx] = useState<number | null>(null);
+    const [activeSelection, setActiveSelection] = useState<ActiveSelection | null>(null);
 
-    const compileSourceNameRef = useRef<string>("");
+    const containerRef = useRef<HTMLDivElement>(null);
+    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    useEffect(() => {
-        if (!file) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setPages([]);
-            setSourceTracker("");
-            setUprightTracker("");
-            setPdfDocument(null);
-            setAnalysis(null);
-            setScannedPages([]);
-            setIsDocumentRotated(false);
-            setIsExtracting(false);
-            setIsCompiling(false);
-            setSuccess(false);
-            setError(null);
-            setExtractJobId("");
-            setCompileJobId("");
-            setExtractJob(null);
-            setCompileJob(null);
-            localStorage.removeItem("pdfnest:edit:extractJobId");
-            localStorage.removeItem("pdfnest:edit:compileJobId");
-            return;
+    // Push snapshot to Undo/Redo history stack
+    const recordHistorySnapshot = useCallback((newPages: PageData[]) => {
+        const pagesCopy = JSON.parse(JSON.stringify(newPages)) as PageData[];
+        setHistory((prev) => {
+            const nextHist = prev.slice(0, historyIndex + 1);
+            return [...nextHist, pagesCopy];
+        });
+        setHistoryIndex((prev) => prev + 1);
+    }, [historyIndex]);
+
+    const handleUndo = useCallback(() => {
+        if (historyIndex > 0) {
+            const targetState = history[historyIndex - 1];
+            setPages(JSON.parse(JSON.stringify(targetState)));
+            setHistoryIndex(historyIndex - 1);
+            notify("Undo applied", "info");
         }
+    }, [history, historyIndex]);
+
+    const handleRedo = useCallback(() => {
+        if (historyIndex < history.length - 1) {
+            const targetState = history[historyIndex + 1];
+            setPages(JSON.parse(JSON.stringify(targetState)));
+            setHistoryIndex(historyIndex + 1);
+            notify("Redo applied", "info");
+        }
+    }, [history, historyIndex]);
+
+    const handleResetWorkspace = useCallback(() => {
+        if (history.length > 0) {
+            setPages(JSON.parse(JSON.stringify(history[0])));
+            setHistoryIndex(0);
+            setSelectedElementIdx(null);
+            setActiveSelection(null);
+            notify("Workspace reset to initial state", "info");
+        }
+    }, [history]);
+
+    const handleFitWidth = useCallback(() => {
+        if (containerRef.current && pages[0]) {
+            const availableW = containerRef.current.clientWidth - 64;
+            if (availableW > 200) {
+                const calculatedScale = Math.min(2.0, Math.max(0.5, Math.round((availableW / pages[0].width) * 100) / 100));
+                setZoomScale(calculatedScale);
+            }
+        }
+    }, [pages]);
+
+    // Handle Style Change
+    const handleStyleChange = useCallback((
+        pageIdx: number,
+        elementIdx: number,
+        styleUpdate: Partial<ElementStyle>,
+        targetSubstring?: string,
+        selStart?: number,
+        selEnd?: number
+    ) => {
+        const isStyleMutation = Object.keys(styleUpdate).length > 0;
+
+        setPages((prev) => {
+            const copy = [...prev];
+            const page = copy[pageIdx];
+            if (!page || !page.elements[elementIdx]) return prev;
+
+            const element = { ...page.elements[elementIdx] };
+            const currentStyle = element.style || {};
+
+            if (isStyleMutation) {
+                element.style = {
+                    ...currentStyle,
+                    ...styleUpdate,
+                };
+            }
+
+            if (targetSubstring !== undefined) {
+                element.target_substring = targetSubstring;
+            }
+            if (selStart !== undefined) {
+                element.selection_start = selStart;
+            }
+            if (selEnd !== undefined) {
+                element.selection_end = selEnd;
+            }
+
+            page.elements[elementIdx] = element;
+            copy[pageIdx] = page;
+
+            if (isStyleMutation) {
+                recordHistorySnapshot(copy);
+            }
+
+            return copy;
+        });
+
+        if (targetSubstring !== undefined && selStart !== undefined && selEnd !== undefined) {
+            setActiveSelection({
+                pageIdx,
+                elementIdx,
+                selectionStart: selStart,
+                selectionEnd: selEnd,
+                targetSubstring,
+            });
+        }
+    }, [recordHistorySnapshot]);
+
+    // Keyboard Shortcuts Handler
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+            const keyLower = e.key.toLowerCase();
+
+            if (isCtrlOrCmd && keyLower === "z") {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    handleRedo();
+                } else {
+                    handleUndo();
+                }
+                return;
+            }
+
+            if (isCtrlOrCmd && keyLower === "y") {
+                e.preventDefault();
+                handleRedo();
+                return;
+            }
+
+            if (e.key === "Escape") {
+                setSelectedElementIdx(null);
+                setActiveSelection(null);
+                return;
+            }
+
+            if (isCtrlOrCmd && selectedElementIdx !== null) {
+                const pIdx = currentPage - 1;
+                const elem = pages[pIdx]?.elements[selectedElementIdx];
+                if (elem) {
+                    if (keyLower === "b") {
+                        e.preventDefault();
+                        handleStyleChange(pIdx, selectedElementIdx, { bold: !elem.style?.bold });
+                    } else if (keyLower === "i") {
+                        e.preventDefault();
+                        handleStyleChange(pIdx, selectedElementIdx, { italic: !elem.style?.italic });
+                    } else if (keyLower === "u") {
+                        e.preventDefault();
+                        handleStyleChange(pIdx, selectedElementIdx, { underline: !elem.style?.underline });
+                    }
+                }
+            }
+        };
+
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [currentPage, handleRedo, handleStyleChange, handleUndo, pages, selectedElementIdx]);
+
+    // Extract layout for the current live editor session.
+    //
+    // Extraction job IDs are intentionally NOT persisted by filename. The
+    // source PDF is short-lived and may be deleted after compilation, so
+    // restoring an old extraction job can point this workspace at a stale R2
+    // source on a later visit.
+    useEffect(() => {
+        if (!file) return;
 
         let cancelled = false;
 
-        const queueExtraction = async () => {
-            setIsExtracting(true);
-            setPages([]);
-            setPdfDocument(null);
-            setAnalysis(null);
-            setScannedPages([]);
-            setIsDocumentRotated(false);
-            setSuccess(false);
-            setError(null);
-            setExtractJob(null);
-
+        const runExtraction = async () => {
             try {
-                const typedFile = file as CustomPdfFile;
-                compileSourceNameRef.current = file.name;
-
-                const analysisForm = new FormData();
-                analysisForm.append("file", file);
-                if (typedFile.originalPassword) {
-                    analysisForm.append("file_password", typedFile.originalPassword);
-                }
-
-                try {
-                    const analysisResponse = await fetch(`${getBaseUrl()}/api/structure/analyze`, {
-                        method: "POST",
-                        body: analysisForm,
-                        credentials: "include",
-                    });
-
-                    if (analysisResponse.ok) {
-                        const analysisData: PDFAnalysis = await analysisResponse.json();
-                        if (!cancelled) {
-                            setAnalysis(analysisData);
-                            setScannedPages(hasScannedLikePages(analysisData));
-                        }
-                    }
-                } catch (analysisError) {
-                    console.error("Structure analysis failed, continuing with extraction job:", analysisError);
-                }
+                setIsExtracting(true);
+                setError(null);
+                setExtractJob(null);
 
                 const formData = new FormData();
                 formData.append("file", file);
-                if (typedFile.originalPassword) {
-                    formData.append("file_password", typedFile.originalPassword);
-                }
 
                 const submission = await submitEditorExtract(formData);
                 if (cancelled) return;
 
                 setExtractJobId(submission.job_id);
-                localStorage.setItem("pdfnest:edit:extractJobId", submission.job_id);
-                notify("Layout extraction queued. Waiting for worker...", "info");
             } catch (e) {
+                if (cancelled) return;
+
                 console.error(e);
-                if (!cancelled) {
-                    setError("Failed to queue layout extraction.");
-                    notify("Failed to queue layout extraction.", "error");
-                    handleClientError(e);
-                }
-            } finally {
-                if (!cancelled) setIsExtracting(false);
+                setIsExtracting(false);
+                setError("Failed to start layout extraction job.");
+                handleClientError(e);
             }
         };
 
-        void queueExtraction();
+        void runExtraction();
 
         return () => {
             cancelled = true;
         };
     }, [file]);
 
-    useEffect(() => {
-        const saved = localStorage.getItem("pdfnest:edit:extractJobId");
-        if (saved && !extractJobId) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setExtractJobId(saved);
-        }
-    }, [extractJobId]);
-
+    // Poll extract job
     useEffect(() => {
         if (!extractJobId) return;
 
         let cancelled = false;
 
-        void (async () => {
+        const pollExtract = async () => {
             try {
-                const job = await waitForEditorJob(extractJobId, (nextJob) => {
-                    if (!cancelled) setExtractJob(nextJob);
-                });
-
+                const job = await waitForEditorJob(extractJobId);
                 if (cancelled) return;
 
                 setExtractJob(job);
 
-                if (job.status === "failed") {
-                    console.error(new Error(job.error || "Extraction failed"));
-                    return
-                }
+                if (job.status === "succeeded" && job.result) {
+                    setIsExtracting(false);
+                    const pagesData = (job.result.pages || []) as PageData[];
+                    setPages(pagesData);
+                    setHistory([JSON.parse(JSON.stringify(pagesData))]);
+                    setHistoryIndex(0);
 
-                if (job.status !== "succeeded") return;
+                    setSourceTracker(job.result.source_tracker || "");
+                    setUprightTracker(job.result.upright_tracker || "");
 
-                const result = job.result as
-                    | {
-                    pages?: PageData[];
-                    source_tracker?: string;
-                    upright_tracker?: string;
-                }
-                    | null;
-
-                if (!result?.pages) {
-                    notify('Extraction was unsuccessful', "error")
-                    console.error(new Error("Malformed extraction result."));
-                    return
-                }
-
-                setPages(result.pages);
-                setSourceTracker(result.source_tracker || "");
-                setUprightTracker(result.upright_tracker || result.source_tracker || "");
-
-                const pdfjsLib = await loadPdfJs();
-
-                const rawPdfTask = await pdfjsLib
-                    .getDocument({data: new Uint8Array(await file!.arrayBuffer())})
-                    .promise;
-
-                let foundRotation = false;
-                for (let i = 1; i <= rawPdfTask.numPages; i += 1) {
-                    const rawPage = await rawPdfTask.getPage(i);
-                    if (rawPage.rotate !== 0) {
-                        foundRotation = true;
-                        break;
+                    if (job.result.analysis) {
+                        setAnalysis(job.result.analysis as PDFAnalysis);
                     }
+                } else if (job.status === "failed" || job.status === "cancelled") {
+                    setIsExtracting(false);
+                    setError(job.error || "Layout extraction failed.");
                 }
-
-                if (!cancelled) {
-                    setIsDocumentRotated(foundRotation);
-                }
-
-                let pdfBuffer = await file!.arrayBuffer();
-                if (result.upright_tracker) {
-                    try {
-                        const uprightResponse = await fetch(
-                            `${getBaseUrl()}/api/edit/file?path=${encodeURIComponent(result.upright_tracker)}`,
-                            {credentials: "include"}
-                        );
-                        if (uprightResponse.ok) {
-                            pdfBuffer = await uprightResponse.arrayBuffer();
-                        }
-                    } catch {
-                        // keep original buffer
-                    }
-                }
-
-                const pdf = await pdfjsLib.getDocument({data: new Uint8Array(pdfBuffer)}).promise;
-                if (!cancelled) {
-                    setPdfDocument(pdf);
-                }
-
-                if (foundRotation) {
-                    notify(
-                        "Warning: This PDF contains rotated pages. For best editing results, use our Rotate Tool.",
-                        "warning"
-                    );
-                } else {
-                    notify("Document layout mapped successfully.", "success");
-                }
-
-                localStorage.removeItem("pdfnest:edit:extractJobId");
-                setExtractJobId("");
             } catch (e) {
+                if (cancelled) return;
                 console.error(e);
-                if (!cancelled) {
-                    setError("Failed to parse structural layout grids.");
-                    notify("Failed to parse structural layout grids.", "error");
-                    handleClientError(e);
-                }
+                setIsExtracting(false);
+                setError("Error polling layout extraction status.");
             }
-        })();
+        };
+
+        void pollExtract();
 
         return () => {
             cancelled = true;
         };
-    }, [extractJobId, file]);
+    }, [extractJobId]);
 
+    // Load PDF.js for preview canvas
     useEffect(() => {
-        const saved = localStorage.getItem("pdfnest:edit:compileJobId");
-        if (saved && !compileJobId) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setCompileJobId(saved);
-        }
-    }, [compileJobId]);
+        if (!file) return;
 
+        let cancelled = false;
+
+        const loadPdf = async () => {
+            try {
+                const pdfjs = await loadPdfJs();
+                const buffer = await file.arrayBuffer();
+                const loadingTask = pdfjs.getDocument({ data: buffer });
+                const pdf = (await loadingTask.promise) as unknown as PdfJsDocument;
+
+                if (!cancelled) {
+                    setPdfDocument(pdf);
+                }
+            } catch (e) {
+                if (!cancelled) {
+                    console.error("Failed to render PDF preview canvas:", e);
+                }
+            }
+        };
+
+        void loadPdf();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [file]);
+
+    // Poll compile job.
+    //
+    // A successful compile consumes the current editor source on the backend.
+    // We therefore treat the workspace as a one-shot editing session: after
+    // the output is ready, replace the workspace history entry with the
+    // download page so Back cannot reopen the consumed editor session.
     useEffect(() => {
         if (!compileJobId) return;
 
         let cancelled = false;
 
-        void (async () => {
+        const pollCompile = async () => {
             try {
-                const job = await waitForEditorJob(compileJobId, (nextJob) => {
-                    if (!cancelled) setCompileJob(nextJob);
-                });
-
+                const job = await waitForEditorJob(compileJobId);
                 if (cancelled) return;
 
-                setCompileJob(job);
+                if (job.status === "succeeded") {
+                    setIsCompiling(false);
 
-                if (job.status === "failed") {
-                    console.error(new Error(job.error || "Compilation failed"));
+                    const blob = await downloadEditorJob(job.id);
+
+                    setDownloadData({
+                        blob,
+                        fileName: file?.name ? `edited_${file.name}` : "edited_document.pdf",
+                    });
+
+                    localStorage.removeItem("pdfnest:edit:compileJobId");
+
+                    notify("PDF compiled successfully!", "success");
+
+                    // Replace, rather than push, the workspace entry. If the
+                    // user presses Back on the download page, the workspace is
+                    // not restored with a source_tracker that has already been
+                    // consumed/deleted by the compile workflow.
+                    router.replace(`/${toolId || "edit-pdf"}/download`);
+                    return;
                 }
 
-                if (job.status !== "succeeded") return;
+                if (job.status === "failed" || job.status === "cancelled") {
+                    const jobError = typeof job.error === "string" ? job.error : "";
+                    const normalizedError = jobError.toLowerCase();
 
-                const blob = await downloadEditorJob(compileJobId);
-                const sourceName = compileSourceNameRef.current || file?.name || "edited_document.pdf";
-                const editedFile = new File([blob], `edited_${sourceName}`, {
-                    type: "application/pdf",
-                });
+                    const isMissingSource =
+                        normalizedError.includes("source_not_found") ||
+                        normalizedError.includes("nosuchkey") ||
+                        normalizedError.includes("does not exist") ||
+                        normalizedError.includes("source file not found") ||
+                        normalizedError.includes("stream r2 object to disk failed");
 
-                localStorage.removeItem("pdfnest:edit:compileJobId");
-                setCompileJobId("");
-                setSuccess(true);
+                    setIsCompiling(false);
+                    localStorage.removeItem("pdfnest:edit:compileJobId");
 
-                setDownloadData({
-                    blob,
-                    fileName: editedFile.name,
-                });
+                    if (isMissingSource) {
+                        const message =
+                            "This editing session has expired. Please upload the PDF again to start a new editing session.";
 
-                notify("Success! Patched PDF document compiled.", "success");
-                router.push(`/${toolId}/download`);
+                        setError(message);
+                        notify(
+                            "This editing session has expired. Please upload the PDF again.",
+                            "error",
+                        );
+
+                        // Never leave the user inside a workspace whose source
+                        // document no longer exists.
+                        router.replace(`/${toolId || "edit-pdf"}`);
+                        return;
+                    }
+
+                    setError(jobError || "Compilation failed.");
+                }
             } catch (e) {
+                if (cancelled) return;
+
                 console.error(e);
-                if (!cancelled) {
-                    notify("Compilation failure occurred.", "error");
-                    handleClientError(e);
-                }
-            } finally {
-                if (!cancelled) setIsCompiling(false);
+                setIsCompiling(false);
+                localStorage.removeItem("pdfnest:edit:compileJobId");
+                setError("Error polling compilation status.");
             }
-        })();
+        };
+
+        void pollCompile();
 
         return () => {
             cancelled = true;
         };
     }, [compileJobId, file, router, setDownloadData, toolId]);
 
+    // Handle Input Text Change
     const handleInputChange = (pageIdx: number, elementIdx: number, val: string) => {
         setPages((prev) => {
             const copy = [...prev];
@@ -395,6 +538,14 @@ function EditPdfWorkspace() {
                 ...page.elements[elementIdx],
                 text: val,
             };
+
+            if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
+            }
+            typingTimeoutRef.current = setTimeout(() => {
+                recordHistorySnapshot(copy);
+            }, 800);
+
             return copy;
         });
     };
@@ -404,10 +555,12 @@ function EditPdfWorkspace() {
             if (!file || pages.length === 0) return;
 
             try {
+                // Each explicit export starts a fresh compile request.
+                // Never reuse a previous compile job ID across sessions.
+                localStorage.removeItem("pdfnest:edit:compileJobId");
+
                 setIsCompiling(true);
-                setSuccess(false);
                 setError(null);
-                setCompileJob(null);
 
                 const submission = await submitEditorCompile({
                     pages,
@@ -417,10 +570,43 @@ function EditPdfWorkspace() {
 
                 setCompileJobId(submission.job_id);
                 localStorage.setItem("pdfnest:edit:compileJobId", submission.job_id);
+
                 notify("Compilation queued. Waiting for worker...", "info");
             } catch (e) {
                 console.error(e);
+
+                const serializedError =
+                    e && typeof e === "object"
+                        ? JSON.stringify(e).toLowerCase()
+                        : String(e).toLowerCase();
+
+                const isMissingSource =
+                    serializedError.includes("source_not_found") ||
+                    serializedError.includes("nosuchkey") ||
+                    serializedError.includes("does not exist") ||
+                    serializedError.includes("source file not found") ||
+                    serializedError.includes("stream r2 object to disk failed");
+
                 setIsCompiling(false);
+                localStorage.removeItem("pdfnest:edit:compileJobId");
+
+                if (isMissingSource) {
+                    const message =
+                        "This editing session has expired. Please upload the PDF again to start a new editing session.";
+
+                    setError(message);
+                    notify(
+                        "This editing session has expired. Please upload the PDF again.",
+                        "error",
+                    );
+
+                    // Do not attempt an automatic re-upload. The intended
+                    // lifecycle is one upload -> one editor session -> one
+                    // compile. A missing source means this session is over.
+                    router.replace(`/${toolId || "edit-pdf"}`);
+                    return;
+                }
+
                 notify("Compilation failed to queue.", "error");
                 handleClientError(e);
             }
@@ -453,171 +639,156 @@ function EditPdfWorkspace() {
                         <JobProgressCard
                             title="Extracting layout"
                             job={extractJob}
-                            active={Boolean(isExtracting || extractJobId)}
-                            description="The worker is analyzing the document and building the editable layout map."
-                            accent="indigo"
+                            active={isExtracting}
+                            description="Extracting text layers and geometry metrics..."
                         />
-                    )}
-
-                    {(isCompiling ||
-                        compileJobId ||
-                        (compileJob &&
-                            compileJob.status !== "succeeded" &&
-                            compileJob.status !== "failed" &&
-                            compileJob.status !== "cancelled")) && (
-                        <JobProgressCard
-                            title="Compiling edited PDF"
-                            job={compileJob}
-                            active={Boolean(isCompiling || compileJobId)}
-                            description="The worker is rebuilding the PDF and preparing the final download."
-                            accent="emerald"
-                        />
-                    )}
-
-                    {isExtracting && !extractJobId && (
-                        <div
-                            className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-border bg-(--background)/60 py-16 text-zinc-500 shadow-inner">
-                            <div className="mb-5 h-14 w-14 animate-pulse rounded-full bg-indigo-500/10"/>
-                            <Loader2 className="mb-4 animate-spin" size={32}/>
-                            <p className="text-center text-sm">
-                                Analyzing the PDF structure and preparing the extraction job...
-                            </p>
-                            <p className="mt-1 text-center text-xs opacity-70">
-                                This also checks for scanned or image-based pages.
-                            </p>
-                        </div>
-                    )}
-
-                    {!isExtracting && scannedPages.length > 0 && (
-                        <div
-                            className="mb-2 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-rose-600 shadow-sm dark:text-rose-300">
-                            <div className="flex items-start gap-3">
-                                <AlertTriangle className="mt-0.5 shrink-0 text-rose-500" size={20}/>
-                                <div className="w-full">
-                                    <h4 className="text-sm font-bold">Scanned / Image-based PDF detected</h4>
-                                    <p className="mt-0.5 text-xs opacity-90">
-                                        This editor is designed for PDFs with selectable text. Scanned PDFs may not work
-                                        as expected here.
-                                    </p>
-                                    <p className="mt-1 text-[11px] opacity-80">
-                                        Problem pages: {scannedPages.join(", ")}
-                                        {analysis ? ` • Pages analyzed: ${analysis.pageCount}` : ""}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {!isExtracting && isDocumentRotated && (
-                        <div
-                            className="mb-2 flex flex-col items-start justify-between gap-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-600 shadow-sm dark:text-amber-400 sm:flex-row sm:items-center">
-                            <div className="flex items-start gap-3">
-                                <AlertTriangle className="mt-0.5 shrink-0 text-amber-500" size={20}/>
-                                <div>
-                                    <h4 className="text-sm font-bold">Rotated Document Detected</h4>
-                                    <p className="mt-0.5 text-xs opacity-90">
-                                        Editing rotated PDFs can lead to alignment offsets. Fix orientation first for
-                                        best results.
-                                    </p>
-                                </div>
-                            </div>
-                            <Link
-                                href="/rotate-pdf"
-                                className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-amber-600"
-                            >
-                                <RotateCw size={14}/> Fix with Rotate Tool
-                            </Link>
-                        </div>
                     )}
 
                     {error && (
-                        <div
-                            className="rounded-2xl border border-red-500/20 bg-red-50/50 p-4 text-xs text-red-600 dark:bg-red-500/10 dark:text-red-400">
-                            {error}
+                        <div className="flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-300">
+                            <AlertTriangle size={18} />
+                            <p className="text-sm font-semibold">{error}</p>
                         </div>
                     )}
 
-                    {!isExtracting && pdfDocument && pages.length > 0 && (
-                        <div className="space-y-6">
-                            <div className="flex items-center justify-between border-b pb-4">
-                                <h3 className="flex items-center gap-2 font-semibold">
-                                    <FileEdit size={18} className="text-indigo-500"/>
-                                    Workspace Canvas: {file.name}
-                                </h3>
-                                <button
-                                    onClick={() => {
-                                        setFile(null);
-                                        setPages([]);
-                                        setPdfDocument(null);
-                                        setSourceTracker("");
-                                        setUprightTracker("");
-                                        setAnalysis(null);
-                                        setScannedPages([]);
-                                        setIsDocumentRotated(false);
-                                        setExtractJobId("");
-                                        setCompileJobId("");
-                                        setExtractJob(null);
-                                        setCompileJob(null);
-                                        setError(null);
-                                        setSuccess(false);
-                                        localStorage.removeItem("pdfnest:edit:extractJobId");
-                                        localStorage.removeItem("pdfnest:edit:compileJobId");
-                                        router.push(`/${toolId}`);
-                                    }}
-                                    className="flex items-center gap-1 text-sm text-red-500 hover:underline"
-                                >
-                                    <RefreshCw size={13}/> Reset Workspace
-                                </button>
-                            </div>
-
-                            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                                <div className="rounded-2xl border border-border p-4">
-                                    <p className="text-sm text-muted-foreground">Pages mapped</p>
-                                    <p className="mt-1 text-xl font-bold text-foreground">{pages.length}</p>
-                                </div>
-                                <div className="rounded-2xl border border-border p-4">
-                                    <p className="text-sm text-muted-foreground">Source tracker</p>
-                                    <p className="mt-1 truncate text-xs font-mono text-foreground">{sourceTracker || "-"}</p>
-                                </div>
-                                <div className="rounded-2xl border border-border p-4">
-                                    <p className="text-sm text-muted-foreground">Upright tracker</p>
-                                    <p className="mt-1 truncate text-xs font-mono text-foreground">{uprightTracker || "-"}</p>
-                                </div>
-                                <div className="rounded-2xl border border-border p-4">
-                                    <p className="text-sm text-muted-foreground">State</p>
-                                    <p className="mt-1 text-xl font-bold text-indigo-500">{success ? "Updated" : "Editing"}</p>
-                                </div>
-                            </div>
-
-                            <div
-                                className="space-y-8 rounded-2xl border border-border bg-(--background)/30 p-4 sm:p-6">
-                                {pages.map((page, pageIdx) => (
-                                    <div
-                                        key={page.page_num}
-                                        className="relative mx-auto flex w-full max-w-full shrink-0 flex-col items-center rounded-2xl border border-border bg-white p-4 shadow-xl"
-                                        style={{minHeight: page.height + 100}}
+                    {pages.length > 0 && (
+                        <div className="flex flex-col gap-6">
+                            {/* Editor Control Header (Undo/Redo, Zoom, Fit Width, Page Nav, Reset) */}
+                            <div className="sticky top-4 z-40 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-indigo-200 bg-white/95 p-3 shadow-xl backdrop-blur-md dark:border-indigo-900/50 dark:bg-zinc-900/95">
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleUndo}
+                                        disabled={historyIndex <= 0}
+                                        title="Undo (Ctrl+Z)"
+                                        className="flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-gray-100 disabled:opacity-40 dark:border-zinc-800 dark:hover:bg-zinc-800"
                                     >
-                                        <div className="mb-3 flex w-full items-center justify-between">
-                                            <span
-                                                className="rounded-lg border border-border bg-card px-2 py-1 text-xs font-bold text-foreground">
-                                                Page {page.page_num}
-                                            </span>
-                                            <span className="text-xs text-muted-foreground">
-                                                Edit text directly on the page canvas
-                                            </span>
-                                        </div>
+                                        <Undo2 size={14} />
+                                        Undo
+                                    </button>
 
-                                        <div
-                                            className="relative overflow-hidden rounded border border-gray-200 shadow-sm">
-                                            <PdfCanvasPage
-                                                page={page}
-                                                pdfDocument={pdfDocument}
-                                                pageIdx={pageIdx}
-                                                handleInputChange={handleInputChange}
-                                            />
-                                        </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleRedo}
+                                        disabled={historyIndex >= history.length - 1}
+                                        title="Redo (Ctrl+Shift+Z)"
+                                        className="flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-gray-100 disabled:opacity-40 dark:border-zinc-800 dark:hover:bg-zinc-800"
+                                    >
+                                        <Redo2 size={14} />
+                                        Redo
+                                    </button>
+
+                                    <div className="h-4 w-px bg-gray-200 dark:bg-zinc-800 mx-1" />
+
+                                    {/* Zoom Controls */}
+                                    <div className="flex items-center gap-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => setZoomScale((s) => Math.max(0.5, Math.round((s - 0.25) * 100) / 100))}
+                                            title="Zoom Out"
+                                            className="rounded-lg border border-gray-200 p-1.5 hover:bg-gray-100 dark:border-zinc-800 dark:hover:bg-zinc-800"
+                                        >
+                                            <ZoomOut size={14} />
+                                        </button>
+
+                                        <select
+                                            value={zoomScale}
+                                            onChange={(e) => setZoomScale(parseFloat(e.target.value))}
+                                            className="rounded-lg border border-gray-200 bg-transparent px-2 py-1 text-xs font-bold outline-none dark:border-zinc-800"
+                                        >
+                                            <option value={0.5} className="dark:bg-zinc-900">50%</option>
+                                            <option value={0.75} className="dark:bg-zinc-900">75%</option>
+                                            <option value={1.0} className="dark:bg-zinc-900">100%</option>
+                                            <option value={1.25} className="dark:bg-zinc-900">125%</option>
+                                            <option value={1.5} className="dark:bg-zinc-900">150%</option>
+                                            <option value={2.0} className="dark:bg-zinc-900">200%</option>
+                                        </select>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => setZoomScale((s) => Math.min(2.0, Math.round((s + 0.25) * 100) / 100))}
+                                            title="Zoom In"
+                                            className="rounded-lg border border-gray-200 p-1.5 hover:bg-gray-100 dark:border-zinc-800 dark:hover:bg-zinc-800"
+                                        >
+                                            <ZoomIn size={14} />
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={handleFitWidth}
+                                            title="Fit Width"
+                                            className="flex items-center gap-1 rounded-lg border border-gray-200 px-2 py-1 text-xs font-semibold hover:bg-gray-100 dark:border-zinc-800 dark:hover:bg-zinc-800"
+                                        >
+                                            <Maximize2 size={12} />
+                                            Fit Width
+                                        </button>
                                     </div>
-                                ))}
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                    {/* Page Nav */}
+                                    <div className="flex items-center gap-1.5 text-xs font-semibold">
+                                        <button
+                                            type="button"
+                                            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                                            disabled={currentPage <= 1}
+                                            className="rounded p-1 hover:bg-gray-100 disabled:opacity-40 dark:hover:bg-zinc-800"
+                                        >
+                                            <ChevronLeft size={16} />
+                                        </button>
+                                        <span>Page {currentPage} of {pages.length}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCurrentPage((p) => Math.min(pages.length, p + 1))}
+                                            disabled={currentPage >= pages.length}
+                                            className="rounded p-1 hover:bg-gray-100 disabled:opacity-40 dark:hover:bg-zinc-800"
+                                        >
+                                            <ChevronRight size={16} />
+                                        </button>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={handleResetWorkspace}
+                                        title="Reset Workspace"
+                                        className="flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 dark:border-red-900/50 dark:hover:bg-red-950/50"
+                                    >
+                                        <RotateCw size={12} />
+                                        Reset
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Canvas & Overlay Workspace Container */}
+                            <div ref={containerRef} className="flex flex-col items-center gap-8 overflow-x-auto py-4">
+                                {pages.map((page, pageIdx) => {
+                                    if (currentPage !== pageIdx + 1 && pages.length > 1) {
+                                        return null;
+                                    }
+
+                                    return (
+                                        <div key={pageIdx} className="flex flex-col items-center gap-2">
+                                            <div className="flex w-full items-center justify-between px-2">
+                                                <span className="text-xs font-bold text-zinc-500">
+                                                    Page {page.page_num} ({page.elements.length} elements)
+                                                </span>
+                                            </div>
+
+                                            <div className="relative overflow-hidden rounded-xl border border-gray-300 shadow-2xl dark:border-zinc-800">
+                                                <PdfCanvasPage
+                                                    page={page}
+                                                    pdfDocument={pdfDocument}
+                                                    pageIdx={pageIdx}
+                                                    zoomScale={zoomScale}
+                                                    selectedElementIdx={selectedElementIdx}
+                                                    setSelectedElementIdx={setSelectedElementIdx}
+                                                    handleInputChange={handleInputChange}
+                                                    handleStyleChange={handleStyleChange}
+                                                />
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
 
                             <button
@@ -628,12 +799,12 @@ function EditPdfWorkspace() {
                             >
                                 {isCompiling ? (
                                     <>
-                                        <Loader2 className="animate-spin" size={16}/>
+                                        <Loader2 className="animate-spin" size={16} />
                                         Assembling layers across all pages...
                                     </>
                                 ) : (
                                     <>
-                                        <Download size={16}/>
+                                        <Download size={16} />
                                         Export Precision Vector Document Changes
                                     </>
                                 )}
@@ -646,111 +817,392 @@ function EditPdfWorkspace() {
     );
 }
 
-export default EditPdfWorkspace
+export default EditPdfWorkspace;
 
-interface PdfCanvasPageProps {
-    page: PageData;
-    pdfDocument: PDFDocumentProxy;
-    pageIdx: number;
-    handleInputChange: (pageIdx: number, elementIdx: number, val: string) => void;
+interface FormattingToolbarProps {
+    element: LayoutElement;
+    position: ToolbarPosition;
+    onStyleChange: (
+        styleUpdate: Partial<ElementStyle>,
+        targetSubstring?: string,
+        selStart?: number,
+        selEnd?: number
+    ) => void;
 }
 
-function PdfCanvasPage({page, pdfDocument, pageIdx, handleInputChange}: PdfCanvasPageProps) {
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
-    const [isRendered, setIsRendered] = useState(false);
+function FormattingToolbar({ element, position, onStyleChange }: FormattingToolbarProps) {
+    const style = element.style || {};
+    const font = style.fontFamily || "original";
+    const size = style.fontSize || element.size || 12;
+    const isBold = Boolean(style.bold);
+    const isItalic = Boolean(style.italic);
+    const isUnderline = Boolean(style.underline);
+    const isStrikethrough = Boolean(style.strikethrough);
+    const color = style.color || element.text_color || "#000000";
 
-    useEffect(() => {
-        let isMounted = true;
-        let renderTask: PdfRenderTask | null = null;
+    let bgHex = "";
+    if (typeof style.background === "string") {
+        bgHex = style.background === "transparent" ? "" : style.background;
+    } else if (typeof style.background === "object" && style.background?.enabled) {
+        bgHex = style.background.color || "#FEF08A";
+    }
 
-        async function drawPageInstance() {
-            if (!pdfDocument || !canvasRef.current) return;
-
-            try {
-                const pdfPage = await pdfDocument.getPage(page.page_num);
-                if (!isMounted || !canvasRef.current) return;
-
-                const canvas = canvasRef.current;
-                const context = canvas.getContext("2d");
-                if (!context) return;
-
-                const viewport = pdfPage.getViewport({scale: 1.0, rotation: 0});
-
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
-                canvas.style.width = `${viewport.width}px`;
-                canvas.style.height = `${viewport.height}px`;
-
-                renderTask = pdfPage.render({
-                    canvasContext: context,
-                    canvas,
-                    viewport,
-                });
-
-                await renderTask.promise;
-
-                if (isMounted) setIsRendered(true);
-            } catch (err: unknown) {
-                const errorObj = err as Error;
-                if (errorObj?.name !== "RenderingCancelledException") {
-                    console.error(`Page ${page.page_num} render thread failed:`, err);
-                }
-            }
-        }
-
-        void drawPageInstance();
-
-        return () => {
-            isMounted = false;
-            if (renderTask) renderTask.cancel();
-        };
-    }, [pdfDocument, page.page_num]);
+    const preventFocusLoss = (e: React.MouseEvent) => {
+        e.preventDefault();
+    };
 
     return (
         <div
-            className="relative mx-auto bg-white shadow-xl select-none"
+            onMouseDown={preventFocusLoss}
             style={{
-                width: `${page.width}px`,
-                height: `${page.height}px`,
-                marginBottom: "24px",
+                position: "fixed",
+                top: `${position.top}px`,
+                left: `${position.left}px`,
+                zIndex: 9999,
             }}
+            className="pointer-events-auto flex flex-wrap items-center gap-2 rounded-xl border border-indigo-200 bg-white/95 p-2 shadow-2xl backdrop-blur-md dark:border-indigo-900/50 dark:bg-zinc-900/95 text-xs text-zinc-800 dark:text-zinc-100 transition-all duration-150"
         >
-            <span
-                className="absolute -left-20 top-2 z-20 rounded border border-zinc-200 bg-white px-2 py-1 text-xs font-bold text-zinc-500 shadow-sm">
-                Page {page.page_num}
-            </span>
-
-            <canvas ref={canvasRef} className="absolute left-0 top-0 z-0 rounded"/>
-
-            <div
-                className={`absolute left-0 top-0 z-10 h-full w-full pointer-events-none transition-opacity duration-300 ${
-                    isRendered ? "opacity-100" : "opacity-0"
-                }`}
+            {/* Font Family Selector */}
+            <select
+                value={font}
+                onChange={(e) => onStyleChange({ fontFamily: e.target.value })}
+                className="rounded-lg border border-gray-300 dark:border-zinc-700 bg-transparent px-2 py-1 text-xs outline-none focus:border-indigo-500"
             >
+                <option value="original" className="dark:bg-zinc-900">Original Font</option>
+                <option value="helv" className="dark:bg-zinc-900">Helvetica</option>
+                <option value="tiro" className="dark:bg-zinc-900">Times-Roman</option>
+                <option value="cour" className="dark:bg-zinc-900">Courier</option>
+                <option value="noto" className="dark:bg-zinc-900">Noto Sans</option>
+            </select>
+
+            {/* Font Size Selector */}
+            <div className="flex items-center gap-1 border-r border-gray-200 dark:border-zinc-800 pr-2">
+                <button
+                    type="button"
+                    onClick={() => onStyleChange({ fontSize: Math.max(6, size - 1) })}
+                    className="rounded border border-gray-300 dark:border-zinc-700 px-1.5 py-0.5 hover:bg-gray-100 dark:hover:bg-zinc-800 font-bold"
+                >
+                    -
+                </button>
+                <input
+                    type="number"
+                    value={Math.round(size)}
+                    min={6}
+                    max={72}
+                    onChange={(e) => onStyleChange({ fontSize: Math.max(6, Math.min(72, parseInt(e.target.value) || 12)) })}
+                    className="w-10 text-center font-bold bg-transparent border-0 outline-none"
+                />
+                <button
+                    type="button"
+                    onClick={() => onStyleChange({ fontSize: Math.min(72, size + 1) })}
+                    className="rounded border border-gray-300 dark:border-zinc-700 px-1.5 py-0.5 hover:bg-gray-100 dark:hover:bg-zinc-800 font-bold"
+                >
+                    +
+                </button>
+            </div>
+
+            {/* Formatting Toggles */}
+            <div className="flex items-center gap-1 border-r border-gray-200 dark:border-zinc-800 pr-2">
+                <button
+                    type="button"
+                    onClick={() => onStyleChange({ bold: !isBold })}
+                    title="Bold (Ctrl+B)"
+                    className={`rounded p-1.5 ${isBold ? "bg-indigo-600 text-white" : "hover:bg-gray-100 dark:hover:bg-zinc-800"}`}
+                >
+                    <Bold size={14} />
+                </button>
+                <button
+                    type="button"
+                    onClick={() => onStyleChange({ italic: !isItalic })}
+                    title="Italic (Ctrl+I)"
+                    className={`rounded p-1.5 ${isItalic ? "bg-indigo-600 text-white" : "hover:bg-gray-100 dark:hover:bg-zinc-800"}`}
+                >
+                    <Italic size={14} />
+                </button>
+                <button
+                    type="button"
+                    onClick={() => onStyleChange({ underline: !isUnderline })}
+                    title="Underline (Ctrl+U)"
+                    className={`rounded p-1.5 ${isUnderline ? "bg-indigo-600 text-white" : "hover:bg-gray-100 dark:hover:bg-zinc-800"}`}
+                >
+                    <Underline size={14} />
+                </button>
+                <button
+                    type="button"
+                    onClick={() => onStyleChange({ strikethrough: !isStrikethrough })}
+                    title="Strikethrough"
+                    className={`rounded p-1.5 ${isStrikethrough ? "bg-indigo-600 text-white" : "hover:bg-gray-100 dark:hover:bg-zinc-800"}`}
+                >
+                    <Strikethrough size={14} />
+                </button>
+            </div>
+
+            {/* Text Color Picker & Presets */}
+            <div className="flex items-center gap-1 border-r border-gray-200 dark:border-zinc-800 pr-2">
+                <Palette size={14} className="text-zinc-500" />
+                <div className="flex items-center gap-1">
+                    {["#000000", "#4B5563", "#1E3A8A", "#DC2626", "#16A34A", "#7C3AED"].map((c) => (
+                        <button
+                            key={c}
+                            type="button"
+                            onClick={() => onStyleChange({ color: c })}
+                            className="h-4 w-4 rounded-full border border-gray-300 dark:border-zinc-700 transition hover:scale-110"
+                            style={{ backgroundColor: c }}
+                        />
+                    ))}
+                    <input
+                        type="color"
+                        value={color.startsWith("#") ? color : "#000000"}
+                        onChange={(e) => onStyleChange({ color: e.target.value })}
+                        className="h-5 w-5 cursor-pointer rounded border-0 bg-transparent p-0"
+                    />
+                </div>
+            </div>
+
+            {/* Highlight Background Picker & Presets */}
+            <div className="flex items-center gap-1">
+                <Highlighter size={14} className="text-zinc-500" />
+                <div className="flex items-center gap-1">
+                    {["#FEF08A", "#BBF7D0", "#BFDBFE", "#FBCFE8"].map((c) => (
+                        <button
+                            key={c}
+                            type="button"
+                            onClick={() => onStyleChange({ background: c })}
+                            className="h-4 w-4 rounded-full border border-gray-300 dark:border-zinc-700 transition hover:scale-110"
+                            style={{ backgroundColor: c }}
+                        />
+                    ))}
+                    {bgHex && (
+                        <button
+                            type="button"
+                            onClick={() => onStyleChange({ background: "transparent" })}
+                            className="rounded px-1.5 py-0.5 text-[10px] font-bold text-red-500 hover:underline"
+                        >
+                            Clear
+                        </button>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+interface PdfCanvasPageProps {
+    page: PageData;
+    pdfDocument: PdfJsDocument | null;
+    pageIdx: number;
+    zoomScale: number;
+    selectedElementIdx: number | null;
+    setSelectedElementIdx: (idx: number | null) => void;
+    handleInputChange: (pageIdx: number, elementIdx: number, val: string) => void;
+    handleStyleChange: (
+        pageIdx: number,
+        elementIdx: number,
+        styleUpdate: Partial<ElementStyle>,
+        targetSubstring?: string,
+        selStart?: number,
+        selEnd?: number
+    ) => void;
+}
+
+function PdfCanvasPage({
+                           page,
+                           pdfDocument,
+                           pageIdx,
+                           zoomScale,
+                           selectedElementIdx,
+                           setSelectedElementIdx,
+                           handleInputChange,
+                           handleStyleChange,
+                       }: PdfCanvasPageProps) {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const renderTaskRef = useRef<PdfRenderTask | null>(null);
+
+    const [toolbarPosition, setToolbarPosition] = useState<ToolbarPosition | null>(null);
+    const activeInputRef = useRef<HTMLInputElement | null>(null);
+
+    const scaledWidth = page.width * zoomScale;
+    const scaledHeight = page.height * zoomScale;
+
+    const updateToolbarPosition = useCallback(() => {
+        if (selectedElementIdx === null || !activeInputRef.current) {
+            setToolbarPosition(null);
+            return;
+        }
+
+        const rect = activeInputRef.current.getBoundingClientRect();
+        const toolbarHeight = 52;
+        const toolbarWidth = 520;
+
+        let top = rect.top - toolbarHeight - 12;
+        if (top < 60) {
+            top = rect.bottom + 12;
+        }
+
+        let left = rect.left + rect.width / 2 - toolbarWidth / 2;
+        left = Math.max(16, Math.min(window.innerWidth - toolbarWidth - 16, left));
+
+        setToolbarPosition({ top, left });
+    }, [selectedElementIdx]);
+
+    useEffect(() => {
+        updateToolbarPosition();
+        window.addEventListener("scroll", updateToolbarPosition, { passive: true });
+        window.addEventListener("resize", updateToolbarPosition, { passive: true });
+
+        return () => {
+            window.removeEventListener("scroll", updateToolbarPosition);
+            window.removeEventListener("resize", updateToolbarPosition);
+        };
+    }, [updateToolbarPosition]);
+
+    useEffect(() => {
+        if (!pdfDocument) return;
+
+        let isCancelled = false;
+
+        const renderPage = async () => {
+            try {
+                const pdfPage = await pdfDocument.getPage(page.page_num);
+                if (isCancelled) return;
+
+                const viewport = pdfPage.getViewport({ scale: 1.0 * zoomScale });
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+
+                const ctx = canvas.getContext("2d");
+                if (!ctx) return;
+
+                if (renderTaskRef.current) {
+                    renderTaskRef.current.cancel();
+                }
+
+                const task = pdfPage.render({
+                    canvasContext: ctx,
+                    viewport,
+                }) as unknown as PdfRenderTask;
+
+                renderTaskRef.current = task;
+                await task.promise;
+            } catch (e: unknown) {
+                if ((e as { name?: string })?.name !== "RenderingCancelledException") {
+                    console.error("PDF.js render error:", e);
+                }
+            }
+        };
+
+        void renderPage();
+
+        return () => {
+            isCancelled = true;
+            if (renderTaskRef.current) {
+                renderTaskRef.current.cancel();
+            }
+        };
+    }, [pdfDocument, page.page_num, zoomScale]);
+
+    return (
+        <div
+            className="relative bg-white dark:bg-zinc-950"
+            style={{ width: `${scaledWidth}px`, height: `${scaledHeight}px` }}
+        >
+            <canvas ref={canvasRef} className="absolute left-0 top-0 z-0 rounded-xl" />
+
+            <div className="absolute left-0 top-0 z-10 h-full w-full pointer-events-none">
                 {page.elements.map((element: LayoutElement, elementIdx: number) => {
-                    const elementBg = element.bg_color || "#ffffff";
-                    const elementText = element.text_color || "#000000";
+                    const isSelected = selectedElementIdx === elementIdx;
+                    const elemX = element.x * zoomScale;
+                    const elemY = element.y * zoomScale;
+                    const elemWidth = (element.width + 2) * zoomScale;
+                    const elemHeight = (element.height + 1) * zoomScale;
+                    const elemSize = element.size * zoomScale;
+
+                    // Determine user background highlight fill if explicitly set
+                    let bgStyle = "transparent";
+                    if (typeof element.style?.background === "string") {
+                        bgStyle = element.style.background;
+                    } else if (typeof element.style?.background === "object" && element.style.background?.enabled) {
+                        bgStyle = element.style.background.color || "#FEF08A";
+                    }
 
                     return (
-                        <input
+                        <div
                             key={elementIdx}
-                            type="text"
-                            value={element.text}
-                            onChange={(e) => handleInputChange(pageIdx, elementIdx, e.target.value)}
-                            className="pointer-events-auto absolute rounded bg-transparent px-1 text-[10px] outline-none focus:z-20"
+                            className="pointer-events-none absolute"
                             style={{
-                                left: `${element.x}px`,
-                                top: `${element.y}px`,
-                                width: `${element.width + 2}px`,
-                                height: `${element.height + 1}px`,
-                                fontSize: `${element.size}px`,
-                                lineHeight: 1,
-                                backgroundColor: elementBg,
-                                color: elementText,
-                                border: "none",
-                                boxShadow: "none",
+                                left: `${elemX}px`,
+                                top: `${elemY}px`,
+                                width: `${elemWidth}px`,
+                                height: `${elemHeight}px`,
                             }}
-                        />
+                        >
+                            {isSelected && toolbarPosition && (
+                                <FormattingToolbar
+                                    element={element}
+                                    position={toolbarPosition}
+                                    onStyleChange={(styleUpdate, targetSub, selStart, selEnd) =>
+                                        handleStyleChange(pageIdx, elementIdx, styleUpdate, targetSub, selStart, selEnd)
+                                    }
+                                />
+                            )}
+
+                            <input
+                                ref={(el) => {
+                                    if (isSelected) {
+                                        activeInputRef.current = el;
+                                    }
+                                }}
+                                type="text"
+                                value={element.text}
+                                aria-label="Edit selected PDF text"
+                                onFocus={() => {
+                                    setSelectedElementIdx(elementIdx);
+                                    setTimeout(updateToolbarPosition, 10);
+                                }}
+                                onBlur={(e) => {
+                                    if (!e.relatedTarget) {
+                                        setSelectedElementIdx(null);
+                                    }
+                                }}
+                                onChange={(e) => handleInputChange(pageIdx, elementIdx, e.target.value)}
+                                onSelect={(e) => {
+                                    const input = e.currentTarget;
+                                    const start = input.selectionStart || 0;
+                                    const end = input.selectionEnd || 0;
+                                    const selText = input.value.substring(start, end);
+                                    if (selText && selText.trim()) {
+                                        handleStyleChange(pageIdx, elementIdx, {}, selText.trim(), start, end);
+                                    }
+                                }}
+                                style={{
+                                    fontSize: `${elemSize}px`,
+                                    lineHeight: `${elemHeight}px`,
+                                    fontFamily: element.font || "sans-serif",
+                                    // PROBLEM 2 FIX: Inactive text uses transparent color so canvas text shows naturally with 0 ghosting/doubling!
+                                    color: isSelected
+                                        ? element.style?.color || element.text_color || "#000000"
+                                        : "transparent",
+                                    caretColor: isSelected ? "#4F46E5" : "transparent",
+                                    fontWeight: element.style?.bold ? "bold" : "normal",
+                                    fontStyle: element.style?.italic ? "italic" : "normal",
+                                    textDecoration: [
+                                        element.style?.underline ? "underline" : "",
+                                        element.style?.strikethrough ? "line-through" : "",
+                                    ].filter(Boolean).join(" "),
+                                    backgroundColor: isSelected
+                                        ? bgStyle !== "transparent" ? bgStyle : "#ffffff"
+                                        : bgStyle !== "transparent" ? bgStyle : "transparent",
+                                }}
+                                className={`pointer-events-auto h-full w-full border-b outline-none transition-all duration-150 ${
+                                    isSelected
+                                        ? "border-2 border-indigo-500 shadow-md"
+                                        : "border-transparent hover:border-indigo-300 hover:bg-indigo-50/10"
+                                }`}
+                            />
+                        </div>
                     );
                 })}
             </div>
