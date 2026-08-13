@@ -82,6 +82,13 @@ export default function Footer() {
 
                         <div className="flex flex-col gap-2 text-xs font-medium">
                             <Link
+                                href="/pricing"
+                                className="text-muted hover:text-indigo-500 transition-colors"
+                            >
+                                Pricing
+                            </Link>
+
+                            <Link
                                 href="/privacy"
                                 className="text-muted hover:text-indigo-500 transition-colors"
                             >
