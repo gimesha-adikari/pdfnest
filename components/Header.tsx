@@ -272,6 +272,19 @@ export default function Header() {
                         )}
 
                         <Link
+                            href="/pricing"
+                            className="
+                                rounded-xl
+                                px-3 py-2
+                                text-sm
+                                font-semibold
+                                hover:bg-[color:var(--border)]/30
+                            "
+                        >
+                            Pricing
+                        </Link>
+
+                        <Link
                             href="/about"
                             className="
                                 rounded-xl
