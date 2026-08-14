@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { NAV_TOOLS } from "@/lib/toolsData";
+import { useTools } from "@/context/ToolContext";
 
 type Category =
     | "all"
@@ -52,7 +52,8 @@ export function ToolGroup({
     category: Category;
     close: () => void;
 }) {
-    const tools = NAV_TOOLS.filter((t) => t.category === category);
+    const { tools: allTools } = useTools();
+    const tools = allTools.filter((t) => (t.category || (t as any).Category) === category);
 
     return (
         <div className="mt-6">
