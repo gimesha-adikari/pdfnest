@@ -117,9 +117,13 @@ export default function WorkspaceConfigurations({
                                     onChange={(e) => updateCurrentToolField("Category", e.target.value)}
                                     className="w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--background)] px-3 py-2.5 text-xs text-[color:var(--foreground)] outline-none transition-colors focus:border-[var(--primary)]"
                                 >
-                                    <option value="editing">Editing</option>
+                                    <option value="organize">Organize</option>
+                                    <option value="edit">Edit</option>
                                     <option value="convert">Convert</option>
+                                    <option value="create">Create</option>
                                     <option value="security">Security</option>
+                                    <option value="optimize">Optimize</option>
+                                    <option value="studio">Studio</option>
                                 </select>
                             </div>
                         </div>
@@ -170,11 +174,54 @@ export default function WorkspaceConfigurations({
                                         style={{ accentColor: "var(--primary)" }}
                                         className="h-4 w-4 rounded border-[color:var(--border)] bg-[color:var(--background)]"
                                     />
-                                    Highlight Badge as "New"
+                                    Highlight Badge as &quot;New&quot;
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* Visibility, Ordering & Icon */}
+                        <div className="grid grid-cols-1 gap-4 pt-2 sm:grid-cols-3">
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-medium text-[color:var(--muted-foreground)]">
+                                    Sort Order (ascending)
+                                </label>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    value={currentActiveTool.sortOrder ?? currentActiveTool.SortOrder ?? 0}
+                                    onChange={(e) => updateCurrentToolField("sortOrder", parseInt(e.target.value, 10) || 0)}
+                                    className="w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--background)] px-3 py-2.5 font-mono text-xs text-[color:var(--foreground)] outline-none transition-colors focus:border-[var(--primary)]"
+                                />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-medium text-[color:var(--muted-foreground)]">
+                                    Icon Name (Lucide)
+                                </label>
+                                <input
+                                    type="text"
+                                    value={currentActiveTool.iconName ?? currentActiveTool.IconName ?? "FileText"}
+                                    placeholder="FileText, Scissors, Merge…"
+                                    onChange={(e) => updateCurrentToolField("iconName", e.target.value)}
+                                    className="w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--background)] px-3 py-2.5 font-mono text-xs text-[color:var(--foreground)] outline-none transition-colors focus:border-[var(--primary)]"
+                                />
+                            </div>
+
+                            <div className="flex items-end pb-1">
+                                <label className="flex cursor-pointer items-center gap-2 text-xs font-medium select-none text-[color:var(--foreground)]">
+                                    <input
+                                        type="checkbox"
+                                        checked={currentActiveTool.isActive !== undefined ? !!currentActiveTool.isActive : currentActiveTool.IsActive !== undefined ? !!currentActiveTool.IsActive : true}
+                                        onChange={(e) => updateCurrentToolField("isActive", e.target.checked)}
+                                        style={{ accentColor: "var(--primary)" }}
+                                        className="h-4 w-4 rounded border-[color:var(--border)] bg-[color:var(--background)]"
+                                    />
+                                    Tool Is Active (visible)
                                 </label>
                             </div>
                         </div>
                     </div>
+
 
                     {/* SEO Metadata Block */}
                     <div className="space-y-4 rounded-2xl border border-[color:var(--border)] bg-[var(--card)] p-6 shadow-sm">
