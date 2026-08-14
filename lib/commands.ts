@@ -1,4 +1,4 @@
-import { NAV_TOOLS } from "@/lib/toolsData";
+import { NAV_TOOLS_FALLBACK } from "@/lib/toolsData";
 
 export type Command = {
     id: string;
@@ -9,13 +9,14 @@ export type Command = {
     action?: () => void;
 };
 
-export function getCommands(): Command[] {
-    const toolCommands: Command[] = NAV_TOOLS.map((tool) => ({
-        id: tool.href,
-        title: tool.title,
-        description: tool.description,
+export function getCommands(toolsList?: any[]): Command[] {
+    const list = toolsList || NAV_TOOLS_FALLBACK;
+    const toolCommands: Command[] = list.map((tool) => ({
+        id: tool.href || tool.Href,
+        title: tool.title || tool.Title,
+        description: tool.description || tool.Description,
         type: "tool",
-        href: tool.href,
+        href: tool.href || tool.Href,
     }));
 
     const pageCommands: Command[] = [
