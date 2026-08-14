@@ -3,7 +3,6 @@ import { ClientExecutor } from "../../lib/execution/ClientExecutor";
 import { CloudExecutor } from "../../lib/execution/CloudExecutor";
 import { ExecutionManager } from "../../lib/execution/ExecutionManager";
 import { ExecutionSafetyGate } from "../../lib/execution/ExecutionSafetyGate";
-import { isClientExecutionEnabled } from "../../lib/execution/flags";
 import { ExecutionError } from "../../lib/execution/types";
 
 async function createDummyPdf(pageCount = 3): Promise<File> {
@@ -37,15 +36,6 @@ export async function runWave1ExecutionTests(): Promise<{ passed: number; failed
     console.log("   RUNNING WAVE 1 HYBRID EXECUTION UNIT TESTS     ");
     console.log("=================================================\n");
 
-    // Enable feature flags for Wave 1 testing
-    process.env.NEXT_PUBLIC_HYBRID_PROCESSING_ENABLED = "true";
-    process.env.NEXT_PUBLIC_TOOL_SPLIT_CLIENT = "true";
-    process.env.NEXT_PUBLIC_TOOL_DELETE_CLIENT = "true";
-    process.env.NEXT_PUBLIC_TOOL_REORDER_CLIENT = "true";
-    process.env.NEXT_PUBLIC_TOOL_INSERT_BLANK_CLIENT = "true";
-    process.env.NEXT_PUBLIC_TOOL_DUPLICATE_CLIENT = "true";
-    process.env.NEXT_PUBLIC_TOOL_UPDATE_METADATA_CLIENT = "true";
-
     let cloudCallCount = 0;
     const originalCloudExecute = CloudExecutor.execute;
     CloudExecutor.execute = async (options) => {
@@ -57,10 +47,10 @@ export async function runWave1ExecutionTests(): Promise<{ passed: number; failed
     try {
         const samplePdf = await createDummyPdf(3);
 
-        // Test 1: Feature Flag Helper for Wave 1 tools
+        // Test 1: Implementation Support for Wave 1 tools
         assert(
-            isClientExecutionEnabled("split") && isClientExecutionEnabled("delete_pages"),
-            "1. Feature flags for Wave 1 tools (split, delete_pages) evaluate true when env enabled"
+            ClientExecutor.isSupported("split") && ClientExecutor.isSupported("delete_pages"),
+            "1. ClientExecutor.isSupported evaluates true for Wave 1 tools (split, delete_pages)"
         );
 
         // Test 2: Split PDF (Extract Pages 1-2 from 3-page PDF)
@@ -181,21 +171,6 @@ export async function runWave1ExecutionTests(): Promise<{ passed: number; failed
             caughtErr !== null && caughtErr.code === "INVALID_INPUT",
             "9. Attempting to delete ALL pages throws INVALID_INPUT error in Device mode"
         );
-
-        // Test 10: Tool Flag Disabled -> Cloud Execution
-        process.env.NEXT_PUBLIC_TOOL_SPLIT_CLIENT = "false";
-        cloudCallCount = 0;
-        const resDisabled = await ExecutionManager.run({
-            tool: "split",
-            files: [samplePdf],
-            params: { pages: "1" },
-            mode: "auto",
-        });
-        assert(
-            resDisabled.executionMode === "cloud" && cloudCallCount === 1,
-            "10. Disabling NEXT_PUBLIC_TOOL_SPLIT_CLIENT=false forces Cloud execution"
-        );
-        process.env.NEXT_PUBLIC_TOOL_SPLIT_CLIENT = "true";
     } finally {
         CloudExecutor.execute = originalCloudExecute;
     }

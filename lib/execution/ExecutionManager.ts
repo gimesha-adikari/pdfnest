@@ -3,7 +3,6 @@
 import { ClientExecutor } from "./ClientExecutor";
 import { CloudExecutor } from "./CloudExecutor";
 import { ExecutionSafetyGate } from "./ExecutionSafetyGate";
-import { isClientExecutionEnabled } from "./flags";
 import {
     ExecutionError,
     ExecutionOptions,
@@ -23,11 +22,11 @@ export class ExecutionManager {
         const outputFileName = buildOutputFileName(tool, primaryFile.name);
         const policy: ToolPolicy = getToolPolicy(tool);
 
-        // 1. Check feature flag
-        const clientEnabled = isClientExecutionEnabled(tool);
+        // 1. Determine client-side implementation support from code (not environment flags)
+        const clientSupported = ClientExecutor.isSupported(tool);
 
-        // 2. Explicit Cloud Mode OR client flag disabled -> Cloud Executor
-        if (mode === "cloud" || !clientEnabled) {
+        // 2. Explicit Cloud Mode OR tool not supported on client -> Cloud Executor
+        if (mode === "cloud" || !clientSupported) {
             const blob = await CloudExecutor.execute(options);
             return {
                 blob,

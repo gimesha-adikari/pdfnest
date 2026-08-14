@@ -4,6 +4,19 @@ import { degrees, PDFDocument } from "pdf-lib";
 import { ExecutionError, ExecutionOptions } from "./types";
 
 export class ClientExecutor {
+    static isSupported(tool: string): boolean {
+        const normalized = normalizeTool(tool);
+        return [
+            "rotate",
+            "split",
+            "delete",
+            "reorder",
+            "insert_blank",
+            "duplicate",
+            "update_metadata",
+        ].includes(normalized);
+    }
+
     static async execute(options: ExecutionOptions): Promise<Blob> {
         const { tool, files, params } = options;
 
