@@ -9,10 +9,10 @@ import {
     type ReactNode,
 } from "react";
 import { useParams, notFound } from "next/navigation";
-import { NAV_TOOLS } from "@/lib/toolsData";
+import { useTools } from "@/context/ToolContext";
 import ToolFAQ from "@/components/SEO/ToolFAQ";
-import { fetchJson } from "@/lib/api";
 import ToolSchema from "@/components/SEO/ToolSchema";
+import { resolveIcon, type LucideIcon } from "@/lib/iconResolver";
 
 interface ToolItem {
     title: string;
@@ -54,7 +54,7 @@ interface BackendTool {
 interface ToolConfig {
     name: string;
     description: string;
-    icon: any;
+    icon: LucideIcon;
     multiple: boolean;
     accept: string;
 }
@@ -69,16 +69,17 @@ interface ToolContextProps {
     isLoadingConfig: boolean;
 }
 
-const ToolContext = createContext<ToolContextProps | undefined>(undefined);
+const SharedToolContext = createContext<ToolContextProps | undefined>(undefined);
 
 export function useSharedTool() {
-    const context = useContext(ToolContext);
+    const context = useContext(SharedToolContext);
     if (!context) throw new Error("useSharedTool must be used within a ToolProvider");
     return context;
 }
 
 export default function ClientToolLayout({ children }: { children: ReactNode }) {
     const params = useParams();
+    const { getToolByHref, tools: allTools, isLoading: isLoadingTools } = useTools();
     const rawToolId = params?.toolId;
     const toolId = Array.isArray(rawToolId) ? rawToolId[0] : rawToolId || "";
     const currentToolHref = `/${toolId}`;
@@ -89,100 +90,62 @@ export default function ClientToolLayout({ children }: { children: ReactNode }) 
 
     const file = activeToolHref === currentToolHref ? fileState : null;
 
-    const localFallback = NAV_TOOLS.find((t) => t.href === currentToolHref) as ToolItem | undefined;
+    const localFallback = getToolByHref(currentToolHref);
     const initialConfig: ToolConfig = {
-        name: localFallback?.title || "PDF Tool",
-        description: localFallback?.description || "Process your PDF files securely.",
-        icon: localFallback?.icon || null,
-        multiple: localFallback?.multiple || false,
-        accept: localFallback?.accept || ".pdf",
+        name: localFallback?.title || (localFallback as any)?.Title || "PDF Tool",
+        description: localFallback?.description || (localFallback as any)?.Description || "Process your PDF files securely.",
+        icon: resolveIcon(localFallback?.iconName || (localFallback as any)?.IconName),
+        multiple: localFallback?.multiple || (localFallback as any)?.Multiple || false,
+        accept: localFallback?.accept || (localFallback as any)?.Accept || ".pdf",
     };
 
     const [toolConfig, setToolConfig] = useState<ToolConfig>(initialConfig);
     const [isLoadingConfig, setIsLoadingConfig] = useState(true);
 
     useEffect(() => {
-        let cancelled = false;
+        const activeFallback = getToolByHref(currentToolHref);
 
-        setIsLoadingConfig(true);
-
-        fetchJson("/site-content/tools")
-            .then((data: unknown) => {
-                if (cancelled) return;
-
-                const activeFallback = NAV_TOOLS.find((t) => t.href === currentToolHref) as ToolItem | undefined;
-
-                if (Array.isArray(data) && data.length > 0) {
-                    const tools = data as BackendTool[];
-                    const found = tools.find((t) => (t.Href || t.href) === currentToolHref);
-
-                    if (found) {
-                        setToolConfig({
-                            name:
-                                found.Name ||
-                                found.name ||
-                                found.Title ||
-                                found.title ||
-                                activeFallback?.title ||
-                                "PDF Tool",
-                            description:
-                                found.Description ||
-                                found.description ||
-                                activeFallback?.description ||
-                                "Process files securely.",
-                            icon: found.Icon || found.icon || activeFallback?.icon || null,
-                            multiple:
-                                found.Multiple !== undefined
-                                    ? found.Multiple
-                                    : found.multiple !== undefined
-                                        ? found.multiple
-                                        : activeFallback?.multiple || false,
-                            accept: found.Accept || found.accept || activeFallback?.accept || ".pdf",
-                        });
-                        return;
-                    }
-                }
-
-                if (activeFallback) {
-                    setToolConfig({
-                        name: activeFallback.title,
-                        description: activeFallback.description,
-                        icon: activeFallback.icon || null,
-                        multiple: activeFallback.multiple || false,
-                        accept: activeFallback.accept || ".pdf",
-                    });
-                    return;
-                }
-
-                // Path matches neither remote tool database nor local NAV_TOOLS array: trigger 404
-                notFound();
-            })
-            .catch((err) => {
-                if (cancelled) return;
-
-                console.error("Error fetching remote tool config, falling back:", err);
-                const activeFallback = NAV_TOOLS.find((t) => t.href === currentToolHref) as ToolItem | undefined;
-
-                if (activeFallback) {
-                    setToolConfig({
-                        name: activeFallback.title,
-                        description: activeFallback.description,
-                        icon: activeFallback.icon || null,
-                        multiple: activeFallback.multiple || false,
-                        accept: activeFallback.accept || ".pdf",
-                    });
-                } else {
-                    notFound();
-                }
-            })
-            .finally(() => {
-                if (!cancelled) setIsLoadingConfig(false);
+        if (activeFallback) {
+            setToolConfig({
+                name: activeFallback.title || (activeFallback as any).Title || "PDF Tool",
+                description: activeFallback.description || (activeFallback as any).Description || "Process files securely.",
+                icon: resolveIcon(activeFallback.iconName || (activeFallback as any).IconName),
+                multiple: activeFallback.multiple || (activeFallback as any).Multiple || false,
+                accept: activeFallback.accept || (activeFallback as any).Accept || ".pdf",
             });
+            setIsLoadingConfig(false);
+            return;
+        }
 
-        return () => {
-            cancelled = true;
-        };
-    }, [currentToolHref]);
+        const STATIC_ROUTES = [
+            "/",
+            "/about",
+            "/admin",
+            "/subscribe",
+            "/pricing",
+            "/terms",
+            "/privacy",
+            "/contact",
+            "/cookies",
+            "/refund",
+            "/security",
+            "/acceptable-use",
+            "/tools",
+            "/dashboard",
+            "/login",
+            "/register",
+            "/verify-email"
+        ];
+
+        if (STATIC_ROUTES.includes(currentToolHref)) {
+            setIsLoadingConfig(false);
+            return;
+        }
+
+        if (!isLoadingTools) {
+            notFound();
+        }
+    }, [currentToolHref, getToolByHref, isLoadingTools]);
 
     const setFile = (nextFile: File | null) => {
         setFileState(nextFile);
@@ -195,7 +158,7 @@ export default function ClientToolLayout({ children }: { children: ReactNode }) 
     };
 
     return (
-        <ToolContext.Provider
+        <SharedToolContext.Provider
             value={{
                 toolId,
                 toolConfig,
@@ -216,6 +179,6 @@ export default function ClientToolLayout({ children }: { children: ReactNode }) 
             <ToolSchema toolHref={`/${toolId}`} />
             {children}
             <ToolFAQ toolHref={`/${toolId}`} />
-        </ToolContext.Provider>
+        </SharedToolContext.Provider>
     );
 }
