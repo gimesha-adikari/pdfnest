@@ -1,6 +1,7 @@
-import { NAV_TOOLS, type ToolCategory } from "@/lib/toolsData";
+import { type ToolCategory } from "@/lib/toolsData";
+import { getTools } from "@/lib/server/tools";
 
-export const dynamic = "force-static";
+export const dynamic = "force-dynamic";
 
 const BASE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://platenpdf.com").replace(/\/$/, "");
 
@@ -8,7 +9,7 @@ function toAbsoluteUrl(pathname: string): string {
     return new URL(pathname.startsWith("/") ? pathname : `/${pathname}`, BASE_URL).toString();
 }
 
-const CATEGORY_NAMES: Record<ToolCategory, string> = {
+const CATEGORY_NAMES: Record<ToolCategory | string, string> = {
     organize: "Organize & Manage PDF",
     edit: "Edit & Annotate PDF",
     convert: "Convert Files & PDF",
@@ -20,6 +21,7 @@ const CATEGORY_NAMES: Record<ToolCategory, string> = {
 
 export async function GET() {
     const lines: string[] = [];
+    const tools = await getTools();
 
     // H1 Title & Site Summary
     lines.push("# Platen PDF");
@@ -29,19 +31,21 @@ export async function GET() {
     );
     lines.push("");
 
-    // Group NAV_TOOLS dynamically by category
-    const categoriesPresent = Array.from(new Set(NAV_TOOLS.map((t) => t.category)));
+    // Group tools dynamically by category
+    const categoriesPresent = Array.from(new Set(tools.map((t) => t.category || (t as any).Category)));
 
     categoriesPresent.forEach((categoryKey) => {
         const categoryTitle = CATEGORY_NAMES[categoryKey] ?? categoryKey;
         lines.push(`## ${categoryTitle}`);
         lines.push("");
 
-        const toolsInCategory = NAV_TOOLS.filter((t) => t.category === categoryKey);
+        const toolsInCategory = tools.filter((t) => (t.category || (t as any).Category) === categoryKey);
         toolsInCategory.forEach((tool) => {
-            const absUrl = toAbsoluteUrl(tool.href);
-            const desc = tool.description || tool.seoDescription || "";
-            lines.push(`- [${tool.title}](${absUrl}): ${desc}`);
+            const href = tool.href || (tool as any).Href;
+            const title = tool.title || (tool as any).Title;
+            const desc = tool.description || (tool as any).Description || tool.seoDescription || "";
+            const absUrl = toAbsoluteUrl(href);
+            lines.push(`- [${title}](${absUrl}): ${desc}`);
         });
 
         lines.push("");
