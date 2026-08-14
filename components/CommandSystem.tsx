@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getCommands, Command } from "@/lib/commands";
 
+import { useTools } from "@/context/ToolContext";
+
 export default function CommandSystem({
                                           externalOpen,
                                           onClose,
@@ -11,6 +13,7 @@ export default function CommandSystem({
     externalOpen?: boolean;
     onClose?: () => void;
 }) {    const router = useRouter();
+    const { tools: toolsList } = useTools();
 
     const [internalOpen, setInternalOpen] = useState(false);
 
@@ -27,7 +30,7 @@ export default function CommandSystem({
     const [query, setQuery] = useState("");
     const [active, setActive] = useState(0);
 
-    const commands = useMemo(() => getCommands(), []);
+    const commands = useMemo(() => getCommands(toolsList), [toolsList]);
 
     const filtered = useMemo(() => {
         if (!query) return commands.slice(0, 12);
