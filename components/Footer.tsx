@@ -1,9 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import Link from "next/link";
-import { NAV_TOOLS } from "@/lib/toolsData";
-import { fetchJson } from "@/lib/api";
+import { useTools } from "@/context/ToolContext";
 
 interface BackendTool {
     Title?: string;
@@ -17,25 +15,7 @@ interface BackendTool {
 }
 
 export default function Footer() {
-    const [toolsList, setToolsList] = useState<any[]>(NAV_TOOLS);
-
-    useEffect(() => {
-        fetchJson("/site-content/tools")
-            .then((data: unknown) => {
-                if (Array.isArray(data) && data.length > 0) {
-                    setToolsList(data);
-                } else {
-                    setToolsList(NAV_TOOLS);
-                }
-            })
-            .catch((err) => {
-                console.error(
-                    "Failed fetching footer components layout from backend matrix, falling back:",
-                    err
-                );
-                setToolsList(NAV_TOOLS);
-            });
-    }, []);
+    const { tools: toolsList } = useTools();
 
     const organizeTools = toolsList.filter(
         (t: BackendTool) => (t.Category || t.category) === "organize"
