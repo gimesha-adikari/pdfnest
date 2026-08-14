@@ -18,33 +18,14 @@ import {
 
 import { MobileLink, ToolGroup } from "@/components/MobileComponents";
 import CommandSystem from "@/components/CommandSystem";
-import { NAV_TOOLS } from "@/lib/toolsData";
-import { fetchJson } from "@/lib/api";
 
 export default function MobileNav() {
     const [open, setOpen] = useState(false);
     const [mounted, setMounted] = useState(false);
     const [commandOpen, setCommandOpen] = useState(false);
-    const [toolsList, setToolsList] = useState<any[]>([]);
 
     const startX = useRef(0);
     const currentX = useRef(0);
-
-    useEffect(() => {
-        // Fetch tools layout custom configurations from backend
-        fetchJson("/site-content/tools")
-            .then((data: any) => {
-                if (Array.isArray(data) && data.length > 0) {
-                    setToolsList(data);
-                } else {
-                    setToolsList(NAV_TOOLS);
-                }
-            })
-            .catch((err) => {
-                console.error("Failed fetching mobile sidebar tools from database, falling back:", err);
-                setToolsList(NAV_TOOLS);
-            });
-    }, []);
 
     const openSidebar = () => {
         setMounted(true);
