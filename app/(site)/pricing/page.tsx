@@ -1,1 +1,1 @@
-export { default, metadata } from "../subscribe/page";
+export { default } from "../subscribe/page";
