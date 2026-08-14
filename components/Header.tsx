@@ -6,7 +6,7 @@ import Image from "next/image";
 import {usePathname} from "next/navigation";
 import ThemeToggle from "./ThemeToggle";
 import ToolSearch from "./ui/ToolSearch";
-import {NAV_TOOLS} from "@/lib/toolsData";
+import { useTools } from "@/context/ToolContext";
 import {ChevronDown, LogOut, ShieldAlert, Sparkles, Zap} from "lucide-react";
 import {useAuth} from "@/context/AuthContext";
 import {fetchJson} from "@/lib/api";
@@ -21,24 +21,23 @@ export default function Header() {
         logout,
         user,
     } = useAuth();
+    const { tools: toolsList } = useTools();
     const pathname = usePathname();
     const [forceHide, setForceHide] = useState(false);
     const {resolvedTheme} = useTheme();
-
-    const toolsList = NAV_TOOLS;
 
     const closeMenu = () => {
         setForceHide(true);
         setTimeout(() => setForceHide(false), 150);
     };
 
-    const organizeTools = toolsList.filter((tool) => (tool.category) === "organize");
-    const editTools = toolsList.filter((tool) => (tool.category) === "edit");
-    const convertTools = toolsList.filter((tool) => (tool.category) === "convert");
-    const createTools = toolsList.filter((tool) => (tool.category) === "create");
-    const securityTools = toolsList.filter((tool) => (tool.category) === "security");
-    const optimizeTools = toolsList.filter((tool) => (tool.category) === "optimize");
-    const studioTools = toolsList.filter((tool) => (tool.category) === "studio");
+    const organizeTools = toolsList.filter((tool) => tool.category === "organize" && !!tool.href);
+    const editTools = toolsList.filter((tool) => tool.category === "edit" && !!tool.href);
+    const convertTools = toolsList.filter((tool) => tool.category === "convert" && !!tool.href);
+    const createTools = toolsList.filter((tool) => tool.category === "create" && !!tool.href);
+    const securityTools = toolsList.filter((tool) => tool.category === "security" && !!tool.href);
+    const optimizeTools = toolsList.filter((tool) => tool.category === "optimize" && !!tool.href);
+    const studioTools = toolsList.filter((tool) => tool.category === "studio" && !!tool.href);
 
     const isPro = subscription?.tier === "pro";
 
