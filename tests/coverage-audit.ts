@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { NAV_TOOLS } from '../lib/toolsData';
+import { NAV_TOOLS_FALLBACK } from '../lib/toolsData';
 
 interface AuditResult {
   title: string;
@@ -34,7 +34,7 @@ export function runCoverageAudit(): AuditResult[] {
     content: fs.readFileSync(f, 'utf-8'),
   }));
 
-  const results: AuditResult[] = NAV_TOOLS.map(tool => {
+  const results: AuditResult[] = NAV_TOOLS_FALLBACK.map(tool => {
     const slug = tool.href.replace(/^\//, '');
     const matchingSpec = specContents.find(s => s.content.includes(`'${slug}'`) || s.content.includes(`"${slug}"`));
 
