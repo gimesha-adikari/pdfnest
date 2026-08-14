@@ -6,13 +6,14 @@ import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { fetchJson } from "@/lib/api";
 import { ArrowLeft, Loader2, Save, FileText } from "lucide-react";
-import { NAV_TOOLS } from "@/lib/toolsData";
+import { NAV_TOOLS_FALLBACK } from "@/lib/toolsData";
 
 import LandingPageContexts from "@/components/admin/LandingPageContexts";
 import PricingSubscriptionMatrices from "@/components/admin/PricingSubscriptionMatrices";
 import WorkspaceConfigurations from "@/components/admin/WorkspaceConfigurations";
 import AboutPageContexts from "@/components/admin/AboutPageContexts";
 import { notify } from "@/lib/notify";
+import { revalidateToolsCache } from "@/lib/actions/revalidateTools";
 
 type ActiveTabSection = "home" | "subscribe" | "about" | "tools";
 
@@ -78,7 +79,7 @@ export default function AdminContentEditor() {
             setAboutData(cleanData(about));
 
             if (!tools || tools.length === 0) {
-                const standardizedFallbackTools = NAV_TOOLS.map((staticTool, index) => ({
+                const standardizedFallbackTools = NAV_TOOLS_FALLBACK.map((staticTool, index) => ({
                     ID: index + 1,
                     Title: staticTool.title,
                     Description: staticTool.description,
@@ -94,6 +95,9 @@ export default function AdminContentEditor() {
                     IsNew: staticTool.isNew || false,
                     Accept: staticTool.accept || "",
                     Multiple: staticTool.multiple || false,
+                    isActive: true,
+                    sortOrder: index + 1,
+                    iconName: "FileText",
                 }));
 
                 setToolsList(standardizedFallbackTools);
@@ -136,22 +140,26 @@ export default function AdminContentEditor() {
                 });
                 notify("About Page content properties published live successfully.", "success");
             } else if (activeSection === "tools") {
-                const savedToolsPromises = toolsList.map((toolItem) => {
-                    const cleanToolPayload = { ...toolItem };
-
-                    if (String(cleanToolPayload.ID).length < 3 && !isNaN(Number(cleanToolPayload.ID))) {
-                        delete cleanToolPayload.ID;
+                const cleanToolsPayload = toolsList.map((toolItem) => {
+                    const copy = { ...toolItem };
+                    if (String(copy.ID).length < 3 && !isNaN(Number(copy.ID))) {
+                        delete copy.ID;
                     }
-
-                    return fetchJson("/admin/site-content/tools-config", {
-                        method: "PUT",
-                        body: JSON.stringify(cleanToolPayload),
-                    });
+                    return copy;
                 });
 
-                const structuralUpdatedResponses = await Promise.all(savedToolsPromises);
-                setToolsList(structuralUpdatedResponses);
-                notify(`Successfully deployed updates across all (${toolsList.length}) application tools.`, "success");
+                const res = await fetchJson<any>("/admin/site-content/tools-config/bulk", {
+                    method: "PUT",
+                    body: JSON.stringify(cleanToolsPayload),
+                });
+
+                if (res && res.tools) {
+                    setToolsList(res.tools);
+                }
+                // Invalidate Next.js SSR tool cache so fresh CMS data is served
+                // on the next request. Only fires after confirmed backend success.
+                await revalidateToolsCache();
+                notify(`Successfully deployed transactional updates across all (${toolsList.length}) application tools.`, "success");
             }
         } catch (err) {
             notify("Failed executing config master commit workflow.", "error");
