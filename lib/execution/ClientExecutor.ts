@@ -2,6 +2,7 @@
 
 import { degrees, PDFDocument, PDFName } from "pdf-lib";
 import { ExecutionError, ExecutionOptions } from "./types";
+import { executePdfcpuWasmWatermark } from "./pdfcpu/pdfcpuClient";
 
 export class ClientExecutor {
     static isSupported(tool: string): boolean {
@@ -15,6 +16,7 @@ export class ClientExecutor {
             "duplicate",
             "update_metadata",
             "merge",
+            "watermark",
         ].includes(normalized);
     }
 
@@ -34,6 +36,10 @@ export class ClientExecutor {
 
         const file = files[0];
         const originalPassword = options.password || (file as any).originalPassword;
+
+        if (normalizedTool === "watermark") {
+            return await executePdfcpuWasmWatermark(file, params, originalPassword);
+        }
 
         // Password-protected files route to Cloud to preserve existing relock pipeline
         if (originalPassword) {
@@ -131,6 +137,8 @@ function normalizeTool(tool: string): string {
             return "insert_blank";
         case "update_metadata":
             return "update_metadata";
+        case "watermark_pdf":
+            return "watermark";
         default:
             return tool;
     }

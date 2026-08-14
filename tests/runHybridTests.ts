@@ -1,14 +1,16 @@
 import { runHybridExecutionTests } from "./unit/hybridExecution.test";
 import { runWave1ExecutionTests } from "./unit/wave1Execution.test";
 import { runMergeExecutionTests } from "./unit/mergeExecution.test";
+import { runWatermarkExecutionTests } from "./unit/watermarkExecution.test";
 
 async function main() {
     console.log("=== STARTING FULL HYBRID SUITE ===\n");
     const resRotate = await runHybridExecutionTests();
     const resWave1 = await runWave1ExecutionTests();
     const resMerge = await runMergeExecutionTests();
+    const resWatermark = await runWatermarkExecutionTests();
 
-    const totalFailed = resRotate.failed + resWave1.failed + resMerge.failed;
+    const totalFailed = resRotate.failed + resWave1.failed + resMerge.failed + resWatermark.failed;
     if (totalFailed > 0) {
         console.error(`\nFAILED SUITE: ${totalFailed} total tests failed.`);
         process.exit(1);

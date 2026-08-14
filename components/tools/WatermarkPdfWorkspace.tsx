@@ -23,6 +23,9 @@ import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
+import { ExecutionManager } from "@/lib/execution/ExecutionManager";
+import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
+import { ProcessingMode } from "@/lib/execution/types";
 
 import { usePreview } from "@/lib/preview/usePreview";
 
@@ -40,6 +43,7 @@ export default function WatermarkPdfWorkspace() {
     const [watermarkType, setWatermarkType] = useState<"text" | "image">("text");
     const [watermarkText, setWatermarkText] = useState("CONFIDENTIAL");
     const [fontFamily, setFontFamily] = useState<string>("Helvetica");
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
 
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string>("");
@@ -128,27 +132,26 @@ export default function WatermarkPdfWorkspace() {
 
                 const description = `font:${fontFamily}, pos:${backendPosition}, scale:${normalizedScale}, rot:${-rotation}, op:${opacity}`;
 
-                const formData = new FormData();
-                formData.append("file", file);
-                formData.append("description", description);
-
-                if (watermarkType === "text") {
-                    formData.append("text", watermarkText.trim());
-                } else if (watermarkType === "image" && imageFile) {
-                    formData.append("watermarkImage", imageFile);
-                }
-
-                if ((file as any).originalPassword) {
-                    formData.append("file_password", (file as any).originalPassword);
-                }
-
-                const responseBlob = await uploadAndDownloadFile(
-                    "/api/structure/watermark",
-                    formData
-                );
+                const responseBlob = await ExecutionManager.run({
+                    tool: "watermark",
+                    files: [file],
+                    params: {
+                        watermarkType,
+                        text: watermarkText.trim(),
+                        watermarkImage: imageFile,
+                        fontFamily,
+                        fontSize,
+                        rotation,
+                        position,
+                        opacity,
+                        description,
+                    },
+                    mode: processingMode,
+                    password: (file as any).originalPassword,
+                });
 
                 setDownloadData({
-                    blob: responseBlob,
+                    blob: responseBlob.blob,
                     fileName: `${file.name.replace(/\.pdf$/i, "")}-marked.pdf`
                 });
 
@@ -184,6 +187,12 @@ export default function WatermarkPdfWorkspace() {
                             setFile(null);
                             router.push(`/${toolId}`);
                         }} />
+
+                        <ProcessingModeSelector
+                            mode={processingMode}
+                            onChange={setProcessingMode}
+                            disabled={isProcessing}
+                        />
 
                         <div className="space-y-2">
                             <label className="text-[11px] font-bold uppercase tracking-wider text-[color:var(--muted)] flex items-center gap-1.5">

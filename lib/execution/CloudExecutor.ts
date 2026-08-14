@@ -24,7 +24,11 @@ export class CloudExecutor {
         // 2. Attach parameters
         Object.entries(params || {}).forEach(([key, val]) => {
             if (val !== undefined && val !== null) {
-                formData.append(key, typeof val === "object" ? JSON.stringify(val) : String(val));
+                if (typeof File !== "undefined" && val instanceof File) {
+                    formData.append(key, val);
+                } else {
+                    formData.append(key, typeof val === "object" ? JSON.stringify(val) : String(val));
+                }
             }
         });
 
