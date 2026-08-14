@@ -16,7 +16,7 @@ import { uploadAndDownloadFile } from "@/lib/api";
 import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 
-import { usePreviews } from "@/lib/preview/usePreviews";
+import LazyPdfThumbnail from "@/components/pdf/LazyPdfThumbnail";
 
 interface ReorderPagesToolProps {
     baseFile: File | null;
@@ -35,15 +35,15 @@ function moveItem<T>(items: T[], from: number, to: number) {
 }
 
 function PageCard({
+                      file,
                       pageNum,
-                      thumbnail,
                       onMoveUp,
                       onMoveDown,
                       disableMoveUp,
                       disableMoveDown,
                   }: {
+    file: File | null;
     pageNum: number;
-    thumbnail?: string;
     onMoveUp: () => void;
     onMoveDown: () => void;
     disableMoveUp: boolean;
@@ -52,17 +52,21 @@ function PageCard({
     return (
         <div className="flex items-center gap-3 rounded-2xl border border-[color:var(--border)] bg-[var(--card)] p-2.5">
             <div className="relative h-16 w-12 shrink-0 overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--background)]">
-                {thumbnail ? (
-                    <img
-                        src={thumbnail}
-                        alt={`Page ${pageNum}`}
-                        className="h-full w-full object-cover"
-                    />
-                ) : (
-                    <div className="flex h-full w-full items-center justify-center text-[color:var(--muted)]">
-                        <FileText size={16} />
-                    </div>
-                )}
+                <LazyPdfThumbnail file={file} page={pageNum} scale={0.3} className="h-full w-full">
+                    {({ src, isLoading }) =>
+                        src ? (
+                            <img
+                                src={src}
+                                alt={`Page ${pageNum}`}
+                                className="h-full w-full object-cover"
+                            />
+                        ) : (
+                            <div className="flex h-full w-full items-center justify-center text-[color:var(--muted)]">
+                                {isLoading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={16} />}
+                            </div>
+                        )
+                    }
+                </LazyPdfThumbnail>
             </div>
 
             <div className="min-w-0 flex-1">
@@ -111,20 +115,6 @@ export default function ReorderPagesTool({ baseFile, onReorderedFile }: ReorderP
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
 
-    const previewRequests = useMemo(
-        () =>
-            Array.from({ length: pageCount }, (_, index) => ({
-                file: baseFile,
-                page: index + 1,
-                scale: 0.3,
-                renderer: "client" as const,
-                enabled: Boolean(baseFile),
-            })),
-        [baseFile, pageCount]
-    );
-
-    const previewResults = usePreviews(previewRequests);
-
     const totalSizeMB = useMemo(() => {
         if (!baseFile) return "0.00";
         return (baseFile.size / 1024 / 1024).toFixed(2);
@@ -146,6 +136,8 @@ export default function ReorderPagesTool({ baseFile, onReorderedFile }: ReorderP
             setPageOrder([]);
             setPageCount(0);
 
+            let loadingTask: any = null;
+            let pdf: any = null;
             try {
                 const pdfjsLib = await import("pdfjs-dist");
                 pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -153,8 +145,8 @@ export default function ReorderPagesTool({ baseFile, onReorderedFile }: ReorderP
 
                 const arrayBuffer = await baseFile.arrayBuffer();
                 const typedArray = new Uint8Array(arrayBuffer);
-                const loadingTask = pdfjsLib.getDocument({ data: typedArray });
-                const pdf: PDFDocumentProxy = await loadingTask.promise;
+                loadingTask = pdfjsLib.getDocument({ data: typedArray });
+                pdf = await loadingTask.promise;
 
                 const totalPages = pdf.numPages;
                 const dynamicOrderArray = Array.from({ length: totalPages }, (_, i) => i + 1);
@@ -163,12 +155,16 @@ export default function ReorderPagesTool({ baseFile, onReorderedFile }: ReorderP
 
                 setPageCount(totalPages);
                 setPageOrder(dynamicOrderArray);
-
-                await loadingTask.destroy();
             } catch (error) {
                 console.error("Root document processing exception:", error);
                 notify("Could not load document preview grids.", "error");
             } finally {
+                if (pdf && typeof pdf.destroy === "function") {
+                    try { pdf.destroy(); } catch {}
+                }
+                if (loadingTask && typeof loadingTask.destroy === "function") {
+                    try { loadingTask.destroy(); } catch {}
+                }
                 if (!cancelled) {
                     setIsReadingTotal(false);
                 }
@@ -270,17 +266,21 @@ export default function ReorderPagesTool({ baseFile, onReorderedFile }: ReorderP
 
                     <div className="mt-3 flex items-center gap-3 rounded-2xl border border-[color:var(--border)] bg-[var(--card)] p-2.5">
                         <div className="relative h-16 w-12 shrink-0 overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--background)]">
-                            {previewResults[0]?.src ? (
-                                <img
-                                    src={previewResults[0].src}
-                                    alt={baseFile.name}
-                                    className="h-full w-full object-cover"
-                                />
-                            ) : (
-                                <div className="flex h-full w-full items-center justify-center text-[color:var(--muted)]">
-                                    <FileText size={16} />
-                                </div>
-                            )}
+                            <LazyPdfThumbnail file={baseFile} page={1} scale={0.3} className="h-full w-full">
+                                {({ src, isLoading }) =>
+                                    src ? (
+                                        <img
+                                            src={src}
+                                            alt={baseFile.name}
+                                            className="h-full w-full object-cover"
+                                        />
+                                    ) : (
+                                        <div className="flex h-full w-full items-center justify-center text-[color:var(--muted)]">
+                                            {isLoading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={16} />}
+                                        </div>
+                                    )
+                                }
+                            </LazyPdfThumbnail>
                         </div>
 
                         <div className="min-w-0 flex-1">
@@ -345,25 +345,21 @@ export default function ReorderPagesTool({ baseFile, onReorderedFile }: ReorderP
                         </div>
                     ) : (
                         <div className="space-y-2">
-                            {pageOrder.map((pageNum, index) => {
-                                const thumbnail = previewResults[pageNum - 1]?.src;
-
-                                return (
-                                    <PageCard
-                                        key={pageNum}
-                                        pageNum={pageNum}
-                                        thumbnail={thumbnail}
-                                        disableMoveUp={index === 0}
-                                        disableMoveDown={index === pageOrder.length - 1}
-                                        onMoveUp={() =>
-                                            setPageOrder((prev) => moveItem(prev, index, index - 1))
-                                        }
-                                        onMoveDown={() =>
-                                            setPageOrder((prev) => moveItem(prev, index, index + 1))
-                                        }
-                                    />
-                                );
-                            })}
+                            {pageOrder.map((pageNum, index) => (
+                                <PageCard
+                                    key={pageNum}
+                                    file={baseFile}
+                                    pageNum={pageNum}
+                                    disableMoveUp={index === 0}
+                                    disableMoveDown={index === pageOrder.length - 1}
+                                    onMoveUp={() =>
+                                        setPageOrder((prev) => moveItem(prev, index, index - 1))
+                                    }
+                                    onMoveDown={() =>
+                                        setPageOrder((prev) => moveItem(prev, index, index + 1))
+                                    }
+                                />
+                            ))}
                         </div>
                     )}
                 </div>

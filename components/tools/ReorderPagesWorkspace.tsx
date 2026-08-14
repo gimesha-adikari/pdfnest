@@ -31,21 +31,6 @@ export default function ReorderPagesWorkspace() {
     const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
 
 
-    const previewRequests = useMemo(
-        () =>
-            Array.from({ length: pageCount }, (_, index) => ({
-                file,
-                page: index + 1,
-                scale: 0.3,
-                renderer: "client" as const,
-                enabled: Boolean(file),
-            })),
-        [file, pageCount]
-    );
-
-    const previewResults = usePreviews(previewRequests);
-    const thumbnails = useMemo(() => previewResults.map((r) => r.src), [previewResults]);
-
     useEffect(() => {
         if (!file) {
             setPageOrder([]);
@@ -57,6 +42,8 @@ export default function ReorderPagesWorkspace() {
             setIsLoadingElements(true);
             setSuccess(false);
 
+            let loadingTask: any = null;
+            let pdf: any = null;
             try {
                 const pdfjsLib = await import("pdfjs-dist");
                 pdfjsLib.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
@@ -64,19 +51,23 @@ export default function ReorderPagesWorkspace() {
                 const arrayBuffer = await file.arrayBuffer();
                 const typedArray = new Uint8Array(arrayBuffer);
 
-                const loadingTask = pdfjsLib.getDocument({ data: typedArray });
-                const pdf = await loadingTask.promise;
+                loadingTask = pdfjsLib.getDocument({ data: typedArray });
+                pdf = await loadingTask.promise;
                 const totalPages = pdf.numPages;
 
                 setPageCount(totalPages);
                 const dynamicOrderArray = Array.from({ length: totalPages }, (_, i) => i + 1);
                 setPageOrder(dynamicOrderArray);
-
-                await loadingTask.destroy();
             } catch (error) {
                 console.error("Root Document Processing Exception:", error);
                 notify("Could not load document preview grids.", "error");
             } finally {
+                if (pdf && typeof pdf.destroy === "function") {
+                    try { pdf.destroy(); } catch {}
+                }
+                if (loadingTask && typeof loadingTask.destroy === "function") {
+                    try { loadingTask.destroy(); } catch {}
+                }
                 setIsLoadingElements(false);
             }
         };
@@ -147,21 +138,21 @@ export default function ReorderPagesWorkspace() {
                         />
 
 
-                        {thumbnails.length > 0 && (
+                        {pageCount > 0 && (
                             <div className="border border-[color:var(--border)] bg-[color:var(--background)]/30 rounded-2xl p-6">
                                 <div className="flex items-center justify-between mb-6 border-b border-[color:var(--border)] pb-3">
                                     <h3 className="text-sm font-bold flex items-center gap-2 text-[color:var(--foreground)]">
                                         <Layers size={16} className="text-indigo-500" /> Interactive Sorting Grid
                                     </h3>
                                     <span className="text-xs bg-indigo-500/10 text-indigo-500 px-2.5 py-1 rounded-full font-semibold">
-                                        {thumbnails.length} Total Pages
+                                        {pageCount} Total Pages
                                     </span>
                                 </div>
 
                                 <PageReorderGrid
                                     items={pageOrder}
                                     setItems={setPageOrder}
-                                    thumbnails={thumbnails}
+                                    file={file}
                                 />
                             </div>
                         )}

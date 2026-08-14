@@ -19,6 +19,8 @@ import { useAuth } from "@/context/AuthContext";
 
 import { usePreviews } from "@/lib/preview/usePreviews";
 
+import LazyPdfThumbnail from "@/components/pdf/LazyPdfThumbnail";
+
 type FileMeta = {
     thumbnail?: string;
     pageCount?: number;
@@ -36,6 +38,9 @@ function getFileKey(file: File) {
 }
 
 async function inspectPdf(file: File): Promise<FileMeta> {
+    let pdf: any = null;
+    let page: any = null;
+    let canvas: HTMLCanvasElement | null = null;
     try {
         if (typeof window === "undefined") return {};
 
@@ -45,16 +50,16 @@ async function inspectPdf(file: File): Promise<FileMeta> {
 
         const arrayBuffer = await file.arrayBuffer();
         const typedArray = new Uint8Array(arrayBuffer);
-        const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
+        pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
 
         const pageCount = pdf.numPages;
         let thumbnail: string | undefined;
 
         if (pageCount > 0) {
-            const page = await pdf.getPage(1);
+            page = await pdf.getPage(1);
             const viewport = page.getViewport({ scale: 0.2 });
 
-            const canvas = document.createElement("canvas");
+            canvas = document.createElement("canvas");
             const ctx = canvas.getContext("2d");
 
             canvas.width = viewport.width;
@@ -69,18 +74,29 @@ async function inspectPdf(file: File): Promise<FileMeta> {
 
                 thumbnail = canvas.toDataURL("image/jpeg", 0.65);
             }
-
-            canvas.remove();
         }
 
         return { pageCount, thumbnail };
     } catch (error) {
         console.error("Failed to inspect PDF:", error);
         return {};
+    } finally {
+        if (canvas) {
+            canvas.width = 0;
+            canvas.height = 0;
+            canvas.remove();
+        }
+        if (page && typeof page.cleanup === "function") {
+            try { page.cleanup(); } catch {}
+        }
+        if (pdf && typeof pdf.destroy === "function") {
+            try { pdf.destroy(); } catch {}
+        }
     }
 }
 
 function PageCard({
+                      file,
                       pageNum,
                       meta,
                       selected,
@@ -89,6 +105,7 @@ function PageCard({
                       onRotateRight,
                       onReset,
                   }: {
+    file: File | null;
     pageNum: number;
     meta?: FileMeta;
     selected: boolean;
@@ -107,19 +124,23 @@ function PageCard({
             ].join(" ")}
         >
             <div className="relative aspect-[1/1.28] overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--background)]">
-                {meta?.thumbnail ? (
-                    <img
-                        src={meta.thumbnail}
-                        alt={`Page ${pageNum}`}
-                        className="h-full w-full object-cover"
-                        style={{ transform: `rotate(${rotation}deg)` }}
-                    />
-                ) : (
-                    <div className="flex h-full w-full flex-col items-center justify-center text-[color:var(--muted)] opacity-50">
-                        <FileText size={24} className="mb-2" />
-                        <Loader2 size={14} className="mt-1 animate-spin" />
-                    </div>
-                )}
+                <LazyPdfThumbnail file={file} page={pageNum} scale={0.3} className="h-full w-full">
+                    {({ src, isLoading }) =>
+                        src ? (
+                            <img
+                                src={src}
+                                alt={`Page ${pageNum}`}
+                                className="h-full w-full object-cover"
+                                style={{ transform: `rotate(${rotation}deg)` }}
+                            />
+                        ) : (
+                            <div className="flex h-full w-full flex-col items-center justify-center text-[color:var(--muted)] opacity-50">
+                                <FileText size={24} className="mb-2" />
+                                {isLoading && <Loader2 size={14} className="mt-1 animate-spin" />}
+                            </div>
+                        )
+                    }
+                </LazyPdfThumbnail>
 
                 <div className="absolute left-2 top-2 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-white backdrop-blur-sm">
                     Pg {pageNum}
@@ -185,20 +206,6 @@ export default function RotateTool({ baseFile, onRotatedFile }: RotateToolProps)
     const [isReadingTotal, setIsReadingTotal] = useState(false);
     const [success, setSuccess] = useState(false);
 
-    const previewRequests = useMemo(
-        () =>
-            Array.from({ length: pageCount }, (_, index) => ({
-                file: baseFile,
-                page: index + 1,
-                scale: 0.3,
-                renderer: "client" as const,
-                enabled: Boolean(baseFile),
-            })),
-        [baseFile, pageCount]
-    );
-
-    const previewResults = usePreviews(previewRequests);
-
     const totalSizeMB = useMemo(() => {
         if (!baseFile) return "0.00";
         return (baseFile.size / 1024 / 1024).toFixed(2);
@@ -226,20 +233,11 @@ export default function RotateTool({ baseFile, onRotatedFile }: RotateToolProps)
                     [getFileKey(baseFile)]: result,
                 }));
 
-                const pdfjsLib = await import("pdfjs-dist");
-                pdfjsLib.GlobalWorkerOptions.workerSrc =
-                    window.location.origin + "/pdf.worker.mjs";
-
-                const arrayBuffer = await baseFile.arrayBuffer();
-                const typedArray = new Uint8Array(arrayBuffer);
-                const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
-
-                const totalPages = pdf.numPages;
-                setPageCount(totalPages);
-                setIsReadingTotal(false);
+                setPageCount(result.pageCount ?? 0);
             } catch (error) {
                 console.error(error);
                 notify("Could not read the structural metadata of this document.","error");
+            } finally {
                 setIsReadingTotal(false);
             }
         };
@@ -465,16 +463,12 @@ export default function RotateTool({ baseFile, onRotatedFile }: RotateToolProps)
                             {Array.from({ length: pageCount }).map((_, idx) => {
                                 const pageNum = idx + 1;
                                 const rotation = pageRotations[pageNum] || 0;
-                                const thumbnailSrc = previewResults[idx]?.src;
 
                                 return (
                                     <PageCard
                                         key={pageNum}
+                                        file={baseFile}
                                         pageNum={pageNum}
-                                        meta={{
-                                            thumbnail: thumbnailSrc,
-                                            pageCount,
-                                        }}
                                         selected={rotation > 0}
                                         rotation={rotation}
                                         onRotateLeft={() => rotatePageCounterClockwise(pageNum)}

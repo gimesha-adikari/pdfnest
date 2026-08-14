@@ -13,7 +13,7 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 
-import { usePreviews } from "@/lib/preview/usePreviews";
+import LazyPdfThumbnail from "@/components/pdf/LazyPdfThumbnail";
 
 export default function MergePdfWorkspace() {
     const { requireAuth } = useAuth();
@@ -23,20 +23,6 @@ export default function MergePdfWorkspace() {
     const [files, setFiles] = useState<File[]>([]);
     const [isMerging, setIsMerging] = useState(false);
     const [fileMeta] = useState<Record<string, { originalPassword?: string }>>({});
-
-    const previewRequests = useMemo(
-        () =>
-            files.map((item) => ({
-                file: item,
-                page: 1,
-                scale: 0.2,
-                renderer: "client" as const,
-                enabled: true,
-            })),
-        [files]
-    );
-
-    const previewResults = usePreviews(previewRequests);
 
     // Automatically ingest the initial full files collection matrix
     useEffect(() => {
@@ -170,19 +156,22 @@ export default function MergePdfWorkspace() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
                         {files.map((item, idx) => {
                             const fileKey = `${item.name}-${item.size}-${item.lastModified}`;
-                            const thumbSrc = previewResults[idx]?.src;
 
                             return (
                                 <div key={fileKey} className="relative group border border-[color:var(--border)] bg-[color:var(--background)] p-2 rounded-2xl flex flex-col items-center justify-between aspect-[1/1.3] overflow-hidden shadow-sm">
                                     <div className="w-full flex-1 flex items-center justify-center overflow-hidden rounded-lg bg-[color:var(--card)] relative">
-                                        {thumbSrc ? (
-                                            <img src={thumbSrc} alt={item.name} className="w-full h-full object-cover" />
-                                        ) : (
-                                            <div className="flex flex-col items-center justify-center text-[color:var(--muted)] opacity-50">
-                                                <FileText size={28} className="mb-1" />
-                                                <Loader2 size={14} className="animate-spin" />
-                                            </div>
-                                        )}
+                                        <LazyPdfThumbnail file={item} page={1} scale={0.2} className="w-full h-full">
+                                            {({ src, isLoading }) =>
+                                                src ? (
+                                                    <img src={src} alt={item.name} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="flex flex-col items-center justify-center text-[color:var(--muted)] opacity-50">
+                                                        <FileText size={28} className="mb-1" />
+                                                        {isLoading && <Loader2 size={14} className="animate-spin" />}
+                                                    </div>
+                                                )
+                                            }
+                                        </LazyPdfThumbnail>
                                         <div className="absolute top-2 left-2 bg-indigo-500 text-white rounded-lg text-[10px] font-bold px-2 py-0.5 shadow">
                                             #{idx + 1}
                                         </div>

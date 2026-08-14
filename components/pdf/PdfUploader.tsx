@@ -3,13 +3,15 @@ import React, { useState, useCallback } from "react";
 import { UploadCloud, Lock, Loader2 } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
 const checkEncryption = async (file: File): Promise<boolean> => {
+    let loadingTask: any = null;
+    let pdfDoc: any = null;
     try {
         const pdfjs = await import("pdfjs-dist");
         pdfjs.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
 
         const arrayBuffer = await file.arrayBuffer();
-        const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
-        await loadingTask.promise;
+        loadingTask = pdfjs.getDocument({ data: arrayBuffer });
+        pdfDoc = await loadingTask.promise;
         return false;
     } catch (error: any) {
         if (error.name === "InvalidPDFException" || error.message.includes("Invalid Root")) {
@@ -21,6 +23,13 @@ const checkEncryption = async (file: File): Promise<boolean> => {
             return true;
         }
         throw error;
+    } finally {
+        if (pdfDoc && typeof pdfDoc.destroy === "function") {
+            try { pdfDoc.destroy(); } catch {}
+        }
+        if (loadingTask && typeof loadingTask.destroy === "function") {
+            try { loadingTask.destroy(); } catch {}
+        }
     }
 };
 

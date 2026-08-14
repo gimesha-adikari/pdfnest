@@ -14,7 +14,7 @@ import {handleClientError} from "@/lib/errorHandler";
 import { uploadAndDownloadFile } from "@/lib/api";
 import { notify } from "@/lib/notify";
 
-import { usePreviews } from "@/lib/preview/usePreviews";
+import LazyPdfThumbnail from "@/components/pdf/LazyPdfThumbnail";
 
 function formatMB(bytes: number) {
     return (bytes / 1024 / 1024).toFixed(2);
@@ -34,20 +34,6 @@ export default function SplitTool({
     const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isReadingTotal, setIsReadingTotal] = useState(false);
-
-    const previewRequests = useMemo(
-        () =>
-            Array.from({ length: pageCount }, (_, index) => ({
-                file: baseFile,
-                page: index + 1,
-                scale: 0.3,
-                renderer: "client" as const,
-                enabled: Boolean(baseFile),
-            })),
-        [baseFile, pageCount]
-    );
-
-    const previewResults = usePreviews(previewRequests);
 
     const fileSizeMB = useMemo(() => {
         if (!baseFile) return "0.00";
@@ -73,6 +59,7 @@ export default function SplitTool({
             setLastSelectedIndex(null);
             setIsReadingTotal(true);
 
+            let pdf: any = null;
             try {
                 const pdfjsLib = await import("pdfjs-dist");
                 if (typeof window !== "undefined") {
@@ -83,13 +70,16 @@ export default function SplitTool({
                 const arrayBuffer = await baseFile.arrayBuffer();
                 const typedArray = new Uint8Array(arrayBuffer);
 
-                const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
+                pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
                 const totalPages = pdf.numPages;
                 setPageCount(totalPages);
             } catch (error) {
                 console.error(error);
                 notify("Could not read the structure of this document.","error");
             } finally {
+                if (pdf && typeof pdf.destroy === "function") {
+                    try { pdf.destroy(); } catch {}
+                }
                 setIsReadingTotal(false);
             }
         };
@@ -288,7 +278,6 @@ export default function SplitTool({
                                 {Array.from({ length: pageCount }).map((_, idx) => {
                                     const pageNum = idx + 1;
                                     const isSelected = selectedPages.has(pageNum);
-                                    const thumbnailSrc = previewResults[idx]?.src;
 
                                     return (
                                         <button
@@ -302,21 +291,25 @@ export default function SplitTool({
                                                     : "border-border bg-card hover:border-indigo-400/50",
                                             ].join(" ")}
                                         >
-                                            {thumbnailSrc ? (
-                                                <img
-                                                    src={thumbnailSrc}
-                                                    alt={`Page ${pageNum}`}
-                                                    className={[
-                                                        "pointer-events-none h-full w-full rounded-md object-cover transition-opacity",
-                                                        isSelected ? "opacity-100" : "opacity-85",
-                                                    ].join(" ")}
-                                                />
-                                            ) : (
-                                                <div className="flex h-full w-full flex-col items-center justify-center text-[color:var(--muted)] opacity-50">
-                                                    <FileText size={24} className="mb-2" />
-                                                    <Loader2 size={14} className="mt-1 animate-spin" />
-                                                </div>
-                                            )}
+                                            <LazyPdfThumbnail file={baseFile} page={pageNum} scale={0.3} className="w-full h-full pointer-events-none">
+                                                {({ src, isLoading }) =>
+                                                    src ? (
+                                                        <img
+                                                            src={src}
+                                                            alt={`Page ${pageNum}`}
+                                                            className={[
+                                                                "pointer-events-none h-full w-full rounded-md object-cover transition-opacity",
+                                                                isSelected ? "opacity-100" : "opacity-85",
+                                                            ].join(" ")}
+                                                        />
+                                                    ) : (
+                                                        <div className="flex h-full w-full flex-col items-center justify-center text-[color:var(--muted)] opacity-50">
+                                                            <FileText size={24} className="mb-2" />
+                                                            {isLoading && <Loader2 size={14} className="mt-1 animate-spin" />}
+                                                        </div>
+                                                    )
+                                                }
+                                            </LazyPdfThumbnail>
 
                                             <div className="absolute bottom-0 w-full bg-black/40 py-1 text-center text-[10px] font-bold text-white backdrop-blur-md">
                                                 Pg {pageNum}

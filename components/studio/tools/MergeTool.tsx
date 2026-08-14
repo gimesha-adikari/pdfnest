@@ -16,7 +16,7 @@ import { uploadAndDownloadFile } from "@/lib/api";
 import { notify } from "@/lib/notify";
 import PdfUploader from "@/components/pdf/PdfUploader";
 
-import { usePreviews } from "@/lib/preview/usePreviews";
+import LazyPdfThumbnail from "@/components/pdf/LazyPdfThumbnail";
 
 type FileMeta = {
     pageCount?: number;
@@ -34,6 +34,7 @@ function getFileKey(file: File) {
 }
 
 async function inspectPdf(file: File): Promise<FileMeta> {
+    let pdf: any = null;
     try {
         if (typeof window === "undefined") return {};
 
@@ -43,19 +44,22 @@ async function inspectPdf(file: File): Promise<FileMeta> {
 
         const arrayBuffer = await file.arrayBuffer();
         const typedArray = new Uint8Array(arrayBuffer);
-        const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
+        pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
 
         return { pageCount: pdf.numPages };
     } catch (error) {
         console.error("Failed to inspect PDF:", error);
         return {};
+    } finally {
+        if (pdf && typeof pdf.destroy === "function") {
+            try { pdf.destroy(); } catch {}
+        }
     }
 }
 
 function MiniFileCard({
                           file,
                           meta,
-                          thumbnail,
                           index,
                           onMoveUp,
                           onMoveDown,
@@ -65,7 +69,6 @@ function MiniFileCard({
                       }: {
     file: File;
     meta?: FileMeta;
-    thumbnail?: string;
     index: number;
     onMoveUp: () => void;
     onMoveDown: () => void;
@@ -76,17 +79,21 @@ function MiniFileCard({
     return (
         <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3">
             <div className="relative h-14 w-11 shrink-0 overflow-hidden rounded-xl border border-border bg-background">
-                {thumbnail ? (
-                    <img
-                        src={thumbnail}
-                        alt={file.name}
-                        className="h-full w-full object-cover"
-                    />
-                ) : (
-                    <div className="flex h-full w-full items-center justify-center text-muted">
-                        <FileText size={16} />
-                    </div>
-                )}
+                <LazyPdfThumbnail file={file} page={1} scale={0.2} className="h-full w-full">
+                    {({ src, isLoading }) =>
+                        src ? (
+                            <img
+                                src={src}
+                                alt={file.name}
+                                className="h-full w-full object-cover"
+                            />
+                        ) : (
+                            <div className="flex h-full w-full items-center justify-center text-muted">
+                                {isLoading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={16} />}
+                            </div>
+                        )
+                    }
+                </LazyPdfThumbnail>
             </div>
 
             <div className="min-w-0 flex-1">
@@ -152,22 +159,7 @@ export function MergeTool({baseFile, onMergedFile}: MergeToolProps) {
         return [...(baseFile ? [baseFile] : []), ...stagedFiles];
     }, [baseFile, stagedFiles]);
 
-    const previewRequests = useMemo(
-        () =>
-            allFiles.map((file) => ({
-                file,
-                page: 1,
-                scale: 0.2,
-                renderer: "client" as const,
-                enabled: true,
-            })),
-        [allFiles]
-    );
-
-    const previewResults = usePreviews(previewRequests);
-
     const baseMeta = baseFile ? metadata[getFileKey(baseFile)] : undefined;
-    const baseThumbnail = baseFile ? previewResults[0]?.src : undefined;
 
     const totalSizeMB = useMemo(() => {
         const totalBytes =
@@ -394,19 +386,22 @@ export function MergeTool({baseFile, onMergedFile}: MergeToolProps) {
 
                     {baseFile ? (
                         <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-2.5">
-                            <div className="relative h-16 w-12 shrink-0 overflow-hidden rounded-xl border border-border
-                            bg-background">
-                                {baseThumbnail ? (
-                                    <img
-                                        src={baseThumbnail}
-                                        alt={baseFile.name}
-                                        className="h-full w-full object-cover"
-                                    />
-                                ) : (
-                                    <div className="flex h-full w-full items-center justify-center text-muted">
-                                        <FileText size={16}/>
-                                    </div>
-                                )}
+                            <div className="relative h-16 w-12 shrink-0 overflow-hidden rounded-xl border border-border bg-background">
+                                <LazyPdfThumbnail file={baseFile} page={1} scale={0.2} className="h-full w-full">
+                                    {({ src, isLoading }) =>
+                                        src ? (
+                                            <img
+                                                src={src}
+                                                alt={baseFile.name}
+                                                className="h-full w-full object-cover"
+                                            />
+                                        ) : (
+                                            <div className="flex h-full w-full items-center justify-center text-muted">
+                                                {isLoading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={16} />}
+                                            </div>
+                                        )
+                                    }
+                                </LazyPdfThumbnail>
                             </div>
 
                             <div className="min-w-0 flex-1">
@@ -454,7 +449,6 @@ export function MergeTool({baseFile, onMergedFile}: MergeToolProps) {
                             stagedFiles.map((file, index) => {
                                 const key = getFileKey(file);
                                 const fileMeta = metadata[key];
-                                const fileThumbnail = previewResults[baseFile ? index + 1 : index]?.src;
                                 const isFirst = index === 0;
                                 const isLast = index === stagedFiles.length - 1;
 
@@ -463,7 +457,6 @@ export function MergeTool({baseFile, onMergedFile}: MergeToolProps) {
                                         key={key}
                                         file={file}
                                         meta={fileMeta}
-                                        thumbnail={fileThumbnail}
                                         index={index}
                                         onMoveUp={() => moveUp(index)}
                                         onMoveDown={() => moveDown(index)}

@@ -16,6 +16,8 @@ import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
 
+import LazyPdfThumbnail from "@/components/pdf/LazyPdfThumbnail";
+
 function formatMB(bytes: number) {
     return (bytes / 1024 / 1024).toFixed(2);
 }
@@ -34,21 +36,6 @@ export default function RotatePdfWorkspace() {
     const [success, setSuccess] = useState(false);
     const [lastExecutionVenue, setLastExecutionVenue] = useState<"client" | "cloud" | null>(null);
 
-
-    const previewRequests = useMemo(
-        () =>
-            Array.from({ length: pageCount }, (_, index) => ({
-                file,
-                page: index + 1,
-                scale: 0.3,
-                renderer: "client" as const,
-                enabled: Boolean(file),
-            })),
-        [file, pageCount]
-    );
-
-    const previewResults = usePreviews(previewRequests);
-
     useEffect(() => {
         if (!file) {
             setPageCount(0);
@@ -61,6 +48,7 @@ export default function RotatePdfWorkspace() {
             setPageRotations({});
             setIsReadingTotal(true);
 
+            let pdf: any = null;
             try {
                 const pdfjsLib = await import("pdfjs-dist");
                 pdfjsLib.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
@@ -68,13 +56,16 @@ export default function RotatePdfWorkspace() {
                 const arrayBuffer = await file.arrayBuffer();
                 const typedArray = new Uint8Array(arrayBuffer);
 
-                const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
+                pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
                 const totalPages = pdf.numPages;
                 setPageCount(totalPages);
-                setIsReadingTotal(false);
             } catch (error) {
                 console.error(error);
                 notify("Could not read the structural metadata of this document.","error");
+            } finally {
+                if (pdf && typeof pdf.destroy === "function") {
+                    try { pdf.destroy(); } catch {}
+                }
                 setIsReadingTotal(false);
             }
         };
@@ -204,7 +195,6 @@ export default function RotatePdfWorkspace() {
                                 {Array.from({ length: pageCount }).map((_, idx) => {
                                     const pageNum = idx + 1;
                                     const rotation = pageRotations[pageNum] || 0;
-                                    const thumbnailSrc = previewResults[idx]?.src;
 
                                     return (
                                         <div
@@ -228,18 +218,27 @@ export default function RotatePdfWorkspace() {
                                                     style={{ transform: `rotate(${rotation}deg)` }}
                                                     className="w-full h-full transition-transform duration-200 ease-out"
                                                 >
-                                                    {thumbnailSrc ? (
-                                                        <img
-                                                            src={thumbnailSrc}
-                                                            alt={`Page ${pageNum}`}
-                                                            className="w-full h-full object-cover rounded-md"
-                                                        />
-                                                    ) : (
-                                                        <div className="flex flex-col items-center justify-center w-full h-full text-[color:var(--muted)] opacity-50">
-                                                            <FileText size={24} className="mb-2" />
-                                                            <Loader2 size={14} className="animate-spin mt-1" />
-                                                        </div>
-                                                    )}
+                                                    <LazyPdfThumbnail
+                                                        file={file}
+                                                        page={pageNum}
+                                                        scale={0.3}
+                                                        className="w-full h-full"
+                                                    >
+                                                        {({ src, isLoading }) =>
+                                                            src ? (
+                                                                <img
+                                                                    src={src}
+                                                                    alt={`Page ${pageNum}`}
+                                                                    className="w-full h-full object-cover rounded-md"
+                                                                />
+                                                            ) : (
+                                                                <div className="flex flex-col items-center justify-center w-full h-full text-[color:var(--muted)] opacity-50">
+                                                                    <FileText size={24} className="mb-2" />
+                                                                    {isLoading && <Loader2 size={14} className="animate-spin mt-1" />}
+                                                                </div>
+                                                            )
+                                                        }
+                                                    </LazyPdfThumbnail>
                                                 </div>
                                             </div>
 

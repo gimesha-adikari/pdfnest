@@ -3,16 +3,20 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+import LazyPdfThumbnail from "@/components/pdf/LazyPdfThumbnail";
+
 interface Props {
     id: number;
     pageNumber: number;
-    thumbnail: string;
+    thumbnail?: string;
+    file?: File | null;
 }
 
 export default function SortablePageCard({
                                              id,
                                              pageNumber,
                                              thumbnail,
+                                             file,
                                          }: Props) {
     const {
         attributes,
@@ -48,11 +52,29 @@ export default function SortablePageCard({
             "
         >
             <div className="aspect-[3/4]">
-                <img
-                    src={thumbnail}
-                    alt={`Page ${pageNumber}`}
-                    className="h-full w-full object-contain"
-                />
+                {file ? (
+                    <LazyPdfThumbnail file={file} page={pageNumber} scale={0.3} className="h-full w-full">
+                        {({ src, isLoading }) =>
+                            src ? (
+                                <img
+                                    src={src}
+                                    alt={`Page ${pageNumber}`}
+                                    className="h-full w-full object-contain"
+                                />
+                            ) : (
+                                <div className="flex h-full w-full items-center justify-center text-xs text-[color:var(--muted)]">
+                                    {isLoading ? "Loading..." : `Page ${pageNumber}`}
+                                </div>
+                            )
+                        }
+                    </LazyPdfThumbnail>
+                ) : (
+                    <img
+                        src={thumbnail}
+                        alt={`Page ${pageNumber}`}
+                        className="h-full w-full object-contain"
+                    />
+                )}
             </div>
 
             <div className="p-4 text-center font-semibold">
