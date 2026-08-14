@@ -1,67 +1,41 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { ChevronDown } from "lucide-react";
-import { NAV_TOOLS } from "@/lib/toolsData";
-import { fetchJson } from "@/lib/api";
+import { useTools } from "@/context/ToolContext";
 
 interface FAQItem {
     question: string;
     answer: string;
 }
 
-interface BackendTool {
-    // Backend responses may use either naming convention during the schema migration.
-    Href?: string;
-    href?: string;
-    FaqJson?: string;
-    faqJson?: string;
-}
-
 export default function ToolFAQ({
-                                    toolHref
-                                }: {
+    toolHref
+}: {
     toolHref: string;
 }) {
+    const { getToolByHref } = useTools();
     const [open, setOpen] = useState<number | null>(null);
 
-    const localTool = NAV_TOOLS.find((t) => t.href === toolHref);
-    const [faqList, setFaqList] = useState<FAQItem[]>(localTool?.faq || []);
+    const tool = getToolByHref(toolHref);
 
-    useEffect(() => {
-        fetchJson("/site-content/tools")
-            .then((data: unknown) => {
-                if (Array.isArray(data) && data.length > 0) {
-                    const tools = data as BackendTool[];
-                    const found = tools.find((t) => (t.Href || t.href) === toolHref);
-
-                    if (found) {
-                        const rawJsonString = found.FaqJson || found.faqJson;
-
-                        if (rawJsonString && typeof rawJsonString === "string" && rawJsonString.trim() !== "[]") {
-                            try {
-                                const parsedFaq = JSON.parse(rawJsonString);
-
-                                if (Array.isArray(parsedFaq) && parsedFaq.length > 0) {
-                                    const normalizedFaq: FAQItem[] = parsedFaq.map((item: any) => ({
-                                        question: item.question || item.Question || item.q || "",
-                                        answer: item.answer || item.Answer || item.a || ""
-                                    })).filter(item => item.question && item.answer);
-
-                                    if (normalizedFaq.length > 0) {
-                                        setFaqList(normalizedFaq);
-                                    }
-                                }
-                            } catch (parseError) {
-                                console.error("Malformed FaqJson matrix configuration block text:", parseError);
-                            }
-                        }
-                    }
+    const faqList: FAQItem[] = useMemo(() => {
+        if (tool?.faq && Array.isArray(tool.faq) && tool.faq.length > 0) {
+            return tool.faq;
+        }
+        const rawJsonString = (tool as any)?.FaqJson || (tool as any)?.faqJson;
+        if (rawJsonString && typeof rawJsonString === "string" && rawJsonString.trim() !== "[]") {
+            try {
+                const parsed = JSON.parse(rawJsonString);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    return parsed.map((item: any) => ({
+                        question: item.question || item.Question || item.q || "",
+                        answer: item.answer || item.Answer || item.a || ""
+                    })).filter(item => item.question && item.answer);
                 }
-            })
-            .catch((err) => {
-                console.error("Error connecting to backend tools config service:", err);
-            });
-    }, [toolHref]);
+            } catch {}
+        }
+        return [];
+    }, [tool]);
 
     if (!faqList || faqList.length === 0) return null;
 
