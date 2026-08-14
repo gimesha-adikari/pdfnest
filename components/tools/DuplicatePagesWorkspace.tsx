@@ -3,8 +3,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { CopyPlus, Loader2, ShieldCheck, ChevronLeft, ChevronRight, Eye, AlertCircle, Sparkles } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/api";
-import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
+import { getFriendlyErrorMessage, handleClientError } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
@@ -13,6 +12,9 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 
 import { usePreview } from "@/lib/preview/usePreview";
+import { ExecutionManager } from "@/lib/execution/ExecutionManager";
+import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
+import { ProcessingMode } from "@/lib/execution/types";
 
 interface CustomPdfFile extends File {
     originalPassword?: string;
@@ -29,9 +31,11 @@ export default function DuplicatePagesWorkspace() {
 
     const [pageSelection, setPageSelection] = useState<string>("1");
     const [numCopies, setNumCopies] = useState<number>(1);
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
+
 
     const [currentPage, setCurrentPage] = useState<number>(1);
     const [totalPages, setTotalPages] = useState<number>(0);
@@ -168,20 +172,21 @@ export default function DuplicatePagesWorkspace() {
                 setIsProcessing(true);
                 setSuccess(false);
 
-                const formData = new FormData();
-                formData.append("file", validFile);
-                formData.append("pages", pageSelection.trim());
-                formData.append("copies", String(numCopies));
-
-                if (validFile.originalPassword) {
-                    formData.append("file_password", validFile.originalPassword);
-                }
-
-                const responseBlob = await uploadAndDownloadFile("/api/structure/duplicate", formData);
+                const result = await ExecutionManager.run({
+                    tool: "duplicate",
+                    files: [validFile],
+                    params: {
+                        pages: pageSelection.trim(),
+                        copies: numCopies,
+                        page: pageSelection.trim(),
+                    },
+                    mode: processingMode,
+                    password: validFile.originalPassword,
+                });
 
                 setDownloadData({
-                    blob: responseBlob,
-                    fileName: `${validFile.name.replace(/\.pdf$/i, "")}-duplicated.pdf`
+                    blob: result.blob,
+                    fileName: result.fileName,
                 });
 
                 setSuccess(true);
@@ -214,11 +219,19 @@ export default function DuplicatePagesWorkspace() {
                             router.push(`/${toolId}`);
                         }} />
 
+                        <ProcessingModeSelector
+                            mode={processingMode}
+                            onChange={setProcessingMode}
+                            toolPolicy="CLIENT_PREFERRED"
+                            disabled={isProcessing}
+                        />
+
                         <div className="rounded-2xl border border-border p-5 bg-[color:var(--background)]/50 space-y-4">
                             <h3 className="text-sm font-semibold flex items-center gap-2">
                                 <CopyPlus size={16} className="text-indigo-500" />
                                 Duplication Configurations
                             </h3>
+
 
                             {/* Preset Selection Buttons Wrapper */}
                             <div className="flex flex-wrap gap-1.5 pb-1">

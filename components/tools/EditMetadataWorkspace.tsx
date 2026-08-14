@@ -4,13 +4,17 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Tags, ShieldCheck, FileText, User, BookOpen, Loader2 } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
-import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
+import { getFriendlyErrorMessage, handleClientError } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
+
+import { ExecutionManager } from "@/lib/execution/ExecutionManager";
+import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
+import { ProcessingMode } from "@/lib/execution/types";
 
 export default function EditMetadataWorkspace() {
     const { requireAuth } = useAuth();
@@ -21,10 +25,12 @@ export default function EditMetadataWorkspace() {
     const [author, setAuthor] = useState("");
     const [subject, setSubject] = useState("");
     const [keywords, setKeywords] = useState("");
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [isReadingFile, setIsReadingFile] = useState(false);
     const [success, setSuccess] = useState(false);
+
 
     useEffect(() => {
         if (!file) return;
@@ -63,21 +69,28 @@ export default function EditMetadataWorkspace() {
                 setIsProcessing(true);
                 setSuccess(false);
 
-                const formData = new FormData();
-                formData.append("file", file);
-                formData.append("title", title.trim());
-                formData.append("author", author.trim());
-                formData.append("subject", subject.trim());
-                formData.append("keywords", keywords.trim());
-
-                const responseBlob = await uploadAndDownloadFile(
-                    "/api/structure/update-metadata",
-                    formData
-                );
+                const result = await ExecutionManager.run({
+                    tool: "update_metadata",
+                    files: [file],
+                    params: {
+                        metadata: {
+                            title: title.trim(),
+                            author: author.trim(),
+                            subject: subject.trim(),
+                            keywords: keywords.trim(),
+                        },
+                        title: title.trim(),
+                        author: author.trim(),
+                        subject: subject.trim(),
+                        keywords: keywords.trim(),
+                    },
+                    mode: processingMode,
+                    password: (file as any).originalPassword,
+                });
 
                 setDownloadData({
-                    blob: responseBlob,
-                    fileName: `${file.name.replace(/\.pdf$/i, "")}-meta.pdf`
+                    blob: result.blob,
+                    fileName: result.fileName,
                 });
 
                 setSuccess(true);
@@ -109,6 +122,14 @@ export default function EditMetadataWorkspace() {
                                 router.push(`/${toolId}`);
                             }} />
                         </div>
+
+                        <ProcessingModeSelector
+                            mode={processingMode}
+                            onChange={setProcessingMode}
+                            toolPolicy="CLIENT_PREFERRED"
+                            disabled={isProcessing}
+                        />
+
 
                         {success && (
                             <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-900 dark:text-emerald-200 flex items-start gap-3">

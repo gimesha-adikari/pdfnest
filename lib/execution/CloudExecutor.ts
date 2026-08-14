@@ -1,0 +1,92 @@
+"use client";
+
+import { uploadAndDownloadFile } from "@/lib/api";
+import { ExecutionError, ExecutionOptions } from "./types";
+
+export class CloudExecutor {
+    static async execute(options: ExecutionOptions): Promise<Blob> {
+        const { tool, files, params, onProgress } = options;
+
+        if (!files || files.length === 0) {
+            throw new ExecutionError("INVALID_INPUT", "No files provided for cloud execution.");
+        }
+
+        const primaryFile = files[0];
+        const formData = new FormData();
+
+        // 1. Preserve existing multipart field naming ('file' for single, 'files' for batch)
+        if (tool === "merge" || files.length > 1) {
+            files.forEach((f) => formData.append("files", f));
+        } else {
+            formData.append("file", primaryFile);
+        }
+
+        // 2. Attach parameters
+        Object.entries(params || {}).forEach(([key, val]) => {
+            if (val !== undefined && val !== null) {
+                formData.append(key, typeof val === "object" ? JSON.stringify(val) : String(val));
+            }
+        });
+
+        // 3. Preserve password propagation for backend relocking pipeline
+        const originalPassword = options.password || (primaryFile as any).originalPassword;
+        if (originalPassword) {
+            formData.append("file_password", originalPassword);
+        }
+
+        // 4. Resolve backend API endpoint
+        const endpoint = getEndpointForTool(tool);
+
+        try {
+            const blob = await uploadAndDownloadFile(endpoint, formData, onProgress);
+            return blob;
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "Cloud execution rejected or failed.";
+            throw new ExecutionError("CLOUD_FAILURE", message, err);
+        }
+    }
+}
+
+function getEndpointForTool(tool: string): string {
+    switch (tool) {
+        case "rotate":
+        case "rotate_pdf":
+            return "/api/structure/rotate";
+        case "split":
+        case "split_pdf":
+            return "/api/structure/split";
+        case "merge":
+        case "merge_pdf":
+            return "/api/structure/merge";
+        case "delete":
+        case "delete_pages":
+            return "/api/structure/delete-pages";
+        case "reorder":
+        case "reorder_pages":
+            return "/api/structure/reorder-pages";
+        case "watermark":
+            return "/api/structure/watermark";
+        case "add_page_numbers":
+            return "/api/structure/add-page-numbers";
+        case "crop":
+            return "/api/structure/crop";
+        case "duplicate":
+            return "/api/structure/duplicate";
+        case "insert_blank":
+            return "/api/structure/insert-blank";
+        case "add_text":
+            return "/api/structure/add-text";
+        case "update_metadata":
+            return "/api/structure/update-metadata";
+        case "compress":
+            return "/api/optimize/compress";
+        case "grayscale":
+            return "/api/optimize/grayscale";
+        case "lock":
+            return "/api/security/lock";
+        case "unlock":
+            return "/api/security/unlock";
+        default:
+            return `/api/structure/${tool}`;
+    }
+}

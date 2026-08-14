@@ -3,10 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2, ShieldCheck, Loader2, FileText } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/api";
-import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
+import { getFriendlyErrorMessage, handleClientError } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
-import { PDFDocumentProxy } from "pdfjs-dist";
 import { FileWithPassword } from "@/lib/types";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
@@ -15,6 +13,9 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 
 import { usePreviews } from "@/lib/preview/usePreviews";
+import { ExecutionManager } from "@/lib/execution/ExecutionManager";
+import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
+import { ProcessingMode } from "@/lib/execution/types";
 
 function formatMB(bytes: number) {
     return (bytes / 1024 / 1024).toFixed(2);
@@ -28,10 +29,12 @@ export default function DeletePagesWorkspace() {
     const [pageCount, setPageCount] = useState<number>(0);
     const [pagesToDelete, setPagesToDelete] = useState<Set<number>>(new Set());
     const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [isReadingTotal, setIsReadingTotal] = useState(false);
     const [success, setSuccess] = useState(false);
+
 
     const previewRequests = useMemo(
         () =>
@@ -145,20 +148,18 @@ export default function DeletePagesWorkspace() {
                 setIsProcessing(true);
                 setSuccess(false);
 
-                const formData = new FormData();
-                formData.append("file", file);
-                formData.append("pages", compiledPageString);
-
                 const typedFile = file as FileWithPassword;
-                if (typedFile.originalPassword) {
-                    formData.append("file_password", typedFile.originalPassword);
-                }
-
-                const responseBlob = await uploadAndDownloadFile("/api/structure/delete-pages", formData);
+                const result = await ExecutionManager.run({
+                    tool: "delete",
+                    files: [file],
+                    params: { pages: compiledPageString },
+                    mode: processingMode,
+                    password: typedFile.originalPassword,
+                });
 
                 setDownloadData({
-                    blob: responseBlob,
-                    fileName: `pruned_${file.name}`
+                    blob: result.blob,
+                    fileName: result.fileName,
                 });
 
                 setSuccess(true);
@@ -189,6 +190,13 @@ export default function DeletePagesWorkspace() {
                         setFile(null);
                         router.push(`/${toolId}`);
                     }} />
+
+                    <ProcessingModeSelector
+                        mode={processingMode}
+                        onChange={setProcessingMode}
+                        toolPolicy="CLIENT_PREFERRED"
+                        disabled={isProcessing}
+                    />
 
                     <div className="rounded-2xl border border-[color:var(--border)] p-5 bg-[color:var(--background)]/50">
                         <div className="flex items-center justify-between mb-4">

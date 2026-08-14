@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Layers, Loader2, ShieldCheck } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/api";
-import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
+import { getFriendlyErrorMessage, handleClientError } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
@@ -15,6 +14,9 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { FileWithPassword } from "@/lib/types";
 
 import { usePreviews } from "@/lib/preview/usePreviews";
+import { ExecutionManager } from "@/lib/execution/ExecutionManager";
+import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
+import { ProcessingMode } from "@/lib/execution/types";
 
 export default function ReorderPagesWorkspace() {
     const { requireAuth } = useAuth();
@@ -26,6 +28,8 @@ export default function ReorderPagesWorkspace() {
     const [isLoadingElements, setIsLoadingElements] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
+
 
     const previewRequests = useMemo(
         () =>
@@ -88,23 +92,18 @@ export default function ReorderPagesWorkspace() {
                 setIsProcessing(true);
                 setSuccess(false);
 
-                const formData = new FormData();
-                formData.append("file", file);
-                formData.append("sequence", pageOrder.join(","));
-
                 const typedFile = file as FileWithPassword;
-                if (typedFile.originalPassword) {
-                    formData.append("file_password", typedFile.originalPassword);
-                }
-
-                const responseBlob = await uploadAndDownloadFile(
-                    "/api/structure/reorder-pages",
-                    formData
-                );
+                const result = await ExecutionManager.run({
+                    tool: "reorder",
+                    files: [file],
+                    params: { sequence: pageOrder.join(",") },
+                    mode: processingMode,
+                    password: typedFile.originalPassword,
+                });
 
                 setDownloadData({
-                    blob: responseBlob,
-                    fileName: `${file.name.replace(/\.pdf$/i, "")}-reordered.pdf`
+                    blob: result.blob,
+                    fileName: result.fileName,
                 });
 
                 setSuccess(true);
@@ -139,6 +138,14 @@ export default function ReorderPagesWorkspace() {
                             setFile(null);
                             router.push(`/${toolId}`);
                         }} />
+
+                        <ProcessingModeSelector
+                            mode={processingMode}
+                            onChange={setProcessingMode}
+                            toolPolicy="CLIENT_PREFERRED"
+                            disabled={isProcessing}
+                        />
+
 
                         {thumbnails.length > 0 && (
                             <div className="border border-[color:var(--border)] bg-[color:var(--background)]/30 rounded-2xl p-6">

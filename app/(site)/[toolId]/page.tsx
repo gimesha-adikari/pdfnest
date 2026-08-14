@@ -134,6 +134,9 @@ export default function SharedUploadPage() {
         );
     }
 
+    console.log(toolConfig.icon);
+    console.log(typeof toolConfig.icon);
+
     return (
         <PdfToolLayout>
             <PdfToolHero

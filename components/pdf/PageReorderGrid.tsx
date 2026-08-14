@@ -8,10 +8,11 @@ import SortablePageCard from "./SortablePageCard";
 interface Props {
     items: number[];
     setItems: React.Dispatch<React.SetStateAction<number[]>>;
-    thumbnails: string[];
+    thumbnails?: string[];
+    file?: File | null;
 }
 
-export default function PageReorderGrid({ items, setItems, thumbnails }: Props) {
+export default function PageReorderGrid({ items, setItems, thumbnails = [], file }: Props) {
     const [isMounted, setIsMounted] = useState(false);
 
     useEffect(() => {
@@ -52,6 +53,7 @@ export default function PageReorderGrid({ items, setItems, thumbnails }: Props) 
                             id={pageNum}
                             pageNumber={pageNum}
                             thumbnail={thumbnails[pageNum - 1]}
+                            file={file}
                         />
                     ))}
                 </div>

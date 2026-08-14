@@ -172,7 +172,8 @@ async function test4_pageNumberAndScale(): Promise<void> {
     assert(resource.width === 1000, "4: width calculated from scale (500 * 2)");
     assert(resource.height === 1400, "4: height calculated from scale (700 * 2)");
     assert(resource.renderedBy === "client-pdfjs", "4: renderedBy is client-pdfjs");
-    assert(tracker.destroyedDoc === true, "4: PDF.js document destroyed after render");
+    ClientPdfRenderer.clearDocumentCache();
+    assert(getTracker().destroyedDoc === true, "4: PDF.js document destroyed after cache cleared");
 }
 
 async function test5_derivedScaleFromWidthHeight(): Promise<void> {
@@ -210,10 +211,10 @@ async function test6_abortSignalCancellation(): Promise<void> {
         }
     }
 
-    const tracker = getTracker();
     assert(threwAbort, "6: render cancellation throws AbortError");
-    assert(tracker.cancelledRender === true, "6: renderTask.cancel() was called");
-    assert(tracker.destroyedDoc === true, "6: pdfDoc was destroyed on abort");
+    assert(getTracker().cancelledRender === true, "6: renderTask.cancel() was called");
+    ClientPdfRenderer.clearDocumentCache();
+    assert(getTracker().destroyedDoc === true, "6: pdfDoc was destroyed on cache clear");
 }
 
 async function test7_pdfJsErrorPropagation(): Promise<void> {
@@ -299,6 +300,7 @@ async function runTests(): Promise<void> {
     let passed = 0;
     let failed = 0;
     for (const [name, fn] of tests) {
+        ClientPdfRenderer.clearDocumentCache();
         try {
             await fn();
             console.log(`  ✓ ${name}`);

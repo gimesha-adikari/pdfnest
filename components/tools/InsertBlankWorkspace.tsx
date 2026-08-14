@@ -3,14 +3,17 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { PlusSquare, Loader2, ShieldCheck, ChevronLeft, ChevronRight, Eye } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/api";
-import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
+import { getFriendlyErrorMessage, handleClientError } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
+
+import { ExecutionManager } from "@/lib/execution/ExecutionManager";
+import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
+import { ProcessingMode } from "@/lib/execution/types";
 
 interface CustomPdfFile extends File {
     originalPassword?: string;
@@ -43,9 +46,11 @@ export default function InsertBlankWorkspace() {
     const [insertAt, setInsertAt] = useState<"start" | "end" | "after">("end");
     const [targetPage, setTargetPage] = useState<number>(1);
     const [numPages, setNumPages] = useState<number>(1);
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
+
 
     const [pdfDocument, setPdfDocument] = useState<PdfJsDocument | null>(null);
     const [currentPage, setCurrentPage] = useState<number>(1);
@@ -155,23 +160,23 @@ export default function InsertBlankWorkspace() {
                 setIsProcessing(true);
                 setSuccess(false);
 
-                const formData = new FormData();
-                formData.append("file", validFile);
-                formData.append("insertAt", insertAt);
-                formData.append("count", String(numPages));
-                if (insertAt === "after") {
-                    formData.append("targetPage", String(targetPage));
-                }
-
-                if (validFile.originalPassword) {
-                    formData.append("file_password", validFile.originalPassword);
-                }
-
-                const responseBlob = await uploadAndDownloadFile("/api/structure/insert-blank", formData);
+                const computedPageIdx = insertAt === "start" ? 1 : insertAt === "end" ? totalPages + 1 : targetPage + 1;
+                const result = await ExecutionManager.run({
+                    tool: "insert_blank",
+                    files: [validFile],
+                    params: {
+                        insertAt,
+                        count: numPages,
+                        targetPage,
+                        page: computedPageIdx,
+                    },
+                    mode: processingMode,
+                    password: validFile.originalPassword,
+                });
 
                 setDownloadData({
-                    blob: responseBlob,
-                    fileName: `${validFile.name.replace(/\.pdf$/i, "")}-with-blank.pdf`
+                    blob: result.blob,
+                    fileName: result.fileName,
                 });
 
                 setSuccess(true);
@@ -204,11 +209,19 @@ export default function InsertBlankWorkspace() {
                             router.push(`/${toolId}`);
                         }} />
 
+                        <ProcessingModeSelector
+                            mode={processingMode}
+                            onChange={setProcessingMode}
+                            toolPolicy="CLIENT_PREFERRED"
+                            disabled={isProcessing}
+                        />
+
                         <div className="rounded-2xl border border-[color:var(--border)] p-5 bg-[color:var(--background)]/50 space-y-4">
                             <h3 className="text-sm font-semibold flex items-center gap-2">
                                 <PlusSquare size={16} className="text-indigo-500" />
                                 Placement Strategies
                             </h3>
+
 
                             <div className="flex flex-col gap-1.5">
                                 <label className="text-[10px] text-[color:var(--muted)] font-bold uppercase">Insert Strategy</label>

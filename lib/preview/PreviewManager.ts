@@ -17,8 +17,21 @@ export class PreviewManager {
     // Disposed flag
     private disposed = false;
 
-    constructor(cache?: PreviewCache) {
+    // Bounded Render Queue settings
+    private readonly maxConcurrency: number;
+    private activeCount = 0;
+    private readonly renderQueue: Array<{
+        key: PreviewKey;
+        request: PreviewRequest;
+        renderer: PreviewRenderer;
+        controller: AbortController;
+        deferredResolve: (res: PreviewResource) => void;
+        deferredReject: (err: unknown) => void;
+    }> = [];
+
+    constructor(cache?: PreviewCache, options?: { maxConcurrency?: number }) {
         this.cache = cache ?? new PreviewCache();
+        this.maxConcurrency = options?.maxConcurrency ?? 2;
     }
 
     /** Register a renderer with a unique identifier. */
@@ -33,6 +46,7 @@ export class PreviewManager {
 
     /** Abort all in‑flight renders and notify active subscribers of cancellation. */
     clear(): void {
+        this.renderQueue.length = 0;
         for (const [key, entry] of this.inflight.entries()) {
             entry.controller.abort();
             const cancelErr: PreviewError = { code: "CANCELLED", message: "Preview request cancelled by clear()" };
@@ -113,24 +127,31 @@ export class PreviewManager {
                 handle._setPendingResult(result, null);
                 return handle;
             }
-            let promise: Promise<PreviewResource>;
-            try {
-                promise = renderer.render(request, controller.signal);
-            } catch (e: unknown) {
-                const previewErr = this.normalizeError(e);
-                const result: PreviewResult = {
-                    status: "error",
-                    resource: null,
-                    error: previewErr,
-                    isLoading: false,
-                    isSuccess: false,
-                    isError: true,
-                };
-                handle._setPendingResult(result, null);
-                return handle;
-            }
+
+            let deferredResolve!: (res: PreviewResource) => void;
+            let deferredReject!: (err: unknown) => void;
+
+            const promise = new Promise<PreviewResource>((resolve, reject) => {
+                deferredResolve = resolve;
+                deferredReject = reject;
+            });
+
+            // Prevent unhandled promise rejection warnings on initial queueing
+            promise.catch(() => {});
+
             entry = { controller, subscribers: new Set(), promise };
             this.inflight.set(key, entry);
+
+            let syncErrorResult: PreviewResult | null = null;
+
+            this.renderQueue.push({
+                key,
+                request,
+                renderer,
+                controller,
+                deferredResolve,
+                deferredReject,
+            });
 
             promise
                 .then((resource) => {
@@ -165,15 +186,80 @@ export class PreviewManager {
                         isSuccess: false,
                         isError: true,
                     };
+                    syncErrorResult = result;
                     for (const sub of entry!.subscribers) {
                         sub(result, null);
                     }
                     this.inflight.delete(key);
                 });
+
+            // Register subscriber for (new or existing) in‑flight entry.
+            entry.subscribers.add(handle._callbackBound);
+            this._processQueue();
+
+            if (syncErrorResult) {
+                handle._setPendingResult(syncErrorResult, null);
+            }
+            return handle;
         }
+
         // Register subscriber for (new or existing) in‑flight entry.
         entry.subscribers.add(handle._callbackBound);
+        this._processQueue();
         return handle;
+    }
+
+    private _processQueue(): void {
+        while (this.activeCount < this.maxConcurrency && this.renderQueue.length > 0) {
+            const task = this.renderQueue.shift();
+            if (!task) break;
+
+            if (task.controller.signal.aborted || !this.inflight.has(task.key)) {
+                continue;
+            }
+
+            const entry = this.inflight.get(task.key);
+            if (!entry || entry.subscribers.size === 0) {
+                this.inflight.delete(task.key);
+                continue;
+            }
+
+            this.activeCount++;
+
+            try {
+                const resultOrPromise = task.renderer.render(task.request, task.controller.signal);
+                Promise.resolve(resultOrPromise)
+                    .then((res) => task.deferredResolve(res))
+                    .catch((err) => task.deferredReject(err))
+                    .finally(() => {
+                        this.activeCount = Math.max(0, this.activeCount - 1);
+                        this._processQueue();
+                    });
+            } catch (syncErr) {
+                const isAbort = typeof syncErr === "object" && syncErr !== null && "name" in syncErr && (syncErr as { name: unknown }).name === "AbortError";
+                if (!isAbort) {
+                    const previewErr = this.normalizeError(syncErr);
+                    const result: PreviewResult = {
+                        status: "error",
+                        resource: null,
+                        error: previewErr,
+                        isLoading: false,
+                        isSuccess: false,
+                        isError: true,
+                    };
+                    const entry = this.inflight.get(task.key);
+                    if (entry) {
+                        for (const sub of entry.subscribers) {
+                            sub(result, null);
+                        }
+                        this.inflight.delete(task.key);
+                    }
+                }
+                task.deferredReject(syncErr);
+                this.activeCount = Math.max(0, this.activeCount - 1);
+                this._processQueue();
+            }
+        }
     }
 
     /** Simple deterministic renderer selection respecting request.renderer preference. */
@@ -287,8 +373,13 @@ class PreviewHandleImpl extends PreviewHandle {
     readonly _callbackBound = (result: PreviewResult, resource: PreviewResource | null) => {
         if (resource) this._retained = resource;
         const cb = this._callback;
-        this._callback = undefined;
-        cb?.(result);
+        if (cb) {
+            this._callback = undefined;
+            cb(result);
+        } else {
+            this._pendingResult = result;
+            this._pendingResource = resource;
+        }
     };
 
     constructor(manager: PreviewManager, key: PreviewKey) {

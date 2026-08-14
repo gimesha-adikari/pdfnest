@@ -362,6 +362,9 @@ async function test04_multipleFiles(): Promise<void> {
     await act(async () => {
         renderer.resolve(keyA, makeResource("blob:a"));
         renderer.resolve(keyB, makeResource("blob:b"));
+    });
+
+    await act(async () => {
         renderer.resolve(keyC, makeResource("blob:c"));
     });
 

@@ -28,6 +28,118 @@ export class ClientPdfRenderer implements PreviewRenderer {
         return Boolean(request.document?.file);
     }
 
+    private static docCache = new Map<string, {
+        key: string;
+        promise: Promise<any>;
+        loadingTask: any | null;
+        pdfDoc: any | null;
+        refCount: number;
+        idleTimer: any | null;
+    }>();
+
+    private static getDocKey(file: File): string {
+        return `${file.name}:${file.size}:${file.lastModified}`;
+    }
+
+    private async _acquireDocument(file: File, signal: AbortSignal): Promise<{ entry: any; pdfDoc: any }> {
+        const key = ClientPdfRenderer.getDocKey(file);
+        let entry = ClientPdfRenderer.docCache.get(key);
+
+        if (!entry) {
+            const promise = (async () => {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdfjsLib = await this._loadPdfJs();
+                const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
+                entry!.loadingTask = loadingTask;
+                const pdfDoc = await loadingTask.promise;
+                entry!.pdfDoc = pdfDoc;
+                return pdfDoc;
+            })();
+
+            // Attach catch to prevent unhandled rejection warning if nothing awaits immediately
+            promise.catch(() => {});
+
+            entry = {
+                key,
+                promise,
+                loadingTask: null,
+                pdfDoc: null,
+                refCount: 0,
+                idleTimer: null,
+            };
+            ClientPdfRenderer.docCache.set(key, entry);
+        }
+
+        if (entry.idleTimer) {
+            clearTimeout(entry.idleTimer);
+            entry.idleTimer = null;
+        }
+
+        entry.refCount++;
+
+        try {
+            if (signal.aborted) {
+                this._releaseDocument(entry);
+                throw this._createAbortError();
+            }
+
+            const pdfDoc = await entry.promise;
+            if (signal.aborted) {
+                this._releaseDocument(entry);
+                throw this._createAbortError();
+            }
+            return { entry, pdfDoc };
+        } catch (err) {
+            ClientPdfRenderer.docCache.delete(key);
+            this._releaseDocument(entry);
+            throw err;
+        }
+    }
+
+    private _releaseDocument(entry: any): void {
+        if (!entry) return;
+        entry.refCount = Math.max(0, entry.refCount - 1);
+        if (entry.refCount === 0 && !entry.idleTimer) {
+            // Idle timer before destroying cached PDF document (e.g. 500ms idle TTL)
+            entry.idleTimer = setTimeout(() => {
+                if (entry.refCount === 0) {
+                    ClientPdfRenderer.docCache.delete(entry.key);
+                    ClientPdfRenderer.destroyEntry(entry);
+                }
+            }, 500);
+        }
+    }
+
+    private static destroyEntry(entry: any): void {
+        if (!entry) return;
+        if (entry.idleTimer) {
+            clearTimeout(entry.idleTimer);
+            entry.idleTimer = null;
+        }
+        if (entry.pdfDoc && typeof entry.pdfDoc.destroy === "function") {
+            try {
+                entry.pdfDoc.destroy();
+            } catch {
+                // ignore
+            }
+        }
+        if (entry.loadingTask && typeof entry.loadingTask.destroy === "function") {
+            try {
+                entry.loadingTask.destroy();
+            } catch {
+                // ignore
+            }
+        }
+    }
+
+    /** Clear all cached document proxies and destroy PDF.js tasks */
+    static clearDocumentCache(): void {
+        for (const entry of ClientPdfRenderer.docCache.values()) {
+            ClientPdfRenderer.destroyEntry(entry);
+        }
+        ClientPdfRenderer.docCache.clear();
+    }
+
     async render(request: PreviewRequest, signal: AbortSignal): Promise<PreviewResource> {
         if (!request.document?.file) {
             throw new Error("ClientPdfRenderer requires request.document.file");
@@ -37,48 +149,11 @@ export class ClientPdfRenderer implements PreviewRenderer {
             throw this._createAbortError();
         }
 
-        const arrayBuffer = await request.document.file.arrayBuffer();
+        const { entry, pdfDoc } = await this._acquireDocument(request.document.file, signal);
 
-        if (signal.aborted) {
-            throw this._createAbortError();
-        }
-
-        const pdfjsLib = await this._loadPdfJs();
-
-        const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
-
-        const onAbort = () => {
-            try {
-                loadingTask.destroy();
-            } catch {
-                // ignore destruction errors on abort
-            }
-        };
-        signal.addEventListener("abort", onAbort);
-
-        let pdfDoc: any;
+        let page: any = null;
         try {
-            pdfDoc = await loadingTask.promise;
-        } catch (e: unknown) {
-            if (signal.aborted) {
-                throw this._createAbortError();
-            }
-            throw e;
-        } finally {
-            signal.removeEventListener("abort", onAbort);
-        }
-
-        if (signal.aborted) {
-            try {
-                pdfDoc.destroy();
-            } catch {
-                // ignore
-            }
-            throw this._createAbortError();
-        }
-
-        try {
-            const page = await pdfDoc.getPage(request.page);
+            page = await pdfDoc.getPage(request.page);
 
             let scale = request.scale;
             if (scale === undefined) {
@@ -143,6 +218,10 @@ export class ClientPdfRenderer implements PreviewRenderer {
                 ? URL.createObjectURL(blob)
                 : "";
 
+            // Immediately clear canvas raster dimensions after PNG Blob creation to release RAM/VRAM bitmap memory
+            canvas.width = 0;
+            canvas.height = 0;
+
             let revoked = false;
 
             return {
@@ -174,11 +253,14 @@ export class ClientPdfRenderer implements PreviewRenderer {
                 },
             };
         } finally {
-            try {
-                pdfDoc.destroy();
-            } catch {
-                // ignore document destruction errors
+            if (page && typeof page.cleanup === "function") {
+                try {
+                    page.cleanup();
+                } catch {
+                    // ignore page cleanup errors
+                }
             }
+            this._releaseDocument(entry);
         }
     }
 

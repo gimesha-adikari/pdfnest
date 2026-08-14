@@ -1,10 +1,9 @@
 "use client";
 
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, FileText, Loader2, Scissors, ShieldCheck } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/api";
-import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
+import { getFriendlyErrorMessage, handleClientError } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
@@ -13,6 +12,9 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 
 import { usePreviews } from "@/lib/preview/usePreviews";
+import { ExecutionManager } from "@/lib/execution/ExecutionManager";
+import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
+import { ProcessingMode } from "@/lib/execution/types";
 
 function formatMB(bytes: number) {
     return (bytes / 1024 / 1024).toFixed(2);
@@ -26,10 +28,12 @@ export default function SplitPdfWorkspace() {
     const [pageCount, setPageCount] = useState<number>(0);
     const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
     const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [isReadingTotal, setIsReadingTotal] = useState(false);
     const [success, setSuccess] = useState(false);
+
 
     const previewRequests = useMemo(
         () =>
@@ -144,19 +148,17 @@ export default function SplitPdfWorkspace() {
                 setIsProcessing(true);
                 setSuccess(false);
 
-                const formData = new FormData();
-                formData.append("file", file);
-                formData.append("pages", compiledPageString);
-
-                if ((file as any).originalPassword) {
-                    formData.append("file_password", (file as any).originalPassword);
-                }
-
-                const responseBlob = await uploadAndDownloadFile("/api/structure/split", formData);
+                const result = await ExecutionManager.run({
+                    tool: "split",
+                    files: [file],
+                    params: { pages: compiledPageString },
+                    mode: processingMode,
+                    password: (file as any).originalPassword,
+                });
 
                 setDownloadData({
-                    blob: responseBlob,
-                    fileName: `${file.name.replace(/\.pdf$/i, "")}-extracted.pdf`
+                    blob: result.blob,
+                    fileName: result.fileName,
                 });
 
                 setSuccess(true);
@@ -188,12 +190,20 @@ export default function SplitPdfWorkspace() {
                         router.push(`/${toolId}`);
                     }} />
 
+                    <ProcessingModeSelector
+                        mode={processingMode}
+                        onChange={setProcessingMode}
+                        toolPolicy="CLIENT_PREFERRED"
+                        disabled={isProcessing}
+                    />
+
                     <div className="rounded-2xl border border-[color:var(--border)] p-5 bg-[color:var(--background)]/50">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-lg font-semibold flex items-center gap-2">
                                 <Scissors size={18} className="text-indigo-500" />
                                 Visual Page Selector
                             </h3>
+
                             {pageCount > 0 && !isReadingTotal && (
                                 <div className="flex gap-3 text-sm">
                                     <button onClick={selectAll} className="text-indigo-500 hover:text-indigo-600 font-medium transition">Select All</button>

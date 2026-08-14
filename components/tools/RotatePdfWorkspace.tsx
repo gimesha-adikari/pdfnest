@@ -1,10 +1,9 @@
 "use client";
 
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { RotateCw, ShieldCheck, Loader2, FileText } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/api";
-import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
+import { getFriendlyErrorMessage, handleClientError } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
@@ -13,6 +12,9 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 
 import { usePreviews } from "@/lib/preview/usePreviews";
+import { ExecutionManager } from "@/lib/execution/ExecutionManager";
+import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
+import { ProcessingMode } from "@/lib/execution/types";
 
 function formatMB(bytes: number) {
     return (bytes / 1024 / 1024).toFixed(2);
@@ -25,10 +27,13 @@ export default function RotatePdfWorkspace() {
 
     const [pageCount, setPageCount] = useState<number>(0);
     const [pageRotations, setPageRotations] = useState<Record<number, number>>({});
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [isReadingTotal, setIsReadingTotal] = useState(false);
     const [success, setSuccess] = useState(false);
+    const [lastExecutionVenue, setLastExecutionVenue] = useState<"client" | "cloud" | null>(null);
+
 
     const previewRequests = useMemo(
         () =>
@@ -125,19 +130,18 @@ export default function RotatePdfWorkspace() {
                     }
                 });
 
-                const formData = new FormData();
-                formData.append("file", file);
-                formData.append("rotations", JSON.stringify(groupedRotations));
+                const result = await ExecutionManager.run({
+                    tool: "rotate",
+                    files: [file],
+                    params: { rotations: groupedRotations },
+                    mode: processingMode,
+                    password: (file as any).originalPassword,
+                });
 
-                if ((file as any).originalPassword) {
-                    formData.append("file_password", (file as any).originalPassword);
-                }
-
-                const responseBlob = await uploadAndDownloadFile("/api/structure/rotate", formData);
-
+                setLastExecutionVenue(result.executionMode);
                 setDownloadData({
-                    blob: responseBlob,
-                    fileName: `${file.name.replace(/\.pdf$/i, "")}-rotated.pdf`
+                    blob: result.blob,
+                    fileName: result.fileName,
                 });
 
                 setSuccess(true);
@@ -146,7 +150,7 @@ export default function RotatePdfWorkspace() {
             } catch (err) {
                 console.error(err);
                 handleClientError(err);
-            }finally {
+            } finally {
                 setIsProcessing(false);
             }
         });
@@ -158,7 +162,7 @@ export default function RotatePdfWorkspace() {
         <>
             <PdfToolHero
                 title="Rotate PDF"
-                description="Rotate individual pages or the entire document layout visually before applying native adjustments on the server."
+                description="Rotate individual pages or the entire document layout visually before applying native adjustments."
             />
 
             <div className="mt-12 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8 shadow-lg w-full">
@@ -167,6 +171,14 @@ export default function RotatePdfWorkspace() {
                         setFile(null);
                         router.push(`/${toolId}`);
                     }} />
+
+                    <ProcessingModeSelector
+                        mode={processingMode}
+                        onChange={setProcessingMode}
+                        toolPolicy="CLIENT_PREFERRED"
+                        disabled={isProcessing}
+                    />
+
 
                     <div className="rounded-2xl border border-[color:var(--border)] p-5 bg-[color:var(--background)]/50">
                         <div className="flex items-center justify-between mb-4">

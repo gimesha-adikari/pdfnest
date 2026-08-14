@@ -91,3 +91,27 @@ export interface PreviewRenderer {
         signal: AbortSignal
     ): Promise<PreviewResource>;
 }
+
+export const PREVIEW_SAFETY_THRESHOLDS = {
+    LARGE_PAGE_COUNT: 100,
+    LARGE_FILE_SIZE_BYTES: 15 * 1024 * 1024, // 15MB
+    HUGE_PAGE_COUNT: 500,
+    HUGE_FILE_SIZE_BYTES: 50 * 1024 * 1024, // 50MB
+} as const;
+
+export type PdfSafetyCategory = "normal" | "large" | "huge";
+
+export function getPdfSafetyCategory(file: File | null, pageCount?: number): PdfSafetyCategory {
+    if (!file) return "normal";
+    const size = file.size;
+    const count = pageCount ?? 0;
+
+    if (count > PREVIEW_SAFETY_THRESHOLDS.HUGE_PAGE_COUNT || size > PREVIEW_SAFETY_THRESHOLDS.HUGE_FILE_SIZE_BYTES) {
+        return "huge";
+    }
+    if (count > PREVIEW_SAFETY_THRESHOLDS.LARGE_PAGE_COUNT || size > PREVIEW_SAFETY_THRESHOLDS.LARGE_FILE_SIZE_BYTES) {
+        return "large";
+    }
+    return "normal";
+}
+
