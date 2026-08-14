@@ -1,4 +1,4 @@
-import { NAV_TOOLS } from "@/lib/toolsData";
+import { NAV_TOOLS_FALLBACK } from "@/lib/toolsData";
 
 type NavTool = {
     title: string;
@@ -33,8 +33,9 @@ const HINTS: Record<string, string[]> = {
     "/markdown-to-pdf": ["/word-to-pdf", "/html-to-pdf", "/code-to-pdf"],
 };
 
-export function getSuggestedNextTools(currentHref: string, limit = 3): NavTool[] {
-    const current = NAV_TOOLS.find((tool: any) => tool.href === currentHref) as NavTool | undefined;
+export function getSuggestedNextTools(currentHref: string, limit = 3, toolsList?: any[]): NavTool[] {
+    const list = (toolsList && toolsList.length > 0 ? toolsList : NAV_TOOLS_FALLBACK) as any[];
+    const current = list.find((tool: any) => (tool.href || tool.Href) === currentHref) as NavTool | undefined;
     if (!current) return [];
 
     const picked = new Map<string, NavTool>();
@@ -43,29 +44,41 @@ export function getSuggestedNextTools(currentHref: string, limit = 3): NavTool[]
         const href = (hrefValue || "").startsWith("/") ? hrefValue! : `/${hrefValue || ""}`;
         if (!href || href === currentHref || picked.has(href)) return;
 
-        const found = NAV_TOOLS.find((tool: any) => tool.href === href) as NavTool | undefined;
+        const found = list.find((tool: any) => (tool.href || tool.Href) === href) as NavTool | undefined;
         if (found) picked.set(href, found);
     };
 
-    (Array.isArray(current.related) ? current.related : []).forEach(addHref);
+    let relatedList: string[] = [];
+    if (Array.isArray(current.related)) {
+        relatedList = current.related;
+    } else if ((current as any).RelatedJson) {
+        try {
+            relatedList = JSON.parse((current as any).RelatedJson);
+        } catch {}
+    }
+
+    relatedList.forEach(addHref);
     (HINTS[currentHref] || []).forEach(addHref);
 
     if (picked.size < limit) {
-        const sameCategory = NAV_TOOLS.filter((tool: any) => {
-            if (tool.href === currentHref) return false;
-            if (!current.category || !tool.category) return false;
-            return String(tool.category).toLowerCase() === String(current.category).toLowerCase();
+        const currentCategory = current.category || (current as any).Category;
+        const sameCategory = list.filter((tool: any) => {
+            const toolHref = tool.href || tool.Href;
+            const toolCategory = tool.category || tool.Category;
+            if (toolHref === currentHref) return false;
+            if (!currentCategory || !toolCategory) return false;
+            return String(toolCategory).toLowerCase() === String(currentCategory).toLowerCase();
         }) as NavTool[];
 
         for (const tool of sameCategory) {
-            addHref(tool.href);
+            addHref(tool.href || (tool as any).Href);
             if (picked.size >= limit) break;
         }
     }
 
     if (picked.size < limit) {
-        for (const tool of NAV_TOOLS as NavTool[]) {
-            addHref(tool.href);
+        for (const tool of list) {
+            addHref(tool.href || tool.Href);
             if (picked.size >= limit) break;
         }
     }
