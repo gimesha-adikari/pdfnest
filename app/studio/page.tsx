@@ -12,10 +12,14 @@ import RecoveryDialog from "@/components/studio/recovery/RecoveryDialog";
 import { openProject } from "@/lib/studio/openProject";
 
 if (typeof window !== "undefined") {
-    import("pdfjs-dist").then((pdfjs) => {
-        pdfjs.GlobalWorkerOptions.workerSrc =
-            window.location.origin + "/pdf.worker.mjs";
-    });
+    import("pdfjs-dist")
+        .then((pdfjs) => {
+            pdfjs.GlobalWorkerOptions.workerSrc =
+                window.location.origin + "/pdf.worker.mjs";
+        })
+        .catch((err) => {
+            console.error("Failed to initialise the PDF.js worker:", err);
+        });
 }
 
 export default function StudioPageBase() {
@@ -36,11 +40,15 @@ export default function StudioPageBase() {
 
     useEffect(() => {
         (async () => {
-            const save = await loadStudioSession();
-            if (!save) return;
+            try {
+                const save = await loadStudioSession();
+                if (!save) return;
 
-            setRecovery(save);
-            setRecoveryOpen(true);
+                setRecovery(save);
+                setRecoveryOpen(true);
+            } catch (err) {
+                console.error("Failed to read the autosaved Studio session:", err);
+            }
         })();
     }, []);
 
@@ -56,7 +64,12 @@ export default function StudioPageBase() {
     };
 
     const discardRecovery = async () => {
-        await deleteStudioSession();
+        try {
+            await deleteStudioSession();
+        } catch (err) {
+            console.error("Failed to discard the autosaved Studio session:", err);
+        }
+
         setRecovery(null);
         setRecoveryOpen(false);
     };
@@ -70,16 +83,34 @@ export default function StudioPageBase() {
         if (lower.endsWith(".pns")) {
             preview.clearPreviewCache();
 
-            const project = await openProject(file);
+            try {
+                const project = await openProject(file);
 
-            document.restoreProject(project);
-            zoom.setZoom(project.zoom);
-            tools.setActiveTool(project.activeTool);
+                document.restoreProject(project);
+                zoom.setZoom(project.zoom);
+                tools.setActiveTool(project.activeTool);
+            } catch (err) {
+                console.error(err);
+                document.setErrorMessage(
+                    err instanceof Error ? err.message : "This Studio project could not be opened."
+                );
+            }
 
             return;
         }
 
         await document.handleFilesAccepted([file]);
+    };
+
+    const handleSaveProject = async () => {
+        try {
+            await saveCurrentProject();
+        } catch (err) {
+            console.error(err);
+            document.setErrorMessage(
+                err instanceof Error ? err.message : "This Studio project could not be saved."
+            );
+        }
     };
 
     return (
@@ -94,7 +125,7 @@ export default function StudioPageBase() {
                 onToggleSidebar={sidebar.toggleSidebar}
                 sidebarOpen={sidebar.isSidebarOpen}
                 onExport={() => setExportOpen(true)}
-                onSave={saveCurrentProject}
+                onSave={handleSaveProject}
             />
 
             <div className="h-4" />

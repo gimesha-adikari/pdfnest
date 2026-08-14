@@ -54,7 +54,9 @@ export function getSuggestedNextTools(currentHref: string, limit = 3, toolsList?
     } else if ((current as any).RelatedJson) {
         try {
             relatedList = JSON.parse((current as any).RelatedJson);
-        } catch {}
+        } catch (err) {
+            console.warn(`Ignoring malformed RelatedJson for tool "${currentHref}":`, err);
+        }
     }
 
     relatedList.forEach(addHref);

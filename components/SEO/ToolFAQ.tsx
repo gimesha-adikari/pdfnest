@@ -32,10 +32,12 @@ export default function ToolFAQ({
                         answer: item.answer || item.Answer || item.a || ""
                     })).filter(item => item.question && item.answer);
                 }
-            } catch {}
+            } catch (err) {
+                console.warn(`Ignoring malformed FaqJson for tool "${toolHref}":`, err);
+            }
         }
         return [];
-    }, [tool]);
+    }, [tool, toolHref]);
 
     if (!faqList || faqList.length === 0) return null;
 

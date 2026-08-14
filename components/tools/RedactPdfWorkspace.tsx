@@ -133,7 +133,10 @@ export default function RedactPdfWorkspace() {
                 );
             }
 
-        } catch (e) {}
+        } catch (error) {
+            if ((error as { name?: string })?.name === "RenderingCancelledException") return;
+            console.error(`Failed to render page ${pageNum} of this document:`, error);
+        }
     }, [pdfDoc, drawnBoxes, currentBox]);
 
     useEffect(() => {

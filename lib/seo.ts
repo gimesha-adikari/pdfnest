@@ -136,7 +136,9 @@ export async function getToolMetadata(toolHref: string): Promise<Metadata> {
     } else if ((tool as any).KeywordsJson) {
         try {
             parsedKeywords = JSON.parse((tool as any).KeywordsJson);
-        } catch {}
+        } catch (err) {
+            console.warn(`Ignoring malformed KeywordsJson for tool "${toolHrefVal}":`, err);
+        }
     }
 
     const keywords = Array.from(
