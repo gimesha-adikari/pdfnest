@@ -12,21 +12,13 @@ import {
 } from "lucide-react";
 
 import ToolCard from "@/components/ToolCard";
-import {NAV_TOOLS} from "@/lib/toolsData";
+import { useTools } from "@/context/ToolContext";
 import {useAuth} from "@/context/AuthContext";
 import {fetchJson} from "@/lib/api";
 import {fallbackHomeContent, HomeContent} from "@/lib/contentHome";
 
-type ToolItem = {
-    Title?: string;
-    title?: string;
-    Description?: string;
-    description?: string;
-    Category?: string;
-    category?: string;
-    Href?: string;
-    href?: string;
-};
+import { ToolItem } from "@/lib/toolsData";
+
 
 export default function Home() {
     const {
@@ -35,10 +27,10 @@ export default function Home() {
         subscription,
         isLoading,
     } = useAuth();
+    const { tools: toolsList } = useTools();
 
     const [search, setSearch] = useState("");
     const [content, setContent] = useState<HomeContent>(fallbackHomeContent);
-    const [toolsList, setToolsList] = useState<ToolItem[]>([]);
 
     const isProUser =
         isLoggedIn && subscription?.tier === "pro";
@@ -51,9 +43,6 @@ export default function Home() {
         (!subscription || subscription.tier === "free");
 
     useEffect(() => {
-
-        setToolsList(NAV_TOOLS as unknown as ToolItem[]);
-
         fetchJson("/site-content/home")
             .then((data: any) => {
                 if (data && typeof data === "object" && !("error" in data)) {
@@ -69,19 +58,19 @@ export default function Home() {
         if (!query) return toolsList;
 
         return toolsList.filter((tool) => {
-            const title = (tool.Title || tool.title || "").toLowerCase();
-            const description = (tool.Description || tool.description || "").toLowerCase();
+            const title = (tool.title || "").toLowerCase();
+            const description = (tool.description || "").toLowerCase();
             return title.includes(query) || description.includes(query);
         });
     }, [query, toolsList]);
 
-    const organizeTools = filteredTools.filter((tool) => (tool.Category || tool.category) === "organize");
-    const editTools = filteredTools.filter((tool) => (tool.Category || tool.category) === "edit");
-    const convertTools = filteredTools.filter((tool) => (tool.Category || tool.category) === "convert");
-    const createTools = filteredTools.filter((tool) => (tool.Category || tool.category) === "create");
-    const securityTools = filteredTools.filter((tool) => (tool.Category || tool.category) === "security");
-    const optimizeTools = filteredTools.filter((tool) => (tool.Category || tool.category) === "optimize");
-    const studioTools = filteredTools.filter((tool) => (tool.Category || tool.category) === "studio");
+    const organizeTools = filteredTools.filter((tool) => tool.category === "organize");
+    const editTools = filteredTools.filter((tool) => tool.category === "edit");
+    const convertTools = filteredTools.filter((tool) => tool.category === "convert");
+    const createTools = filteredTools.filter((tool) => tool.category === "create");
+    const securityTools = filteredTools.filter((tool) => tool.category === "security");
+    const optimizeTools = filteredTools.filter((tool) => tool.category === "optimize");
+    const studioTools = filteredTools.filter((tool) => tool.category === "studio");
 
     const toolGroups = [
         {
@@ -403,10 +392,10 @@ export default function Home() {
                             <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3">
                                 {group.tools.map((tool, idx) => (
                                     <ToolCard
-                                        key={tool.Href || tool.href || idx}
-                                        title={tool.Title || tool.title || ""}
-                                        description={tool.Description || tool.description || ""}
-                                        href={tool.Href || tool.href || ""}
+                                        key={tool.href || idx}
+                                        title={tool.title || ""}
+                                        description={tool.description || ""}
+                                        href={tool.href || ""}
                                     />
                                 ))}
                             </div>
