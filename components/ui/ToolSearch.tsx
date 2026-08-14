@@ -3,18 +3,20 @@
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { useMemo, useState } from "react";
-import { NAV_TOOLS } from "@/lib/toolsData";
+import { useTools } from "@/context/ToolContext";
 
 export default function ToolSearch() {
+    const { tools } = useTools();
     const [query, setQuery] = useState("");
 
     const results = useMemo(() => {
         if (!query.trim()) return [];
 
-        return NAV_TOOLS.filter((tool) =>
-            tool.title.toLowerCase().includes(query.toLowerCase())
-        ).slice(0, 8);
-    }, [query]);
+        return tools.filter((tool) => {
+            const title = tool.title || (tool as any).Title || "";
+            return title.toLowerCase().includes(query.toLowerCase());
+        }).slice(0, 8);
+    }, [query, tools]);
 
     return (
         <div className="relative hidden lg:block">
