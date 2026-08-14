@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { NAV_TOOLS } from "./toolsData";
+import { getToolBySlug } from "./server/tools";
 
 const BASE_URL = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "https://www.platenpdf.com"
+    process.env.NEXT_PUBLIC_APP_URL ?? "https://platenpdf.com"
 ).replace(/\/$/, "");
 
 function buildCanonicalUrl(baseUrl: string): string {
@@ -117,31 +117,43 @@ function buildBaseMetadata(): Metadata {
     };
 }
 
-export function getToolMetadata(toolHref: string): Metadata {
-    const tool = NAV_TOOLS.find((item) => item.href === toolHref);
+export async function getToolMetadata(toolHref: string): Promise<Metadata> {
+    const tool = await getToolBySlug(toolHref);
 
     if (!tool) {
         return buildBaseMetadata();
     }
 
-    const title = tool.seoTitle ?? `${tool.title} Online Free - Platen PDF`;
-    const description = tool.seoDescription ?? tool.description;
+    const toolTitle = tool.title || (tool as any).Title || "";
+    const toolDescription = tool.description || (tool as any).Description || "";
+    const toolHrefVal = tool.href || (tool as any).Href || toolHref;
+    const seoTitle = tool.seoTitle || (tool as any).SeoTitle || `${toolTitle} Online Free - Platen PDF`;
+    const seoDescription = tool.seoDescription || (tool as any).SeoDescription || toolDescription;
+
+    let parsedKeywords: string[] = [];
+    if (Array.isArray(tool.keywords)) {
+        parsedKeywords = tool.keywords;
+    } else if ((tool as any).KeywordsJson) {
+        try {
+            parsedKeywords = JSON.parse((tool as any).KeywordsJson);
+        } catch {}
+    }
 
     const keywords = Array.from(
         new Set([
-            tool.title,
-            `${tool.title} online`,
-            `${tool.title} free`,
+            toolTitle,
+            `${toolTitle} online`,
+            `${toolTitle} free`,
             "Platen PDF",
             "free PDF tools",
-            ...(tool.keywords ?? []),
+            ...parsedKeywords,
         ])
     );
 
-    const url = buildAbsoluteUrl(tool.href);
+    const url = buildAbsoluteUrl(toolHrefVal);
 
     return {
-        ...buildCommonMetadata(title, description, url, title),
+        ...buildCommonMetadata(seoTitle, seoDescription, url, toolTitle),
         keywords,
     };
 }
