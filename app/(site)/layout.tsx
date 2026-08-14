@@ -5,24 +5,30 @@ import CommandSystem from "@/components/CommandSystem";
 import MobileNav from "@/components/ui/MobileNav";
 import AuthModal from "@/components/auth/AuthModal";
 import PaddleTransactionBridge from "@/components/paddle/PaddleTransactionBridge";
+import { getTools } from "@/lib/server/tools";
+import { ToolProvider } from "@/context/ToolContext";
 
-export default function SiteLayout({
+export default async function SiteLayout({
                                        children,
                                    }: {
     children: React.ReactNode;
 }) {
+    const initialTools = await getTools();
+
     return (
-        <div className="min-h-screen flex flex-col relative isolation-auto">
-            <Header />
-            <main className="flex-1 w-full relative z-10 pb-20 md:pb-0">
-                <GlobalNotifications />
-                <AuthModal />
-                <PaddleTransactionBridge />
-                {children}
-                <CommandSystem />
-            </main>
-            <MobileNav />
-            <Footer />
-        </div>
+        <ToolProvider initialTools={initialTools}>
+            <div className="min-h-screen flex flex-col relative isolation-auto">
+                <Header />
+                <main className="flex-1 w-full relative z-10 pb-20 md:pb-0">
+                    <GlobalNotifications />
+                    <AuthModal />
+                    <PaddleTransactionBridge />
+                    {children}
+                    <CommandSystem />
+                </main>
+                <MobileNav />
+                <Footer />
+            </div>
+        </ToolProvider>
     );
 }
