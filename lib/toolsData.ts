@@ -28,8 +28,9 @@ export interface ToolItem {
     isNew?: boolean;
     accept?: string;
     multiple?: boolean;
+    iconName?: string;
 }
-export const NAV_TOOLS: ToolItem[] = [
+export const NAV_TOOLS_FALLBACK: ToolItem[] = [
     {
         title: "Merge PDF",
         description: "Combine multiple PDF files into one document quickly and easily.",
@@ -438,7 +439,7 @@ export const NAV_TOOLS: ToolItem[] = [
         ],
         related: [
             "/pdf-to-word",
-            "/image-to-text-pdf"
+            "/image-to-searchable-pdf"
         ],
         accept: ".pdf",
         multiple: false,
