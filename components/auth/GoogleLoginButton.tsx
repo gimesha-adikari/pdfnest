@@ -5,6 +5,7 @@ import { GoogleLogin } from "@react-oauth/google";
 import { fetchJson } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/lib/notify";
+import { safeRedirectPath } from "@/lib/safeRedirect";
 
 interface GoogleLoginButtonProps {
     onSuccessCallback?: () => void;
@@ -41,8 +42,7 @@ export default function GoogleLoginButton({
                 onSuccessCallback();
             } else {
                 const searchParams = new URLSearchParams(window.location.search);
-                const callbackUrl = searchParams.get("callbackUrl") || "/";
-                window.location.href = callbackUrl;
+                window.location.href = safeRedirectPath(searchParams.get("callbackUrl"));
             }
         } catch (err: any) {
             const msg = (err.message || "").toLowerCase();
