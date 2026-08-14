@@ -15,6 +15,10 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 
 import LazyPdfThumbnail from "@/components/pdf/LazyPdfThumbnail";
 
+import { ExecutionManager } from "@/lib/execution/ExecutionManager";
+import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
+import { ProcessingMode } from "@/lib/execution/types";
+
 export default function MergePdfWorkspace() {
     const { requireAuth } = useAuth();
     const router = useRouter();
@@ -22,6 +26,7 @@ export default function MergePdfWorkspace() {
 
     const [files, setFiles] = useState<File[]>([]);
     const [isMerging, setIsMerging] = useState(false);
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
     const [fileMeta] = useState<Record<string, { originalPassword?: string }>>({});
 
     // Automatically ingest the initial full files collection matrix
@@ -102,24 +107,16 @@ export default function MergePdfWorkspace() {
 
             try {
                 setIsMerging(true);
-                const formData = new FormData();
 
-                files.forEach((item, index) => {
-                    formData.append("files", item);
-
-                    const fileKey = `${item.name}-${item.size}-${item.lastModified}`;
-                    const password = fileMeta[fileKey]?.originalPassword;
-
-                    if (password) {
-                        formData.append(`password_${index}`, password);
-                    }
+                const result = await ExecutionManager.run({
+                    tool: "merge",
+                    files,
+                    mode: processingMode,
                 });
 
-                const responseBlob = await uploadAndDownloadFile("/api/structure/merge", formData);
-
                 setDownloadData({
-                    blob: responseBlob,
-                    fileName: "merged-document.pdf"
+                    blob: result.blob,
+                    fileName: result.fileName || "merged-document.pdf"
                 });
 
                 router.push(`/${toolId}/download`);
@@ -150,6 +147,15 @@ export default function MergePdfWorkspace() {
                     multiple={true}
                     accept=".pdf"
                 />
+
+                <div className="mt-6 mb-6">
+                    <ProcessingModeSelector
+                        mode={processingMode}
+                        onChange={setProcessingMode}
+                        toolPolicy="CLIENT_PREFERRED"
+                        disabled={isMerging}
+                    />
+                </div>
 
                 <div className="mt-8">
                     <h3 className="text-md font-semibold text-[color:var(--muted)] mb-4">Document Queue Layout Sequence</h3>

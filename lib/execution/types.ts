@@ -12,7 +12,7 @@ export type ToolPolicy =
 export interface ExecutionOptions {
     tool: string;
     files: File[];
-    params: Record<string, any>;
+    params?: Record<string, any>;
     mode: ProcessingMode;
     allowFallback?: boolean;
     password?: string;

@@ -1,6 +1,6 @@
 "use client";
 
-import { degrees, PDFDocument } from "pdf-lib";
+import { degrees, PDFDocument, PDFName } from "pdf-lib";
 import { ExecutionError, ExecutionOptions } from "./types";
 
 export class ClientExecutor {
@@ -14,14 +14,22 @@ export class ClientExecutor {
             "insert_blank",
             "duplicate",
             "update_metadata",
+            "merge",
         ].includes(normalized);
     }
 
     static async execute(options: ExecutionOptions): Promise<Blob> {
-        const { tool, files, params } = options;
+        const { tool, files } = options;
+        const params = options.params || {};
 
         if (!files || files.length === 0) {
             throw new ExecutionError("INVALID_INPUT", "No files provided for client execution.");
+        }
+
+        const normalizedTool = normalizeTool(tool);
+
+        if (normalizedTool === "merge") {
+            return await executeMerge(files, options);
         }
 
         const file = files[0];
@@ -34,8 +42,6 @@ export class ClientExecutor {
                 "Password-protected files require server-side encryption relocking pipeline."
             );
         }
-
-        const normalizedTool = normalizeTool(tool);
 
         try {
             // 1. Perform 5-byte %PDF- header check before WASM parsing
@@ -162,16 +168,16 @@ async function executeSplit(pdfDoc: PDFDocument, params: Record<string, any>): P
         throw new ExecutionError("INVALID_INPUT", "No valid pages selected for extraction.");
     }
 
-    const newDoc = await PDFDocument.create();
-    const copiedPages = await newDoc.copyPages(pdfDoc, pageIndices);
-    copiedPages.forEach((page) => newDoc.addPage(page));
+    // Catalog-preserving in-place page pruning:
+    // Retains AcroForm fields, Outlines/Bookmarks, XMP Metadata stream, PageLabels, and Info Dict.
+    const keepSet = new Set(pageIndices);
+    for (let i = totalPages - 1; i >= 0; i--) {
+        if (!keepSet.has(i)) {
+            pdfDoc.removePage(i);
+        }
+    }
 
-    // Copy basic metadata
-    if (pdfDoc.getTitle()) newDoc.setTitle(pdfDoc.getTitle()!);
-    if (pdfDoc.getAuthor()) newDoc.setAuthor(pdfDoc.getAuthor()!);
-    if (pdfDoc.getSubject()) newDoc.setSubject(pdfDoc.getSubject()!);
-
-    return newDoc;
+    return pdfDoc;
 }
 
 async function executeDelete(pdfDoc: PDFDocument, params: Record<string, any>): Promise<PDFDocument> {
@@ -212,12 +218,27 @@ async function executeReorder(pdfDoc: PDFDocument, params: Record<string, any>):
         throw new ExecutionError("INVALID_INPUT", "Invalid page ordering parameters.");
     }
 
+    // Catalog-preserving in-place reordering for simple 1-to-1 page permutations:
+    const isSimplePermutation =
+        pageIndices.length === totalPages &&
+        new Set(pageIndices).size === totalPages;
+
+    if (isSimplePermutation) {
+        const copiedPages = await pdfDoc.copyPages(pdfDoc, pageIndices);
+        for (let i = totalPages - 1; i >= 0; i--) {
+            pdfDoc.removePage(i);
+        }
+        copiedPages.forEach((page) => pdfDoc.addPage(page));
+        return pdfDoc;
+    }
+
     const newDoc = await PDFDocument.create();
     const copiedPages = await newDoc.copyPages(pdfDoc, pageIndices);
     copiedPages.forEach((page) => newDoc.addPage(page));
 
     if (pdfDoc.getTitle()) newDoc.setTitle(pdfDoc.getTitle()!);
     if (pdfDoc.getAuthor()) newDoc.setAuthor(pdfDoc.getAuthor()!);
+    if (pdfDoc.getSubject()) newDoc.setSubject(pdfDoc.getSubject()!);
 
     return newDoc;
 }
@@ -296,4 +317,75 @@ function parsePageRangeString(rangeStr: string, maxPages: number): number[] {
     }
 
     return indices;
+}
+
+async function executeMerge(files: File[], options: ExecutionOptions): Promise<Blob> {
+    if (files.length < 2) {
+        throw new ExecutionError("INVALID_INPUT", "At least two files are required for merging.");
+    }
+
+    const mergedDoc = await PDFDocument.create();
+    let isFirst = true;
+
+    for (const file of files) {
+        const password = options.password || (file as any).originalPassword;
+        if (password) {
+            throw new ExecutionError(
+                "UNSUPPORTED_CLIENT_OP",
+                `Password-protected file '${file.name}' requires server-side encryption pipeline.`
+            );
+        }
+
+        const fileBuffer = await file.arrayBuffer();
+        const headerBytes = new Uint8Array(fileBuffer.slice(0, 5));
+        const headerString = String.fromCharCode(...headerBytes);
+        if (!headerString.startsWith("%PDF-")) {
+            throw new ExecutionError(
+                "INVALID_INPUT",
+                `File '${file.name}' is not a valid PDF document (missing %PDF- header).`
+            );
+        }
+
+        let srcDoc: PDFDocument;
+        try {
+            srcDoc = await PDFDocument.load(fileBuffer, { ignoreEncryption: false });
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            if (message.toLowerCase().includes("password") || message.toLowerCase().includes("encrypt")) {
+                throw new ExecutionError(
+                    "UNSUPPORTED_CLIENT_OP",
+                    `Password-protected file '${file.name}' encountered during merge.`,
+                    err
+                );
+            }
+            throw err;
+        }
+
+        // Structural check: If file contains AcroForms, Outlines/Bookmarks, or EmbeddedFiles, route to Cloud for full pdfcpu merge
+        if (
+            srcDoc.catalog.has(PDFName.of("AcroForm")) ||
+            srcDoc.catalog.has(PDFName.of("Outlines")) ||
+            srcDoc.catalog.has(PDFName.of("EmbeddedFiles"))
+        ) {
+            throw new ExecutionError(
+                "UNSUPPORTED_CLIENT_OP",
+                `File '${file.name}' contains complex catalog structures requiring server-side pdfcpu merge.`
+            );
+        }
+
+        const pageIndices = srcDoc.getPageIndices();
+        const copiedPages = await mergedDoc.copyPages(srcDoc, pageIndices);
+        copiedPages.forEach((page) => mergedDoc.addPage(page));
+
+        if (isFirst) {
+            if (srcDoc.getTitle()) mergedDoc.setTitle(srcDoc.getTitle()!);
+            if (srcDoc.getAuthor()) mergedDoc.setAuthor(srcDoc.getAuthor()!);
+            if (srcDoc.getSubject()) mergedDoc.setSubject(srcDoc.getSubject()!);
+            if (srcDoc.getKeywords()) mergedDoc.setKeywords(srcDoc.getKeywords()! as any);
+            isFirst = false;
+        }
+    }
+
+    const pdfBytes = await mergedDoc.save();
+    return new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" });
 }
