@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { NAV_TOOLS } from "@/lib/toolsData";
+import { getTools } from "@/lib/server/tools";
 
 const BASE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://platenpdf.com").replace(/\/$/, "");
 
@@ -7,7 +7,7 @@ function url(pathname: string): string {
     return new URL(pathname.startsWith("/") ? pathname : `/${pathname}`, BASE_URL).toString();
 }
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const staticPages: MetadataRoute.Sitemap = [
         {
             url: url("/"),
@@ -71,8 +71,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
         },
     ];
 
-    const toolPages: MetadataRoute.Sitemap = NAV_TOOLS.map((tool) => ({
-        url: url(tool.href),
+    const tools = await getTools();
+    const toolPages: MetadataRoute.Sitemap = tools.map((tool) => ({
+        url: url(tool.href || (tool as any).Href),
         changeFrequency: "weekly",
         priority: 0.8,
     }));
