@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
-import { NAV_TOOLS } from "@/lib/toolsData";
+import { useTools } from "@/context/ToolContext";
 import Stat from "./Stat";
 
 type Category =
@@ -17,38 +17,41 @@ type Category =
     | "studio";
 
 export default function ToolsDirectory() {
+    const { tools: toolsList } = useTools();
     const [search, setSearch] = useState("");
     const [category, setCategory] = useState<Category>("all");
 
     const filteredTools = useMemo(() => {
-        return NAV_TOOLS.filter((tool) => {
+        return toolsList.filter((tool) => {
+            const toolCategory = tool.category || (tool as any).Category;
+            const toolTitle = tool.title || (tool as any).Title || "";
+            const toolDescription = tool.description || (tool as any).Description || "";
+
             const matchesCategory =
-                category === "all" || tool.category === category;
+                category === "all" || toolCategory === category;
 
             const matchesSearch =
-                tool.title.toLowerCase().includes(search.toLowerCase()) ||
-                tool.description
-                    .toLowerCase()
-                    .includes(search.toLowerCase());
+                toolTitle.toLowerCase().includes(search.toLowerCase()) ||
+                toolDescription.toLowerCase().includes(search.toLowerCase());
 
             return matchesCategory && matchesSearch;
         });
-    }, [search, category]);
+    }, [toolsList, search, category]);
 
-    const editingCount = NAV_TOOLS.filter((t) => t.category === "edit").length;
-    const organizeCount = NAV_TOOLS.filter((t) => t.category === "organize").length;
-    const convertCount = NAV_TOOLS.filter((t) => t.category === "convert").length;
-    const createCount = NAV_TOOLS.filter((t) => t.category === "create").length;
-    const securityCount = NAV_TOOLS.filter((t) => t.category === "security").length;
-    const optimizeCount = NAV_TOOLS.filter((t) => t.category === "optimize").length;
-    const studioCount = NAV_TOOLS.filter((t) => t.category === "studio").length;
+    const editingCount = toolsList.filter((t) => (t.category || (t as any).Category) === "edit").length;
+    const organizeCount = toolsList.filter((t) => (t.category || (t as any).Category) === "organize").length;
+    const convertCount = toolsList.filter((t) => (t.category || (t as any).Category) === "convert").length;
+    const createCount = toolsList.filter((t) => (t.category || (t as any).Category) === "create").length;
+    const securityCount = toolsList.filter((t) => (t.category || (t as any).Category) === "security").length;
+    const optimizeCount = toolsList.filter((t) => (t.category || (t as any).Category) === "optimize").length;
+    const studioCount = toolsList.filter((t) => (t.category || (t as any).Category) === "studio").length;
 
     return (
         <main className="mx-auto max-w-7xl px-6 py-16">
             {/* Hero */}
             <section className="text-center">
                 <div className="inline-flex items-center rounded-full border border-indigo-500/20 bg-indigo-500/10 px-4 py-1 text-sm font-semibold text-indigo-500">
-                    {NAV_TOOLS.length} PDF Tools
+                    {toolsList.length} PDF Tools
                 </div>
 
                 <h1 className="mt-6 text-5xl font-black tracking-tight">
