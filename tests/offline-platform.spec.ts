@@ -21,7 +21,7 @@ test.describe("PDFNest Truth-Based Capability & Offline Architecture", () => {
         await page.setViewportSize({ width: 1280, height: 800 });
     });
 
-    test("1. When backend is offline, discovery surfaces only display the 13 offline-capable tools", async ({ page }) => {
+    test("1. When backend is offline, discovery surfaces only display the offline-capable tools", async ({ page }) => {
         await simulateBackendOffline(page);
         await page.goto("/tools");
 
@@ -44,7 +44,6 @@ test.describe("PDFNest Truth-Based Capability & Offline Architecture", () => {
         await expect(page.locator("main a[href='/word-to-pdf']")).toHaveCount(0);
         await expect(page.locator("main a[href='/redact-pdf']")).toHaveCount(0);
         await expect(page.locator("main a[href='/image-to-searchable-pdf']")).toHaveCount(0);
-        await expect(page.locator("main a[href='/crop-pdf']")).toHaveCount(0);
         await expect(page.locator("main a[href='/edit-pdf']")).toHaveCount(0);
 
         // 4. Verify genuinely offline-capable tools ARE present
@@ -57,6 +56,7 @@ test.describe("PDFNest Truth-Based Capability & Offline Architecture", () => {
         await expect(page.locator("main a[href='/add-page-numbers']")).toBeVisible();
         await expect(page.locator("main a[href='/add-text']")).toBeVisible();
         await expect(page.locator("main a[href='/images-to-pdf']")).toBeVisible();
+        await expect(page.locator("main a[href='/crop-pdf']")).toBeVisible();
         await expect(page.locator("main a[href='/edit-metadata']")).toBeVisible();
         await expect(page.locator("main a[href='/studio']")).toBeVisible();
     });
