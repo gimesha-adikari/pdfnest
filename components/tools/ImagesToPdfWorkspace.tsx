@@ -75,9 +75,6 @@ function formatFileSize(bytes: number): string {
 export default function ImagesToPdfWorkspace() {
     const {
         requireAuth,
-        subscription,
-        isGuest,
-        isLoggedIn,
     } = useAuth();
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
@@ -91,9 +88,6 @@ export default function ImagesToPdfWorkspace() {
     const [canvasItems, setCanvasItems] = useState<CanvasItem[]>([]);
     const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
 
-    const [showUpgradeAd, setShowUpgradeAd] = useState(false);
-    const [showLoginAd, setShowLoginAd] = useState(false);
-
     const [customPagesCount, setCustomPagesCount] = useState<number>(1);
 
     const [history, setHistory] = useState<CanvasItem[][]>([]);
@@ -101,8 +95,6 @@ export default function ImagesToPdfWorkspace() {
 
     const [interaction, setInteraction] = useState<InteractionState | null>(null);
     const canvasRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
-
-    const isPro = subscription?.tier === "pro";
 
     const canvasWidth = 595;
     const canvasHeight = 842;
@@ -300,7 +292,7 @@ export default function ImagesToPdfWorkspace() {
                     if (x < 0) x = 0;
                     if (x + width > canvasWidth) x = canvasWidth - width;
                     if (y < 0) y = 0;
-                    if (y + height > canvasHeight) y = canvasHeight - height;
+                    if (y + height > canvasHeight) height = canvasHeight - height;
                 } else {
                     if (item.id !== interaction.itemId) return item;
 
@@ -487,7 +479,7 @@ export default function ImagesToPdfWorkspace() {
 
                 let params: Record<string, any> = {};
 
-                if (activeTab === "custom" && isPro) {
+                if (activeTab === "custom") {
                     const activePageIndices = Array.from(new Set(canvasItems.map((item) => item.pageIndex))).sort((a, b) => a - b);
 
                     const optimizedLayout = canvasItems
@@ -564,34 +556,19 @@ export default function ImagesToPdfWorkspace() {
 
                     <button
                         type="button"
-                        onClick={() => {
-                            if (isGuest) {
-                                setShowLoginAd(true);
-                                return;
-                            }
-                            if (!isPro) {
-                                setShowUpgradeAd(true);
-                                return;
-                            }
-                            setActiveTab("custom");
-                        }}
+                        onClick={() => setActiveTab("custom")}
                         className={`px-4 py-2 text-xs font-semibold rounded-lg flex items-center gap-2 transition ${
                             activeTab === "custom"
                                 ? "bg-white dark:bg-neutral-800 text-[color:var(--foreground)] shadow-sm"
                                 : "text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
-                        } ${!isPro ? "opacity-75" : ""}`}
+                        }`}
                     >
                         <Layers size={14} className={activeTab === "custom" ? "text-purple-500" : ""} />
                         Interactive Custom Canvas
-                        {!isPro && (
-                            <span className="text-[9px] font-bold bg-amber-500/15 text-amber-500 border border-amber-500/30 px-1.5 py-0.5 rounded uppercase tracking-wider">
-                                Pro
-                            </span>
-                        )}
                     </button>
                 </div>
 
-                {activeTab === "custom" && isPro && (
+                {activeTab === "custom" && (
                     <div className="flex items-center gap-2">
                         <button
                             type="button"
@@ -804,8 +781,8 @@ export default function ImagesToPdfWorkspace() {
                 </div>
             )}
 
-            {/* TAB 2: CUSTOM CANVAS MODE (INTERACTIVE PRO CANVAS) */}
-            {activeTab === "custom" && isPro && (
+            {/* TAB 2: CUSTOM CANVAS MODE (INTERACTIVE CUSTOM CANVAS - ACCESSIBLE TO ALL USERS) */}
+            {activeTab === "custom" && (
                 <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start">
                     {/* CANVAS VIEWPORT AREA (PRIORITY WIDTH, NEVER COMPRESSED) */}
                     <div
@@ -1096,106 +1073,6 @@ export default function ImagesToPdfWorkspace() {
                                 disabled={isProcessing || images.length === 0}
                                 onClick={handleCompilePdf}
                             />
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* PREMIUM UPGRADE OVERLAY AD MODAL */}
-            {showUpgradeAd && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                    <div className="relative w-full max-w-md bg-[color:var(--card)] border border-[color:var(--border)] rounded-3xl p-8 shadow-2xl text-center flex flex-col items-center animate-in zoom-in-95 duration-200">
-                        <button
-                            type="button"
-                            onClick={() => setShowUpgradeAd(false)}
-                            className="absolute top-4 right-4 p-2 text-[color:var(--muted)] hover:text-[color:var(--foreground)] rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
-                        >
-                            <span className="text-sm font-bold">✕</span>
-                        </button>
-
-                        <div className="w-14 h-14 bg-amber-500/10 text-amber-500 rounded-2xl flex items-center justify-center mb-5 shadow-sm border border-amber-500/10">
-                            <Sparkles size={26} />
-                        </div>
-
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/5 px-3.5 py-1 text-[10px] font-bold uppercase tracking-widest text-amber-500 mb-3">
-                            Premium Workspace Feature
-                        </span>
-
-                        <h3 className="text-2xl font-black text-[color:var(--foreground)] tracking-tight leading-snug">
-                            Unlock Custom Canvas
-                        </h3>
-
-                        <p className="mt-3 text-xs leading-relaxed text-[color:var(--muted)] font-medium px-2">
-                            Multi-page visual layouts, interactive scaling, layering orders, and custom borders are available with Pro tier.
-                        </p>
-
-                        <div className="mt-6 flex flex-col gap-2 w-full">
-                            <Link
-                                href="/subscribe"
-                                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-5 py-3 text-xs font-bold text-white shadow-md shadow-amber-600/10 hover:opacity-95 transition-all"
-                            >
-                                Upgrade to Pro Tier
-                            </Link>
-                            <button
-                                type="button"
-                                onClick={() => setShowUpgradeAd(false)}
-                                className="w-full px-5 py-3 border border-[color:var(--border)] hover:bg-[var(--background)] text-xs font-bold rounded-xl text-[color:var(--foreground)] transition-all"
-                            >
-                                Continue with Standard Stack
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* LOGIN AD MODAL */}
-            {showLoginAd && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                    <div className="relative w-full max-w-md bg-[color:var(--card)] border border-[color:var(--border)] rounded-3xl p-8 shadow-2xl text-center flex flex-col items-center animate-in zoom-in-95 duration-200">
-                        <button
-                            type="button"
-                            onClick={() => setShowLoginAd(false)}
-                            className="absolute top-4 right-4 p-2 text-[color:var(--muted)] hover:text-[color:var(--foreground)] rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
-                        >
-                            <span className="text-sm font-bold">✕</span>
-                        </button>
-
-                        <div className="w-14 h-14 bg-amber-500/10 text-amber-500 rounded-2xl flex items-center justify-center mb-5 shadow-sm border border-amber-500/10">
-                            <Sparkles size={26} />
-                        </div>
-
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/5 px-3.5 py-1 text-[10px] font-bold uppercase tracking-widest text-amber-500 mb-3">
-                            Account Required
-                        </span>
-
-                        <h3 className="text-2xl font-black text-[color:var(--foreground)] tracking-tight leading-snug">
-                            Sign in to Customize
-                        </h3>
-
-                        <p className="mt-3 text-xs leading-relaxed text-[color:var(--muted)] font-medium px-2">
-                            Create a free account to unlock your personal workspace, save usage history, and upgrade to Pro whenever needed.
-                        </p>
-
-                        <div className="mt-6 flex flex-col gap-2 w-full">
-                            <Link
-                                href="/register"
-                                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-5 py-3 text-xs font-bold text-white shadow-md shadow-amber-600/10 hover:opacity-95 transition-all"
-                            >
-                                Create Free Account
-                            </Link>
-                            <Link
-                                href="/login"
-                                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-[color:var(--border)] px-5 py-3 text-xs font-bold hover:bg-[var(--background)] transition-all"
-                            >
-                                Already have an account? Sign in
-                            </Link>
-                            <button
-                                type="button"
-                                onClick={() => setShowLoginAd(false)}
-                                className="w-full px-5 py-3 border border-[color:var(--border)] hover:bg-[var(--background)] text-xs font-bold rounded-xl text-[color:var(--foreground)] transition-all"
-                            >
-                                Continue with Standard Stack
-                            </button>
                         </div>
                     </div>
                 </div>
