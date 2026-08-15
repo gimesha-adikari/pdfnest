@@ -52,6 +52,7 @@ interface SessionResponse {
 }
 
 type AuthModalView = "login" | "register";
+export type AuthAvailability = "available" | "unavailable" | "unknown";
 
 interface AuthContextType {
     user: User | null;
@@ -62,6 +63,7 @@ interface AuthContextType {
     isLoggedIn: boolean;
     isGuest: boolean;
     isLoading: boolean;
+    authAvailability: AuthAvailability;
 
     refreshSession: () => Promise<void>;
     ensureGuestSession: () => Promise<void>;
@@ -111,6 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [isGuest, setIsGuest] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [authAvailability, setAuthAvailability] = useState<AuthAvailability>("unknown");
 
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
     const [authModalView, setAuthModalView] = useState<AuthModalView>("login");
@@ -125,6 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsAuthenticated(true);
         setIsLoggedIn(false);
         setIsGuest(true);
+        setAuthAvailability("available");
 
         syncWindowSession({
             authenticated: true,
@@ -144,6 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsAuthenticated(true);
         setIsLoggedIn(true);
         setIsGuest(false);
+        setAuthAvailability("available");
 
         syncWindowSession({
             authenticated: true,
@@ -176,9 +181,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     }
                 );
             }
+            setAuthAvailability("available");
         } catch (err) {
-            console.warn("Session refresh failed; continuing unauthenticated:", err);
+            console.warn("Session refresh failed; backend or auth service unavailable:", err);
 
+            setAuthAvailability("unavailable");
             setUser(null);
             setGuest(null);
             setSubscription(null);
@@ -231,7 +238,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const requireAuth = useCallback(
         (action: () => void) => {
-            if (isAuthenticated) {
+            // For client tools: if authenticated, or if backend auth is offline, let the action execute
+            if (isAuthenticated || authAvailability === "unavailable") {
                 action();
                 return;
             }
@@ -239,7 +247,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             pendingAction.current = action;
             void refreshSession();
         },
-        [isAuthenticated, refreshSession]
+        [isAuthenticated, authAvailability, refreshSession]
     );
 
     const requireLogin = useCallback(
@@ -249,10 +257,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 return;
             }
 
+            if (authAvailability === "unavailable") {
+                openAuthModal("login");
+                return;
+            }
+
             pendingAction.current = action;
             openAuthModal("login");
         },
-        [isLoggedIn, openAuthModal]
+        [isLoggedIn, authAvailability, openAuthModal]
     );
 
     const closeAuthModal = useCallback(() => {
@@ -292,6 +305,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             isLoggedIn,
             isGuest,
             isLoading,
+            authAvailability,
             refreshSession,
             ensureGuestSession,
             logout,
@@ -304,6 +318,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             handleAuthModalSuccess,
         }),
         [
+            authAvailability,
             authModalView,
             closeAuthModal,
             ensureGuestSession,

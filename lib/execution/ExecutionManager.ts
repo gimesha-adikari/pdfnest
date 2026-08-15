@@ -27,13 +27,30 @@ export class ExecutionManager {
 
         // 2. Explicit Cloud Mode OR tool not supported on client -> Cloud Executor
         if (mode === "cloud" || !clientSupported) {
-            const blob = await CloudExecutor.execute(options);
-            return {
-                blob,
-                fileName: outputFileName,
-                executionMode: "cloud",
-                fallbackOccurred: false,
-            };
+            try {
+                const blob = await CloudExecutor.execute(options);
+                return {
+                    blob,
+                    fileName: outputFileName,
+                    executionMode: "cloud",
+                    fallbackOccurred: false,
+                };
+            } catch (err: unknown) {
+                if (mode === "cloud" && clientSupported) {
+                    throw new ExecutionError(
+                        "CLOUD_UNAVAILABLE",
+                        "Cloud processing is currently unavailable. The backend service is offline or unreachable. Switch to Auto or Device mode to process locally.",
+                        err
+                    );
+                } else if (!clientSupported) {
+                    throw new ExecutionError(
+                        "BACKEND_UNAVAILABLE",
+                        "This tool requires the PDFNest processing service, which is currently unavailable.",
+                        err
+                    );
+                }
+                throw err;
+            }
         }
 
         // 3. Explicit Device Mode -> Client Executor (Option B fallback to cloud if file requires server relocking)
@@ -58,13 +75,21 @@ export class ExecutionManager {
                 // If password protected file requires cloud relocking pipeline, fallback to cloud
                 if (err instanceof ExecutionError && err.code === "UNSUPPORTED_CLIENT_OP") {
                     console.info("[ExecutionManager] Password-protected file detected in Device mode. Routing to Cloud relock pipeline.");
-                    const blob = await CloudExecutor.execute(options);
-                    return {
-                        blob,
-                        fileName: outputFileName,
-                        executionMode: "cloud",
-                        fallbackOccurred: true,
-                    };
+                    try {
+                        const blob = await CloudExecutor.execute(options);
+                        return {
+                            blob,
+                            fileName: outputFileName,
+                            executionMode: "cloud",
+                            fallbackOccurred: true,
+                        };
+                    } catch (cloudErr) {
+                        throw new ExecutionError(
+                            "CLOUD_UNAVAILABLE",
+                            "This encrypted document requires server-side processing, but the backend service is currently unreachable.",
+                            cloudErr
+                        );
+                    }
                 }
 
                 if (err instanceof ExecutionError) {
@@ -101,24 +126,40 @@ export class ExecutionManager {
                 }
 
                 console.warn("[ExecutionManager] Client execution failed in Auto mode. Triggering Cloud fallback:", err);
-                const blob = await CloudExecutor.execute(options);
-                return {
-                    blob,
-                    fileName: outputFileName,
-                    executionMode: "cloud",
-                    fallbackOccurred: true,
-                };
+                try {
+                    const blob = await CloudExecutor.execute(options);
+                    return {
+                        blob,
+                        fileName: outputFileName,
+                        executionMode: "cloud",
+                        fallbackOccurred: true,
+                    };
+                } catch (cloudErr) {
+                    throw new ExecutionError(
+                        "CLOUD_UNAVAILABLE",
+                        "Local processing could not complete and cloud processing is currently unreachable.",
+                        cloudErr
+                    );
+                }
             }
         }
 
         // Safety gate rejected local execution -> Route to Cloud
-        const blob = await CloudExecutor.execute(options);
-        return {
-            blob,
-            fileName: outputFileName,
-            executionMode: "cloud",
-            fallbackOccurred: false,
-        };
+        try {
+            const blob = await CloudExecutor.execute(options);
+            return {
+                blob,
+                fileName: outputFileName,
+                executionMode: "cloud",
+                fallbackOccurred: false,
+            };
+        } catch (cloudErr) {
+            throw new ExecutionError(
+                "CLOUD_UNAVAILABLE",
+                "This document is too large for device processing, and cloud processing is currently unreachable.",
+                cloudErr
+            );
+        }
     }
 }
 

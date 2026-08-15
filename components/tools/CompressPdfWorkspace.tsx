@@ -8,6 +8,8 @@ import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { FileWithPassword } from "@/lib/types";
 import { useAuth } from "@/context/AuthContext";
+import { useBackendHealth } from "@/context/BackendHealthContext";
+import BackendUnavailableNotice from "@/components/pdf/BackendUnavailableNotice";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
@@ -19,8 +21,11 @@ function formatMB(bytes: number) {
 
 export default function CompressPdfWorkspace() {
     const { requireAuth } = useAuth();
+    const { status } = useBackendHealth();
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
+
+    const isOffline = status === "offline";
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
@@ -88,6 +93,9 @@ export default function CompressPdfWorkspace() {
                             <p className="mt-1 text-2xl font-bold text-indigo-500">{success ? "Optimized" : "Ready"}</p>
                         </div>
                     </div>
+                    {isOffline && (
+                        <BackendUnavailableNotice toolName="Compress PDF" />
+                    )}
                     {success && (
                         <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5 text-emerald-900 dark:text-emerald-200 flex items-start gap-3">
                             <ShieldCheck className="text-emerald-500 mt-0.5 shrink-0" size={18} />
@@ -103,7 +111,7 @@ export default function CompressPdfWorkspace() {
                         text="Optimize and Compress PDF"
                         loadingText="Executing Object Stream Reductions..."
                         loading={isProcessing}
-                        disabled={success}
+                        disabled={success || isOffline}
                         onClick={handleCompression}
                     />
                 </div>

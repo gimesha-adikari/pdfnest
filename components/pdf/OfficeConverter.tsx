@@ -11,6 +11,8 @@ import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import {notify} from "@/lib/notify";
 import {FileWithPassword} from "@/lib/types";
 import {useAuth} from "@/context/AuthContext";
+import {useBackendHealth} from "@/context/BackendHealthContext";
+import BackendUnavailableNotice from "@/components/pdf/BackendUnavailableNotice";
 
 interface OfficeConverterProps {
     targetFormat: "docx" | "xlsx" | "pptx";
@@ -25,11 +27,14 @@ function formatMB(bytes: number) {
 
 export default function OfficeConverter({targetFormat, title, description, icon}: OfficeConverterProps) {
     const {requireAuth} = useAuth();
+    const {status} = useBackendHealth();
     const router = useRouter();
     const {toolId, file, setFile, setDownloadData} = useSharedTool();
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
+
+    const isOffline = status === "offline";
 
     const fileExtractedSize = useMemo(() => {
         if (!file) return "0.00";
@@ -75,18 +80,8 @@ export default function OfficeConverter({targetFormat, title, description, icon}
                 setSuccess(true);
                 router.push(`/${toolId}/download`);
             } catch (err) {
-                if (err instanceof Error){
-                    const error = (err as Error)
-                    if (error.message == "Network Error") {
-                        notify("Unsupported File or Network Error","error")
-                    }else {
-                        console.error(err);
-                        handleClientError(err);
-                    }
-                }else{
-                    console.error(err)
-                    handleClientError(err);
-                }
+                console.error(err);
+                handleClientError(err);
             } finally {
                 setIsProcessing(false);
             }
@@ -115,6 +110,10 @@ export default function OfficeConverter({targetFormat, title, description, icon}
                     </div>
                 </div>
 
+                {isOffline && (
+                    <BackendUnavailableNotice toolName={`PDF to ${formatLabel}`} />
+                )}
+
                 {success && (
                     <div
                         className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5 text-emerald-900 dark:text-emerald-200 flex items-start gap-3 animate-in fade-in duration-200">
@@ -132,7 +131,7 @@ export default function OfficeConverter({targetFormat, title, description, icon}
                     text={`Convert PDF to ${targetFormat.toUpperCase()}`}
                     loadingText="Deconstructing Layout Matrices..."
                     loading={isProcessing}
-                    disabled={isProcessing}
+                    disabled={isProcessing || isOffline}
                     onClick={handleConversion}
                 />
             </div>

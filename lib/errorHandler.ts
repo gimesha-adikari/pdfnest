@@ -13,6 +13,19 @@ export function getFriendlyErrorMessage(error: unknown): string {
     }
 
     if (err instanceof Error) {
+        const msg = err.message || "";
+        const lowerMsg = msg.toLowerCase();
+
+        if (
+            err.status === 0 ||
+            (err.status && err.status >= 502 && err.status <= 504) ||
+            lowerMsg === "failed to fetch" ||
+            lowerMsg === "network error" ||
+            lowerMsg === "econnrefused"
+        ) {
+            return "PDFNest processing service is currently unavailable. Please check your connection or switch to local processing.";
+        }
+
         try {
             if (err.message.startsWith("{")) {
                 const backendErr: BackendError = JSON.parse(err.message);

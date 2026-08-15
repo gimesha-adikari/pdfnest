@@ -7,6 +7,8 @@ import { uploadAndDownloadFile } from "@/lib/api";
 import {handleClientError} from "@/lib/errorHandler";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
+import { useBackendHealth } from "@/context/BackendHealthContext";
+import BackendUnavailableNotice from "@/components/pdf/BackendUnavailableNotice";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 
@@ -26,8 +28,11 @@ export default function OfficeToPdfConverter({
                                                  icon
                                              }: OfficeToPdfConverterProps) {
     const { requireAuth } = useAuth();
+    const { status } = useBackendHealth();
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
+
+    const isOffline = status === "offline";
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [isPreviewLoading, setIsPreviewLoading] = useState(false);
@@ -108,6 +113,10 @@ export default function OfficeToPdfConverter({
             <div className="lg:col-span-5 space-y-6">
                 <PdfFileInfo file={file} onClear={clearWorkspace} />
 
+                {isOffline && (
+                    <BackendUnavailableNotice toolName={`${sourceType.toUpperCase()} to PDF`} />
+                )}
+
                 {success && (
                     <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5 text-emerald-900 dark:text-emerald-200 flex items-start gap-3">
                         <ShieldCheck className="text-emerald-500 mt-0.5 shrink-0" size={18} />
@@ -124,7 +133,7 @@ export default function OfficeToPdfConverter({
                     text="Convert to PDF"
                     loadingText="Processing Layout Anchors..."
                     loading={isProcessing}
-                    disabled={isProcessing}
+                    disabled={isProcessing || isOffline}
                     onClick={handleConversion}
                 />
             </div>

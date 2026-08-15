@@ -1,4 +1,5 @@
 import axios from "axios";
+import { backendHealth } from "@/lib/health/backendHealth";
 
 export interface BackendError {
     code: string;
@@ -179,7 +180,17 @@ async function handleAxiosError(error: unknown): Promise<never> {
     const configUrl = error.config?.url || "";
 
     if (!response) {
-        throw new Error(error.message || "Network transport failure.");
+        backendHealth.markOffline(error.message || "Network transport failure");
+        const clientErr = new Error("PDFNest processing service is currently unavailable.") as ClientError;
+        clientErr.status = 0;
+        clientErr.raw = error;
+        throw clientErr;
+    }
+
+    if (response.status >= 502 && response.status <= 504) {
+        backendHealth.markOffline(`Service unavailable (HTTP ${response.status})`);
+    } else if (response.status < 500) {
+        backendHealth.markOnline();
     }
 
     const isAuthEndpoint = configUrl.includes("/status") || configUrl.includes("/auth");
@@ -252,6 +263,7 @@ export async function uploadAndDownloadFile(
 
         responseBlob = response.data;
         contentType = getHeader(response.headers, "content-type");
+        backendHealth.markOnline();
     } catch (error: unknown) {
         throw await handleAxiosError(error);
     }
@@ -315,7 +327,22 @@ export async function fetchJson<T = unknown>(endpoint: string, options: RequestI
         },
     };
 
-    const response = await fetch(url, config);
+    let response: Response;
+    try {
+        response = await fetch(url, config);
+    } catch (networkError: any) {
+        backendHealth.markOffline(networkError?.message || "Failed to connect to backend");
+        const clientErr = new Error("PDFNest processing service is currently unavailable.") as ClientError;
+        clientErr.status = 0;
+        clientErr.raw = networkError;
+        throw clientErr;
+    }
+
+    if (response.status >= 502 && response.status <= 504) {
+        backendHealth.markOffline(`Service unavailable (HTTP ${response.status})`);
+    } else if (response.ok || response.status < 500) {
+        backendHealth.markOnline();
+    }
 
     if (!response.ok) {
         const isAuthEndpoint = endpoint.includes("/status") || endpoint.includes("/auth");

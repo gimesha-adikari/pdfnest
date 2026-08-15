@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/context/AuthContext";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { WorkflowProvider } from "@/context/WorkflowContext";
+import { BackendHealthProvider } from "@/context/BackendHealthContext";
 
 const SITE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://platenpdf.com").replace(/\/$/, "");
 
@@ -59,9 +60,11 @@ export default function RootLayout({
         <body className="min-h-full overflow-x-hidden bg-[var(--background)] text-[var(--foreground)] font-sans transition-colors duration-200">
         <ThemeProvider>
             <GoogleOAuthProvider clientId={googleClientId}>
-                <AuthProvider>
-                    <WorkflowProvider>{children}</WorkflowProvider>
-                </AuthProvider>
+                <BackendHealthProvider>
+                    <AuthProvider>
+                        <WorkflowProvider>{children}</WorkflowProvider>
+                    </AuthProvider>
+                </BackendHealthProvider>
             </GoogleOAuthProvider>
         </ThemeProvider>
         </body>

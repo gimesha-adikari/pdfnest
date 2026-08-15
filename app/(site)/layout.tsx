@@ -5,6 +5,7 @@ import CommandSystem from "@/components/CommandSystem";
 import MobileNav from "@/components/ui/MobileNav";
 import AuthModal from "@/components/auth/AuthModal";
 import PaddleTransactionBridge from "@/components/paddle/PaddleTransactionBridge";
+import BackendStatusBanner from "@/components/ui/BackendStatusBanner";
 import { getTools } from "@/lib/server/tools";
 import { ToolProvider } from "@/context/ToolContext";
 
@@ -18,6 +19,7 @@ export default async function SiteLayout({
     return (
         <ToolProvider initialTools={initialTools}>
             <div className="min-h-screen flex flex-col relative isolation-auto">
+                <BackendStatusBanner />
                 <Header />
                 <main className="flex-1 w-full relative z-10 pb-20 md:pb-0">
                     <GlobalNotifications />

@@ -47,6 +47,8 @@ export type ExecutionErrorCode =
     | "CLIENT_FAILURE"
     | "SAFETY_REJECTION"
     | "CLOUD_FAILURE"
+    | "CLOUD_UNAVAILABLE"
+    | "BACKEND_UNAVAILABLE"
     | "USER_CANCELLATION";
 
 export class ExecutionError extends Error {
