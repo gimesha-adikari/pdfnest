@@ -7,6 +7,7 @@ import {
     executePdfcpuWasmAddText,
     executePdfcpuWasmWatermark,
 } from "./pdfcpu/pdfcpuClient";
+import { executeImagesToPdf } from "./images/imageToPdfClient";
 
 export class ClientExecutor {
     static isSupported(tool: string): boolean {
@@ -23,6 +24,7 @@ export class ClientExecutor {
             "watermark",
             "add_page_numbers",
             "add_text",
+            "images_to_pdf",
         ].includes(normalized);
     }
 
@@ -38,6 +40,10 @@ export class ClientExecutor {
 
         if (normalizedTool === "merge") {
             return await executeMerge(files, options);
+        }
+
+        if (normalizedTool === "images_to_pdf") {
+            return await executeImagesToPdf(files, params);
         }
 
         const file = files[0];
@@ -161,6 +167,14 @@ function normalizeTool(tool: string): string {
         case "add-text":
         case "addtext":
             return "add_text";
+        case "images_to_pdf":
+        case "images-to-pdf":
+        case "img_to_pdf":
+        case "jpg_to_pdf":
+        case "jpg-to-pdf":
+        case "to_pdf":
+        case "to-pdf":
+            return "images_to_pdf";
         default:
             return tool;
     }

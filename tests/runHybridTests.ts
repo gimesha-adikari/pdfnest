@@ -4,6 +4,7 @@ import { runMergeExecutionTests } from "./unit/mergeExecution.test";
 import { runWatermarkExecutionTests } from "./unit/watermarkExecution.test";
 import { runPageNumbersExecutionTests } from "./unit/pageNumbersExecution.test";
 import { runAddTextExecutionTests } from "./unit/addTextExecution.test";
+import { runImagesToPdfExecutionTests } from "./unit/imagesToPdfExecution.test";
 import { setupNodeWasmWorker } from "./setupNodeWasmWorker";
 
 async function main() {
@@ -15,6 +16,7 @@ async function main() {
     const resWatermark = await runWatermarkExecutionTests();
     const resPageNumbers = await runPageNumbersExecutionTests();
     const resAddText = await runAddTextExecutionTests();
+    await runImagesToPdfExecutionTests();
 
     const totalFailed =
         resRotate.failed +
@@ -34,3 +36,4 @@ main().catch((err) => {
     console.error("Test runner crashed:", err);
     process.exit(1);
 });
+

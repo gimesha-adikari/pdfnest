@@ -137,6 +137,13 @@ function getToolPolicy(tool: string): ToolPolicy {
         case "watermark":
         case "add_text":
         case "add_page_numbers":
+        case "images_to_pdf":
+        case "images-to-pdf":
+        case "img_to_pdf":
+        case "jpg_to_pdf":
+        case "jpg-to-pdf":
+        case "to_pdf":
+        case "to-pdf":
         case "lock":
         case "unlock":
         case "repair":

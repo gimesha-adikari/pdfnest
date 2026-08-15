@@ -14,13 +14,15 @@ import {
     Trash2,
     Undo2
 } from "lucide-react";
-import {uploadAndDownloadFile} from "@/lib/api";
 import {handleClientError} from "@/lib/errorHandler";
 import {useAuth} from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
+import { ExecutionManager } from "@/lib/execution/ExecutionManager";
+import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
+import { ProcessingMode } from "@/lib/execution/types";
 import Link from "next/link";
 
 interface CanvasItem {
@@ -70,6 +72,7 @@ export default function ImagesToPdfWorkspace() {
     const [images, setImages] = useState<File[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
 
     const [activeTab, setActiveTab] = useState<"standard" | "custom">("standard");
     const [canvasItems, setCanvasItems] = useState<CanvasItem[]>([]);
@@ -439,16 +442,9 @@ export default function ImagesToPdfWorkspace() {
                 setIsProcessing(true);
                 setSuccess(false);
 
-                const formData = new FormData();
-                images.forEach((img) => {
-                    formData.append("images", img);
-                });
-
-                let targetEndpoint = "/api/conversion/to-pdf";
+                let params: Record<string, any> = {};
 
                 if (activeTab === "custom" && isPro) {
-                    targetEndpoint = "/api/conversion/custom-to-pdf";
-
                     const activePageIndices = Array.from(new Set(canvasItems.map(item => item.pageIndex))).sort((a, b) => a - b);
 
                     const optimizedLayout = canvasItems
@@ -465,13 +461,20 @@ export default function ImagesToPdfWorkspace() {
                             };
                         });
 
-                    formData.append("canvasLayout", JSON.stringify(optimizedLayout));
+                    params = {
+                        canvasLayout: optimizedLayout,
+                    };
                 }
 
-                const responseBlob = await uploadAndDownloadFile(targetEndpoint, formData);
+                const response = await ExecutionManager.run({
+                    tool: "images_to_pdf",
+                    files: images,
+                    params,
+                    mode: processingMode,
+                });
 
                 setDownloadData({
-                    blob: responseBlob,
+                    blob: response.blob,
                     fileName: activeTab === "custom" ? "custom-layout-compiled.pdf" : "compiled-images.pdf"
                 });
 
@@ -945,7 +948,14 @@ export default function ImagesToPdfWorkspace() {
                             </div>
                         )}
 
-                        <div className="w-full pt-4">
+                        <div className="w-full pt-4 space-y-4">
+                            <div className="flex justify-end">
+                                <ProcessingModeSelector
+                                    mode={processingMode}
+                                    onChange={setProcessingMode}
+                                    disabled={isProcessing}
+                                />
+                            </div>
                             <PdfActionButton
                                 text={`Compile ${images.length} Image${images.length > 1 ? "s" : ""} into PDF`}
                                 loadingText="Processing Image Matrix Conversion..."

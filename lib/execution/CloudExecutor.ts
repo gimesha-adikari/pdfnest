@@ -17,17 +17,18 @@ export class CloudExecutor {
 
         const primaryFile = files[0];
         const formData = new FormData();
+        const normalizedTool = normalizeTool(tool);
 
-        // 1. Preserve existing multipart field naming ('file' for single, 'files' for batch)
-        if (tool === "merge" || files.length > 1) {
+        // 1. Preserve existing multipart field naming ('images' for conversion, 'files' for merge/batch, 'file' for single)
+        if (normalizedTool === "images_to_pdf") {
+            files.forEach((f) => formData.append("images", f));
+        } else if (tool === "merge" || files.length > 1) {
             files.forEach((f) => formData.append("files", f));
         } else {
             formData.append("file", primaryFile);
         }
 
         // 2. Attach parameters
-        const normalizedTool = normalizeTool(tool);
-
         if (normalizedTool === "watermark") {
             const watermarkType = params?.watermarkType || (params?.watermarkImage || params?.imageFile ? "image" : "text");
             const description = buildWatermarkDescription(params || {});
@@ -72,7 +73,7 @@ export class CloudExecutor {
         });
 
         // 4. Resolve backend API endpoint
-        const endpoint = getEndpointForTool(tool);
+        const endpoint = getEndpointForTool(tool, params);
 
         try {
             const blob = await uploadAndDownloadFile(endpoint, formData, onProgress);
@@ -106,12 +107,20 @@ function normalizeTool(tool: string): string {
         case "add-text":
         case "addtext":
             return "add_text";
+        case "images_to_pdf":
+        case "images-to-pdf":
+        case "img_to_pdf":
+        case "jpg_to_pdf":
+        case "jpg-to-pdf":
+        case "to_pdf":
+        case "to-pdf":
+            return "images_to_pdf";
         default:
             return tool;
     }
 }
 
-function getEndpointForTool(tool: string): string {
+function getEndpointForTool(tool: string, params?: Record<string, any>): string {
     switch (tool) {
         case "rotate":
         case "rotate_pdf":
@@ -145,6 +154,14 @@ function getEndpointForTool(tool: string): string {
         case "add-text":
         case "addtext":
             return "/api/structure/add-text";
+        case "images_to_pdf":
+        case "images-to-pdf":
+        case "img_to_pdf":
+        case "jpg_to_pdf":
+        case "jpg-to-pdf":
+        case "to_pdf":
+        case "to-pdf":
+            return params?.canvasLayout ? "/api/conversion/custom-to-pdf" : "/api/conversion/to-pdf";
         case "update_metadata":
             return "/api/structure/update-metadata";
         case "compress":

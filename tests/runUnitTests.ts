@@ -18,6 +18,7 @@ const EXCLUDED = new Set([
     "wave1Execution.test.ts",
     "pageNumbersExecution.test.ts",
     "addTextExecution.test.ts",
+    "imagesToPdfExecution.test.ts",
 ]);
 
 function main() {
