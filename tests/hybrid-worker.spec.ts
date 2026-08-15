@@ -119,4 +119,70 @@ test.describe('Real Browser WASM Web Worker Integration Suite', () => {
     expect(backendProcessingRequests).toEqual([]);
   });
 
+  test('Execute Add Page Numbers via pdfcpu WASM Web Worker in Chromium', async ({ page }) => {
+    const backendProcessingRequests: string[] = [];
+    page.on('request', (request) => {
+      const url = request.url();
+      if (url.includes('/api/structure/add-page-numbers') || url.includes('/api/v1/structure')) {
+        backendProcessingRequests.push(url);
+      }
+    });
+
+    const fixturePath = path.resolve(process.cwd(), 'tests/fixtures/sample.pdf');
+    const samplePdfBuffer = fs.readFileSync(fixturePath);
+    const samplePdfArray = Array.from(samplePdfBuffer);
+
+    await page.goto('/page-numbers');
+    await page.waitForLoadState('networkidle');
+
+    const result = await page.evaluate(async (pdfBytesArray) => {
+      const inputBuffer = new Uint8Array(pdfBytesArray).buffer;
+
+      return new Promise<{ id: string; success: boolean; pdfSize: number; header: string }>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error("WASM Worker timed out after 30s")), 30000);
+        const worker = new Worker('/wasm/pdfcpu.worker.js');
+
+        worker.onmessage = (event) => {
+          clearTimeout(timeout);
+          const data = event.data;
+          worker.terminate();
+          if (data.type === "success" && data.pdfBytes) {
+            const bytes = new Uint8Array(data.pdfBytes);
+            const header = new TextDecoder().decode(bytes.slice(0, 5));
+            resolve({
+              id: data.id,
+              success: true,
+              pdfSize: bytes.byteLength,
+              header,
+            });
+          } else {
+            reject(new Error(`Worker error [${data.code}]: ${data.message}`));
+          }
+        };
+
+        worker.onerror = (err) => {
+          clearTimeout(timeout);
+          worker.terminate();
+          reject(err);
+        };
+
+        worker.postMessage(
+          {
+            id: "req-pagenum-browser",
+            type: "watermark-text",
+            pdfBytes: inputBuffer,
+            text: "%p",
+            description: "font:Helvetica, scale:0.48 abs, pos:bc, rot:0, offset: 0 20",
+          },
+          [inputBuffer]
+        );
+      });
+    }, samplePdfArray);
+
+    expect(result.success).toBe(true);
+    expect(result.header).toBe('%PDF-');
+    expect(result.pdfSize).toBeGreaterThan(1000);
+    expect(backendProcessingRequests).toEqual([]);
+  });
+
 });

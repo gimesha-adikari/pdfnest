@@ -213,6 +213,38 @@ export function buildWatermarkDescription(
     );
 }
 
+export function buildPageNumbersDescription(
+    params: Record<string, any>
+): string {
+    const fontFamily = String(params.fontFamily || "Helvetica");
+    const fontSize = Number(params.fontSize) || 12;
+    const position = String(params.position || "bc").toLowerCase();
+    const normalizedScale = (fontSize / 25).toFixed(2);
+
+    let baseDesc =
+        params.description ||
+        `font:${fontFamily}, scale:${normalizedScale} abs, pos:${position}, rot:0`;
+
+    // Append exact backend offsets if not already present
+    if (!baseDesc.includes("offset:")) {
+        if (baseDesc.includes("pos:bl")) {
+            baseDesc += ", offset: 20 20";
+        } else if (baseDesc.includes("pos:bc")) {
+            baseDesc += ", offset: 0 20";
+        } else if (baseDesc.includes("pos:br")) {
+            baseDesc += ", offset: -20 20";
+        } else if (baseDesc.includes("pos:tl")) {
+            baseDesc += ", offset: 20 -20";
+        } else if (baseDesc.includes("pos:tc")) {
+            baseDesc += ", offset: 0 -20";
+        } else if (baseDesc.includes("pos:tr")) {
+            baseDesc += ", offset: -20 -20";
+        }
+    }
+
+    return baseDesc;
+}
+
 function ensureSupportedImageFile(
     imageFile: unknown
 ): imageFile is File | Blob {

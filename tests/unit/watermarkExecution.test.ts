@@ -4,6 +4,7 @@ import { CloudExecutor } from "../../lib/execution/CloudExecutor";
 import { ExecutionManager } from "../../lib/execution/ExecutionManager";
 import { ExecutionSafetyGate } from "../../lib/execution/ExecutionSafetyGate";
 import { ExecutionError } from "../../lib/execution/types";
+import { setupNodeWasmWorker } from "../setupNodeWasmWorker";
 
 async function createDummyPdf(pageCount = 2, title?: string): Promise<File> {
     const pdfDoc = await PDFDocument.create();
@@ -60,6 +61,8 @@ export async function runWatermarkExecutionTests(): Promise<{ passed: number; fa
     console.log("=================================================");
     console.log("  RUNNING WAVE 2 WATERMARK PDF HYBRID UNIT TESTS ");
     console.log("=================================================\n");
+
+    setupNodeWasmWorker();
 
     let cloudCallCount = 0;
     const originalCloudExecute = CloudExecutor.execute;

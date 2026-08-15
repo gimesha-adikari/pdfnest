@@ -16,6 +16,7 @@ const EXCLUDED = new Set([
     "mergeExecution.test.ts",
     "watermarkExecution.test.ts",
     "wave1Execution.test.ts",
+    "pageNumbersExecution.test.ts",
 ]);
 
 function main() {

@@ -2,7 +2,10 @@
 
 import { uploadAndDownloadFile } from "@/lib/api";
 import { ExecutionError, ExecutionOptions } from "./types";
-import { buildWatermarkDescription } from "./pdfcpu/pdfcpuClient";
+import {
+    buildPageNumbersDescription,
+    buildWatermarkDescription,
+} from "./pdfcpu/pdfcpuClient";
 
 export class CloudExecutor {
     static async execute(options: ExecutionOptions): Promise<Blob> {
@@ -39,6 +42,9 @@ export class CloudExecutor {
                 const textVal = String(params?.text ?? params?.watermarkText ?? "CONFIDENTIAL");
                 formData.append("text", textVal);
             }
+        } else if (normalizedTool === "add_page_numbers") {
+            const description = buildPageNumbersDescription(params || {});
+            formData.append("description", description);
         } else {
             Object.entries(params || {}).forEach(([key, val]) => {
                 if (val !== undefined && val !== null) {
@@ -92,6 +98,10 @@ function normalizeTool(tool: string): string {
             return "reorder";
         case "watermark_pdf":
             return "watermark";
+        case "add_page_numbers":
+        case "add-page-numbers":
+        case "page_numbers":
+            return "add_page_numbers";
         default:
             return tool;
     }
@@ -117,6 +127,8 @@ function getEndpointForTool(tool: string): string {
         case "watermark":
             return "/api/structure/watermark";
         case "add_page_numbers":
+        case "add-page-numbers":
+        case "page_numbers":
             return "/api/structure/add-page-numbers";
         case "crop":
             return "/api/structure/crop";

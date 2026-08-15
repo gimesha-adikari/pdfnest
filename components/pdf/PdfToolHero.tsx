@@ -1,31 +1,34 @@
 import React from "react";
 import type { LucideProps } from "lucide-react";
 
+type LucideIcon = React.ComponentType<LucideProps>;
+
 interface PdfToolHeroProps {
     title: string;
     description: string;
-    icon?: any;
+    icon?: LucideIcon | React.ReactNode;
 }
 
 export default function PdfToolHero({
-                                        title,
-                                        description,
-                                        icon,
-                                    }: PdfToolHeroProps) {
-    let iconNode = null;
+    title,
+    description,
+    icon,
+}: PdfToolHeroProps) {
+    let iconNode: React.ReactNode = null;
 
-    if (icon) {
-        try {
-            iconNode = React.createElement(icon, {
-                size: 48,
-                strokeWidth: 1.5,
-                className: "text-[var(--primary)]",
-            });
-        } catch {
-            if (React.isValidElement(icon)) {
-                iconNode = icon;
-            }
-        }
+    if (!icon) {
+        iconNode = null;
+    } else if (React.isValidElement(icon)) {
+        iconNode = icon;
+    } else {
+        const IconComponent = icon as LucideIcon;
+        iconNode = (
+            <IconComponent
+                size={48}
+                strokeWidth={1.5}
+                className="text-[var(--primary)]"
+            />
+        );
     }
 
     return (

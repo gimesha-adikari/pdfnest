@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Hash, Loader2, FileText } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/api";
 import { getFriendlyErrorMessage } from "@/lib/errorHandler";
 import { FileWithPassword } from "@/lib/types";
 import { useAuth } from "@/context/AuthContext";
@@ -13,6 +12,9 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 
 import { usePreview } from "@/lib/preview/usePreview";
+import { ExecutionManager } from "@/lib/execution/ExecutionManager";
+import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
+import { ProcessingMode } from "@/lib/execution/types";
 
 const STYLISTIC_FONTS = [
     { id: "Helvetica", name: "Sans-Serif Modern (Helvetica)", cssClass: "font-sans font-bold" },
@@ -28,6 +30,7 @@ export default function PageNumbersWorkspace() {
     const [fontFamily, setFontFamily] = useState<string>("Helvetica");
     const [fontSize, setFontSize] = useState<number>(12);
     const [position, setPosition] = useState<string>("bc");
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
 
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
@@ -48,23 +51,21 @@ export default function PageNumbersWorkspace() {
             setError(null);
 
             try {
-                const formData = new FormData();
-                formData.append("file", file);
-
-                const normalizedScale = (fontSize / 25).toFixed(2);
-                const formatDescription = `font:${fontFamily}, scale:${normalizedScale} abs, pos:${position}, rot:0`;
-                formData.append("description", formatDescription);
-
-                const typedFile = file as FileWithPassword;
-                if (typedFile.originalPassword) {
-                    formData.append("file_password", typedFile.originalPassword);
-                }
-
-                const responseBlob = await uploadAndDownloadFile("/api/structure/add-page-numbers", formData);
+                const response = await ExecutionManager.run({
+                    tool: "add_page_numbers",
+                    files: [file],
+                    params: {
+                        fontFamily,
+                        fontSize,
+                        position,
+                    },
+                    mode: processingMode,
+                    password: (file as FileWithPassword).originalPassword,
+                });
 
                 setDownloadData({
-                    blob: responseBlob,
-                    fileName: `numbered_${file.name}`
+                    blob: response.blob,
+                    fileName: `numbered_${file.name}`,
                 });
 
                 router.push(`/${toolId}/download`);
@@ -143,9 +144,17 @@ export default function PageNumbersWorkspace() {
                         </div>
                     </div>
 
-                    <div className="flex flex-col items-center justify-between rounded-2xl border border-gray-100 bg-gray-50/50 p-6 dark:border-zinc-800/50 dark:bg-zinc-900/20 lg:col-span-5">
+                    <div className="flex flex-col items-center justify-between rounded-2xl border border-gray-100 bg-gray-50/50 p-6 dark:border-zinc-800/50 dark:bg-zinc-900/20 lg:col-span-5 space-y-6">
                         <div className="w-full">
                             <PdfFileInfo file={file} onClear={() => { setFile(null); router.push(`/${toolId}`); }} />
+                        </div>
+
+                        <div className="w-full">
+                            <ProcessingModeSelector
+                                mode={processingMode}
+                                onChange={setProcessingMode}
+                                disabled={isProcessing}
+                            />
                         </div>
 
                         <div className="relative my-auto flex h-64 w-full items-center justify-center rounded-xl bg-white/50 p-4 shadow-inner dark:bg-zinc-900/50">

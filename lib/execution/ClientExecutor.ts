@@ -2,7 +2,10 @@
 
 import { degrees, PDFDocument, PDFName } from "pdf-lib";
 import { ExecutionError, ExecutionOptions } from "./types";
-import { executePdfcpuWasmWatermark } from "./pdfcpu/pdfcpuClient";
+import {
+    buildPageNumbersDescription,
+    executePdfcpuWasmWatermark,
+} from "./pdfcpu/pdfcpuClient";
 
 export class ClientExecutor {
     static isSupported(tool: string): boolean {
@@ -17,6 +20,7 @@ export class ClientExecutor {
             "update_metadata",
             "merge",
             "watermark",
+            "add_page_numbers",
         ].includes(normalized);
     }
 
@@ -39,6 +43,10 @@ export class ClientExecutor {
 
         if (normalizedTool === "watermark") {
             return await executePdfcpuWasmWatermark(file, params, originalPassword);
+        }
+
+        if (normalizedTool === "add_page_numbers") {
+            return await executeAddPageNumbers(file, params, originalPassword);
         }
 
         // Password-protected files route to Cloud to preserve existing relock pipeline
@@ -139,9 +147,28 @@ function normalizeTool(tool: string): string {
             return "update_metadata";
         case "watermark_pdf":
             return "watermark";
+        case "add_page_numbers":
+        case "add-page-numbers":
+        case "page_numbers":
+            return "add_page_numbers";
         default:
             return tool;
     }
+}
+
+async function executeAddPageNumbers(
+    file: File,
+    params: Record<string, any>,
+    originalPassword?: string
+): Promise<Blob> {
+    const description = buildPageNumbersDescription(params);
+    const pageNumberParams = {
+        ...params,
+        watermarkType: "text",
+        text: "%p",
+        description,
+    };
+    return await executePdfcpuWasmWatermark(file, pageNumberParams, originalPassword);
 }
 
 // --- TOOL ENGINES ---
