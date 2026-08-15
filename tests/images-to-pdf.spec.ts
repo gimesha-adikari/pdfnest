@@ -38,7 +38,7 @@ test.describe('Images to PDF Browser Integration Suite', () => {
       // 4. Verify workspace UI elements & ProcessingModeSelector
       await expect(page.locator('h1')).toContainText('Convert Images to PDF');
       await expect(page.getByText('Standard Matrix Stack')).toBeVisible();
-      await expect(page.getByText('Compiled Queue')).toBeVisible();
+      await expect(page.getByText(/Document Sequence/i)).toBeVisible();
       await expect(page.getByText('Execution Venue')).toBeVisible();
 
       // 5. Click the compile action button
