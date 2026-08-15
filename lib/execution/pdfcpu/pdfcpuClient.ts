@@ -4,6 +4,7 @@ import { ExecutionError } from "../types";
 import {
     PdfcpuWorkerRequest,
     PdfcpuWorkerResponse,
+    TextElement,
 } from "./types";
 
 let workerInstance: Worker | null = null;
@@ -394,6 +395,75 @@ export async function executePdfcpuWasmWatermark(
                     )
                 );
             });
+    });
+}
+
+export function buildTextElementDescription(el: TextElement): string {
+    let colorHex = el.color || "#000000";
+    if (!colorHex.startsWith("#")) {
+        colorHex = "#" + colorHex;
+    }
+    if (colorHex.length === 4) {
+        colorHex = `#${colorHex[1]}${colorHex[1]}${colorHex[2]}${colorHex[2]}${colorHex[3]}${colorHex[3]}`;
+    }
+    const fontSize = Number(el.fontSize) || 24;
+    const x = Number(el.x) || 0;
+    const y = Number(el.y) || 0;
+    return `font:Helvetica, points:${fontSize}, pos:tl, offset:${x} ${-y - 13}, scale:1 abs, rot:0, fillcol:${colorHex}`;
+}
+
+export async function executePdfcpuWasmAddText(
+    pdfFile: File,
+    elements: TextElement[],
+    password?: string
+): Promise<Blob> {
+    // Preserve Option B security behavior.
+    if (password || (pdfFile as any).originalPassword) {
+        throw new ExecutionError(
+            "UNSUPPORTED_CLIENT_OP",
+            "Password-protected files require server-side encryption pipeline."
+        );
+    }
+
+    const pdfBuffer = await pdfFile.arrayBuffer();
+    validatePdfHeader(pdfBuffer);
+
+    const validElements = (elements || []).filter(
+        (e) => e && typeof e.text === "string" && e.text.trim() !== ""
+    );
+
+    if (validElements.length === 0) {
+        return new Blob([pdfBuffer], { type: "application/pdf" });
+    }
+
+    const worker = getOrCreateWorker();
+    const requestId = createRequestId();
+
+    return new Promise<Blob>((resolve, reject) => {
+        pendingRequests.set(requestId, {
+            resolve,
+            reject,
+        });
+
+        const request: PdfcpuWorkerRequest = {
+            id: requestId,
+            type: "add-text",
+            pdfBytes: pdfBuffer,
+            elements: validElements,
+        };
+
+        try {
+            worker.postMessage(request, [pdfBuffer]);
+        } catch (error) {
+            pendingRequests.delete(requestId);
+            reject(
+                new ExecutionError(
+                    "CLIENT_FAILURE",
+                    "Failed to send add-text data to the pdfcpu worker.",
+                    error
+                )
+            );
+        }
     });
 }
 

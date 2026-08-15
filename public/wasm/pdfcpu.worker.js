@@ -42,6 +42,14 @@ self.onmessage = async (event) => {
                 new Uint8Array(imageBytes),
                 description
             );
+        } else if (type === 'add-text') {
+            const elementsJson = typeof event.data.elements === 'string'
+                ? event.data.elements
+                : JSON.stringify(event.data.elements || []);
+            result = self.pdfcpuApplyTextElements(
+                new Uint8Array(pdfBytes),
+                elementsJson
+            );
         } else {
             throw new Error(`Unsupported worker request type '${type}'`);
         }

@@ -185,4 +185,74 @@ test.describe('Real Browser WASM Web Worker Integration Suite', () => {
     expect(backendProcessingRequests).toEqual([]);
   });
 
+  test('Execute Add Text via pdfcpu WASM Web Worker in Chromium with multiple elements', async ({ page }) => {
+    const backendProcessingRequests: string[] = [];
+    page.on('request', (request) => {
+      const url = request.url();
+      if (url.includes('/api/structure/add-text') || url.includes('/api/v1/structure')) {
+        backendProcessingRequests.push(url);
+      }
+    });
+
+    const fixturePath = path.resolve(process.cwd(), 'tests/fixtures/sample.pdf');
+    const samplePdfBuffer = fs.readFileSync(fixturePath);
+    const samplePdfArray = Array.from(samplePdfBuffer);
+
+    await page.goto('/add-text');
+    await page.waitForLoadState('networkidle');
+
+    const result = await page.evaluate(async (pdfBytesArray) => {
+      const inputBuffer = new Uint8Array(pdfBytesArray).buffer;
+
+      return new Promise<{ id: string; success: boolean; pdfSize: number; header: string }>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error("WASM Worker timed out after 30s")), 30000);
+        const worker = new Worker('/wasm/pdfcpu.worker.js');
+
+        worker.onmessage = (event) => {
+          clearTimeout(timeout);
+          const data = event.data;
+          worker.terminate();
+          if (data.type === "success" && data.pdfBytes) {
+            const bytes = new Uint8Array(data.pdfBytes);
+            const header = new TextDecoder().decode(bytes.slice(0, 5));
+            resolve({
+              id: data.id,
+              success: true,
+              pdfSize: bytes.byteLength,
+              header,
+            });
+          } else {
+            reject(new Error(`Worker error [${data.code}]: ${data.message}`));
+          }
+        };
+
+        worker.onerror = (err) => {
+          clearTimeout(timeout);
+          worker.terminate();
+          reject(err);
+        };
+
+        const elements = [
+          { id: "e1", text: "Page 1 Header Stamp", x: 50, y: 50, page: 1, fontSize: 18, color: "#1e3a8a" },
+          { id: "e2", text: "Page 2 Note Stamp", x: 60, y: 120, page: 2, fontSize: 14, color: "#dc2626" },
+        ];
+
+        worker.postMessage(
+          {
+            id: "req-addtext-browser",
+            type: "add-text",
+            pdfBytes: inputBuffer,
+            elements,
+          },
+          [inputBuffer]
+        );
+      });
+    }, samplePdfArray);
+
+    expect(result.success).toBe(true);
+    expect(result.header).toBe('%PDF-');
+    expect(result.pdfSize).toBeGreaterThan(1000);
+    expect(backendProcessingRequests).toEqual([]);
+  });
+
 });

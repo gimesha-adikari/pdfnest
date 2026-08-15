@@ -1,3 +1,13 @@
+export interface TextElement {
+    id: string;
+    text: string;
+    x: number;
+    y: number;
+    page: number;
+    fontSize: number;
+    color: string;
+}
+
 export type PdfcpuWorkerRequest =
     | {
           id: string;
@@ -12,6 +22,12 @@ export type PdfcpuWorkerRequest =
           pdfBytes: ArrayBuffer;
           imageBytes: ArrayBuffer;
           description: string;
+      }
+    | {
+          id: string;
+          type: "add-text";
+          pdfBytes: ArrayBuffer;
+          elements: TextElement[];
       };
 
 export type PdfcpuWorkerResponse =

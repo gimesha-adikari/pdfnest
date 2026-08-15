@@ -101,6 +101,35 @@ export function setupNodeWasmWorker(): void {
                                     workerShim.onmessage?.({ data: resp });
                                     listeners.message.forEach((cb) => cb({ data: resp }));
                                 }
+                            } else if (request.type === "add-text") {
+                                const elementsJson = typeof request.elements === "string"
+                                    ? request.elements
+                                    : JSON.stringify(request.elements || []);
+                                const result = (global as any).pdfcpuApplyTextElements(
+                                    new Uint8Array(request.pdfBytes),
+                                    elementsJson
+                                );
+                                if (result.error) {
+                                    const resp = {
+                                        id: request.id,
+                                        type: "error",
+                                        code: "CLIENT_FAILURE",
+                                        message: result.error,
+                                    };
+                                    workerShim.onmessage?.({ data: resp });
+                                    listeners.message.forEach((cb) => cb({ data: resp }));
+                                } else {
+                                    const resp = {
+                                        id: request.id,
+                                        type: "success",
+                                        pdfBytes: result.pdfBytes.buffer.slice(
+                                            result.pdfBytes.byteOffset,
+                                            result.pdfBytes.byteOffset + result.pdfBytes.byteLength
+                                        ),
+                                    };
+                                    workerShim.onmessage?.({ data: resp });
+                                    listeners.message.forEach((cb) => cb({ data: resp }));
+                                }
                             }
                         } catch (err: any) {
                             const resp = {

@@ -102,6 +102,10 @@ function normalizeTool(tool: string): string {
         case "add-page-numbers":
         case "page_numbers":
             return "add_page_numbers";
+        case "add_text":
+        case "add-text":
+        case "addtext":
+            return "add_text";
         default:
             return tool;
     }
@@ -125,6 +129,7 @@ function getEndpointForTool(tool: string): string {
         case "reorder_pages":
             return "/api/structure/reorder-pages";
         case "watermark":
+        case "watermark_pdf":
             return "/api/structure/watermark";
         case "add_page_numbers":
         case "add-page-numbers":
@@ -137,6 +142,8 @@ function getEndpointForTool(tool: string): string {
         case "insert_blank":
             return "/api/structure/insert-blank";
         case "add_text":
+        case "add-text":
+        case "addtext":
             return "/api/structure/add-text";
         case "update_metadata":
             return "/api/structure/update-metadata";

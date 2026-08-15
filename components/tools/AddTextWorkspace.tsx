@@ -14,7 +14,6 @@ import {
     Plus,
 } from "lucide-react";
 
-import { uploadAndDownloadFile } from "@/lib/api";
 import { getFriendlyErrorMessage, handleClientError } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
@@ -22,6 +21,9 @@ import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
+import { ExecutionManager } from "@/lib/execution/ExecutionManager";
+import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
+import { ProcessingMode } from "@/lib/execution/types";
 
 interface CustomPdfFile extends File {
     originalPassword?: string;
@@ -79,6 +81,7 @@ export default function AddTextWorkspace() {
     const [activeId, setActiveId] = useState<string | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
 
     // Drag tracking system
     const dragRef = useRef<{
@@ -278,18 +281,18 @@ export default function AddTextWorkspace() {
                 setIsProcessing(true);
                 setSuccess(false);
 
-                const formData = new FormData();
-                formData.append("file", validFile);
-                formData.append("elements", JSON.stringify(validElements));
-
-                if (validFile.originalPassword) {
-                    formData.append("file_password", validFile.originalPassword);
-                }
-
-                const responseBlob = await uploadAndDownloadFile("/api/structure/add-text", formData);
+                const response = await ExecutionManager.run({
+                    tool: "add_text",
+                    files: [validFile],
+                    params: {
+                        elements: validElements,
+                    },
+                    mode: processingMode,
+                    password: validFile.originalPassword,
+                });
 
                 setDownloadData({
-                    blob: responseBlob,
+                    blob: response.blob,
                     fileName: `${validFile.name.replace(/\.pdf$/i, "")}-text-added.pdf`,
                 });
 
@@ -399,6 +402,14 @@ export default function AddTextWorkspace() {
                                     <p className="mt-1 text-xs opacity-70">Click a box on the canvas or add a new one.</p>
                                 </div>
                             )}
+                        </div>
+
+                        <div className="w-full">
+                            <ProcessingModeSelector
+                                mode={processingMode}
+                                onChange={setProcessingMode}
+                                disabled={isProcessing}
+                            />
                         </div>
 
                         <PdfActionButton

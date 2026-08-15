@@ -3,6 +3,7 @@ import { runWave1ExecutionTests } from "./unit/wave1Execution.test";
 import { runMergeExecutionTests } from "./unit/mergeExecution.test";
 import { runWatermarkExecutionTests } from "./unit/watermarkExecution.test";
 import { runPageNumbersExecutionTests } from "./unit/pageNumbersExecution.test";
+import { runAddTextExecutionTests } from "./unit/addTextExecution.test";
 import { setupNodeWasmWorker } from "./setupNodeWasmWorker";
 
 async function main() {
@@ -13,13 +14,15 @@ async function main() {
     const resMerge = await runMergeExecutionTests();
     const resWatermark = await runWatermarkExecutionTests();
     const resPageNumbers = await runPageNumbersExecutionTests();
+    const resAddText = await runAddTextExecutionTests();
 
     const totalFailed =
         resRotate.failed +
         resWave1.failed +
         resMerge.failed +
         resWatermark.failed +
-        resPageNumbers.failed;
+        resPageNumbers.failed +
+        resAddText.failed;
     if (totalFailed > 0) {
         console.error(`\nFAILED SUITE: ${totalFailed} total tests failed.`);
         process.exit(1);

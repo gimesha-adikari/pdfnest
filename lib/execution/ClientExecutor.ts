@@ -4,6 +4,7 @@ import { degrees, PDFDocument, PDFName } from "pdf-lib";
 import { ExecutionError, ExecutionOptions } from "./types";
 import {
     buildPageNumbersDescription,
+    executePdfcpuWasmAddText,
     executePdfcpuWasmWatermark,
 } from "./pdfcpu/pdfcpuClient";
 
@@ -21,6 +22,7 @@ export class ClientExecutor {
             "merge",
             "watermark",
             "add_page_numbers",
+            "add_text",
         ].includes(normalized);
     }
 
@@ -47,6 +49,10 @@ export class ClientExecutor {
 
         if (normalizedTool === "add_page_numbers") {
             return await executeAddPageNumbers(file, params, originalPassword);
+        }
+
+        if (normalizedTool === "add_text") {
+            return await executeAddText(file, params, originalPassword);
         }
 
         // Password-protected files route to Cloud to preserve existing relock pipeline
@@ -151,6 +157,10 @@ function normalizeTool(tool: string): string {
         case "add-page-numbers":
         case "page_numbers":
             return "add_page_numbers";
+        case "add_text":
+        case "add-text":
+        case "addtext":
+            return "add_text";
         default:
             return tool;
     }
@@ -169,6 +179,25 @@ async function executeAddPageNumbers(
         description,
     };
     return await executePdfcpuWasmWatermark(file, pageNumberParams, originalPassword);
+}
+
+async function executeAddText(
+    file: File,
+    params: Record<string, any>,
+    originalPassword?: string
+): Promise<Blob> {
+    const rawElements = params.elements;
+    let elements = [];
+    if (typeof rawElements === "string") {
+        try {
+            elements = JSON.parse(rawElements);
+        } catch {
+            elements = [];
+        }
+    } else if (Array.isArray(rawElements)) {
+        elements = rawElements;
+    }
+    return await executePdfcpuWasmAddText(file, elements, originalPassword);
 }
 
 // --- TOOL ENGINES ---
