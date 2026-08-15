@@ -202,7 +202,7 @@ export default function AdminContentEditor() {
     const tabInactive =
         "text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] hover:bg-[color:var(--background)]";
 
-    if (isLoading || isFetching) {
+    if (isLoading || isFetching || !isLoggedIn || user?.role !== "admin") {
         return (
             <div className="min-h-screen flex items-center justify-center bg-[var(--background)] text-[var(--foreground)]">
                 <Loader2 className="animate-spin text-[var(--primary)]" size={32} />

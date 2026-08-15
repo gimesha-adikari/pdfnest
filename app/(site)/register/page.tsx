@@ -8,6 +8,7 @@ import GoogleLoginButton from "@/components/auth/GoogleLoginButton";
 import PolicyConsentDialog from "@/components/auth/PolicyConsentDialog";
 import { ArrowLeft, CheckCircle2, Mail, Lock, Loader2 } from "lucide-react";
 import { fetchJson } from "@/lib/api";
+import { safeRedirectPath } from "@/lib/safeRedirect";
 
 type PendingAction = "register" | null;
 
@@ -19,7 +20,7 @@ function RegisterContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
 
-    const callbackUrl = searchParams.get("callbackUrl") || "/";
+    const callbackUrl = safeRedirectPath(searchParams.get("callbackUrl"));
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");

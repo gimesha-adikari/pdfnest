@@ -193,7 +193,7 @@ export default function AdminPage() {
         }
     };
 
-    if (isLoading || isFetching) {
+    if (isLoading || isFetching || !isLoggedIn || user?.role !== "admin") {
         return <div className="min-h-screen flex items-center justify-center bg-[var(--background)]"><Loader2
             className="animate-spin text-indigo-500" size={32}/></div>;
     }
