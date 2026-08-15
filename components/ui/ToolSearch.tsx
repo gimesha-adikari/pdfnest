@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { useTools } from "@/context/ToolContext";
 
 export default function ToolSearch() {
-    const { tools } = useTools();
+    const { displayTools: tools } = useTools();
     const [query, setQuery] = useState("");
 
     const results = useMemo(() => {

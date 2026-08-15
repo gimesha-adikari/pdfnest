@@ -35,31 +35,38 @@ export default function EditMetadataWorkspace() {
     useEffect(() => {
         if (!file) return;
 
-        const loadMetadataFromBackend = async () => {
+        const loadMetadata = async () => {
             setIsReadingFile(true);
             try {
-                const formData = new FormData();
-                formData.append("file", file);
+                // 1. First attempt fast local client-side metadata extraction via pdf-lib
+                const buffer = await file.arrayBuffer();
+                const { PDFDocument } = await import("pdf-lib");
+                const doc = await PDFDocument.load(buffer, { ignoreEncryption: true });
 
-                const responseBlob = await uploadAndDownloadFile("/api/structure/metadata/fetch", formData);
-                const jsonText = await responseBlob.text();
-                const properties: Record<string, string> = JSON.parse(jsonText);
+                const clientTitle = doc.getTitle() || file.name.replace(/\.pdf$/i, "");
+                const clientAuthor = doc.getAuthor() || "";
+                const clientSubject = doc.getSubject() || "";
+                const clientKeywords = doc.getKeywords() || "";
 
-                setTitle(properties["title"] || file.name.replace(/\.pdf$/i, ""));
-                setAuthor(properties["author"] || "");
-                setSubject(properties["subject"] || "");
-                setKeywords(properties["keywords"] || "");
-            } catch (err) {
-                console.error(err);
-                handleClientError(err);
+                setTitle(clientTitle);
+                setAuthor(clientAuthor);
+                setSubject(clientSubject);
+                setKeywords(clientKeywords);
+            } catch (localErr) {
+                console.warn("Client metadata preview extraction fallback:", localErr);
+                // 2. Fallback to basic filename default
                 setTitle(file.name.replace(/\.pdf$/i, ""));
+                setAuthor("");
+                setSubject("");
+                setKeywords("");
             } finally {
                 setIsReadingFile(false);
             }
         };
 
-        loadMetadataFromBackend();
+        loadMetadata();
     }, [file]);
+
 
     const handleMetadataUpdate = async () => {
         requireAuth(async () => {

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Loader2, ShieldCheck } from "lucide-react";
+import { FileText, Loader2, ShieldCheck, CloudOff } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { useBackendHealth } from "@/context/BackendHealthContext";
 import { uploadAndDownloadFile } from "@/lib/api";
 import { handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
@@ -22,11 +23,18 @@ function downloadBlob(blob: Blob, fileName: string) {
 
 export default function WordExport({ file, onExportedFile }: StudioExportProps) {
     const { requireAuth } = useAuth();
+    const { isAvailable } = useBackendHealth();
+    const isCloudOffline = !isAvailable;
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
 
     const handleExport = () => {
+        if (isCloudOffline) {
+            notify("Word conversion requires cloud services, which are currently offline. Please use PDF Export instead.", "warning");
+            return;
+        }
+
         requireAuth(async () => {
             try {
                 setIsProcessing(true);
@@ -59,7 +67,7 @@ export default function WordExport({ file, onExportedFile }: StudioExportProps) 
                 }
 
                 setSuccess(true);
-                notify("Word export ready.","error");
+                notify("Word export ready.","success");
             } catch (err) {
                 if (err instanceof Error) {
                     if (err.message === "Network Error") {
@@ -80,8 +88,7 @@ export default function WordExport({ file, onExportedFile }: StudioExportProps) 
 
     return (
         <div className="space-y-4">
-            <div className="flex items-start justify-between gap-3 rounded-2xl border border-border
-            bg-(--background)/40 p-4">
+            <div className="flex items-start justify-between gap-3 rounded-2xl border border-border bg-(--background)/40 p-4">
                 <div>
                     <p className="text-sm font-semibold text-foreground">
                         Word (.docx)
@@ -93,9 +100,20 @@ export default function WordExport({ file, onExportedFile }: StudioExportProps) 
                 <FileText size={32} className="text-indigo-500" />
             </div>
 
+            {isCloudOffline && (
+                <div className="flex items-start gap-2.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-900 dark:text-amber-200">
+                    <CloudOff size={16} className="text-amber-500 mt-0.5 shrink-0" />
+                    <div>
+                        <p className="font-semibold">Cloud Conversion Unavailable</p>
+                        <p className="mt-0.5 text-[11px] text-amber-800/80 dark:text-amber-300/80">
+                            Word conversion requires server-side processing. You can switch to PDF format to export immediately on your device.
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {success && (
-                <div className="flex items-start gap-3 rounded-2xl border border-emerald-500/30
-                bg-emerald-500/10 p-4 text-emerald-900 dark:text-emerald-200">
+                <div className="flex items-start gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-900 dark:text-emerald-200">
                     <ShieldCheck className="mt-0.5 shrink-0 text-emerald-500" size={18} />
                     <div>
                         <p className="text-sm font-semibold">Word export complete!</p>
@@ -109,13 +127,11 @@ export default function WordExport({ file, onExportedFile }: StudioExportProps) 
             <button
                 type="button"
                 onClick={handleExport}
-                disabled={isProcessing}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl
-                bg-indigo-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-indigo-700
-                disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={isProcessing || isCloudOffline}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-                {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
-                {isProcessing ? "Exporting..." : "Export Word (.docx)"}
+                {isProcessing ? <Loader2 size={16} className="animate-spin" /> : isCloudOffline ? <CloudOff size={16} /> : <FileText size={16} />}
+                {isProcessing ? "Exporting..." : isCloudOffline ? "Word Export Offline (Use PDF Export)" : "Export Word (.docx)"}
             </button>
         </div>
     );

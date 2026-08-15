@@ -1,3 +1,5 @@
+import type { ToolPolicy } from "@/lib/execution/types";
+
 export type ToolCategory =
     | "organize"
     | "edit"
@@ -10,6 +12,25 @@ export type ToolCategory =
 export interface ToolFAQ {
     question: string;
     answer: string;
+}
+
+/**
+ * Multi-dimensional capability descriptor.
+ * Captures execution reality, workspace-level dependencies, and hybrid capabilities.
+ */
+export interface ToolCapability {
+    /** True if the core transformation can run in-browser (via pdf-lib, pdfcpu.wasm, or canvas). */
+    clientExecutable: boolean;
+    /** True if the complete standalone workspace workflow (upload -> preview -> configure -> execute -> download) works without backend. */
+    workspaceOffline: boolean;
+    /** True if the tool strictly requires server-side processing to complete. */
+    requiresBackend: boolean;
+    /** True if the workspace has client-side fallback when backend auxiliary APIs fail (e.g. metadata extraction). */
+    hasOfflineFallback?: boolean;
+    /** True if the tool is a composite workspace with both local and remote capabilities (e.g. Studio). */
+    isHybridWorkspace?: boolean;
+    /** Human-readable explanation when backend is required. */
+    offlineReason?: string;
 }
 
 export interface ToolItem {
@@ -29,13 +50,44 @@ export interface ToolItem {
     accept?: string;
     multiple?: boolean;
     iconName?: string;
+    /** Multi-dimensional runtime capability */
+    capability?: ToolCapability;
+    /** Legacy boolean flag — kept for backwards compatibility */
+    clientCapable?: boolean;
+    /** Execution policy for ExecutionManager */
+    toolPolicy?: ToolPolicy;
+    /** Human-readable explanation when backend is required. */
+    offlineReason?: string;
 }
+
+/**
+ * Returns true if the tool can be safely discovered and used while the backend is offline.
+ */
+export function isToolAvailableOffline(tool: ToolItem): boolean {
+    if (tool.capability) {
+        return tool.capability.workspaceOffline === true;
+    }
+    return tool.clientCapable === true;
+}
+
+/** Total number of tools in the full static registry. */
+export const TOTAL_TOOL_COUNT = 37;
+
+/**
+ * Number of truly offline-capable tools (11 fully offline standalone + 1 metadata + 1 studio suite).
+ */
+export const OFFLINE_TOOL_COUNT = 13;
+export const CLIENT_CAPABLE_TOOL_COUNT = 13;
+
 export const NAV_TOOLS_FALLBACK: ToolItem[] = [
     {
         title: "Merge PDF",
         description: "Combine multiple PDF files into one document quickly and easily.",
         href: "/merge-pdf",
         category: "organize",
+        capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false },
+        clientCapable: true,
+        toolPolicy: "CLIENT_PREFERRED",
         seoTitle: "Merge PDF Online Free - Combine PDF Files",
         seoDescription: "Merge multiple PDF files into one document online. Arrange pages and create a single PDF quickly with Platen PDF.",
         intent: "Users want to combine multiple PDF documents into one file.",
@@ -68,6 +120,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Extract specific pages from a PDF or separate files into individual sheets.",
         href: "/split-pdf",
         category: "organize",
+        capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false },
+        clientCapable: true,
+        toolPolicy: "CLIENT_PREFERRED",
         seoTitle: "Split PDF Online Free - Extract Pages",
         seoDescription: "Extract specific pages or separate a large PDF into multiple smaller files instantly online.",
         intent: "Users want to separate a PDF into multiple files or extract specific pages.",
@@ -98,6 +153,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Rotate PDF pages easily and permanently change document orientations layout grids.",
         href: "/rotate-pdf",
         category: "organize",
+        capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false },
+        clientCapable: true,
+        toolPolicy: "CLIENT_PREFERRED",
         seoTitle: "Rotate PDF Pages Online Free",
         seoDescription: "Permanently rotate individual PDF pages or entire documents online quickly and easily.",
         intent: "Users want to fix the orientation of PDF pages.",
@@ -128,6 +186,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Remove specific unneeded pages from a PDF document stream instantly.",
         href: "/delete-pages",
         category: "organize",
+        capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false },
+        clientCapable: true,
+        toolPolicy: "CLIENT_PREFERRED",
         seoTitle: "Delete Pages from PDF Online Free",
         seoDescription: "Remove unwanted pages from your PDF documents instantly. Fast, secure, and free online tool.",
         intent: "Users want to remove unwanted pages from a PDF document.",
@@ -158,6 +219,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Change the order of PDF pages visually using an interactive sorting grid sequence layout.",
         href: "/reorder-pages",
         category: "organize",
+        capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false },
+        clientCapable: true,
+        toolPolicy: "CLIENT_PREFERRED",
         seoTitle: "Reorder PDF Pages Online Free",
         seoDescription: "Drag and drop to rearrange PDF pages easily. Organize your document exactly how you need it.",
         intent: "Users want to change the sequence of pages within a PDF.",
@@ -188,6 +252,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Add custom text watermarks or image stamps securely to PDF layout backgrounds.",
         href: "/watermark-pdf",
         category: "edit",
+        capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false },
+        clientCapable: true,
+        toolPolicy: "HYBRID",
         seoTitle: "Add Watermark to PDF Online Free",
         seoDescription: "Stamp your documents by adding customizable text or image watermarks to your PDF files securely.",
         intent: "Users want to brand or protect their PDFs with a visual watermark.",
@@ -218,6 +285,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Reduce PDF file sizes instantly by stripping object redundancy and unneeded systems metadata.",
         href: "/compress-pdf",
         category: "optimize",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side compression engine" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
         seoTitle: "Compress PDF Files Online Free",
         seoDescription: "Reduce the size of your PDF files without losing quality. Fast and secure online PDF optimizer.",
         intent: "Users want to make a PDF file smaller for emailing or uploading.",
@@ -248,6 +318,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Easily add sequential page numbers to your PDF document. Choose positions, dimensions, and styling elements.",
         href: "/add-page-numbers",
         category: "edit",
+        capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false },
+        clientCapable: true,
+        toolPolicy: "HYBRID",
         seoTitle: "Add Page Numbers to PDF Online Free",
         seoDescription: "Insert page numbers into your PDF documents. Customize position, font, and starting number easily.",
         intent: "Users want to number the pages of a PDF document.",
@@ -279,6 +352,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Modify document property values like Title, Author, Subject description and system Keywords tags.",
         href: "/edit-metadata",
         category: "edit",
+        capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false, hasOfflineFallback: true },
+        clientCapable: true,
+        toolPolicy: "CLIENT_PREFERRED",
         seoTitle: "Edit PDF Metadata Online Free",
         seoDescription: "View and change hidden PDF properties, including author, title, keywords, and subject data.",
         intent: "Users want to change the hidden property fields of a PDF.",
@@ -309,6 +385,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Secure your documents by applying robust, high-grade permissions access encryption configurations.",
         href: "/lock-pdf",
         category: "security",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side encryption engine" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
         seoTitle: "Password Protect PDF Online Free",
         seoDescription: "Encrypt and lock your PDF files with a secure password to prevent unauthorized access or printing.",
         intent: "Users want to add a password to restrict access to their PDF.",
@@ -339,6 +418,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Strip protection limits, passwords, and security encryption blocks instantly from your documents.",
         href: "/unlock-pdf",
         category: "security",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side decryption engine" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
         seoTitle: "Unlock PDF Online Free - Remove Password",
         seoDescription: "Remove passwords and security restrictions from PDF files quickly. Decrypt PDFs instantly.",
         intent: "Users want to remove password protection or restrictions from a PDF.",
@@ -369,6 +451,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Convert graphic image files (PNG, JPG, WebP) into organized, optimized PDF files easily.",
         href: "/images-to-pdf",
         category: "create",
+        capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false },
+        clientCapable: true,
+        toolPolicy: "HYBRID",
         seoTitle: "Convert Images to PDF Online Free",
         seoDescription: "Combine JPG, PNG, and WebP images into a single PDF document easily. High-quality image conversion.",
         intent: "Users want to turn picture files into a single PDF document.",
@@ -399,6 +484,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Convert PDF pages into high-resolution JPG or PNG graphic image files instantly.",
         href: "/pdf-to-images",
         category: "convert",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side rasterization engine" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
         seoTitle: "Convert PDF to JPG/PNG Images Free",
         seoDescription: "Extract pages from your PDF and save them as high-quality JPG or PNG images instantly.",
         intent: "Users want to turn PDF pages into standalone image files.",
@@ -429,6 +517,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Extract hidden raw text layer data strings directly out of text-based PDF pages.",
         href: "/pdf-to-text",
         category: "convert",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side text extraction engine" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
         seoTitle: "Convert PDF to Text Online Free",
         seoDescription: "Extract text from PDF documents quickly. Convert PDF to raw TXT files instantly online.",
         intent: "Users want to extract readable text from a PDF file.",
@@ -459,6 +550,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Convert scanned images into searchable PDFs while preserving the original layout, colors, logos, formatting, and design.",
         href: "/image-to-searchable-pdf",
         category: "create",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side OCR engine" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
 
         seoTitle: "Image to Searchable PDF Online Free | OCR Image to PDF",
         seoDescription: "Convert images, screenshots, and scanned documents into searchable PDFs online for free. Preserve the original appearance while adding selectable and searchable text with OCR.",
@@ -516,6 +610,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Edit, chain operations, process, reorganize layout topologies, and configure your PDF in one tool.",
         href: "/studio",
         category: "studio",
+        capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false, isHybridWorkspace: true },
+        clientCapable: true,
+        toolPolicy: "CLIENT_PREFERRED",
         seoTitle: "Advanced PDF Studio - All-in-One Editor",
         seoDescription: "A powerful all-in-one workspace to edit, merge, process, and completely manage your PDF documents online.",
         intent: "Users need a comprehensive workspace to do multiple operations on a PDF.",
@@ -546,6 +643,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Convert Word (.docx, .doc) documents into standard printable vector PDFs instantly.",
         href: "/word-to-pdf",
         category: "create",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires LibreOffice conversion engine" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
         seoTitle: "Convert Word to PDF Online Free",
         seoDescription: "Turn Microsoft Word documents into PDF files securely while preserving all original formatting.",
         intent: "Users want to securely share a Word document by converting it to PDF format.",
@@ -577,6 +677,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Convert Excel (.xlsx, .xls) sheets and grid data directly into standard printable vector PDFs.",
         href: "/excel-to-pdf",
         category: "create",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires LibreOffice conversion engine" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
         seoTitle: "Convert Excel to PDF Online Free",
         seoDescription: "Transform Excel spreadsheets into easily readable and printable PDF documents instantly.",
         intent: "Users want to lock spreadsheet data into a fixed PDF view.",
@@ -608,6 +711,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Convert PowerPoint (.pptx, .ppt) pitch slide decks into standard vector PDF presentation frames.",
         href: "/powerpoint-to-pdf",
         category: "create",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires LibreOffice conversion engine" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
         seoTitle: "Convert PowerPoint to PDF Online Free",
         seoDescription: "Save your PPT and PPTX presentation slides as static PDF files easily and securely.",
         intent: "Users want to share presentations in a universally viewable PDF format.",
@@ -639,6 +745,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Input a live webpage link to render, scrape, and capture the DOM viewport directly into a printable vector PDF template document.",
         href: "/url-to-pdf",
         category: "create",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side Chromium render engine" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
         seoTitle: "Convert URL Website to PDF Online Free",
         seoDescription: "Capture any live webpage and save it as a high-quality, printable PDF document instantly.",
         intent: "Users want to save a web page as a PDF for offline viewing or archiving.",
@@ -670,6 +779,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Convert documentation markdown files (.md) into clean, typography-focused stylized portrait vector PDFs.",
         href: "/markdown-to-pdf",
         category: "create",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side markdown conversion engine" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
         seoTitle: "Convert Markdown to PDF Online Free",
         seoDescription: "Render MD files into beautiful, formatted PDF documents with proper typography and layouts.",
         intent: "Users want to turn plain text markdown into a visually appealing document.",
@@ -701,6 +813,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Convert development script source files into clean syntax-highlighted printable vector layout sheets.",
         href: "/code-to-pdf",
         category: "create",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side syntax render engine" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
         seoTitle: "Convert Source Code to PDF Online Free",
         seoDescription: "Format programming code files into beautiful PDFs with full syntax highlighting and line numbers.",
         intent: "Users want to print or share code snippets in a readable, formatted way.",
@@ -732,6 +847,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Permanently scrub and strip explicit textual reference target vectors entirely out of underlying objects properties.",
         href: "/redact-pdf",
         category: "security",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side redaction engine" },
+        clientCapable: false,
+        toolPolicy: "SECURITY_CRITICAL_BACKEND",
         seoTitle: "Redact PDF Online Free - Hide Sensitive Text",
         seoDescription: "Securely black out and permanently redact sensitive information from your PDF documents.",
         intent: "Users need to permanently hide confidential information in a PDF.",
@@ -762,6 +880,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Modify explicit text components inline coordinates matrices while preserving format matrix loops seamlessly.",
         href: "/edit-pdf",
         category: "edit",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side text extraction and compilation" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
         seoTitle: "Edit PDF Online Free - Full Document Editor",
         seoDescription: "Edit text, add shapes, insert images, and modify your PDF directly in your browser.",
         intent: "Users want to make direct text or layout changes to an existing PDF.",
@@ -792,6 +913,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Extract data metrics and convert embedded calculation tabular columns out of document sections into structured Excel sheets.",
         href: "/pdf-to-excel",
         category: "convert",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side tabular conversion engine" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
         seoTitle: "Convert PDF to Excel Online Free",
         seoDescription: "Accurately convert PDF tables and data into editable Excel spreadsheets quickly and securely.",
         intent: "Users want to pull tabular data from a PDF into a working spreadsheet.",
@@ -822,6 +946,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Transform uneditable flat layout parameters back into fluid selectable Microsoft Word document properties.",
         href: "/pdf-to-word",
         category: "convert",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side Word conversion engine" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
         seoTitle: "Convert PDF to Word Online Free",
         seoDescription: "Convert PDF documents to fully editable Microsoft Word DOCX files while keeping the formatting.",
         intent: "Users want to convert a PDF back into a Word document for extensive text editing.",
@@ -852,6 +979,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Transform presentation data frames back into entirely editable Microsoft PowerPoint pitch layout slides structures.",
         href: "/pdf-to-powerpoint",
         category: "convert",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side PowerPoint conversion engine" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
         seoTitle: "Convert PDF to PowerPoint Online Free",
         seoDescription: "Turn your PDF pages into fully editable PowerPoint slides for your next presentation.",
         intent: "Users want to rebuild presentation slides from a PDF file.",
@@ -882,6 +1012,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Remove color tracks from your files to optimize printing consumption parameters and drop server weights paths.",
         href: "/grayscale-pdf",
         category: "optimize",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side color conversion engine" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
         seoTitle: "Convert PDF to Grayscale Online Free",
         seoDescription: "Easily convert color PDF documents to black and white or grayscale to save ink and reduce file size.",
         intent: "Users want to remove color from a PDF to save printer ink.",
@@ -911,6 +1044,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Rebuild cross reference tables and fix damaged dictionary tree layouts components so they open without corruption warnings.",
         href: "/repair-pdf",
         category: "optimize",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side cross-reference repair engine" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
         seoTitle: "Repair Corrupted PDF Online Free",
         seoDescription: "Repair damaged PDF files and restore documents that fail to open.",
         intent: "Users need to recover broken PDF files.",
@@ -941,6 +1077,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Add signatures to PDF documents with a simple online signing tool.",
         href: "/sign-pdf",
         category: "edit",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side signature stamp engine" },
+        clientCapable: false,
+        toolPolicy: "SECURITY_CRITICAL_BACKEND",
         seoTitle: "Sign PDF Online Free",
         seoDescription: "Add electronic signatures to PDF documents quickly and securely.",
         intent: "Users want to sign PDF documents digitally.",
@@ -968,12 +1107,12 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
     },
     {
         title: "Crop PDF",
-
         description: "Crop PDF pages online by removing unwanted margins, whitespace, or page areas. Adjust page boundaries precisely while preserving document quality.",
-
         href: "/crop-pdf",
-
         category: "organize",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side cropping engine" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
 
         seoTitle: "Crop PDF Online Free | Remove Margins & White Space from PDFs",
 
@@ -1040,12 +1179,12 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
     },
     {
         title: "Duplicate PDF Pages",
-
         description: "Duplicate PDF pages online by copying selected pages multiple times. Clone individual pages or page ranges while preserving the original document quality and layout.",
-
         href: "/duplicate-pages",
-
         category: "organize",
+        capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false },
+        clientCapable: true,
+        toolPolicy: "CLIENT_PREFERRED",
 
         seoTitle: "Duplicate PDF Pages Online Free | Copy PDF Pages Instantly",
 
@@ -1112,12 +1251,12 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
     },
     {
         title: "Insert Blank PDF Pages",
-
         description: "Insert blank pages into a PDF online at the beginning, end, or after any page. Add empty pages for notes, separators, printing, signatures, or document organization.",
-
         href: "/insert-blank-pages",
-
         category: "organize",
+        capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false },
+        clientCapable: true,
+        toolPolicy: "CLIENT_PREFERRED",
 
         seoTitle: "Insert Blank Pages into PDF Online Free | Add Empty PDF Pages",
 
@@ -1184,12 +1323,12 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
     },
     {
         title: "Add Text to PDF",
-
         description: "Add custom text to PDF pages online. Insert labels, annotations, dates, names, document references, or custom messages anywhere in your PDF while preserving the original layout.",
-
         href: "/add-text",
-
         category: "edit",
+        capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false },
+        clientCapable: true,
+        toolPolicy: "HYBRID",
 
         seoTitle: "Add Text to PDF Online Free | Insert Custom Text into PDFs",
 
@@ -1256,12 +1395,12 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
     },
     {
         title: "Highlight PDF",
-
         description: "Highlight text and important sections in PDF files online. Add colored highlight markers to emphasize key content while preserving the original document layout and quality.",
-
         href: "/highlight-pdf",
-
         category: "edit",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side markup worker" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
 
         seoTitle: "Highlight PDF Online Free | Add Highlight Markers to PDF",
 
@@ -1328,12 +1467,12 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
     },
     {
         title: "Underline PDF",
-
         description: "Underline text and important content in PDF files online. Add colored underline annotations to emphasize words, sentences, or document sections while preserving the original layout and formatting.",
-
         href: "/underline-pdf",
-
         category: "edit",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side markup worker" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
 
         seoTitle: "Underline PDF Online Free | Add Underlines to PDF Documents",
 
@@ -1400,12 +1539,12 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
     },
     {
         title: "Strikeout PDF",
-
         description: "Strike through text and content in PDF files online. Add colored strikeout annotations to words, sentences, or document sections while preserving the original document layout and formatting.",
-
         href: "/strikeout-pdf",
-
         category: "edit",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side markup worker" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
 
         seoTitle: "Strikeout PDF Online Free | Add Strikethrough to PDF Text",
 

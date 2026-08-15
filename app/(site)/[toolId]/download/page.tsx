@@ -6,6 +6,7 @@ import { ShieldCheck, ArrowLeft, Download, ArrowRight, Sparkles } from "lucide-r
 
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import { useWorkflow } from "@/context/WorkflowContext";
+import { useTools } from "@/context/ToolContext";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import { getSuggestedNextTools } from "@/lib/toolSuggestions";
 
@@ -13,9 +14,14 @@ export default function SharedDownloadPage() {
     const router = useRouter();
     const { toolId, downloadData, setFile, setDownloadData } = useSharedTool();
     const { setPendingTransfer, clearTransfer } = useWorkflow();
+    const { displayTools } = useTools();
 
     const leavingForNextToolRef = useRef(false);
-    const suggestedTools = useMemo(() => getSuggestedNextTools(`/${toolId}`, 3), [toolId]);
+    const suggestedTools = useMemo(
+        () => getSuggestedNextTools(`/${toolId}`, 3, displayTools),
+        [toolId, displayTools]
+    );
+
 
     useEffect(() => {
         if (leavingForNextToolRef.current) return;

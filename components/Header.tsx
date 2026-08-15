@@ -21,7 +21,7 @@ export default function Header() {
         logout,
         user,
     } = useAuth();
-    const { tools: toolsList } = useTools();
+    const { displayTools: toolsList } = useTools();
     const pathname = usePathname();
     const [forceHide, setForceHide] = useState(false);
     const {resolvedTheme} = useTheme();

@@ -16,7 +16,10 @@ import {
     FilePlus, Blend, FileDigit, ShieldQuestionMark, TextInitial, Signature, SquareDashedText, Highlighter, Underline,
     Strikethrough,
     FileArchive, Paintbrush, Wrench, Droplet, Eraser,
+    CloudOff,
 } from "lucide-react";
+import { useBackendHealth } from "@/context/BackendHealthContext";
+import { notify } from "@/lib/notify";
 
 export type StudioToolId =
     | "select"
@@ -42,6 +45,20 @@ export type StudioToolId =
     | "repair"
     | "redact"
     ;
+
+/** Sub-tools that require server-side execution */
+const STUDIO_BACKEND_TOOLS = new Set<StudioToolId>([
+    "crop",
+    "edit-pdf",
+    "sign",
+    "highlight",
+    "underline",
+    "strikeout",
+    "compress",
+    "grayscale",
+    "repair",
+    "redact",
+]);
 
 interface StudioToolBarProps {
     activeTool: StudioToolId;
@@ -178,15 +195,34 @@ export default function StudioToolBar({
                                           onUndo,
                                           onRedo,
                                       }: StudioToolBarProps) {
+    const { isAvailable } = useBackendHealth();
+    const isCloudOffline = !isAvailable;
+
+    const handleSelectTool = (toolId: StudioToolId, toolLabel: string) => {
+        if (isCloudOffline && STUDIO_BACKEND_TOOLS.has(toolId)) {
+            notify(
+                `${toolLabel} requires cloud processing, which is currently unavailable. Offline editing tools (Rotate, Split, Organize, Watermark, Numbers, Text) remain fully usable.`,
+                "warning"
+            );
+            return;
+        }
+        onToolSelect(toolId);
+    };
+
     return (
         <section className="rounded-3xl border border-[color:var(--border)] bg-[var(--card)] shadow-sm">
             <div className="flex items-center justify-between gap-3 border-b border-[color:var(--border)] px-4 py-2.5">
                 <div>
-                    <h3 className="text-sm font-bold text-[color:var(--foreground)]">
-                        Tools
+                    <h3 className="text-sm font-bold text-[color:var(--foreground)] flex items-center gap-2">
+                        <span>Tools</span>
+                        {isCloudOffline && (
+                            <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                                Local Mode Active
+                            </span>
+                        )}
                     </h3>
                     <p className="text-xs text-[color:var(--muted)]">
-                        Studio editing tools
+                        {isCloudOffline ? "Local-first Studio editing tools" : "Studio editing tools"}
                     </p>
                 </div>
 
@@ -229,39 +265,52 @@ export default function StudioToolBar({
                 <div className="flex min-w-max items-center gap-2">
                     {TOOLS.map((tool) => {
                         const active = activeTool === tool.id;
+                        const requiresCloud = STUDIO_BACKEND_TOOLS.has(tool.id);
+                        const isBlockedOffline = isCloudOffline && requiresCloud;
 
                         return (
                             <button
                                 key={tool.id}
                                 type="button"
-                                onClick={() => onToolSelect(tool.id)}
+                                onClick={() => handleSelectTool(tool.id, tool.label)}
+                                title={isBlockedOffline ? `${tool.label} (Requires Cloud Server — Offline)` : tool.label}
                                 className={[
                                     "inline-flex h-10 items-center gap-2 rounded-2xl border px-3 text-left transition",
                                     active
                                         ? "border-indigo-500 bg-indigo-500/10 shadow-sm"
-                                        : "border-[color:var(--border)] bg-[var(--background)]/40 hover:bg-[var(--card)]",
+                                        : isBlockedOffline
+                                            ? "border-[color:var(--border)] bg-[var(--background)]/20 opacity-60 hover:opacity-100 hover:border-amber-500/50"
+                                            : "border-[color:var(--border)] bg-[var(--background)]/40 hover:bg-[var(--card)]",
                                 ].join(" ")}
                             >
                                 <span
                                     className={[
-                                        "flex h-7 w-7 items-center justify-center rounded-xl",
+                                        "flex h-7 w-7 items-center justify-center rounded-xl relative",
                                         active
                                             ? "bg-indigo-500/15 text-indigo-500"
-                                            : "bg-[var(--card)] text-[color:var(--muted)]",
+                                            : isBlockedOffline
+                                                ? "bg-[var(--card)] text-[color:var(--muted)]"
+                                                : "bg-[var(--card)] text-[color:var(--muted)]",
                                     ].join(" ")}
                                 >
                                     {tool.icon}
+                                    {isBlockedOffline && (
+                                        <CloudOff size={10} className="absolute -top-1 -right-1 text-amber-500 bg-[var(--card)] rounded-full p-0.5" />
+                                    )}
                                 </span>
 
-                                <span className="text-sm font-semibold text-[color:var(--foreground)]">
+                                <span
+                                    className={[
+                                        "text-xs font-semibold",
+                                        active
+                                            ? "text-[color:var(--foreground)]"
+                                            : isBlockedOffline
+                                                ? "text-[color:var(--muted)]"
+                                                : "text-[color:var(--foreground)]",
+                                    ].join(" ")}
+                                >
                                     {tool.label}
                                 </span>
-
-                                {active && (
-                                    <span className="rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-500">
-                                        Active
-                                    </span>
-                                )}
                             </button>
                         );
                     })}

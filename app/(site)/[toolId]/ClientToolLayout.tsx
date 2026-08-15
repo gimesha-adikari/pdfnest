@@ -13,6 +13,7 @@ import { useTools } from "@/context/ToolContext";
 import ToolFAQ from "@/components/SEO/ToolFAQ";
 import ToolSchema from "@/components/SEO/ToolSchema";
 import { resolveIcon, type LucideIcon } from "@/lib/iconResolver";
+import { BackendOnlyToolGuard } from "@/components/pdf/BackendOnlyToolGuard";
 
 interface ToolItem {
     title: string;
@@ -91,6 +92,9 @@ export default function ClientToolLayout({ children }: { children: ReactNode }) 
     const file = activeToolHref === currentToolHref ? fileState : null;
 
     const localFallback = getToolByHref(currentToolHref);
+    // Extract capability policy from the static registry so the guard works
+    // even before the CMS hydration completes.
+    const toolPolicyValue = (localFallback as any)?.toolPolicy ?? undefined;
     const initialConfig: ToolConfig = {
         name: localFallback?.title || (localFallback as any)?.Title || "PDF Tool",
         description: localFallback?.description || (localFallback as any)?.Description || "Process your PDF files securely.",
@@ -176,9 +180,15 @@ export default function ClientToolLayout({ children }: { children: ReactNode }) 
                 isLoadingConfig,
             }}
         >
-            <ToolSchema toolHref={`/${toolId}`} />
-            {children}
-            <ToolFAQ toolHref={`/${toolId}`} />
+            <BackendOnlyToolGuard
+                toolId={toolId}
+                toolTitle={toolConfig.name}
+                toolPolicy={toolPolicyValue}
+            >
+                <ToolSchema toolHref={`/${toolId}`} />
+                {children}
+                <ToolFAQ toolHref={`/${toolId}`} />
+            </BackendOnlyToolGuard>
         </SharedToolContext.Provider>
     );
 }

@@ -11,6 +11,8 @@ import {
     ArrowRight,
 } from "lucide-react";
 import { fetchJson } from "@/lib/api";
+import { useTools } from "@/context/ToolContext";
+import { TOTAL_TOOL_COUNT } from "@/lib/toolsData";
 
 interface AboutData {
     HeroTag: string;
@@ -37,17 +39,16 @@ interface AboutData {
 
 export default function AboutPage() {
     const [data, setData] = useState<AboutData | null>(null);
-    const [toolsList, setToolsList] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
+    // Tools come from ToolContext — already seeded from the static registry,
+    // never shows 0 when the backend is offline
+    const { displayTools: toolsList, isOfflineMode, totalCount } = useTools();
+
     useEffect(() => {
-        Promise.all([
-            fetchJson<AboutData>("/site-content/about"),
-            fetchJson<any[]>("/site-content/tools"),
-        ])
-            .then(([aboutRes, toolsRes]) => {
+        fetchJson<AboutData>("/site-content/about")
+            .then((aboutRes) => {
                 setData(aboutRes);
-                setToolsList(toolsRes || []);
             })
             .catch((err) => {
                 console.error("Backend fetch error:", err);
@@ -57,7 +58,7 @@ export default function AboutPage() {
             });
     }, []);
 
-    if (loading) {
+    if (loading && !data) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-[color:var(--background)]">
                 <Loader2 className="animate-spin text-indigo-500" size={32} />
@@ -66,30 +67,32 @@ export default function AboutPage() {
     }
 
     const fallbackData: AboutData = {
-        HeroTag: "Next-Gen PDF Infrastructure",
-        HeroTitle: "Built for Secure & Fast Document Processing",
-        HeroDescription: "Platen PDF is an online document engine designed for fast, private, and powerful PDF management directly in your browser or isolated sandbox environments.",
+        HeroTag: "Next-Gen PDF Architecture",
+        HeroTitle: "Built for Performance, Security, and Local-First Reliability",
+        HeroDescription: "Platen PDF delivers high-performance client-side document processing with seamless offline capabilities and secure cloud execution.",
         StatsJson: JSON.stringify([]),
         SectionTitle: "Core Platform Philosophy",
         SectionSubtitle: "Designed with privacy, performance, and simplicity as first principles.",
         HighlightsJson: JSON.stringify([
-            { title: "Browser & Isolated Processing", description: "Files are processed inside secure execution containers or locally in your browser." },
-            { title: "Automated Data Lifecycle", description: "Uploaded documents and generated files are automatically deleted after processing." },
-            { title: "Modular Toolsuite", description: "Comprehensive utilities to merge, split, compress, edit, redact, and convert documents." }
+            { title: "Client-Side Processing", description: "Standard operations execute 100% locally in your browser using WASM." },
+            { title: "Privacy First", description: "Zero document telemetry. Files are never stored permanently." },
+            { title: "Universal Compatibility", description: "Works on desktop, mobile, and tablets with equal speed." },
         ]),
-        StudioTitle: "PDF Studio Workspace",
-        StudioDescription: "A unified interactive editor enabling visual layout reordering, content annotation, and multi-tool chain operations.",
+        StudioTitle: "Platen Studio Architecture",
+        StudioDescription: "Our unified studio workspace allows you to visually manipulate, annotate, organize, and transform document layouts with real-time feedback.",
         StudioFeaturesJson: JSON.stringify([
-            "Visual drag-and-drop page sorting grid",
-            "Multi-tool operation chaining",
-            "Real-time page preview & rotation"
+            "Dynamic Page Matrix Layout",
+            "Multi-layer Vector Watermarks",
+            "Real-time Canvas Rendering",
+            "Cross-document Page Merging"
         ]),
-        CanvasTitle: "Interactive Document Canvas",
-        CanvasDescription: "Work with vector overlays, watermark positioning, page number pagination, and document metadata editing.",
+        CanvasTitle: "Modern Rendering Pipeline",
+        CanvasDescription: "Optimized canvas viewports deliver crisp vector clarity at any zoom level without exhausting client memory resources.",
         CanvasFeaturesJson: JSON.stringify([
-            "Custom text & logo watermarking",
-            "Precision pagination positioning",
-            "Metadata property editing"
+            "Sub-pixel Text Layout Engine",
+            "High-DPI Viewport Scaling",
+            "Zero-latency Pagination",
+            "Lossless Asset Handling"
         ]),
         SecurityTitle: "Security & Privacy Guarantee",
         SecurityDescription: "We strictly protect user data. All processing sandboxes clear cache automatically, and no uploaded document content is permanently stored.",
@@ -100,20 +103,28 @@ export default function AboutPage() {
         MissionDescription: "Provide high-performance document tools accessible anywhere without compromising user privacy or file security."
     };
 
-    const activeData = data || fallbackData;
+    const activeData = { ...fallbackData, ...(data || {}) };
 
-    const totalToolsCount = toolsList.length;
     const uniqueCategories = new Set(
-        toolsList.map((t) => (t.Category || t.category || "General").toLowerCase())
+        toolsList.length > 0
+            ? toolsList.map((t) => (t.category || "organize").toLowerCase())
+            : ["organize", "edit", "convert", "create", "security", "optimize", "studio"]
     );
     const workspaceCount = uniqueCategories.size;
 
-    const stats = [
-        { value: `${Math.max(totalToolsCount - 1, 0)}+`, label: "PDF Tools Available" },
-        { value: String(workspaceCount), label: "Workspace Modules" },
-        { value: "Free", label: "Plan Available" },
-        { value: "Pro", label: "Advanced Workspaces" },
-    ];
+    const stats = isOfflineMode
+        ? [
+              { value: `${toolsList.length}+`, label: "Local Tools (Cloud Offline)" },
+              { value: String(workspaceCount), label: "Available Categories" },
+              { value: "Offline", label: "Local Mode Active" },
+              { value: "Free", label: "Zero Cloud Credits" },
+          ]
+        : [
+              { value: `${totalCount || TOTAL_TOOL_COUNT}+`, label: "PDF Tools Available" },
+              { value: String(workspaceCount), label: "Workspace Modules" },
+              { value: "Free", label: "Plan Available" },
+              { value: "Pro", label: "Advanced Workspaces" },
+          ];
 
     const parse = (json: string) => {
         try {

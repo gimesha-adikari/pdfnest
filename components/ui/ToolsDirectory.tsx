@@ -17,7 +17,7 @@ type Category =
     | "studio";
 
 export default function ToolsDirectory() {
-    const { tools: toolsList } = useTools();
+    const { displayTools: toolsList, isOfflineMode } = useTools();
     const [search, setSearch] = useState("");
     const [category, setCategory] = useState<Category>("all");
 
@@ -50,8 +50,19 @@ export default function ToolsDirectory() {
         <main className="mx-auto max-w-7xl px-6 py-16">
             {/* Hero */}
             <section className="text-center">
-                <div className="inline-flex items-center rounded-full border border-indigo-500/20 bg-indigo-500/10 px-4 py-1 text-sm font-semibold text-indigo-500">
-                    {toolsList.length} PDF Tools
+                <div className={`inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-semibold ${
+                    isOfflineMode
+                        ? "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300"
+                        : "border-indigo-500/20 bg-indigo-500/10 text-indigo-500"
+                }`}>
+                    {isOfflineMode ? (
+                        <>
+                            <span>●</span>
+                            <span>{toolsList.length} Local Tools Available (Cloud Offline)</span>
+                        </>
+                    ) : (
+                        <span>{toolsList.length} PDF Tools Available</span>
+                    )}
                 </div>
 
                 <h1 className="mt-6 text-5xl font-black tracking-tight">
@@ -59,10 +70,12 @@ export default function ToolsDirectory() {
                 </h1>
 
                 <p className="mx-auto mt-4 max-w-2xl text-lg text-[color:var(--muted)]">
-                    Edit, convert, optimize and secure PDF documents with
-                    Platen PDF.
+                    {isOfflineMode
+                        ? "Process, merge, split, watermark, and organize PDF documents directly in your browser with zero data leaving your device."
+                        : "Edit, convert, optimize and secure PDF documents with Platen PDF."}
                 </p>
             </section>
+
 
             {/* Stats */}
             <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-4">

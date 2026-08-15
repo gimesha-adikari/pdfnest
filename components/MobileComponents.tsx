@@ -52,7 +52,7 @@ export function ToolGroup({
     category: Category;
     close: () => void;
 }) {
-    const { tools: allTools } = useTools();
+    const { displayTools: allTools } = useTools();
     const tools = allTools.filter((t) => (t.category || (t as any).Category) === category);
 
     return (

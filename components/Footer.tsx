@@ -15,7 +15,7 @@ interface BackendTool {
 }
 
 export default function Footer() {
-    const { tools: toolsList } = useTools();
+    const { displayTools: toolsList } = useTools();
 
     const organizeTools = toolsList.filter(
         (t: BackendTool) => (t.Category || t.category) === "organize"

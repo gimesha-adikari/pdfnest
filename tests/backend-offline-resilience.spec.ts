@@ -239,16 +239,14 @@ test.describe('Backend Outage Resilience & Offline-Capable UX Suite', () => {
         await page.goto('/compress-pdf');
         await page.waitForLoadState('domcontentloaded');
 
-        const fileInput = page.locator('input[type="file"]');
-        await fileInput.setInputFiles(samplePdfPath);
+        // Should display friendly service unavailable notice
+        await expect(page.getByText(/Service Temporarily Unavailable/i).first()).toBeVisible({ timeout: 10000 });
+        await expect(page.getByText(/Backend offline — cloud processing unavailable/i).first()).toBeVisible();
 
-        await expect(page).toHaveURL(/\/compress-pdf\/workspace/);
-
-        // Should display friendly service unavailable notice and disabled action button
-        await expect(page.getByText(/Service Temporarily Unavailable|PDFNest backend processing service/i).first()).toBeVisible({ timeout: 10000 });
-        const compressBtn = page.getByRole('button', { name: /Optimize and Compress PDF/i });
-        await expect(compressBtn).toBeDisabled();
+        // Must NOT render file upload dropzone
+        await expect(page.locator('input[type="file"]')).toHaveCount(0);
     });
+
 
     test('9. Auth/session failure does not crash the application', async ({ page }) => {
         const pageErrors: string[] = [];
