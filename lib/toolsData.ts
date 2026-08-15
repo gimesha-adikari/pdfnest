@@ -74,10 +74,10 @@ export function isToolAvailableOffline(tool: ToolItem): boolean {
 export const TOTAL_TOOL_COUNT = 37;
 
 /**
- * Number of truly offline-capable tools (11 fully offline standalone + 1 metadata + 1 studio suite).
+ * Number of truly offline-capable tools (12 fully offline standalone + 1 metadata + 1 studio suite).
  */
-export const OFFLINE_TOOL_COUNT = 13;
-export const CLIENT_CAPABLE_TOOL_COUNT = 13;
+export const OFFLINE_TOOL_COUNT = 14;
+export const CLIENT_CAPABLE_TOOL_COUNT = 14;
 
 export const NAV_TOOLS_FALLBACK: ToolItem[] = [
     {
@@ -1110,9 +1110,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Crop PDF pages online by removing unwanted margins, whitespace, or page areas. Adjust page boundaries precisely while preserving document quality.",
         href: "/crop-pdf",
         category: "organize",
-        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side cropping engine" },
-        clientCapable: false,
-        toolPolicy: "BACKEND_ONLY",
+        capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false, hasOfflineFallback: false, isHybridWorkspace: false },
+        clientCapable: true,
+        toolPolicy: "CLIENT_PREFERRED",
 
         seoTitle: "Crop PDF Online Free | Remove Margins & White Space from PDFs",
 

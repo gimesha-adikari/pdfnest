@@ -115,6 +115,10 @@ function normalizeTool(tool: string): string {
         case "to_pdf":
         case "to-pdf":
             return "images_to_pdf";
+        case "crop":
+        case "crop_pdf":
+        case "crop-pdf":
+            return "crop";
         default:
             return tool;
     }

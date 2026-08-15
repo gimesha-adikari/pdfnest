@@ -25,6 +25,7 @@ export class ClientExecutor {
             "add_page_numbers",
             "add_text",
             "images_to_pdf",
+            "crop",
         ].includes(normalized);
     }
 
@@ -123,6 +124,9 @@ export class ClientExecutor {
                 case "update_metadata":
                     outputDoc = await executeUpdateMetadata(pdfDoc, params);
                     break;
+                case "crop":
+                    outputDoc = await executeCrop(pdfDoc, params);
+                    break;
                 default:
                     throw new ExecutionError(
                         "UNSUPPORTED_CLIENT_OP",
@@ -175,9 +179,127 @@ function normalizeTool(tool: string): string {
         case "to_pdf":
         case "to-pdf":
             return "images_to_pdf";
+        case "crop":
+        case "crop_pdf":
+        case "crop-pdf":
+            return "crop";
         default:
             return tool;
     }
+}
+
+export async function executeCrop(
+    pdfDoc: PDFDocument,
+    params: Record<string, any>
+): Promise<PDFDocument> {
+    const boxParam = params.box;
+    if (!boxParam && params.xmin === undefined) {
+        throw new ExecutionError("INVALID_INPUT", "Target crop box boundary dimension map is required.");
+    }
+
+    let xmin = 0;
+    let ymin = 0;
+    let xmax = 0;
+    let ymax = 0;
+
+    if (typeof boxParam === "string") {
+        // String format "[xmin ymin xmax ymax]" or "xmin ymin xmax ymax" (e.g. "[50 100 450 700]")
+        const match = boxParam.match(/\[?\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\]?/);
+        if (!match) {
+            throw new ExecutionError("INVALID_INPUT", "Invalid crop box parameter format. Expected [xmin ymin xmax ymax].");
+        }
+        xmin = parseFloat(match[1]);
+        ymin = parseFloat(match[2]);
+        xmax = parseFloat(match[3]);
+        ymax = parseFloat(match[4]);
+    } else if (Array.isArray(boxParam) && boxParam.length === 4) {
+        xmin = Number(boxParam[0]);
+        ymin = Number(boxParam[1]);
+        xmax = Number(boxParam[2]);
+        ymax = Number(boxParam[3]);
+    } else if (
+        params.xmin !== undefined &&
+        params.ymin !== undefined &&
+        params.xmax !== undefined &&
+        params.ymax !== undefined
+    ) {
+        xmin = Number(params.xmin);
+        ymin = Number(params.ymin);
+        xmax = Number(params.xmax);
+        ymax = Number(params.ymax);
+    } else {
+        throw new ExecutionError("INVALID_INPUT", "Invalid crop box parameters.");
+    }
+
+    const width = xmax - xmin;
+    const height = ymax - ymin;
+
+    if (width <= 0 || height <= 0) {
+        throw new ExecutionError(
+            "INVALID_INPUT",
+            "Invalid crop box dimensions. Width and height must be positive numbers."
+        );
+    }
+
+    const totalPages = pdfDoc.getPageCount();
+    if (totalPages === 0) {
+        throw new ExecutionError("INVALID_INPUT", "Document contains 0 pages.");
+    }
+
+    const targetPageIndices = new Set<number>();
+    const pagesParam = params.pages;
+
+    if (!pagesParam || (Array.isArray(pagesParam) && pagesParam.length === 0)) {
+        for (let i = 0; i < totalPages; i++) {
+            targetPageIndices.add(i);
+        }
+    } else {
+        const rawTokens = Array.isArray(pagesParam)
+            ? pagesParam
+            : String(pagesParam).split(",").map((p) => p.trim()).filter(Boolean);
+
+        const pageTokens = rawTokens
+            .flatMap((t) => String(t).split(","))
+            .map((p) => p.trim())
+            .filter(Boolean);
+
+        for (const token of pageTokens) {
+            const str = String(token).trim();
+            if (str.includes("-")) {
+                const [startStr, endStr] = str.split("-");
+                const start = parseInt(startStr, 10);
+                const end = parseInt(endStr, 10);
+                if (!isNaN(start) && !isNaN(end)) {
+                    for (let p = Math.min(start, end); p <= Math.max(start, end); p++) {
+                        if (p >= 1 && p <= totalPages) {
+                            targetPageIndices.add(p - 1);
+                        }
+                    }
+                }
+            } else {
+                const p = parseInt(str, 10);
+                if (!isNaN(p) && p >= 1 && p <= totalPages) {
+                    targetPageIndices.add(p - 1);
+                }
+            }
+        }
+    }
+
+    if (targetPageIndices.size === 0) {
+        for (let i = 0; i < totalPages; i++) {
+            targetPageIndices.add(i);
+        }
+    }
+
+    const pages = pdfDoc.getPages();
+    for (const idx of targetPageIndices) {
+        if (idx >= 0 && idx < pages.length) {
+            const page = pages[idx];
+            page.setCropBox(xmin, ymin, width, height);
+        }
+    }
+
+    return pdfDoc;
 }
 
 async function executeAddPageNumbers(

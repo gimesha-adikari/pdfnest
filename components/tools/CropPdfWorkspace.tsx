@@ -3,15 +3,16 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Crop, Loader2, ShieldCheck, ChevronLeft, ChevronRight, Eye } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/api";
-import { getFriendlyErrorMessage, handleClientError } from "@/lib/errorHandler";
-import { notify } from "@/lib/notify";
+import { handleClientError } from "@/lib/errorHandler";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { usePreview } from "@/lib/preview/usePreview";
+import { ExecutionManager } from "@/lib/execution/ExecutionManager";
+import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
+import { ProcessingMode } from "@/lib/execution/types";
 
 interface CustomPdfFile extends File {
     originalPassword?: string;
@@ -57,6 +58,10 @@ export default function CropPdfWorkspace() {
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
+
+    // Adaptive Hybrid Preview: Default to server preview online; auto-fallback to client renderer on failure or offline
+    const [previewRenderer, setPreviewRenderer] = useState<"server" | "client">("server");
 
     const [pdfDocument, setPdfDocument] = useState<PdfJsDocument | null>(null);
     const [currentPage, setCurrentPage] = useState<number>(1);
@@ -67,7 +72,13 @@ export default function CropPdfWorkspace() {
         page: currentPage,
         scale: 1.5,
         mode: "page",
-        renderer: "server",
+        renderer: previewRenderer,
+        onError: (err) => {
+            if (previewRenderer === "server") {
+                console.warn("[CropPdfWorkspace] Server preview failed. Seamlessly activating ClientPdfRenderer fallback:", err);
+                setPreviewRenderer("client");
+            }
+        },
     });
 
     // Track baseline PDF point dimensions (unscaled)
@@ -136,6 +147,7 @@ export default function CropPdfWorkspace() {
             setCurrentPage(1);
             setPageSelectionMode("current");
             setCustomPagesInput("");
+            setPreviewRenderer("server");
             return;
         }
 
@@ -309,23 +321,19 @@ export default function CropPdfWorkspace() {
                 setIsProcessing(true);
                 setSuccess(false);
 
-                const formData = new FormData();
-                formData.append("file", validFile);
-                formData.append("box", compiledBoxString);
-
-                const pagesToSend = selectedPagesPayload;
-                if (pagesToSend && pagesToSend.length > 0) {
-                    formData.append("pages", pagesToSend.join(","));
-                }
-
-                if (validFile.originalPassword) {
-                    formData.append("file_password", validFile.originalPassword);
-                }
-
-                const responseBlob = await uploadAndDownloadFile("/api/structure/crop", formData);
+                const result = await ExecutionManager.run({
+                    tool: "crop",
+                    files: [validFile],
+                    params: {
+                        box: compiledBoxString,
+                        pages: selectedPagesPayload,
+                    },
+                    mode: processingMode,
+                    password: validFile.originalPassword,
+                });
 
                 setDownloadData({
-                    blob: responseBlob,
+                    blob: result.blob,
                     fileName: `${validFile.name.replace(/\.pdf$/i, "")}-cropped.pdf`,
                 });
 
@@ -450,50 +458,36 @@ export default function CropPdfWorkspace() {
                                             : "border-[color:var(--border)] bg-[color:var(--background)] text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
                                     }`}
                                 >
-                                    Custom
+                                    Custom range
                                 </button>
                             </div>
 
-                            <div className="space-y-2">
-                                <label className="text-[10px] text-[color:var(--muted)] font-bold uppercase">Pages to crop</label>
-
-                                {pageSelectionMode === "custom" ? (
+                            {pageSelectionMode === "custom" && (
+                                <div className="space-y-1 pt-1">
+                                    <label className="text-[10px] text-[color:var(--muted)] font-bold uppercase">Pages (e.g. 1, 3, 5-8)</label>
                                     <input
                                         type="text"
+                                        placeholder="1, 3, 5-8"
                                         value={customPagesInput}
                                         onChange={(e) => setCustomPagesInput(e.target.value)}
-                                        placeholder="1-3,5,8-10"
                                         className="w-full px-3 py-2 text-sm border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl text-[color:var(--foreground)] outline-none font-medium"
                                     />
-                                ) : (
-                                    <div className="w-full px-3 py-2 text-sm border border-[color:var(--border)] bg-[color:var(--background)] rounded-xl text-[color:var(--foreground)] font-medium">
-                                        {selectedPagesPreview}
-                                    </div>
-                                )}
+                                </div>
+                            )}
 
-                                <p className="text-[11px] text-[color:var(--muted)] leading-relaxed">
-                                    Use a comma-separated list for custom pages. Examples: <span className="font-mono">1</span>,{" "}
-                                    <span className="font-mono">1-3</span>, <span className="font-mono">1,4,7-9</span>.
-                                </p>
-                            </div>
-
-                            <div className="pt-3 border-t border-[color:var(--border)] flex items-center justify-between text-xs">
-                                <span className="text-[color:var(--muted)]">Applied Pages:</span>
-                                <span className="font-mono font-bold text-indigo-500 bg-indigo-500/10 px-2 py-1 rounded-md">
-                  {selectedPagesPreview}
-                </span>
+                            <div className="pt-2 border-t border-[color:var(--border)] flex items-center justify-between text-xs">
+                                <span className="text-[color:var(--muted)]">Target Scope:</span>
+                                <span className="font-semibold text-[color:var(--foreground)]">{selectedPagesPreview}</span>
                             </div>
                         </div>
 
-                        <div className="grid gap-4 sm:grid-cols-2">
-                            <div className="rounded-2xl border border-[color:var(--border)] p-4 bg-transparent">
-                                <p className="text-sm text-[color:var(--muted)]">Source document size</p>
-                                <p className="mt-1 text-xl font-bold text-[color:var(--foreground)]">{fileExtractedSize} MB</p>
-                            </div>
-                            <div className="rounded-2xl border border-[color:var(--border)] p-4 bg-transparent">
-                                <p className="text-sm text-[color:var(--muted)]">Format Grid Unit</p>
-                                <p className="mt-1 text-xl font-bold text-indigo-500">Points (pt)</p>
-                            </div>
+                        {/* Processing Mode Selector */}
+                        <div className="pt-2">
+                            <ProcessingModeSelector
+                                mode={processingMode}
+                                onChange={setProcessingMode}
+                                disabled={isProcessing}
+                            />
                         </div>
 
                         <PdfActionButton
@@ -515,9 +509,9 @@ export default function CropPdfWorkspace() {
                         )}
 
                         <div className="w-full flex items-center justify-between border-b border-[color:var(--border)] pb-3 text-[color:var(--foreground)] text-sm font-bold mb-4">
-              <span className="flex items-center gap-2">
-                <Eye size={16} className="text-indigo-500" /> Workspace Canvas Simulator
-              </span>
+                            <span className="flex items-center gap-2">
+                                <Eye size={16} className="text-indigo-500" /> Workspace Canvas Simulator
+                            </span>
                             {totalPages > 0 && (
                                 <div className="flex items-center gap-2 border border-[color:var(--border)] px-2 py-0.5 rounded-lg bg-[var(--card)] text-xs text-[color:var(--muted)] font-mono select-none">
                                     <button
@@ -615,7 +609,7 @@ export default function CropPdfWorkspace() {
                                 <div className="text-xs">
                                     <p className="font-semibold">Document crop transformation successful!</p>
                                     <p className="mt-0.5 text-emerald-800/80 dark:text-emerald-200/70">
-                                        The targeted box metrics were parsed on the backend processing matrices correctly.
+                                        Your cropped document is ready to download.
                                     </p>
                                 </div>
                             </div>
@@ -626,4 +620,3 @@ export default function CropPdfWorkspace() {
         </>
     );
 }
-
