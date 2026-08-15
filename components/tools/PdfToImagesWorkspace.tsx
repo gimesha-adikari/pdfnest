@@ -3,13 +3,15 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck, Loader2, FileArchive, RefreshCw, Image as ImageIcon } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/api";
 import { handleClientError } from "@/lib/errorHandler";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
+import { ExecutionManager } from "@/lib/execution/ExecutionManager";
+import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
+import { ProcessingMode } from "@/lib/execution/types";
 
 type ImageTypeOption = {
     value: "jpg" | "png" | "pnggray" | "pngmono";
@@ -48,6 +50,7 @@ export default function PdfToImagesWorkspace() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
     const [imageType, setImageType] = useState<ImageTypeOption["value"]>("jpg");
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
 
     const selectedOption =
         IMAGE_TYPE_OPTIONS.find((option) => option.value === imageType) ?? IMAGE_TYPE_OPTIONS[0];
@@ -67,20 +70,20 @@ export default function PdfToImagesWorkspace() {
                 setIsProcessing(true);
                 setSuccess(false);
 
-                const formData = new FormData();
-                formData.append("file", file);
-                formData.append("image_type", imageType);
-
-                if ((file as any).originalPassword) {
-                    formData.append("file_password", (file as any).originalPassword);
-                }
-
-                const responseBlob = await uploadAndDownloadFile("/api/conversion/pdf-to-images", formData);
+                const result = await ExecutionManager.run({
+                    tool: "pdf_to_images",
+                    files: [file],
+                    params: {
+                        imageType,
+                    },
+                    mode: processingMode,
+                    password: (file as any).originalPassword,
+                });
 
                 const zipDownloadName = `${file.name.replace(/\.pdf$/i, "")}-${imageType}-images.zip`;
 
                 setDownloadData({
-                    blob: responseBlob,
+                    blob: result.blob,
                     fileName: zipDownloadName,
                 });
 
@@ -138,6 +141,15 @@ export default function PdfToImagesWorkspace() {
                             <p className="text-xs leading-5 text-[color:var(--muted)]">
                                 {selectedOption.description}
                             </p>
+                        </div>
+
+                        {/* Processing Mode Selector */}
+                        <div className="pt-2">
+                            <ProcessingModeSelector
+                                mode={processingMode}
+                                onChange={setProcessingMode}
+                                disabled={isProcessing}
+                            />
                         </div>
 
                         {success && (

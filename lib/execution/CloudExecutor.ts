@@ -119,6 +119,17 @@ function normalizeTool(tool: string): string {
         case "crop_pdf":
         case "crop-pdf":
             return "crop";
+        case "pdf_to_images":
+        case "pdf-to-images":
+        case "pdf_to_image":
+        case "pdf-to-image":
+        case "pdf_to_img":
+        case "pdf-to-img":
+        case "pdf_to_jpg":
+        case "pdf-to-jpg":
+        case "pdf_to_png":
+        case "pdf-to-png":
+            return "pdf_to_images";
         default:
             return tool;
     }
@@ -150,6 +161,17 @@ function getEndpointForTool(tool: string, params?: Record<string, any>): string 
             return "/api/structure/add-page-numbers";
         case "crop":
             return "/api/structure/crop";
+        case "pdf_to_images":
+        case "pdf-to-images":
+        case "pdf_to_image":
+        case "pdf-to-image":
+        case "pdf_to_img":
+        case "pdf-to-img":
+        case "pdf_to_jpg":
+        case "pdf-to-jpg":
+        case "pdf_to_png":
+        case "pdf-to-png":
+            return "/api/conversion/pdf-to-images";
         case "duplicate":
             return "/api/structure/duplicate";
         case "insert_blank":

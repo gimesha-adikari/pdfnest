@@ -8,6 +8,7 @@ import {
     executePdfcpuWasmWatermark,
 } from "./pdfcpu/pdfcpuClient";
 import { executeImagesToPdf } from "./images/imageToPdfClient";
+import { executePdfToImages } from "./images/pdfToImageClient";
 
 export class ClientExecutor {
     static isSupported(tool: string): boolean {
@@ -26,6 +27,7 @@ export class ClientExecutor {
             "add_text",
             "images_to_pdf",
             "crop",
+            "pdf_to_images",
         ].includes(normalized);
     }
 
@@ -49,6 +51,10 @@ export class ClientExecutor {
 
         const file = files[0];
         const originalPassword = options.password || (file as any).originalPassword;
+
+        if (normalizedTool === "pdf_to_images") {
+            return await executePdfToImages(file, params, originalPassword);
+        }
 
         if (normalizedTool === "watermark") {
             return await executePdfcpuWasmWatermark(file, params, originalPassword);
@@ -183,6 +189,17 @@ function normalizeTool(tool: string): string {
         case "crop_pdf":
         case "crop-pdf":
             return "crop";
+        case "pdf_to_images":
+        case "pdf-to-images":
+        case "pdf_to_image":
+        case "pdf-to-image":
+        case "pdf_to_img":
+        case "pdf-to-img":
+        case "pdf_to_jpg":
+        case "pdf-to-jpg":
+        case "pdf_to_png":
+        case "pdf-to-png":
+            return "pdf_to_images";
         default:
             return tool;
     }
