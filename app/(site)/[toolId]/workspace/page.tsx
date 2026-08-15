@@ -39,7 +39,9 @@ import CropPdfWorkspace from "@/components/tools/CropPdfWorkspace";
 import DuplicatePagesWorkspace from "@/components/tools/DuplicatePagesWorkspace";
 import InsertBlankWorkspace from "@/components/tools/InsertBlankWorkspace";
 import AddTextWorkspace from "@/components/tools/AddTextWorkspace";
-import MarkupPdfWorkspace from "@/components/tools/MarkupPdfWorkspace";
+import HighlightPdfWorkspace from "@/components/tools/HighlightPdfWorkspace";
+import UnderlinePdfWorkspace from "@/components/tools/UnderlinePdfWorkspace";
+import StrikeoutPdfWorkspace from "@/components/tools/StrikeoutPdfWorkspace";
 
 export default function SharedWorkspacePage() {
     const router = useRouter();
@@ -102,9 +104,9 @@ export default function SharedWorkspacePage() {
             {toolId === "duplicate-pages" && <DuplicatePagesWorkspace />}
             {toolId === "insert-blank-pages" && <InsertBlankWorkspace />}
             {toolId === "add-text" && <AddTextWorkspace />}
-            {toolId === "highlight-pdf" && <MarkupPdfWorkspace kind="highlight" />}
-            {toolId === "underline-pdf" && <MarkupPdfWorkspace kind="underline" />}
-            {toolId === "strikeout-pdf" && <MarkupPdfWorkspace kind="strikeout" />}
+            {toolId === "highlight-pdf" && <HighlightPdfWorkspace />}
+            {toolId === "underline-pdf" && <UnderlinePdfWorkspace />}
+            {toolId === "strikeout-pdf" && <StrikeoutPdfWorkspace />}
         </PdfToolLayout>
     );
 }

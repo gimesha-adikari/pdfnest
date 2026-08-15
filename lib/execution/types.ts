@@ -16,6 +16,7 @@ export interface ExecutionOptions {
     mode: ProcessingMode;
     allowFallback?: boolean;
     password?: string;
+    passwords?: (string | undefined)[];
     onProgress?: (percentage: number) => void;
 }
 

@@ -18,7 +18,9 @@ import EditMetadataTool from "@/components/studio/tools/EditMetadataTool";
 import EditPdfTool from "@/components/studio/tools/EditPdfTool";
 import SignPdfTool from "@/components/studio/tools/SignPdfTool";
 import AddTextTool from "@/components/studio/tools/AddTextTool";
-import MarkupStudioTool from "@/components/studio/tools/MarkupStudioTool";
+import HighlightTool from "@/components/studio/tools/HighlightTool";
+import UnderlineTool from "@/components/studio/tools/UnderlineTool";
+import StrikeoutTool from "@/components/studio/tools/StrikeoutTool";
 import CompressTool from "@/components/studio/tools/CompressTool";
 import GrayscaleTool from "@/components/studio/tools/GrayscaleTool";
 import RepairTool from "@/components/studio/tools/RepairTool";
@@ -146,22 +148,19 @@ export default function StudioWorkspace({
                                 onTextApplied={commitDocument}
                             />
                         ) : activeTool === "highlight" ? (
-                            <MarkupStudioTool
-                                kind="highlight"
+                            <HighlightTool
                                 baseFile={activeFile}
-                                onProcessedFile={commitDocument}
+                                onHighlightedFile={commitDocument}
                             />
                         ) : activeTool === "underline" ? (
-                            <MarkupStudioTool
-                                kind="underline"
+                            <UnderlineTool
                                 baseFile={activeFile}
-                                onProcessedFile={commitDocument}
+                                onUnderlinedFile={commitDocument}
                             />
                         ) : activeTool === "strikeout" ? (
-                            <MarkupStudioTool
-                                kind="strikeout"
+                            <StrikeoutTool
                                 baseFile={activeFile}
-                                onProcessedFile={commitDocument}
+                                onStrikeoutFile={commitDocument}
                             />
 
                         ) : activeTool === "redact" ? (

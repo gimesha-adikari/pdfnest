@@ -163,6 +163,41 @@ async function executeRotate(pdfDoc: PDFDocument, params: Record<string, any>): 
     return pdfDoc;
 }
 
+function hasComplexCatalogStructures(pdfDoc: PDFDocument): boolean {
+    const catalog = pdfDoc.catalog;
+    return (
+        catalog.has(PDFName.of("AcroForm")) ||
+        catalog.has(PDFName.of("Outlines")) ||
+        catalog.has(PDFName.of("Names")) ||
+        catalog.has(PDFName.of("PageLabels")) ||
+        catalog.has(PDFName.of("Dests")) ||
+        catalog.has(PDFName.of("StructTreeRoot")) ||
+        catalog.has(PDFName.of("OCProperties"))
+    );
+}
+
+async function copyPagesToFreshDoc(
+    srcDoc: PDFDocument,
+    pageIndices: number[]
+): Promise<PDFDocument> {
+    const newDoc = await PDFDocument.create();
+    const copiedPages = await newDoc.copyPages(srcDoc, pageIndices);
+    copiedPages.forEach((page) => newDoc.addPage(page));
+
+    if (srcDoc.getTitle()) newDoc.setTitle(srcDoc.getTitle()!);
+    if (srcDoc.getAuthor()) newDoc.setAuthor(srcDoc.getAuthor()!);
+    if (srcDoc.getSubject()) newDoc.setSubject(srcDoc.getSubject()!);
+    if (srcDoc.getKeywords()) {
+        const kw = srcDoc.getKeywords();
+        if (Array.isArray(kw)) newDoc.setKeywords(kw);
+        else if (typeof kw === "string") newDoc.setKeywords(kw.split(",").map((s) => s.trim()));
+    }
+    if (srcDoc.getCreator()) newDoc.setCreator(srcDoc.getCreator()!);
+    if (srcDoc.getProducer()) newDoc.setProducer(srcDoc.getProducer()!);
+
+    return newDoc;
+}
+
 async function executeSplit(pdfDoc: PDFDocument, params: Record<string, any>): Promise<PDFDocument> {
     const pagesStr = String(params.pages || "").trim();
     if (!pagesStr) {
@@ -176,16 +211,14 @@ async function executeSplit(pdfDoc: PDFDocument, params: Record<string, any>): P
         throw new ExecutionError("INVALID_INPUT", "No valid pages selected for extraction.");
     }
 
-    // Catalog-preserving in-place page pruning:
-    // Retains AcroForm fields, Outlines/Bookmarks, XMP Metadata stream, PageLabels, and Info Dict.
-    const keepSet = new Set(pageIndices);
-    for (let i = totalPages - 1; i >= 0; i--) {
-        if (!keepSet.has(i)) {
-            pdfDoc.removePage(i);
-        }
+    if (hasComplexCatalogStructures(pdfDoc)) {
+        throw new ExecutionError(
+            "UNSUPPORTED_CLIENT_OP",
+            "Document contains complex catalog structures (bookmarks, forms, attachments) requiring server-side pdfcpu engine."
+        );
     }
 
-    return pdfDoc;
+    return await copyPagesToFreshDoc(pdfDoc, pageIndices);
 }
 
 async function executeDelete(pdfDoc: PDFDocument, params: Record<string, any>): Promise<PDFDocument> {
@@ -197,18 +230,23 @@ async function executeDelete(pdfDoc: PDFDocument, params: Record<string, any>): 
     const totalPages = pdfDoc.getPageCount();
     const pageIndices = parsePageRangeString(pagesStr, totalPages);
 
-    // Remove duplicates and sort descending to avoid index shifting
     const uniqueDescending = Array.from(new Set(pageIndices)).sort((a, b) => b - a);
 
     if (uniqueDescending.length >= totalPages) {
         throw new ExecutionError("INVALID_INPUT", "Cannot remove every single page from the document.");
     }
 
-    uniqueDescending.forEach((idx) => {
-        pdfDoc.removePage(idx);
-    });
+    if (hasComplexCatalogStructures(pdfDoc)) {
+        throw new ExecutionError(
+            "UNSUPPORTED_CLIENT_OP",
+            "Document contains complex catalog structures (bookmarks, forms, attachments) requiring server-side pdfcpu engine."
+        );
+    }
 
-    return pdfDoc;
+    const deleteSet = new Set(uniqueDescending);
+    const keepIndices = Array.from({ length: totalPages }, (_, i) => i).filter((i) => !deleteSet.has(i));
+
+    return await copyPagesToFreshDoc(pdfDoc, keepIndices);
 }
 
 async function executeReorder(pdfDoc: PDFDocument, params: Record<string, any>): Promise<PDFDocument> {
@@ -226,29 +264,14 @@ async function executeReorder(pdfDoc: PDFDocument, params: Record<string, any>):
         throw new ExecutionError("INVALID_INPUT", "Invalid page ordering parameters.");
     }
 
-    // Catalog-preserving in-place reordering for simple 1-to-1 page permutations:
-    const isSimplePermutation =
-        pageIndices.length === totalPages &&
-        new Set(pageIndices).size === totalPages;
-
-    if (isSimplePermutation) {
-        const copiedPages = await pdfDoc.copyPages(pdfDoc, pageIndices);
-        for (let i = totalPages - 1; i >= 0; i--) {
-            pdfDoc.removePage(i);
-        }
-        copiedPages.forEach((page) => pdfDoc.addPage(page));
-        return pdfDoc;
+    if (hasComplexCatalogStructures(pdfDoc)) {
+        throw new ExecutionError(
+            "UNSUPPORTED_CLIENT_OP",
+            "Document contains complex catalog structures (bookmarks, forms, attachments) requiring server-side pdfcpu engine."
+        );
     }
 
-    const newDoc = await PDFDocument.create();
-    const copiedPages = await newDoc.copyPages(pdfDoc, pageIndices);
-    copiedPages.forEach((page) => newDoc.addPage(page));
-
-    if (pdfDoc.getTitle()) newDoc.setTitle(pdfDoc.getTitle()!);
-    if (pdfDoc.getAuthor()) newDoc.setAuthor(pdfDoc.getAuthor()!);
-    if (pdfDoc.getSubject()) newDoc.setSubject(pdfDoc.getSubject()!);
-
-    return newDoc;
+    return await copyPagesToFreshDoc(pdfDoc, pageIndices);
 }
 
 async function executeInsertBlank(pdfDoc: PDFDocument, params: Record<string, any>): Promise<PDFDocument> {

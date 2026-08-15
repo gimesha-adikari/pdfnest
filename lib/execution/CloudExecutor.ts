@@ -2,6 +2,7 @@
 
 import { uploadAndDownloadFile } from "@/lib/api";
 import { ExecutionError, ExecutionOptions } from "./types";
+import { buildWatermarkDescription } from "./pdfcpu/pdfcpuClient";
 
 export class CloudExecutor {
     static async execute(options: ExecutionOptions): Promise<Blob> {
@@ -22,21 +23,47 @@ export class CloudExecutor {
         }
 
         // 2. Attach parameters
-        Object.entries(params || {}).forEach(([key, val]) => {
-            if (val !== undefined && val !== null) {
-                if (typeof File !== "undefined" && val instanceof File) {
-                    formData.append(key, val);
-                } else {
-                    formData.append(key, typeof val === "object" ? JSON.stringify(val) : String(val));
+        const normalizedTool = normalizeTool(tool);
+
+        if (normalizedTool === "watermark") {
+            const watermarkType = params?.watermarkType || (params?.watermarkImage || params?.imageFile ? "image" : "text");
+            const description = buildWatermarkDescription(params || {});
+            formData.append("description", description);
+
+            if (watermarkType === "image") {
+                const imageFile = params?.watermarkImage || params?.imageFile;
+                if (typeof File !== "undefined" && imageFile instanceof File) {
+                    formData.append("watermarkImage", imageFile);
+                }
+            } else {
+                const textVal = String(params?.text ?? params?.watermarkText ?? "CONFIDENTIAL");
+                formData.append("text", textVal);
+            }
+        } else {
+            Object.entries(params || {}).forEach(([key, val]) => {
+                if (val !== undefined && val !== null) {
+                    if (typeof File !== "undefined" && val instanceof File) {
+                        formData.append(key, val);
+                    } else {
+                        formData.append(key, typeof val === "object" ? JSON.stringify(val) : String(val));
+                    }
+                }
+            });
+        }
+
+        // 3. Preserve password propagation for per-file passwords (password_0, password_1, ...) and single file_password
+        files.forEach((f, idx) => {
+            const pwd =
+                (options.passwords && options.passwords[idx]) ||
+                (f as any).originalPassword ||
+                (idx === 0 ? options.password : undefined);
+            if (pwd) {
+                formData.append(`password_${idx}`, pwd);
+                if (idx === 0) {
+                    formData.append("file_password", pwd);
                 }
             }
         });
-
-        // 3. Preserve password propagation for backend relocking pipeline
-        const originalPassword = options.password || (primaryFile as any).originalPassword;
-        if (originalPassword) {
-            formData.append("file_password", originalPassword);
-        }
 
         // 4. Resolve backend API endpoint
         const endpoint = getEndpointForTool(tool);
@@ -48,6 +75,25 @@ export class CloudExecutor {
             const message = err instanceof Error ? err.message : "Cloud execution rejected or failed.";
             throw new ExecutionError("CLOUD_FAILURE", message, err);
         }
+    }
+}
+
+function normalizeTool(tool: string): string {
+    switch (tool) {
+        case "rotate_pdf":
+            return "rotate";
+        case "split_pdf":
+            return "split";
+        case "merge_pdf":
+            return "merge";
+        case "delete_pages":
+            return "delete";
+        case "reorder_pages":
+            return "reorder";
+        case "watermark_pdf":
+            return "watermark";
+        default:
+            return tool;
     }
 }
 

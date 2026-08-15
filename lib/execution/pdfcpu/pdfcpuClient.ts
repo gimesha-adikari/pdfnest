@@ -7,12 +7,24 @@ import {
 } from "./types";
 
 let workerInstance: Worker | null = null;
+let customWorkerFactory: ((scriptUrl: string) => Worker) | null = null;
+
+export function setWorkerFactory(factory: ((scriptUrl: string) => Worker) | null): void {
+    if (workerInstance) {
+        try {
+            workerInstance.terminate();
+        } catch {}
+        workerInstance = null;
+    }
+    customWorkerFactory = factory;
+}
 
 const pendingRequests = new Map<
     string,
     {
         resolve: (blob: Blob) => void;
         reject: (error: ExecutionError) => void;
+        timeoutId?: ReturnType<typeof setTimeout>;
     }
 >();
 
@@ -21,7 +33,18 @@ function getOrCreateWorker(): Worker {
         return workerInstance;
     }
 
-    const worker = new Worker("/wasm/pdfcpu.worker.js");
+    if (customWorkerFactory) {
+        workerInstance = customWorkerFactory("/wasm/pdfcpu.worker.js");
+    } else if (typeof Worker !== "undefined") {
+        workerInstance = new Worker("/wasm/pdfcpu.worker.js");
+    } else {
+        throw new ExecutionError(
+            "CLIENT_FAILURE",
+            "Web Worker API is not available in the current runtime environment."
+        );
+    }
+
+    const worker = workerInstance;
 
     worker.onmessage = (
         event: MessageEvent<PdfcpuWorkerResponse>
@@ -31,6 +54,10 @@ function getOrCreateWorker(): Worker {
 
         if (!pending) {
             return;
+        }
+
+        if (pending.timeoutId) {
+            clearTimeout(pending.timeoutId);
         }
 
         pendingRequests.delete(data.id);
@@ -79,13 +106,14 @@ function getOrCreateWorker(): Worker {
             event
         );
 
-        pendingRequests.forEach(({ reject }) => {
+        pendingRequests.forEach(({ reject, timeoutId }) => {
+            if (timeoutId) clearTimeout(timeoutId);
             reject(error);
         });
 
         pendingRequests.clear();
 
-        worker.terminate();
+        try { worker.terminate(); } catch {}
         workerInstance = null;
     };
 
@@ -98,17 +126,17 @@ function getOrCreateWorker(): Worker {
             event
         );
 
-        pendingRequests.forEach(({ reject }) => {
+        pendingRequests.forEach(({ reject, timeoutId }) => {
+            if (timeoutId) clearTimeout(timeoutId);
             reject(error);
         });
 
         pendingRequests.clear();
 
-        worker.terminate();
+        try { worker.terminate(); } catch {}
         workerInstance = null;
     };
 
-    workerInstance = worker;
     return worker;
 }
 
@@ -147,7 +175,7 @@ function normalizeWatermarkType(
     return type;
 }
 
-function buildWatermarkDescription(
+export function buildWatermarkDescription(
     params: Record<string, any>
 ): string {
     let position = String(params.position || "cc").toLowerCase();
@@ -217,10 +245,33 @@ export async function executePdfcpuWasmWatermark(
     const worker = getOrCreateWorker();
     const requestId = createRequestId();
 
+    const timeoutMs = Number(params.timeoutMs) || 30000;
+
     return new Promise<Blob>((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+            if (pendingRequests.has(requestId)) {
+                pendingRequests.delete(requestId);
+
+                if (workerInstance) {
+                    try {
+                        workerInstance.terminate();
+                    } catch {}
+                    workerInstance = null;
+                }
+
+                reject(
+                    new ExecutionError(
+                        "CLIENT_FAILURE",
+                        `pdfcpu WASM worker timed out after ${timeoutMs / 1000}s.`
+                    )
+                );
+            }
+        }, timeoutMs);
+
         pendingRequests.set(requestId, {
             resolve,
             reject,
+            timeoutId,
         });
 
         if (watermarkType === "text") {
