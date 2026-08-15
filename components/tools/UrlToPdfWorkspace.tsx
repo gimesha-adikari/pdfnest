@@ -11,6 +11,7 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import { PdfProgressTracker } from "@/components/pdf/PdfProgressTracker";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { useAsyncTask } from "@/hooks/useAsyncTask";
+import { isPublicHttpUrl } from "@/lib/safeUrl";
 
 export default function UrlToPdfWorkspace() {
     const { requireAuth } = useAuth();
@@ -103,6 +104,11 @@ export default function UrlToPdfWorkspace() {
         requireAuth(async () => {
             if (!url || taskStatus === "PENDING" || taskStatus === "PROCESSING" || isSubmitting) return;
 
+            if (!isPublicHttpUrl(url)) {
+                notify("Enter a public http:// or https:// address.", "error");
+                return;
+            }
+
             try {
                 setIsPreviewLoadingLocal(true);
                 setSuccess(false);
@@ -153,7 +159,7 @@ export default function UrlToPdfWorkspace() {
     }, [url, paperSize, margins, requireAuth, submitTask, registerSubmission, taskStatus, isSubmitting]);
 
     useEffect(() => {
-        if (url && url.startsWith("http") && url.length > 12 && !taskId && !taskStatus) {
+        if (url && isPublicHttpUrl(url) && !taskId && !taskStatus) {
             const delayDebounceHook = setTimeout(() => {
                 generateLiveWebPreview();
             }, 800);
