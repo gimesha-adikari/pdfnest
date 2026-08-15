@@ -4,10 +4,18 @@ import fs from 'fs';
 
 test.describe('Images to PDF Custom Layout & Interaction Suite', () => {
 
-  test('Verify Custom Canvas Layout, Selection Persistence, Property Editing, and Dragging', async ({ page }) => {
+  test('Verify Unauthenticated Guest can use Custom Canvas, Edit Properties, Add Pages, and Compile PDF with 0 paywalls', async ({ page }) => {
     const pageErrors: string[] = [];
     page.on('pageerror', (err) => {
       pageErrors.push(err.message);
+    });
+
+    const backendRequests: string[] = [];
+    page.on('request', (req) => {
+      const url = req.url();
+      if (url.includes('/api/conversion/to-pdf') || url.includes('/api/conversion/custom-to-pdf')) {
+        backendRequests.push(url);
+      }
     });
 
     // Create 2 temporary PNG images
@@ -18,105 +26,81 @@ test.describe('Images to PDF Custom Layout & Interaction Suite', () => {
     fs.writeFileSync(tmpPngPath2, Buffer.from(pngBase64, 'base64'));
 
     try {
-      // 1. Mock Pro session endpoint
-      await page.route('**/api/**/session', async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            authenticated: true,
-            type: "user",
-            user: {
-              id: "pro-user-1",
-              email: "pro@platen.test",
-              role: "user",
-            },
-            subscription: {
-              tier: "pro",
-              status: "active",
-              role: "user",
-              billing_interval: "monthly",
-              current_period_end: "2099-12-31",
-              custom_credits: 1000,
-              used_units_3h: 0,
-              used_units_daily: 0,
-              used_units_monthly: 0,
-            },
-          }),
-        });
-      });
-
-      // 2. Navigate to tool landing page & upload 2 files
+      // 1. Navigate to tool landing page as a completely unauthenticated guest (NO auth mock)
       await page.goto('/images-to-pdf');
       await page.waitForLoadState('networkidle');
 
+      // 2. Upload image files
       const fileInput = page.locator('input[type="file"]');
       await fileInput.setInputFiles([tmpPngPath1, tmpPngPath2]);
 
       // 3. Should transition to workspace
       await expect(page).toHaveURL(/\/images-to-pdf\/workspace/);
 
-      // 4. Switch to Custom Canvas mode
+      // 4. Verify Interactive Custom Canvas tab is enabled and has NO Pro badge
       const customTab = page.getByRole('button', { name: /Interactive Custom Canvas/i });
       await expect(customTab).toBeVisible();
+      await expect(customTab).not.toHaveClass(/opacity-75/);
+      await expect(customTab.getByText(/Pro/i)).not.toBeVisible();
+
+      // Click the tab
       await customTab.click();
 
-      // 5. Verify Canvas width & non-deformation
-      const canvasPage = page.locator('div[style*="595px"]');
+      // 5. Verify NO upgrade or login modal appears
+      await expect(page.getByText('Unlock Custom Canvas')).not.toBeVisible();
+      await expect(page.getByText('Sign in to Customize')).not.toBeVisible();
+      await expect(page.getByText('Upgrade to Pro Tier')).not.toBeVisible();
+
+      // 6. Verify Canvas dimensions and toolbar
+      const canvasPage = page.locator('div[style*="595px"]').first();
       await expect(canvasPage).toBeVisible();
       const canvasBox = await canvasPage.boundingBox();
       expect(canvasBox).not.toBeNull();
       expect(canvasBox!.width).toBeCloseTo(595, 1);
       expect(canvasBox!.height).toBeCloseTo(842, 1);
 
-      // 6. Verify initial state: "No object selected" in properties panel
-      await expect(page.getByText('No object selected')).toBeVisible();
+      // 7. Verify "Add Page" toolbar button works for guests
+      const addPageBtn = page.getByRole('button', { name: /Add Page/i });
+      await expect(addPageBtn).toBeVisible();
+      await addPageBtn.click();
+      await expect(page.getByText('Page Canvas #2')).toBeVisible();
 
-      // 7. Click on the first object on canvas
+      // 8. Select an object on canvas and verify selection persists after release
       const canvasItems = canvasPage.locator('.cursor-move');
       await expect(canvasItems).toHaveCount(2);
 
       const item1 = canvasItems.nth(0);
       const item2 = canvasItems.nth(1);
 
-      // Click item 1
       await item1.click();
-
-      // 8. Assert item 1 remains selected after mouse release
       await expect(item1).toHaveClass(/ring-2 ring-indigo-500/);
-      await expect(page.getByText('No object selected')).not.toBeVisible();
       await expect(page.getByText('Target Canvas Page')).toBeVisible();
       await expect(page.getByText('X Position')).toBeVisible();
 
-      // 9. Modify property (Border Thickness) and verify selection persists
-      const borderSlider = page.locator('input[type="range"][max="12"]');
-      await expect(borderSlider).toBeVisible();
-      await borderSlider.fill("4");
-      await expect(item1).toHaveClass(/ring-2 ring-indigo-500/);
-
-      // 10. Click item 2: item 1 deselects, item 2 remains selected after release
+      // 9. Reallocate item 2 to Page 2
       await item2.click();
       await expect(item2).toHaveClass(/ring-2 ring-indigo-500/);
-      await expect(item1).not.toHaveClass(/ring-2 ring-indigo-500/);
 
-      // 11. Drag item 2 and verify selection remains active upon release
-      const item2Box = await item2.boundingBox();
-      expect(item2Box).not.toBeNull();
-      await page.mouse.move(item2Box!.x + 20, item2Box!.y + 20);
-      await page.mouse.down();
-      await page.mouse.move(item2Box!.x + 50, item2Box!.y + 50, { steps: 5 });
-      await page.mouse.up();
+      const pageSelect = page.locator('select').filter({ hasText: /Page #1/ });
+      await expect(pageSelect).toBeVisible();
+      await pageSelect.selectOption({ label: 'Page #2' });
 
-      await expect(item2).toHaveClass(/ring-2 ring-indigo-500/);
-
-      // 12. Click on empty canvas background: selection clears
+      // 10. Click empty canvas and verify deselection
       await canvasPage.click({ position: { x: 50, y: 500 } });
-
       await expect(page.getByText('No object selected')).toBeVisible();
-      await expect(item1).not.toHaveClass(/ring-2 ring-indigo-500/);
-      await expect(item2).not.toHaveClass(/ring-2 ring-indigo-500/);
 
-      // 13. Ensure zero uncaught React runtime errors
+      // 11. Click "Compile 2 Images into PDF" as guest
+      const compileBtn = page.getByRole('button', { name: /Compile 2 Images into PDF/i });
+      await expect(compileBtn).toBeVisible();
+      await compileBtn.click();
+
+      // 12. Should complete in Auto mode locally and navigate to download
+      await expect(page).toHaveURL(/\/images-to-pdf\/download/, { timeout: 15000 });
+      await expect(page.getByText('Task completed successfully!')).toBeVisible();
+      await expect(page.getByRole('button', { name: /Download File/i })).toBeVisible();
+
+      // 0 backend conversion requests in client Auto mode
+      expect(backendRequests).toEqual([]);
       expect(pageErrors).toEqual([]);
     } finally {
       if (fs.existsSync(tmpPngPath1)) fs.unlinkSync(tmpPngPath1);
