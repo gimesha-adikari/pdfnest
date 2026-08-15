@@ -255,9 +255,7 @@ export default function ImagesToPdfWorkspace() {
                 updatedSelection.push(item.id);
             }
         } else {
-            if (!selectedItemIds.includes(item.id)) {
-                updatedSelection = [item.id];
-            }
+            updatedSelection = [item.id];
         }
         setSelectedItemIds(updatedSelection);
 
@@ -542,7 +540,7 @@ export default function ImagesToPdfWorkspace() {
     };
 
     return (
-        <div className="w-full max-w-6xl mx-auto space-y-6">
+        <div className={`w-full ${activeTab === "custom" ? "max-w-7xl" : "max-w-6xl"} mx-auto space-y-6`}>
             <PdfToolHero
                 title="Convert Images to PDF"
                 description="Package multiple high-resolution graphics, photos, or documents into a single optimized vector PDF container."
@@ -808,10 +806,16 @@ export default function ImagesToPdfWorkspace() {
 
             {/* TAB 2: CUSTOM CANVAS MODE (INTERACTIVE PRO CANVAS) */}
             {activeTab === "custom" && isPro && (
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 min-h-[600px]">
+                <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start">
+                    {/* CANVAS VIEWPORT AREA (PRIORITY WIDTH, NEVER COMPRESSED) */}
                     <div
-                        onClick={() => setSelectedItemIds([])}
-                        className="lg:col-span-3 border border-[color:var(--border)] rounded-2xl p-8 overflow-auto flex flex-col gap-8 items-center max-h-[850px] shadow-inner bg-neutral-900/10 dark:bg-black/40"
+                        onPointerDown={(e) => {
+                            if (!(e.target as HTMLElement).closest('.cursor-move')) setSelectedItemIds([]);
+                        }}
+                        onClick={(e) => {
+                            if (!(e.target as HTMLElement).closest('.cursor-move')) setSelectedItemIds([]);
+                        }}
+                        className="w-full min-w-0 border border-[color:var(--border)] rounded-2xl p-6 lg:p-8 overflow-x-auto overflow-y-auto flex flex-col gap-8 items-center max-h-[850px] shadow-inner bg-neutral-900/10 dark:bg-black/40"
                     >
                         {Array.from({length: customPagesCount}).map((_, pageIdx) => {
                             const itemsOnThisPage = canvasItems.filter((item) => item.pageIndex === pageIdx);
@@ -823,14 +827,21 @@ export default function ImagesToPdfWorkspace() {
                                         <span>{itemsOnThisPage.length} Object{itemsOnThisPage.length !== 1 ? "s" : ""} Placed</span>
                                     </div>
 
+                                    {/* Standalone non-deformed ISO A4 Canvas Container */}
                                     <div
                                         ref={(el) => {
                                             canvasRefs.current[pageIdx] = el;
                                         }}
                                         style={{ width: `${canvasWidth}px`, height: `${canvasHeight}px` }}
-                                        className="relative bg-white dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-800 shadow-2xl rounded-sm overflow-hidden select-none"
+                                        className="w-[595px] h-[842px] shrink-0 relative bg-white dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-800 shadow-2xl rounded-sm overflow-hidden select-none"
                                         onPointerMove={handleInteractionMove}
                                         onPointerUp={handleInteractionEnd}
+                                        onPointerDown={(e) => {
+                                            if (!(e.target as HTMLElement).closest('.cursor-move')) setSelectedItemIds([]);
+                                        }}
+                                        onClick={(e) => {
+                                            if (!(e.target as HTMLElement).closest('.cursor-move')) setSelectedItemIds([]);
+                                        }}
                                     >
                                         {/* Canvas Grid Background Guide */}
                                         <div
@@ -850,6 +861,10 @@ export default function ImagesToPdfWorkspace() {
                                                 <div
                                                     key={item.id}
                                                     onPointerDown={(e) => handleInteractionStart(e, item, "move")}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedItemIds([item.id]);
+                                                    }}
                                                     style={{
                                                         transform: `translate3d(${item.x}px, ${item.y}px, 0px)`,
                                                         width: `${item.width}px`,
@@ -861,7 +876,7 @@ export default function ImagesToPdfWorkspace() {
                                                     }}
                                                     className={`absolute group cursor-move touch-none ${
                                                         isSelected
-                                                            ? "ring-2 ring-indigo-500 shadow-lg"
+                                                            ? "ring-2 ring-indigo-500 shadow-xl"
                                                             : "hover:ring-1 hover:ring-indigo-500/50"
                                                     }`}
                                                 >
@@ -878,19 +893,23 @@ export default function ImagesToPdfWorkspace() {
                                                         <>
                                                             <div
                                                                 onPointerDown={(e) => handleInteractionStart(e, item, "resize-nw")}
-                                                                className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-indigo-600 rounded-full cursor-nw-resize z-30"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="absolute -top-1.5 -left-1.5 w-3.5 h-3.5 bg-white border-2 border-indigo-600 rounded-full cursor-nw-resize z-30 shadow-md"
                                                             />
                                                             <div
                                                                 onPointerDown={(e) => handleInteractionStart(e, item, "resize-ne")}
-                                                                className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-indigo-600 rounded-full cursor-ne-resize z-30"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-white border-2 border-indigo-600 rounded-full cursor-ne-resize z-30 shadow-md"
                                                             />
                                                             <div
                                                                 onPointerDown={(e) => handleInteractionStart(e, item, "resize-se")}
-                                                                className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-indigo-600 rounded-full cursor-se-resize z-30"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-white border-2 border-indigo-600 rounded-full cursor-se-resize z-30 shadow-md"
                                                             />
                                                             <div
                                                                 onPointerDown={(e) => handleInteractionStart(e, item, "resize-sw")}
-                                                                className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-indigo-600 rounded-full cursor-sw-resize z-30"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="absolute -bottom-1.5 -left-1.5 w-3.5 h-3.5 bg-white border-2 border-indigo-600 rounded-full cursor-sw-resize z-30 shadow-md"
                                                             />
                                                         </>
                                                     )}
@@ -903,30 +922,34 @@ export default function ImagesToPdfWorkspace() {
                         })}
                     </div>
 
-                    {/* Canvas Controls Sidebar */}
-                    <div className="border border-[color:var(--border)] rounded-2xl p-5 bg-[color:var(--card)] flex flex-col justify-between space-y-6">
+                    {/* Canvas Controls Sidebar (Sticky 340px) */}
+                    <div className="w-full lg:w-[340px] shrink-0 border border-[color:var(--border)] rounded-2xl p-5 bg-[color:var(--card)] flex flex-col justify-between space-y-6 sticky top-6 shadow-sm">
                         <div className="space-y-4">
                             <h4 className="text-xs font-bold text-[color:var(--foreground)] uppercase tracking-wider flex items-center gap-2">
                                 <SlidersHorizontal size={14} className="text-indigo-500" /> Canvas Properties
                             </h4>
 
                             {leadingItem ? (
-                                <div className="space-y-3">
+                                <div className="space-y-3.5">
                                     <div className="flex items-center justify-between pb-2 border-b border-[color:var(--border)]">
-                                        <span className="text-xs font-bold text-[color:var(--foreground)] truncate max-w-[140px]">
-                                            {leadingItem.name}
-                                        </span>
+                                        <div className="flex items-center gap-1.5 truncate max-w-[170px]">
+                                            <div className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
+                                            <span className="text-xs font-bold text-[color:var(--foreground)] truncate" title={leadingItem.name}>
+                                                {leadingItem.name}
+                                            </span>
+                                        </div>
                                         <button
                                             type="button"
                                             onClick={() => deleteSelectedCanvasItem(leadingItem.id)}
-                                            className="text-xs text-red-500 hover:underline flex items-center gap-1"
+                                            className="text-xs text-red-500 hover:text-red-600 hover:underline flex items-center gap-1 font-medium"
                                         >
                                             <Trash2 size={12} /> Remove
                                         </button>
                                     </div>
 
+                                    {/* Page Allocation */}
                                     <div className="space-y-1">
-                                        <label className="block text-[10px] text-[color:var(--muted)] font-bold">Target Page</label>
+                                        <label className="block text-[10px] text-[color:var(--muted)] font-bold uppercase tracking-wider">Target Canvas Page</label>
                                         <select
                                             value={leadingItem.pageIndex}
                                             onChange={(e) => {
@@ -934,7 +957,7 @@ export default function ImagesToPdfWorkspace() {
                                                 updateSelectedItemsFields(() => ({ pageIndex: nextP }));
                                                 pushToHistory(canvasItems);
                                             }}
-                                            className="w-full bg-[color:var(--background)] border border-[color:var(--border)] rounded-lg text-xs p-2 text-[color:var(--foreground)]"
+                                            className="w-full bg-[color:var(--background)] border border-[color:var(--border)] rounded-lg text-xs p-2 text-[color:var(--foreground)] font-medium"
                                         >
                                             {Array.from({ length: customPagesCount }).map((_, p) => (
                                                 <option key={p} value={p}>Page #{p + 1}</option>
@@ -942,10 +965,45 @@ export default function ImagesToPdfWorkspace() {
                                         </select>
                                     </div>
 
+                                    {/* Position (X, Y) */}
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="space-y-1">
+                                            <label className="block text-[10px] text-[color:var(--muted)] font-bold uppercase tracking-wider">X Position</label>
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                max={canvasWidth - leadingItem.width}
+                                                value={leadingItem.x}
+                                                onChange={(e) => {
+                                                    const val = Math.max(0, Math.min(canvasWidth - leadingItem.width, Number(e.target.value)));
+                                                    updateSelectedItemsFields(() => ({ x: val }));
+                                                }}
+                                                onBlur={() => pushToHistory(canvasItems)}
+                                                className="w-full bg-[color:var(--background)] border border-[color:var(--border)] rounded-lg text-xs p-2 text-[color:var(--foreground)] font-mono"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="block text-[10px] text-[color:var(--muted)] font-bold uppercase tracking-wider">Y Position</label>
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                max={canvasHeight - leadingItem.height}
+                                                value={leadingItem.y}
+                                                onChange={(e) => {
+                                                    const val = Math.max(0, Math.min(canvasHeight - leadingItem.height, Number(e.target.value)));
+                                                    updateSelectedItemsFields(() => ({ y: val }));
+                                                }}
+                                                onBlur={() => pushToHistory(canvasItems)}
+                                                className="w-full bg-[color:var(--background)] border border-[color:var(--border)] rounded-lg text-xs p-2 text-[color:var(--foreground)] font-mono"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Dimensions (Width, Height) */}
                                     <div className="space-y-1">
                                         <div className="flex justify-between text-[10px] text-[color:var(--muted)] font-semibold">
-                                            <span>Scale (Width)</span>
-                                            <span>{leadingItem.width}px</span>
+                                            <span className="uppercase tracking-wider font-bold">Dimensions (Width × Height)</span>
+                                            <span className="font-mono text-indigo-500 font-bold">{leadingItem.width} × {leadingItem.height}px</span>
                                         </div>
                                         <input
                                             type="range"
@@ -964,30 +1022,42 @@ export default function ImagesToPdfWorkspace() {
                                                 });
                                             }}
                                             onMouseUp={() => pushToHistory(canvasItems)}
-                                            className="w-full accent-indigo-500 h-1 bg-[color:var(--border)] rounded-lg appearance-none cursor-pointer"
+                                            className="w-full accent-indigo-500 h-1.5 bg-[color:var(--border)] rounded-lg appearance-none cursor-pointer"
                                         />
                                     </div>
 
+                                    {/* Border Thickness & Color */}
                                     <div className="space-y-1">
                                         <div className="flex justify-between text-[10px] text-[color:var(--muted)] font-semibold">
-                                            <span>Border Thickness</span>
-                                            <span>{leadingItem.borderWidth}px</span>
+                                            <span className="uppercase tracking-wider font-bold">Border Thickness</span>
+                                            <span className="font-mono">{leadingItem.borderWidth}px</span>
                                         </div>
-                                        <input
-                                            type="range"
-                                            min="0"
-                                            max="12"
-                                            value={leadingItem.borderWidth}
-                                            onChange={(e) => updateSelectedItemsFields(() => ({ borderWidth: Number(e.target.value) }))}
-                                            onMouseUp={() => pushToHistory(canvasItems)}
-                                            className="w-full accent-indigo-500 h-1 bg-[color:var(--border)] rounded-lg appearance-none cursor-pointer"
-                                        />
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="range"
+                                                min="0"
+                                                max="12"
+                                                value={leadingItem.borderWidth}
+                                                onChange={(e) => updateSelectedItemsFields(() => ({ borderWidth: Number(e.target.value) }))}
+                                                onMouseUp={() => pushToHistory(canvasItems)}
+                                                className="flex-1 accent-indigo-500 h-1.5 bg-[color:var(--border)] rounded-lg appearance-none cursor-pointer"
+                                            />
+                                            <input
+                                                type="color"
+                                                value={leadingItem.borderColor || "#000000"}
+                                                onChange={(e) => updateSelectedItemsFields(() => ({ borderColor: e.target.value }))}
+                                                onBlur={() => pushToHistory(canvasItems)}
+                                                className="w-7 h-7 p-0.5 rounded border border-[color:var(--border)] bg-[color:var(--background)] cursor-pointer"
+                                                title="Border Color"
+                                            />
+                                        </div>
                                     </div>
 
+                                    {/* Z-Index Layer */}
                                     <div className="space-y-1">
                                         <div className="flex justify-between text-[10px] text-[color:var(--muted)] font-semibold">
-                                            <span>Layer (Z-Index)</span>
-                                            <span>{leadingItem.zIndex}</span>
+                                            <span className="uppercase tracking-wider font-bold">Layer (Z-Index)</span>
+                                            <span className="font-mono text-purple-500 font-bold">{leadingItem.zIndex}</span>
                                         </div>
                                         <input
                                             type="range"
@@ -999,14 +1069,16 @@ export default function ImagesToPdfWorkspace() {
                                                 updateSelectedItemsFields(() => ({ zIndex: baseVal }));
                                             }}
                                             onMouseUp={() => pushToHistory(canvasItems)}
-                                            className="w-full accent-purple-500 h-1 bg-[color:var(--border)] rounded-lg appearance-none cursor-pointer"
+                                            className="w-full accent-purple-500 h-1.5 bg-[color:var(--border)] rounded-lg appearance-none cursor-pointer"
                                         />
                                     </div>
                                 </div>
                             ) : (
-                                <p className="text-[11px] text-[color:var(--muted)] italic text-center py-6">
-                                    Click any image on the canvas to adjust its properties.
-                                </p>
+                                <div className="rounded-xl border border-dashed border-[color:var(--border)] p-6 text-center text-xs text-[color:var(--muted)] space-y-2">
+                                    <Move size={20} className="mx-auto text-[color:var(--muted)] opacity-60" />
+                                    <p className="font-medium">No object selected</p>
+                                    <p className="text-[10px] opacity-75">Click on any image on the canvas to inspect and edit its size, position, border, and layer order.</p>
+                                </div>
                             )}
                         </div>
 
