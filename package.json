@@ -10,6 +10,7 @@
     "test": "npx playwright test",
     "test:smoke": "npx playwright test smoke.spec.ts",
     "test:ui": "npx playwright test --ui",
+    "test:unit": "npx tsx tests/runUnitTests.ts",
     "test:fixtures": "npx tsx tests/generate-fixtures.ts"
   },
   "dependencies": {
