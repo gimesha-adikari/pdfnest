@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect, useRef, type PointerEvent } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback, type PointerEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
     Highlighter,
@@ -278,10 +278,16 @@ export default function HighlightPdfWorkspace() {
     const [job, setJob] = useState<JobRecord | null>(null);
     const [uploadProgress, setUploadProgress] = useState<number>(0);
     const [jobError, setJobError] = useState<string | null>(null);
+    const [pdfLoadError, setPdfLoadError] = useState<string | null>(null);
+    const [canvasElement, setCanvasElement] = useState<HTMLCanvasElement | null>(null);
+    const canvasRef = useCallback((node: HTMLCanvasElement | null) => {
+        setCanvasElement(node);
+    }, []);
 
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const renderTaskRef = useRef<PdfJsRenderTask | null>(null);
+    const loadingTaskRef = useRef<any>(null);
+    const pdfDocRef = useRef<any>(null);
     const analysisAbortRef = useRef<AbortController | null>(null);
     const jobAbortRef = useRef<AbortController | null>(null);
     const isDrawingRef = useRef(false);
@@ -306,12 +312,12 @@ export default function HighlightPdfWorkspace() {
     const canUseSmartMode = pageKind !== "scanned" && pageKind !== "blank";
     const currentPageBoxes = useMemo(() => boxes.filter((b) => b.page === currentPage), [boxes, currentPage]);
 
-    // ─── Session-based preview for scanned pages ─────────────────────────────
+    // ─── Session-based preview for scanned pages (supplementary) ─────────────
     const { src: scannedPreviewSrc, isLoading: scannedPreviewLoading } = usePreview({
         file,
         page: currentPage,
         scale: 2.0,
-        enabled: isScannedPage,
+        enabled: isScannedPage && !pdfDocument,
         onError: (err: PreviewError) => console.error("Failed to render scanned page preview:", err.message),
     });
 
@@ -371,6 +377,15 @@ export default function HighlightPdfWorkspace() {
     }, [historyPast, historyFuture, boxes]);
 
     useEffect(() => {
+        if (loadingTaskRef.current) {
+            try { loadingTaskRef.current.destroy(); } catch {}
+            loadingTaskRef.current = null;
+        }
+        if (pdfDocRef.current) {
+            try { pdfDocRef.current.destroy(); } catch {}
+            pdfDocRef.current = null;
+        }
+
         if (!file) {
             setPdfDocument(null);
             setTotalPages(0);
@@ -385,6 +400,7 @@ export default function HighlightPdfWorkspace() {
             setAnalysisLoaded(false);
             setAnalysisError(null);
             setIsAnalyzing(false);
+            setPdfLoadError(null);
 
             setJobId("");
             setJob(null);
@@ -393,24 +409,76 @@ export default function HighlightPdfWorkspace() {
             return;
         }
 
+        let isCancelled = false;
+
         const loadPdf = async () => {
             try {
                 setIsRenderingCanvas(true);
+                setPdfLoadError(null);
+
                 const pdfjsLib = await loadPdfJs();
                 const arrayBuffer = await file.arrayBuffer();
-                const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+                if (isCancelled) return;
+
+                // Safe clone of buffer bytes to prevent worker transfer detachment from invalidating other readers
+                const clonedData = new Uint8Array(arrayBuffer.slice(0));
+
+                const maybePassword = (file as CustomPdfFile).originalPassword;
+                const docParams: Record<string, any> = { data: clonedData };
+                if (maybePassword?.trim()) {
+                    docParams.password = maybePassword.trim();
+                }
+
+                const loadingTask = pdfjsLib.getDocument(docParams);
+                loadingTaskRef.current = loadingTask;
+
+                const pdf = await loadingTask.promise;
+                if (isCancelled) {
+                    try { (pdf as any)?.destroy?.(); } catch {}
+                    return;
+                }
+
+                loadingTaskRef.current = null;
+                pdfDocRef.current = pdf;
 
                 setPdfDocument(pdf as unknown as PdfJsDocument);
                 setTotalPages(pdf.numPages);
                 setCurrentPage(1);
-            } catch (err) {
+                setPdfLoadError(null);
+            } catch (err: unknown) {
+                if (isCancelled) return;
+                loadingTaskRef.current = null;
                 console.error("Failed to parse document context framework:", err);
+
+                const errName = (err as any)?.name || "";
+                const errMsg = (err as any)?.message || String(err);
+
+                if (errName === "PasswordException" || errMsg.toLowerCase().includes("password")) {
+                    setPdfLoadError("This document is password-protected. Please unlock it to annotate.");
+                } else if (errName === "InvalidPDFException" || errMsg.toLowerCase().includes("invalid")) {
+                    setPdfLoadError("Invalid or corrupted PDF document.");
+                } else {
+                    setPdfLoadError("Could not render document preview.");
+                }
+
+                setPdfDocument(null);
+                setTotalPages(0);
             } finally {
-                setIsRenderingCanvas(false);
+                if (!isCancelled) {
+                    setIsRenderingCanvas(false);
+                }
             }
         };
 
         loadPdf();
+
+        return () => {
+            isCancelled = true;
+            if (loadingTaskRef.current) {
+                try { loadingTaskRef.current.destroy(); } catch {}
+                loadingTaskRef.current = null;
+            }
+        };
     }, [file]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
@@ -491,30 +559,29 @@ export default function HighlightPdfWorkspace() {
         }
     }, [currentPageAnalysis, highlightMode]);
 
-
-
-
-
     useEffect(() => {
-        if (!pdfDocument || !canvasRef.current) return;
+        if (!pdfDocument || !canvasElement) return;
+
+        let isCancelled = false;
 
         const renderPage = async () => {
             try {
                 setIsRenderingCanvas(true);
-                if (renderTaskRef.current) renderTaskRef.current.cancel();
+                if (renderTaskRef.current) {
+                    try { renderTaskRef.current.cancel(); } catch {}
+                }
 
                 const page = await pdfDocument.getPage(currentPage);
-                const canvas = canvasRef.current;
-                if (!canvas) return;
+                if (isCancelled || !canvasElement) return;
 
-                const ctx = canvas.getContext("2d");
+                const ctx = canvasElement.getContext("2d");
                 if (!ctx) return;
 
                 const baseViewport = page.getViewport({ scale: 1.0 });
                 const renderViewport = page.getViewport({ scale: 1.5 });
 
-                canvas.width = renderViewport.width;
-                canvas.height = renderViewport.height;
+                canvasElement.width = renderViewport.width;
+                canvasElement.height = renderViewport.height;
 
                 const renderTask = page.render({
                     canvasContext: ctx,
@@ -522,43 +589,47 @@ export default function HighlightPdfWorkspace() {
                 });
                 renderTaskRef.current = renderTask;
                 await renderTask.promise;
+                if (isCancelled) return;
                 renderTaskRef.current = null;
 
-                setTimeout(() => {
-                    if (canvasRef.current) {
-                        setPdfDimensions({ width: baseViewport.width, height: baseViewport.height });
-                        setDisplayDimensions({
-                            width: canvasRef.current.clientWidth,
-                            height: canvasRef.current.clientHeight,
-                        });
-                    }
-                }, 0);
+                if (canvasElement) {
+                    setPdfDimensions({ width: baseViewport.width, height: baseViewport.height });
+                    setDisplayDimensions({
+                        width: canvasElement.clientWidth,
+                        height: canvasElement.clientHeight,
+                    });
+                }
             } catch (err: unknown) {
                 if ((err as Error)?.name !== "RenderingCancelledException") {
                     console.error("Canvas render skipped:", err);
                 }
             } finally {
-                setIsRenderingCanvas(false);
+                if (!isCancelled) {
+                    setIsRenderingCanvas(false);
+                }
             }
         };
 
         renderPage();
 
         const updateDisplaySize = () => {
-            if (canvasRef.current) {
+            if (canvasElement) {
                 setDisplayDimensions({
-                    width: canvasRef.current.clientWidth,
-                    height: canvasRef.current.clientHeight,
+                    width: canvasElement.clientWidth,
+                    height: canvasElement.clientHeight,
                 });
             }
         };
 
         window.addEventListener("resize", updateDisplaySize);
         return () => {
+            isCancelled = true;
             window.removeEventListener("resize", updateDisplaySize);
-            if (renderTaskRef.current) renderTaskRef.current.cancel();
+            if (renderTaskRef.current) {
+                try { renderTaskRef.current.cancel(); } catch {}
+            }
         };
-    }, [pdfDocument, currentPage]);
+    }, [pdfDocument, currentPage, canvasElement]);
 
     useEffect(() => {
         if (!jobId) return;
@@ -1079,6 +1150,13 @@ export default function HighlightPdfWorkspace() {
                             className="w-full flex flex-col items-center justify-center bg-gray-500/5 dark:bg-black/20 rounded-xl border border-[color:var(--border)] p-4 relative overflow-hidden min-h-[420px]"
                             onClick={() => setActiveId(null)}
                         >
+                            {pdfLoadError && (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center text-red-500 bg-red-500/5 rounded-xl z-20">
+                                    <p className="font-semibold text-sm">{pdfLoadError}</p>
+                                    <p className="text-xs text-[color:var(--muted)] mt-1">Please try uploading a valid, unlocked PDF file.</p>
+                                </div>
+                            )}
+
                             <div
                                 ref={containerRef}
                                 className="relative shadow-xl rounded border border-gray-400/20 bg-white max-w-full h-auto cursor-crosshair select-none touch-none overflow-hidden"
@@ -1089,23 +1167,15 @@ export default function HighlightPdfWorkspace() {
                             >
                                 <canvas
                                     ref={canvasRef}
-                                    className={`max-w-full h-auto block rounded pointer-events-none ${
-                                        isScannedPage ? "opacity-0" : "opacity-100"
-                                    }`}
+                                    className="max-w-full h-auto block rounded pointer-events-none opacity-100"
                                 />
 
-                                {isScannedPage && scannedPreviewSrc && (
+                                {isScannedPage && scannedPreviewSrc && !pdfDocument && (
                                     <img
                                         src={scannedPreviewSrc}
                                         alt={`Scanned page preview ${currentPage}`}
                                         className="absolute inset-0 w-full h-full object-contain rounded pointer-events-none"
                                     />
-                                )}
-
-                                {isScannedPage && !scannedPreviewSrc && (
-                                    <div className="absolute inset-0 flex items-center justify-center text-xs text-[color:var(--muted)]">
-                                        Preparing scanned preview...
-                                    </div>
                                 )}
 
                                 {boxes
