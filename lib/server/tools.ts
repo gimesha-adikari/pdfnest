@@ -1,5 +1,17 @@
 import { fetchJson } from "@/lib/api";
-import { NAV_TOOLS_FALLBACK, ToolItem } from "@/lib/toolsData";
+import { NAV_TOOLS_FALLBACK, ToolFAQ, ToolItem } from "@/lib/toolsData";
+
+function parseJsonField<T>(raw: unknown, field: string, toolHref: string): T[] {
+    if (typeof raw !== "string" || raw.trim() === "") return [];
+
+    try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? (parsed as T[]) : [];
+    } catch (err) {
+        console.warn(`Ignoring malformed ${field} for tool "${toolHref}":`, err);
+        return [];
+    }
+}
 
 export function normalizeTool(rawTool: any): ToolItem | null {
     if (!rawTool || typeof rawTool !== "object") return null;
@@ -24,27 +36,19 @@ export function normalizeTool(rawTool: any): ToolItem | null {
         category: (category || "organize").toLowerCase(),
         keywords: Array.isArray(rawTool.keywords)
             ? rawTool.keywords
-            : (rawTool.keywordsJson || rawTool.KeywordsJson)
-                ? JSON.parse(rawTool.keywordsJson || rawTool.KeywordsJson || "[]")
-                : [],
+            : parseJsonField<string>(rawTool.keywordsJson || rawTool.KeywordsJson, "keywordsJson", cleanHref),
         seoTitle: rawTool.seoTitle || rawTool.SeoTitle || "",
         seoDescription: rawTool.seoDescription || rawTool.SeoDescription || "",
         intent: rawTool.intent || rawTool.Intent || "",
         related: Array.isArray(rawTool.related)
             ? rawTool.related
-            : (rawTool.relatedJson || rawTool.RelatedJson)
-                ? JSON.parse(rawTool.relatedJson || rawTool.RelatedJson || "[]")
-                : [],
+            : parseJsonField<string>(rawTool.relatedJson || rawTool.RelatedJson, "relatedJson", cleanHref),
         faq: Array.isArray(rawTool.faq)
             ? rawTool.faq
-            : (rawTool.faqJson || rawTool.FaqJson)
-                ? JSON.parse(rawTool.faqJson || rawTool.FaqJson || "[]")
-                : [],
+            : parseJsonField<ToolFAQ>(rawTool.faqJson || rawTool.FaqJson, "faqJson", cleanHref),
         features: Array.isArray(rawTool.features)
             ? rawTool.features
-            : (rawTool.featuresJson || rawTool.FeaturesJson)
-                ? JSON.parse(rawTool.featuresJson || rawTool.FeaturesJson || "[]")
-                : [],
+            : parseJsonField<string>(rawTool.featuresJson || rawTool.FeaturesJson, "featuresJson", cleanHref),
         isNew: rawTool.isNew !== undefined ? rawTool.isNew : rawTool.IsNew || false,
         accept: rawTool.accept || rawTool.Accept || ".pdf",
         multiple: rawTool.multiple !== undefined ? rawTool.multiple : rawTool.Multiple || false,
@@ -69,8 +73,10 @@ export async function getTools(): Promise<ToolItem[]> {
             }
         }
 
+        console.warn("No active tools returned by the backend; using the bundled fallback list.");
         return NAV_TOOLS_FALLBACK.map(normalizeTool).filter((t): t is ToolItem => t !== null);
-    } catch {
+    } catch (err) {
+        console.error("Failed to load tools from the backend; using the bundled fallback list:", err);
         return NAV_TOOLS_FALLBACK.map(normalizeTool).filter((t): t is ToolItem => t !== null);
     }
 }

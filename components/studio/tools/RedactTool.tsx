@@ -477,8 +477,6 @@ export default function RedactTool({ baseFile, onRedactedFile }: RedactToolProps
                 setSuccess(true);
                 notify("Redacted PDF loaded back into Studio.","success");
             } catch (error) {
-                if (error ==null)
-                    return
                 console.error(error);
                 handleClientError(error);
             } finally {

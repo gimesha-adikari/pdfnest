@@ -71,7 +71,9 @@ export default function UrlToPdfWorkspace() {
                     if (previewUrl) window.URL.revokeObjectURL(previewUrl);
                     setPreviewUrl(window.URL.createObjectURL(imageBlob));
                 })
-                .catch(() => {});
+                .catch((err) => {
+                    console.warn("Could not render the preview image for this capture:", err);
+                });
 
             setSuccess(true);
             setIsPreviewLoadingLocal(false);

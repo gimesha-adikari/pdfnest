@@ -89,7 +89,8 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
                     setProgress(data.progress || 0);
                 }
             })
-            .catch(() => {
+            .catch((err) => {
+                console.warn("Failed to restore the stored task state:", err);
             });
 
         return () => {
@@ -105,7 +106,9 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
         let timeoutId: ReturnType<typeof setTimeout>;
         let currentInterval = 1000;
         const MAX_INTERVAL = 8000;
+        const MAX_CONSECUTIVE_FAILURES = 5;
         let lastProgress = -1;
+        let consecutiveFailures = 0;
 
         const poll = async () => {
             try {
@@ -120,13 +123,14 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
                 }
 
                 if (!res.ok) {
-                    scheduleNext();
+                    handlePollFailure(new Error(`Status request failed (${res.status})`));
                     return;
                 }
 
                 const data: TaskStatusResponse = await res.json();
                 if (!isMounted) return;
 
+                consecutiveFailures = 0;
                 setProgress(data.progress || 0);
 
                 if (data.status === "COMPLETED") {
@@ -161,9 +165,27 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
                 }
 
                 scheduleNext();
-            } catch {
-                scheduleNext();
+            } catch (err) {
+                if (!isMounted) return;
+                handlePollFailure(err);
             }
+        };
+
+        // Transient status-request failures are retried; a sustained outage is
+        // surfaced instead of leaving the UI polling forever.
+        const handlePollFailure = (err: unknown) => {
+            consecutiveFailures += 1;
+            console.warn(`Task status poll failed (attempt ${consecutiveFailures}):`, err);
+
+            if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                setStatus("FAILED");
+                const message = "Lost contact with the server while processing this task.";
+                setError(message);
+                updateStoredTask(taskId, { status: "FAILED", error: message });
+                return;
+            }
+
+            scheduleNext();
         };
 
         const scheduleNext = () => {
@@ -247,10 +269,16 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
                     idempotencyKeyRef.current = "";
                     return null;
                 }
+
+                console.warn(`Task submission attempt ${attempt + 1} failed, retrying:`, err);
             }
         }
 
+        // Every attempt returned 409, so the task was never confirmed.
         setIsSubmitting(false);
+        setStatus("FAILED");
+        setError("The server did not confirm this task. Please try again.");
+        idempotencyKeyRef.current = "";
         return null;
     };
 
@@ -297,6 +325,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
             }
         } catch (err) {
             console.error("Cancellation request error:", err);
+            setError(err instanceof Error ? err.message : "Could not cancel this task.");
         } finally {
             setIsCancelling(false);
         }

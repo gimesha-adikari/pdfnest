@@ -176,7 +176,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     }
                 );
             }
-        } catch {
+        } catch (err) {
+            console.warn("Session refresh failed; continuing unauthenticated:", err);
+
             setUser(null);
             setGuest(null);
             setSubscription(null);
@@ -208,7 +210,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
             await fetchJson("/auth/logout", {
                 method: "POST",
-            }).catch(() => {});
+            }).catch((err) => {
+                // The local session is cleared regardless, but the failure must not vanish.
+                console.warn("Logout request failed; clearing the local session anyway:", err);
+            });
         } finally {
             setUser(null);
             setGuest(null);
