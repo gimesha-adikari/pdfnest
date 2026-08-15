@@ -57,6 +57,7 @@ test.describe("PDFNest Truth-Based Capability & Offline Architecture", () => {
         await expect(page.locator("main a[href='/add-text']")).toBeVisible();
         await expect(page.locator("main a[href='/images-to-pdf']")).toBeVisible();
         await expect(page.locator("main a[href='/crop-pdf']")).toBeVisible();
+        await expect(page.locator("main a[href='/pdf-to-images']")).toBeVisible();
         await expect(page.locator("main a[href='/edit-metadata']")).toBeVisible();
         await expect(page.locator("main a[href='/studio']")).toBeVisible();
     });

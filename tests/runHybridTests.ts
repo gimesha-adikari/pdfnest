@@ -6,6 +6,7 @@ import { runPageNumbersExecutionTests } from "./unit/pageNumbersExecution.test";
 import { runAddTextExecutionTests } from "./unit/addTextExecution.test";
 import { runImagesToPdfExecutionTests } from "./unit/imagesToPdfExecution.test";
 import { runCropExecutionTests } from "./unit/cropExecution.test";
+import { runPdfToImagesExecutionTests } from "./unit/pdfToImagesExecution.test";
 import { setupNodeWasmWorker } from "./setupNodeWasmWorker";
 
 async function main() {
@@ -19,6 +20,7 @@ async function main() {
     const resAddText = await runAddTextExecutionTests();
     await runImagesToPdfExecutionTests();
     await runCropExecutionTests();
+    await runPdfToImagesExecutionTests();
 
     const totalFailed =
         resRotate.failed +
