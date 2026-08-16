@@ -5,6 +5,8 @@ import { ExecutionError, ExecutionOptions } from "./types";
 import {
     buildPageNumbersDescription,
     executePdfcpuWasmAddText,
+    executePdfcpuWasmLock,
+    executePdfcpuWasmUnlock,
     executePdfcpuWasmWatermark,
 } from "./pdfcpu/pdfcpuClient";
 import { executeImagesToPdf } from "./images/imageToPdfClient";
@@ -28,6 +30,8 @@ export class ClientExecutor {
             "images_to_pdf",
             "crop",
             "pdf_to_images",
+            "unlock",
+            "lock",
         ].includes(normalized);
     }
 
@@ -51,6 +55,17 @@ export class ClientExecutor {
 
         const file = files[0];
         const originalPassword = options.password || (file as any).originalPassword;
+
+        if (normalizedTool === "lock") {
+            const lockPassword = options.password || params.password || (file as any).originalPassword;
+            const keyLength = Number(params.keyLength) || 128;
+            return await executePdfcpuWasmLock(file, lockPassword, keyLength);
+        }
+
+        if (normalizedTool === "unlock") {
+            const unlockPassword = options.password || params.password || (file as any).originalPassword;
+            return await executePdfcpuWasmUnlock(file, unlockPassword);
+        }
 
         if (normalizedTool === "pdf_to_images") {
             return await executePdfToImages(file, params, originalPassword);
@@ -200,6 +215,21 @@ function normalizeTool(tool: string): string {
         case "pdf_to_png":
         case "pdf-to-png":
             return "pdf_to_images";
+        case "unlock":
+        case "unlock_pdf":
+        case "unlock-pdf":
+        case "security_unlock":
+        case "decrypt":
+            return "unlock";
+        case "lock":
+        case "lock_pdf":
+        case "lock-pdf":
+        case "protect":
+        case "protect_pdf":
+        case "protect-pdf":
+        case "security_lock":
+        case "encrypt":
+            return "lock";
         default:
             return tool;
     }

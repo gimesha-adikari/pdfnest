@@ -74,10 +74,10 @@ export function isToolAvailableOffline(tool: ToolItem): boolean {
 export const TOTAL_TOOL_COUNT = 37;
 
 /**
- * Number of truly offline-capable tools (13 fully offline standalone + 1 metadata + 1 studio suite).
+ * Number of truly offline-capable tools (15 fully offline standalone + 1 metadata + 1 studio suite).
  */
-export const OFFLINE_TOOL_COUNT = 15;
-export const CLIENT_CAPABLE_TOOL_COUNT = 15;
+export const OFFLINE_TOOL_COUNT = 17;
+export const CLIENT_CAPABLE_TOOL_COUNT = 17;
 
 export const NAV_TOOLS_FALLBACK: ToolItem[] = [
     {
@@ -385,9 +385,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Secure your documents by applying robust, high-grade permissions access encryption configurations.",
         href: "/lock-pdf",
         category: "security",
-        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side encryption engine" },
-        clientCapable: false,
-        toolPolicy: "BACKEND_ONLY",
+        capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false, hasOfflineFallback: false, isHybridWorkspace: false },
+        clientCapable: true,
+        toolPolicy: "CLIENT_PREFERRED",
         seoTitle: "Password Protect PDF Online Free",
         seoDescription: "Encrypt and lock your PDF files with a secure password to prevent unauthorized access or printing.",
         intent: "Users want to add a password to restrict access to their PDF.",
@@ -418,9 +418,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Strip protection limits, passwords, and security encryption blocks instantly from your documents.",
         href: "/unlock-pdf",
         category: "security",
-        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side decryption engine" },
-        clientCapable: false,
-        toolPolicy: "BACKEND_ONLY",
+        capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false, hasOfflineFallback: false, isHybridWorkspace: false },
+        clientCapable: true,
+        toolPolicy: "CLIENT_PREFERRED",
         seoTitle: "Unlock PDF Online Free - Remove Password",
         seoDescription: "Remove passwords and security restrictions from PDF files quickly. Decrypt PDFs instantly.",
         intent: "Users want to remove password protection or restrictions from a PDF.",

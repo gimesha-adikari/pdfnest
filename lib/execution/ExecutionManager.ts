@@ -116,8 +116,11 @@ export class ExecutionManager {
                     fallbackOccurred: false,
                 };
             } catch (err: unknown) {
-                // User input validation errors (invalid PDF header) do NOT trigger cloud fallback
-                if (err instanceof ExecutionError && err.code === "INVALID_INPUT") {
+                // User input validation & auth errors (invalid PDF header, wrong password) do NOT trigger cloud fallback
+                if (
+                    err instanceof ExecutionError &&
+                    (err.code === "INVALID_INPUT" || err.code === "DECRYPTION_AUTH_FAILED")
+                ) {
                     throw err;
                 }
 

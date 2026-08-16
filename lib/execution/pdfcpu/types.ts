@@ -28,6 +28,19 @@ export type PdfcpuWorkerRequest =
           type: "add-text";
           pdfBytes: ArrayBuffer;
           elements: TextElement[];
+      }
+    | {
+          id: string;
+          type: "decrypt";
+          pdfBytes: ArrayBuffer;
+          password: string;
+      }
+    | {
+          id: string;
+          type: "encrypt";
+          pdfBytes: ArrayBuffer;
+          password: string;
+          keyLength?: number;
       };
 
 export type PdfcpuWorkerResponse =

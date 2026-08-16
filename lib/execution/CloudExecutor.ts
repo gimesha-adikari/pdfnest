@@ -130,6 +130,21 @@ function normalizeTool(tool: string): string {
         case "pdf_to_png":
         case "pdf-to-png":
             return "pdf_to_images";
+        case "unlock":
+        case "unlock_pdf":
+        case "unlock-pdf":
+        case "security_unlock":
+        case "decrypt":
+            return "unlock";
+        case "lock":
+        case "lock_pdf":
+        case "lock-pdf":
+        case "protect":
+        case "protect_pdf":
+        case "protect-pdf":
+        case "security_lock":
+        case "encrypt":
+            return "lock";
         default:
             return tool;
     }
