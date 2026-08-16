@@ -26,6 +26,7 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { usePreview } from "@/lib/preview/usePreview";
 import type { PreviewError } from "@/lib/preview/types";
+import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 
 interface CustomPdfFile extends File {
     originalPassword?: string;
@@ -317,7 +318,7 @@ export default function HighlightPdfWorkspace() {
         file,
         page: currentPage,
         scale: 2.0,
-        enabled: isScannedPage && !pdfDocument,
+        enabled: isScannedPage,
         onError: (err: PreviewError) => console.error("Failed to render scanned page preview:", err.message),
     });
 
@@ -812,6 +813,49 @@ export default function HighlightPdfWorkspace() {
                 setJobError(null);
                 setUploadProgress(0);
 
+                // If user selected OCR mode or page is scanned in Smart mode, route directly to Cloud Worker
+                if (highlightMode === "ocr" || (isScannedPage && highlightMode === "smart")) {
+                    const submission = await submitHighlightJob(
+                        validFile,
+                        validBoxes,
+                        "ocr",
+                        validFile.originalPassword
+                    );
+
+                    setJobId(submission.job_id);
+                    setJob(null);
+                    setUploadProgress(100);
+                    notify("Highlight job queued. Waiting for OCR worker...", "info");
+                    return;
+                }
+
+                const result = await ExecutionManager.run({
+                    tool: "highlight",
+                    files: [validFile],
+                    params: {
+                        boxes: validBoxes,
+                        mode: highlightMode,
+                    },
+                    mode: "auto",
+                    password: validFile.originalPassword,
+                });
+
+                if (result.executionMode === "client") {
+                    const fileName = (file?.name || "document.pdf").replace(/\.pdf$/i, "");
+                    const highlightedFile = new File([result.blob], `${fileName}-highlighted.pdf`, {
+                        type: "application/pdf",
+                    });
+
+                    setDownloadData({
+                        blob: result.blob,
+                        fileName: `${fileName}-highlighted.pdf`,
+                    });
+
+                    await onJobFinished(highlightedFile);
+                    router.push(`/${toolId}/download`);
+                    return;
+                }
+
                 const submission = await submitHighlightJob(
                     validFile,
                     validBoxes,
@@ -909,6 +953,17 @@ export default function HighlightPdfWorkspace() {
                                         <option value="manual">Manual highlight</option>
                                         <option value="ocr">OCR page</option>
                                     </select>
+                                    {highlightMode === "ocr" && (
+                                        <div className="mt-1 rounded-lg border border-indigo-500/30 bg-indigo-500/10 p-2.5 text-[11px] text-indigo-900 dark:text-indigo-200 flex items-start gap-2">
+                                            <ScanText className="text-indigo-500 mt-0.5 shrink-0" size={14} />
+                                            <div>
+                                                <p className="font-semibold">OCR Target Area Mode</p>
+                                                <p className="opacity-80">
+                                                    Draw boxes over scanned text. Exact word snapping and text recognition will be performed by the server OCR worker upon processing.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="flex flex-col gap-1.5">
@@ -1170,7 +1225,7 @@ export default function HighlightPdfWorkspace() {
                                     className="max-w-full h-auto block rounded pointer-events-none opacity-100"
                                 />
 
-                                {isScannedPage && scannedPreviewSrc && !pdfDocument && (
+                                {isScannedPage && scannedPreviewSrc && (
                                     <img
                                         src={scannedPreviewSrc}
                                         alt={`Scanned page preview ${currentPage}`}
@@ -1182,6 +1237,7 @@ export default function HighlightPdfWorkspace() {
                                     .filter((box) => box.page === currentPage)
                                     .map((box) => {
                                         const isActive = activeId === box.id;
+                                        const isOcrBox = highlightMode === "ocr";
                                         return (
                                             <div
                                                 key={box.id}
@@ -1195,12 +1251,28 @@ export default function HighlightPdfWorkspace() {
                                                     top: `${box.y * scaleFactor}px`,
                                                     width: `${box.width * scaleFactor}px`,
                                                     height: `${box.height * scaleFactor}px`,
-                                                    backgroundColor: box.color,
+                                                    backgroundColor: isOcrBox ? "transparent" : box.color,
                                                 }}
-                                                className={`opacity-40 transition-all ${
-                                                    isActive ? "ring-2 ring-indigo-600 opacity-60 z-20 shadow-md" : "hover:opacity-50 z-10"
+                                                className={`transition-all ${
+                                                    isOcrBox
+                                                        ? "border-2 border-dashed border-indigo-500 bg-indigo-500/10 z-20"
+                                                        : "opacity-40"
+                                                } ${
+                                                    isActive
+                                                        ? isOcrBox
+                                                            ? "ring-2 ring-indigo-600 shadow-md"
+                                                            : "ring-2 ring-indigo-600 opacity-60 z-20 shadow-md"
+                                                        : isOcrBox
+                                                            ? "hover:bg-indigo-500/20"
+                                                            : "hover:opacity-50 z-10"
                                                 }`}
-                                            />
+                                            >
+                                                {isOcrBox && (
+                                                    <span className="absolute -top-5 left-0 bg-indigo-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow whitespace-nowrap">
+                                                        OCR Target Area
+                                                    </span>
+                                                )}
+                                            </div>
                                         );
                                     })}
                             </div>
