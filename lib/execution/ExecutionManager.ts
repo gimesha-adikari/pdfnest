@@ -190,6 +190,12 @@ function getToolPolicy(tool: string): ToolPolicy {
         case "duplicate":
         case "insert_blank":
         case "update_metadata":
+        case "compress":
+        case "compress_pdf":
+        case "compress-pdf":
+        case "optimize":
+        case "optimize_pdf":
+        case "optimize-pdf":
             return "CLIENT_PREFERRED";
         case "watermark":
         case "add_text":
@@ -203,9 +209,10 @@ function getToolPolicy(tool: string): ToolPolicy {
         case "to-pdf":
         case "lock":
         case "unlock":
+        case "pdf_to_images":
+        case "pdf_to_text":
         case "repair":
             return "HYBRID";
-        case "compress":
         case "grayscale":
         case "word_to_pdf":
         case "excel_to_pdf":

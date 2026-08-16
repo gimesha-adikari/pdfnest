@@ -12,6 +12,7 @@ import {
 import { executeImagesToPdf } from "./images/imageToPdfClient";
 import { executePdfToImages } from "./images/pdfToImageClient";
 import { executePdfToText } from "./text/pdfToTextClient";
+import { executeCompressPdf } from "./optimize/compressClient";
 
 export class ClientExecutor {
     static isSupported(tool: string): boolean {
@@ -34,6 +35,7 @@ export class ClientExecutor {
             "unlock",
             "lock",
             "pdf_to_text",
+            "compress",
         ].includes(normalized);
     }
 
@@ -75,6 +77,17 @@ export class ClientExecutor {
 
         if (normalizedTool === "pdf_to_text") {
             return await executePdfToText(
+                file,
+                params,
+                originalPassword,
+                options.mode,
+                options.signal,
+                options.onProgress
+            );
+        }
+
+        if (normalizedTool === "compress") {
+            return await executeCompressPdf(
                 file,
                 params,
                 originalPassword,
@@ -251,6 +264,14 @@ function normalizeTool(tool: string): string {
         case "extract-text":
         case "ocr_extract_text":
             return "pdf_to_text";
+        case "compress":
+        case "compress_pdf":
+        case "compress-pdf":
+        case "optimize":
+        case "optimize_pdf":
+        case "optimize-pdf":
+        case "optimize_compress":
+            return "compress";
         default:
             return tool;
     }

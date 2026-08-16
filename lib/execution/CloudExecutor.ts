@@ -161,6 +161,14 @@ function normalizeTool(tool: string): string {
         case "extract-text":
         case "ocr_extract_text":
             return "pdf_to_text";
+        case "compress":
+        case "compress_pdf":
+        case "compress-pdf":
+        case "optimize":
+        case "optimize_pdf":
+        case "optimize-pdf":
+        case "optimize_compress":
+            return "compress";
         default:
             return tool;
     }
