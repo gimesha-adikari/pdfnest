@@ -172,6 +172,12 @@ async function readResponseErrorPayload(response: {
 }
 
 async function handleAxiosError(error: unknown): Promise<never> {
+    if (axios.isCancel(error) || (error as any)?.name === "CanceledError" || (error as any)?.name === "AbortError") {
+        const cancelErr = new Error("Request cancelled by user.") as ClientError;
+        (cancelErr as any).code = "USER_CANCELLATION";
+        throw cancelErr;
+    }
+
     if (!axios.isAxiosError(error)) {
         throw new Error("Unexpected non-Axios error occurred.");
     }
@@ -224,7 +230,8 @@ export function getBaseUrl(): string {
 export async function uploadAndDownloadFile(
     endpoint: string,
     formData: FormData,
-    onProgress?: (percentage: number) => void
+    onProgress?: (percentage: number) => void,
+    signal?: AbortSignal
 ): Promise<Blob> {
     const apiUrl = getBaseUrl();
     const targetUrl = endpoint.startsWith("http")
@@ -250,6 +257,7 @@ export async function uploadAndDownloadFile(
         const response = await axios.post(targetUrl, formData, {
             responseType: "blob",
             withCredentials: true,
+            signal,
             headers: {
                 "Content-Type": "multipart/form-data",
             },
