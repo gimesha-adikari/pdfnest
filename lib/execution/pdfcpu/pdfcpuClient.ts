@@ -84,11 +84,13 @@ function getOrCreateWorker(): Worker {
         }
 
         const code =
-            data.code === "INVALID_INPUT"
-                ? "INVALID_INPUT"
-                : data.code === "CLIENT_FAILURE"
-                    ? "CLIENT_FAILURE"
-                    : "UNSUPPORTED_CLIENT_OP";
+            data.code === "DECRYPTION_AUTH_FAILED"
+                ? "DECRYPTION_AUTH_FAILED"
+                : data.code === "INVALID_INPUT"
+                    ? "INVALID_INPUT"
+                    : data.code === "CLIENT_FAILURE"
+                        ? "CLIENT_FAILURE"
+                        : "UNSUPPORTED_CLIENT_OP";
 
         pending.reject(
             new ExecutionError(
@@ -460,6 +462,242 @@ export async function executePdfcpuWasmAddText(
                 new ExecutionError(
                     "CLIENT_FAILURE",
                     "Failed to send add-text data to the pdfcpu worker.",
+                    error
+                )
+            );
+        }
+    });
+}
+
+export async function executePdfcpuWasmUnlock(
+    pdfFile: File,
+    password?: string
+): Promise<Blob> {
+    if (!pdfFile) {
+        throw new ExecutionError(
+            "INVALID_INPUT",
+            "No PDF document provided to unlock."
+        );
+    }
+
+    const effectivePassword = password || (pdfFile as any).originalPassword || "";
+    if (!effectivePassword) {
+        throw new ExecutionError(
+            "INVALID_INPUT",
+            "Password is required to unlock this file."
+        );
+    }
+
+    const pdfBuffer = await pdfFile.arrayBuffer();
+    validatePdfHeader(pdfBuffer);
+
+    // Node.js test environment direct WASM fallback
+    if (typeof window === "undefined") {
+        const workerShim = customWorkerFactory
+            ? customWorkerFactory("/wasm/pdfcpu.worker.js")
+            : null;
+        if (workerShim) {
+            const requestId = createRequestId();
+            return new Promise<Blob>((resolve, reject) => {
+                const handler = (event: any) => {
+                    const data = event.data || event;
+                    if (data.id === requestId) {
+                        if (data.type === "success") {
+                            resolve(new Blob([data.pdfBytes], { type: "application/pdf" }));
+                        } else {
+                            reject(
+                                new ExecutionError(
+                                    (data.code as any) || "UNSUPPORTED_CLIENT_OP",
+                                    data.message || "Decryption failed."
+                                )
+                            );
+                        }
+                    }
+                };
+                if (typeof workerShim.addEventListener === "function") {
+                    workerShim.addEventListener("message", handler);
+                } else if ("onmessage" in workerShim) {
+                    workerShim.onmessage = handler;
+                }
+                workerShim.postMessage({
+                    id: requestId,
+                    type: "decrypt",
+                    pdfBytes: pdfBuffer,
+                    password: effectivePassword,
+                });
+            });
+        }
+
+        if (typeof (globalThis as any).pdfcpuDecryptPDF === "function") {
+            const res = (globalThis as any).pdfcpuDecryptPDF(
+                new Uint8Array(pdfBuffer),
+                effectivePassword
+            );
+            if (res && res.error) {
+                const errStr = String(res.error);
+                let code = "UNSUPPORTED_CLIENT_OP";
+                if (
+                    errStr.toLowerCase().includes("password") ||
+                    errStr.toLowerCase().includes("auth") ||
+                    errStr.toLowerCase().includes("credentials")
+                ) {
+                    code = "DECRYPTION_AUTH_FAILED";
+                } else if (
+                    errStr.toLowerCase().includes("invalid") ||
+                    errStr.toLowerCase().includes("corrupt") ||
+                    errStr.toLowerCase().includes("header")
+                ) {
+                    code = "INVALID_INPUT";
+                }
+                throw new ExecutionError(code as any, errStr);
+            }
+            return new Blob([res.pdfBytes], { type: "application/pdf" });
+        }
+    }
+
+    // Browser Web Worker execution path
+    const worker = getOrCreateWorker();
+    const requestId = createRequestId();
+
+    return new Promise<Blob>((resolve, reject) => {
+        pendingRequests.set(requestId, {
+            resolve,
+            reject,
+        });
+
+        const request: PdfcpuWorkerRequest = {
+            id: requestId,
+            type: "decrypt",
+            pdfBytes: pdfBuffer,
+            password: effectivePassword,
+        };
+
+        try {
+            worker.postMessage(request, [pdfBuffer]);
+        } catch (error) {
+            pendingRequests.delete(requestId);
+            reject(
+                new ExecutionError(
+                    "CLIENT_FAILURE",
+                    "Failed to send decrypt data to the pdfcpu worker.",
+                    error
+                )
+            );
+        }
+    });
+}
+
+export async function executePdfcpuWasmLock(
+    pdfFile: File,
+    password?: string,
+    keyLength: number = 128
+): Promise<Blob> {
+    if (!pdfFile) {
+        throw new ExecutionError(
+            "INVALID_INPUT",
+            "No PDF document provided to encrypt."
+        );
+    }
+
+    const effectivePassword = password || (pdfFile as any).originalPassword || "";
+    if (!effectivePassword) {
+        throw new ExecutionError(
+            "INVALID_INPUT",
+            "Password is required to encrypt this file."
+        );
+    }
+
+    const pdfBuffer = await pdfFile.arrayBuffer();
+    validatePdfHeader(pdfBuffer);
+
+    // Node.js test environment direct WASM fallback
+    if (typeof window === "undefined") {
+        const workerShim = customWorkerFactory
+            ? customWorkerFactory("/wasm/pdfcpu.worker.js")
+            : null;
+        if (workerShim) {
+            const requestId = createRequestId();
+            return new Promise<Blob>((resolve, reject) => {
+                const handler = (event: any) => {
+                    const data = event.data || event;
+                    if (data.id === requestId) {
+                        if (data.type === "success") {
+                            resolve(new Blob([data.pdfBytes], { type: "application/pdf" }));
+                        } else {
+                            reject(
+                                new ExecutionError(
+                                    (data.code as any) || "UNSUPPORTED_CLIENT_OP",
+                                    data.message || "Encryption failed."
+                                )
+                            );
+                        }
+                    }
+                };
+                if (typeof workerShim.addEventListener === "function") {
+                    workerShim.addEventListener("message", handler);
+                } else if ("onmessage" in workerShim) {
+                    workerShim.onmessage = handler;
+                }
+                workerShim.postMessage({
+                    id: requestId,
+                    type: "encrypt",
+                    pdfBytes: pdfBuffer,
+                    password: effectivePassword,
+                    keyLength,
+                });
+            });
+        }
+
+        if (typeof (globalThis as any).pdfcpuEncryptPDF === "function") {
+            const res = (globalThis as any).pdfcpuEncryptPDF(
+                new Uint8Array(pdfBuffer),
+                effectivePassword,
+                keyLength
+            );
+            if (res && res.error) {
+                const errStr = String(res.error);
+                let code = "UNSUPPORTED_CLIENT_OP";
+                if (
+                    errStr.toLowerCase().includes("invalid") ||
+                    errStr.toLowerCase().includes("corrupt") ||
+                    errStr.toLowerCase().includes("header") ||
+                    errStr.toLowerCase().includes("already") ||
+                    errStr.toLowerCase().includes("empty")
+                ) {
+                    code = "INVALID_INPUT";
+                }
+                throw new ExecutionError(code as any, errStr);
+            }
+            return new Blob([res.pdfBytes], { type: "application/pdf" });
+        }
+    }
+
+    // Browser Web Worker execution path
+    const worker = getOrCreateWorker();
+    const requestId = createRequestId();
+
+    return new Promise<Blob>((resolve, reject) => {
+        pendingRequests.set(requestId, {
+            resolve,
+            reject,
+        });
+
+        const request: PdfcpuWorkerRequest = {
+            id: requestId,
+            type: "encrypt",
+            pdfBytes: pdfBuffer,
+            password: effectivePassword,
+            keyLength,
+        };
+
+        try {
+            worker.postMessage(request, [pdfBuffer]);
+        } catch (error) {
+            pendingRequests.delete(requestId);
+            reject(
+                new ExecutionError(
+                    "CLIENT_FAILURE",
+                    "Failed to send encrypt data to the pdfcpu worker.",
                     error
                 )
             );

@@ -30,7 +30,18 @@ self.onmessage = async (event) => {
         await initWasm();
 
         let result;
-        if (type === 'watermark-text') {
+        if (type === 'encrypt') {
+            result = self.pdfcpuEncryptPDF(
+                new Uint8Array(pdfBytes),
+                event.data.password || "",
+                event.data.keyLength || 128
+            );
+        } else if (type === 'decrypt') {
+            result = self.pdfcpuDecryptPDF(
+                new Uint8Array(pdfBytes),
+                event.data.password || ""
+            );
+        } else if (type === 'watermark-text') {
             result = self.pdfcpuApplyTextWatermark(
                 new Uint8Array(pdfBytes),
                 text,
@@ -57,7 +68,9 @@ self.onmessage = async (event) => {
         if (result && result.error) {
             const errStr = String(result.error);
             let code = "UNSUPPORTED_CLIENT_OP";
-            if (errStr.toLowerCase().includes("invalid") || errStr.toLowerCase().includes("corrupt")) {
+            if (errStr.toLowerCase().includes("password") || errStr.toLowerCase().includes("auth") || errStr.toLowerCase().includes("credentials")) {
+                code = "DECRYPTION_AUTH_FAILED";
+            } else if (errStr.toLowerCase().includes("invalid") || errStr.toLowerCase().includes("corrupt") || errStr.toLowerCase().includes("header")) {
                 code = "INVALID_INPUT";
             }
             self.postMessage({ id, type: "error", code, message: errStr });
