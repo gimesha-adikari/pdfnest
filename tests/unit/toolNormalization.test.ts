@@ -55,6 +55,8 @@ assert.ok(offlineHrefs.has("/add-text"), "Add Text must be offline-capable");
 assert.ok(offlineHrefs.has("/images-to-pdf"), "Images to PDF must be offline-capable");
 assert.ok(offlineHrefs.has("/crop-pdf"), "Crop PDF must be offline-capable");
 assert.ok(offlineHrefs.has("/pdf-to-images"), "PDF to Images must be offline-capable");
+assert.ok(offlineHrefs.has("/unlock-pdf"), "Unlock PDF must be offline-capable");
+assert.ok(offlineHrefs.has("/lock-pdf"), "Protect/Lock PDF must be offline-capable");
 assert.ok(offlineHrefs.has("/edit-metadata"), "Edit Metadata must be offline-capable (with fallback)");
 assert.ok(offlineHrefs.has("/studio"), "Studio must be offline-capable (hybrid workspace)");
 
