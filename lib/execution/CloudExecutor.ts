@@ -76,9 +76,17 @@ export class CloudExecutor {
         const endpoint = getEndpointForTool(tool, params);
 
         try {
-            const blob = await uploadAndDownloadFile(endpoint, formData, onProgress);
+            const blob = await uploadAndDownloadFile(endpoint, formData, onProgress, options.signal);
             return blob;
         } catch (err: unknown) {
+            if (
+                (err as any)?.code === "USER_CANCELLATION" ||
+                (err as any)?.name === "CanceledError" ||
+                (err as any)?.name === "AbortError" ||
+                options.signal?.aborted
+            ) {
+                throw new ExecutionError("USER_CANCELLATION", "Request cancelled by user.", err);
+            }
             const message = err instanceof Error ? err.message : "Cloud execution rejected or failed.";
             throw new ExecutionError("CLOUD_FAILURE", message, err);
         }
@@ -145,6 +153,14 @@ function normalizeTool(tool: string): string {
         case "security_lock":
         case "encrypt":
             return "lock";
+        case "pdf_to_text":
+        case "pdf-to-text":
+        case "to_text":
+        case "to-text":
+        case "extract_text":
+        case "extract-text":
+        case "ocr_extract_text":
+            return "pdf_to_text";
         default:
             return tool;
     }
@@ -213,6 +229,8 @@ function getEndpointForTool(tool: string, params?: Record<string, any>): string 
             return "/api/security/lock";
         case "unlock":
             return "/api/security/unlock";
+        case "pdf_to_text":
+            return "/api/ocr/extract-text";
         default:
             return `/api/structure/${tool}`;
     }

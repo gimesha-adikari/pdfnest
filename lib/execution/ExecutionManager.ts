@@ -18,6 +18,10 @@ export class ExecutionManager {
             throw new ExecutionError("INVALID_INPUT", "No files provided for execution.");
         }
 
+        if (options.signal?.aborted) {
+            throw new ExecutionError("USER_CANCELLATION", "Execution was cancelled by the user.");
+        }
+
         const primaryFile = files[0];
         const outputFileName = buildOutputFileName(tool, primaryFile.name);
         const policy: ToolPolicy = getToolPolicy(tool);
@@ -83,7 +87,10 @@ export class ExecutionManager {
                             executionMode: "cloud",
                             fallbackOccurred: true,
                         };
-                    } catch (cloudErr) {
+                    } catch (cloudErr: any) {
+                        if (cloudErr?.code === "USER_CANCELLATION" || options.signal?.aborted) {
+                            throw cloudErr;
+                        }
                         throw new ExecutionError(
                             "CLOUD_UNAVAILABLE",
                             "This encrypted document requires server-side processing, but the backend service is currently unreachable.",
@@ -119,12 +126,12 @@ export class ExecutionManager {
                 // User input validation & auth errors (invalid PDF header, wrong password) do NOT trigger cloud fallback
                 if (
                     err instanceof ExecutionError &&
-                    (err.code === "INVALID_INPUT" || err.code === "DECRYPTION_AUTH_FAILED")
+                    (err.code === "INVALID_INPUT" || err.code === "DECRYPTION_AUTH_FAILED" || err.code === "USER_CANCELLATION")
                 ) {
                     throw err;
                 }
 
-                if (!allowFallback) {
+                if (!allowFallback || options.signal?.aborted) {
                     throw err;
                 }
 
@@ -137,7 +144,10 @@ export class ExecutionManager {
                         executionMode: "cloud",
                         fallbackOccurred: true,
                     };
-                } catch (cloudErr) {
+                } catch (cloudErr: any) {
+                    if (cloudErr?.code === "USER_CANCELLATION" || options.signal?.aborted) {
+                        throw cloudErr;
+                    }
                     throw new ExecutionError(
                         "CLOUD_UNAVAILABLE",
                         "Local processing could not complete and cloud processing is currently unreachable.",
@@ -156,7 +166,10 @@ export class ExecutionManager {
                 executionMode: "cloud",
                 fallbackOccurred: false,
             };
-        } catch (cloudErr) {
+        } catch (cloudErr: any) {
+            if (cloudErr?.code === "USER_CANCELLATION" || options.signal?.aborted) {
+                throw cloudErr;
+            }
             throw new ExecutionError(
                 "CLOUD_UNAVAILABLE",
                 "This document is too large for device processing, and cloud processing is currently unreachable.",

@@ -11,6 +11,7 @@ import {
 } from "./pdfcpu/pdfcpuClient";
 import { executeImagesToPdf } from "./images/imageToPdfClient";
 import { executePdfToImages } from "./images/pdfToImageClient";
+import { executePdfToText } from "./text/pdfToTextClient";
 
 export class ClientExecutor {
     static isSupported(tool: string): boolean {
@@ -32,6 +33,7 @@ export class ClientExecutor {
             "pdf_to_images",
             "unlock",
             "lock",
+            "pdf_to_text",
         ].includes(normalized);
     }
 
@@ -69,6 +71,17 @@ export class ClientExecutor {
 
         if (normalizedTool === "pdf_to_images") {
             return await executePdfToImages(file, params, originalPassword);
+        }
+
+        if (normalizedTool === "pdf_to_text") {
+            return await executePdfToText(
+                file,
+                params,
+                originalPassword,
+                options.mode,
+                options.signal,
+                options.onProgress
+            );
         }
 
         if (normalizedTool === "watermark") {
@@ -230,6 +243,14 @@ function normalizeTool(tool: string): string {
         case "security_lock":
         case "encrypt":
             return "lock";
+        case "pdf_to_text":
+        case "pdf-to-text":
+        case "to_text":
+        case "to-text":
+        case "extract_text":
+        case "extract-text":
+        case "ocr_extract_text":
+            return "pdf_to_text";
         default:
             return tool;
     }
