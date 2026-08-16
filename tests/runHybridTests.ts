@@ -9,6 +9,7 @@ import { runCropExecutionTests } from "./unit/cropExecution.test";
 import { runPdfToImagesExecutionTests } from "./unit/pdfToImagesExecution.test";
 import { runUnlockExecutionTests } from "./unit/unlockExecution.test";
 import { runLockExecutionTests } from "./unit/lockExecution.test";
+import { runPdfToTextExecutionTests } from "./unit/pdfToTextExecution.test";
 import { setupNodeWasmWorker } from "./setupNodeWasmWorker";
 
 async function main() {
@@ -25,6 +26,7 @@ async function main() {
     await runPdfToImagesExecutionTests();
     await runUnlockExecutionTests();
     await runLockExecutionTests();
+    await runPdfToTextExecutionTests();
 
     const totalFailed =
         resRotate.failed +
