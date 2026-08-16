@@ -74,10 +74,10 @@ export function isToolAvailableOffline(tool: ToolItem): boolean {
 export const TOTAL_TOOL_COUNT = 37;
 
 /**
- * Number of truly offline-capable tools (15 fully offline standalone + 1 metadata + 1 studio suite).
+ * Number of truly offline-capable tools (16 fully offline standalone + 1 metadata + 1 studio suite).
  */
-export const OFFLINE_TOOL_COUNT = 17;
-export const CLIENT_CAPABLE_TOOL_COUNT = 17;
+export const OFFLINE_TOOL_COUNT = 18;
+export const CLIENT_CAPABLE_TOOL_COUNT = 18;
 
 export const NAV_TOOLS_FALLBACK: ToolItem[] = [
     {
@@ -517,9 +517,16 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Extract hidden raw text layer data strings directly out of text-based PDF pages.",
         href: "/pdf-to-text",
         category: "convert",
-        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side text extraction engine" },
-        clientCapable: false,
-        toolPolicy: "BACKEND_ONLY",
+        capability: {
+            clientExecutable: true,
+            workspaceOffline: true,
+            requiresBackend: false,
+            hasOfflineFallback: true,
+            isHybridWorkspace: false,
+            offlineReason: "Image-only pages require cloud OCR for full text extraction",
+        },
+        clientCapable: true,
+        toolPolicy: "CLIENT_PREFERRED",
         seoTitle: "Convert PDF to Text Online Free",
         seoDescription: "Extract text from PDF documents quickly. Convert PDF to raw TXT files instantly online.",
         intent: "Users want to extract readable text from a PDF file.",

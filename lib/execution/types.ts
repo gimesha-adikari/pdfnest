@@ -18,6 +18,7 @@ export interface ExecutionOptions {
     password?: string;
     passwords?: (string | undefined)[];
     onProgress?: (percentage: number) => void;
+    signal?: AbortSignal;
 }
 
 export interface ExecutionResult {
