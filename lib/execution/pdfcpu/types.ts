@@ -41,6 +41,12 @@ export type PdfcpuWorkerRequest =
           pdfBytes: ArrayBuffer;
           password: string;
           keyLength?: number;
+      }
+    | {
+          id: string;
+          type: "optimize";
+          pdfBytes: ArrayBuffer;
+          password?: string;
       };
 
 export type PdfcpuWorkerResponse =

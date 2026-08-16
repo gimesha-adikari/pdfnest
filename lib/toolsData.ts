@@ -76,8 +76,8 @@ export const TOTAL_TOOL_COUNT = 37;
 /**
  * Number of truly offline-capable tools (16 fully offline standalone + 1 metadata + 1 studio suite).
  */
-export const OFFLINE_TOOL_COUNT = 18;
-export const CLIENT_CAPABLE_TOOL_COUNT = 18;
+export const OFFLINE_TOOL_COUNT = 19;
+export const CLIENT_CAPABLE_TOOL_COUNT = 19;
 
 export const NAV_TOOLS_FALLBACK: ToolItem[] = [
     {
@@ -285,9 +285,16 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Reduce PDF file sizes instantly by stripping object redundancy and unneeded systems metadata.",
         href: "/compress-pdf",
         category: "optimize",
-        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side compression engine" },
-        clientCapable: false,
-        toolPolicy: "BACKEND_ONLY",
+        capability: {
+            clientExecutable: true,
+            workspaceOffline: true,
+            requiresBackend: false,
+            hasOfflineFallback: true,
+            isHybridWorkspace: false,
+            offlineReason: "High compression and aggressive raster downsampling may require cloud processing",
+        },
+        clientCapable: true,
+        toolPolicy: "CLIENT_PREFERRED",
         seoTitle: "Compress PDF Files Online Free",
         seoDescription: "Reduce the size of your PDF files without losing quality. Fast and secure online PDF optimizer.",
         intent: "Users want to make a PDF file smaller for emailing or uploading.",

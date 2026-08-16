@@ -705,6 +705,133 @@ export async function executePdfcpuWasmLock(
     });
 }
 
+export async function executePdfcpuWasmOptimize(
+    pdfFile: File,
+    password?: string
+): Promise<Blob> {
+    if (!pdfFile) {
+        throw new ExecutionError(
+            "INVALID_INPUT",
+            "No PDF document provided to optimize."
+        );
+    }
+
+    const pdfBuffer = await pdfFile.arrayBuffer();
+
+    // Validate magic header
+    const headerBytes = new Uint8Array(pdfBuffer.slice(0, 5));
+    const headerString = String.fromCharCode(...headerBytes);
+    if (!headerString.startsWith("%PDF-")) {
+        throw new ExecutionError(
+            "INVALID_INPUT",
+            "The selected file is not a valid PDF document (missing %PDF- header)."
+        );
+    }
+
+    const effectivePassword =
+        password || (pdfFile as any).originalPassword || "";
+
+    // Node.js test environment path
+    if (typeof window === "undefined") {
+        if (customWorkerFactory) {
+            const workerShim = customWorkerFactory("/wasm/pdfcpu.worker.js");
+            const requestId = createRequestId();
+
+            return new Promise<Blob>((resolve, reject) => {
+                const handler = (event: any) => {
+                    const data = event.data;
+                    if (!data || data.id !== requestId) return;
+
+                    if (data.type === "success") {
+                        resolve(
+                            new Blob([data.pdfBytes], {
+                                type: "application/pdf",
+                            })
+                        );
+                    } else {
+                        const code =
+                            data.code === "DECRYPTION_AUTH_FAILED"
+                                ? "DECRYPTION_AUTH_FAILED"
+                                : data.code === "INVALID_INPUT"
+                                ? "INVALID_INPUT"
+                                : "CLIENT_FAILURE";
+                        reject(new ExecutionError(code as any, data.message));
+                    }
+                };
+
+                if (typeof workerShim.addEventListener === "function") {
+                    workerShim.addEventListener("message", handler);
+                } else {
+                    workerShim.onmessage = handler;
+                }
+                workerShim.postMessage({
+                    id: requestId,
+                    type: "optimize",
+                    pdfBytes: pdfBuffer,
+                    password: effectivePassword,
+                });
+            });
+        }
+
+        if (typeof (globalThis as any).pdfcpuOptimizePDF === "function") {
+            const res = (globalThis as any).pdfcpuOptimizePDF(
+                new Uint8Array(pdfBuffer),
+                effectivePassword
+            );
+            if (res && res.error) {
+                const errStr = String(res.error);
+                let code = "CLIENT_FAILURE";
+                if (
+                    errStr.toLowerCase().includes("password") ||
+                    errStr.toLowerCase().includes("auth") ||
+                    errStr.toLowerCase().includes("credentials")
+                ) {
+                    code = "DECRYPTION_AUTH_FAILED";
+                } else if (
+                    errStr.toLowerCase().includes("invalid") ||
+                    errStr.toLowerCase().includes("corrupt") ||
+                    errStr.toLowerCase().includes("header")
+                ) {
+                    code = "INVALID_INPUT";
+                }
+                throw new ExecutionError(code as any, errStr);
+            }
+            return new Blob([res.pdfBytes], { type: "application/pdf" });
+        }
+    }
+
+    // Browser Web Worker execution path
+    const worker = getOrCreateWorker();
+    const requestId = createRequestId();
+
+    return new Promise<Blob>((resolve, reject) => {
+        pendingRequests.set(requestId, {
+            resolve,
+            reject,
+        });
+
+        const request: PdfcpuWorkerRequest = {
+            id: requestId,
+            type: "optimize",
+            pdfBytes: pdfBuffer,
+            password: effectivePassword,
+        };
+
+        try {
+            worker.postMessage(request, [pdfBuffer]);
+        } catch (error) {
+            pendingRequests.delete(requestId);
+            reject(
+                new ExecutionError(
+                    "CLIENT_FAILURE",
+                    "Failed to send optimize data to the pdfcpu worker.",
+                    error
+                )
+            );
+        }
+    });
+}
+
 export function disposePdfcpuWorker(): void {
     if (!workerInstance) {
         return;
