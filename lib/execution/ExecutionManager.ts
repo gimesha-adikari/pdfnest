@@ -59,7 +59,7 @@ export class ExecutionManager {
 
         // 3. Explicit Device Mode -> Client Executor (Option B fallback to cloud if file requires server relocking)
         if (mode === "device") {
-            const safety = ExecutionSafetyGate.evaluate(tool, files, policy);
+            const safety = ExecutionSafetyGate.evaluate(tool, files, policy, options.params);
             if (!safety.eligible) {
                 throw new ExecutionError(
                     "SAFETY_REJECTION",
@@ -111,7 +111,7 @@ export class ExecutionManager {
         }
 
         // 4. Auto Mode -> Prefer Client if safe, with Cloud Fallback on client execution exception
-        const safety = ExecutionSafetyGate.evaluate(tool, files, policy);
+        const safety = ExecutionSafetyGate.evaluate(tool, files, policy, options.params);
 
         if (safety.eligible) {
             try {
@@ -196,6 +196,20 @@ function getToolPolicy(tool: string): ToolPolicy {
         case "optimize":
         case "optimize_pdf":
         case "optimize-pdf":
+        case "highlight":
+        case "highlight_pdf":
+        case "highlight-pdf":
+        case "underline":
+        case "underline_pdf":
+        case "underline-pdf":
+        case "strikeout":
+        case "strikeout_pdf":
+        case "strikeout-pdf":
+        case "strike_pdf":
+        case "strike-pdf":
+        case "strikethrough":
+        case "strikethrough_pdf":
+        case "strikethrough-pdf":
             return "CLIENT_PREFERRED";
         case "watermark":
         case "add_text":
@@ -242,6 +256,23 @@ function buildOutputFileName(tool: string, originalName: string): string {
         case "split":
         case "split_pdf":
             return `${base}-split.pdf`;
+        case "highlight":
+        case "highlight_pdf":
+        case "highlight-pdf":
+            return `${base}-highlighted.pdf`;
+        case "underline":
+        case "underline_pdf":
+        case "underline-pdf":
+            return `${base}-underlined.pdf`;
+        case "strikeout":
+        case "strikeout_pdf":
+        case "strikeout-pdf":
+        case "strike_pdf":
+        case "strike-pdf":
+        case "strikethrough":
+        case "strikethrough_pdf":
+        case "strikethrough-pdf":
+            return `${base}-struckout.pdf`;
         default:
             return `${base}-${tool}.pdf`;
     }

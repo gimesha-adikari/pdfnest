@@ -19,6 +19,7 @@ export class ExecutionSafetyGate {
         toolId: string,
         files: File[],
         policy: ToolPolicy,
+        params?: Record<string, any>,
         config: SafetyGateConfig = DEFAULT_SAFETY_CONFIG
     ): SafetyGateEvaluation {
         const isMobile = typeof navigator !== "undefined" && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -39,6 +40,16 @@ export class ExecutionSafetyGate {
                 eligible: false,
                 recommendedMode: "cloud",
                 reason: "This tool requires server-side cloud processing engines.",
+                metrics,
+            };
+        }
+
+        // 1.1 OCR mode requires server-side cloud OCR worker
+        if (params?.mode === "ocr") {
+            return {
+                eligible: false,
+                recommendedMode: "cloud",
+                reason: "OCR text recognition mode requires server-side cloud worker processing.",
                 metrics,
             };
         }

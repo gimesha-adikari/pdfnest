@@ -239,6 +239,23 @@ function getEndpointForTool(tool: string, params?: Record<string, any>): string 
             return "/api/security/unlock";
         case "pdf_to_text":
             return "/api/ocr/extract-text";
+        case "highlight":
+        case "highlight_pdf":
+        case "highlight-pdf":
+            return "/api/markup/highlight";
+        case "underline":
+        case "underline_pdf":
+        case "underline-pdf":
+            return "/api/markup/underline";
+        case "strikeout":
+        case "strikeout_pdf":
+        case "strikeout-pdf":
+        case "strike_pdf":
+        case "strike-pdf":
+        case "strikethrough":
+        case "strikethrough_pdf":
+        case "strikethrough-pdf":
+            return "/api/markup/strikeout";
         default:
             return `/api/structure/${tool}`;
     }

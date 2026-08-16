@@ -76,8 +76,8 @@ export const TOTAL_TOOL_COUNT = 37;
 /**
  * Number of truly offline-capable tools (16 fully offline standalone + 1 metadata + 1 studio suite).
  */
-export const OFFLINE_TOOL_COUNT = 19;
-export const CLIENT_CAPABLE_TOOL_COUNT = 19;
+export const OFFLINE_TOOL_COUNT = 22;
+export const CLIENT_CAPABLE_TOOL_COUNT = 22;
 
 export const NAV_TOOLS_FALLBACK: ToolItem[] = [
     {
@@ -1412,9 +1412,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Highlight text and important sections in PDF files online. Add colored highlight markers to emphasize key content while preserving the original document layout and quality.",
         href: "/highlight-pdf",
         category: "edit",
-        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side markup worker" },
-        clientCapable: false,
-        toolPolicy: "BACKEND_ONLY",
+        capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false },
+        clientCapable: true,
+        toolPolicy: "CLIENT_PREFERRED",
 
         seoTitle: "Highlight PDF Online Free | Add Highlight Markers to PDF",
 
@@ -1484,9 +1484,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Underline text and important content in PDF files online. Add colored underline annotations to emphasize words, sentences, or document sections while preserving the original layout and formatting.",
         href: "/underline-pdf",
         category: "edit",
-        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side markup worker" },
-        clientCapable: false,
-        toolPolicy: "BACKEND_ONLY",
+        capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false },
+        clientCapable: true,
+        toolPolicy: "CLIENT_PREFERRED",
 
         seoTitle: "Underline PDF Online Free | Add Underlines to PDF Documents",
 
@@ -1556,9 +1556,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Strike through text and content in PDF files online. Add colored strikeout annotations to words, sentences, or document sections while preserving the original document layout and formatting.",
         href: "/strikeout-pdf",
         category: "edit",
-        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side markup worker" },
-        clientCapable: false,
-        toolPolicy: "BACKEND_ONLY",
+        capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false },
+        clientCapable: true,
+        toolPolicy: "CLIENT_PREFERRED",
 
         seoTitle: "Strikeout PDF Online Free | Add Strikethrough to PDF Text",
 

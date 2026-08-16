@@ -13,6 +13,7 @@ import { executeImagesToPdf } from "./images/imageToPdfClient";
 import { executePdfToImages } from "./images/pdfToImageClient";
 import { executePdfToText } from "./text/pdfToTextClient";
 import { executeCompressPdf } from "./optimize/compressClient";
+import { executeMarkup } from "./markup/markupClient";
 
 export class ClientExecutor {
     static isSupported(tool: string): boolean {
@@ -36,6 +37,9 @@ export class ClientExecutor {
             "lock",
             "pdf_to_text",
             "compress",
+            "highlight",
+            "underline",
+            "strikeout",
         ].includes(normalized);
     }
 
@@ -107,6 +111,22 @@ export class ClientExecutor {
 
         if (normalizedTool === "add_text") {
             return await executeAddText(file, params, originalPassword);
+        }
+
+        if (normalizedTool === "highlight" || normalizedTool === "underline" || normalizedTool === "strikeout") {
+            const rawBoxes = params.boxes;
+            let parsedBoxes = [];
+            if (typeof rawBoxes === "string") {
+                try {
+                    parsedBoxes = JSON.parse(rawBoxes);
+                } catch {
+                    parsedBoxes = [];
+                }
+            } else if (Array.isArray(rawBoxes)) {
+                parsedBoxes = rawBoxes;
+            }
+            const mode = params.mode || "smart";
+            return await executeMarkup(file, { action: normalizedTool as any, boxes: parsedBoxes, mode }, originalPassword);
         }
 
         // Password-protected files route to Cloud to preserve existing relock pipeline
@@ -272,6 +292,23 @@ function normalizeTool(tool: string): string {
         case "optimize-pdf":
         case "optimize_compress":
             return "compress";
+        case "highlight":
+        case "highlight_pdf":
+        case "highlight-pdf":
+            return "highlight";
+        case "underline":
+        case "underline_pdf":
+        case "underline-pdf":
+            return "underline";
+        case "strikeout":
+        case "strikeout_pdf":
+        case "strikeout-pdf":
+        case "strike_pdf":
+        case "strike-pdf":
+        case "strikethrough":
+        case "strikethrough_pdf":
+        case "strikethrough-pdf":
+            return "strikeout";
         default:
             return tool;
     }
