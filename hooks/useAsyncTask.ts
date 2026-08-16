@@ -286,6 +286,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
         if (!taskId || isCancelling) return;
         if (status !== "PENDING" && status !== "PROCESSING") return;
 
+        console.log(`[FORENSIC ${new Date().toISOString()}] UI Cancel Clicked for taskId: ${taskId}`);
         setIsCancelling(true);
 
         try {
