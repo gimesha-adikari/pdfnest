@@ -58,12 +58,12 @@ assert.ok(offlineHrefs.has("/pdf-to-images"), "PDF to Images must be offline-cap
 assert.ok(offlineHrefs.has("/unlock-pdf"), "Unlock PDF must be offline-capable");
 assert.ok(offlineHrefs.has("/lock-pdf"), "Protect/Lock PDF must be offline-capable");
 assert.ok(offlineHrefs.has("/pdf-to-text"), "PDF to Text must be offline-capable");
+assert.ok(offlineHrefs.has("/compress-pdf"), "Compress PDF must be offline-capable");
 assert.ok(offlineHrefs.has("/edit-metadata"), "Edit Metadata must be offline-capable (with fallback)");
 assert.ok(offlineHrefs.has("/studio"), "Studio must be offline-capable (hybrid workspace)");
 
 // Verify backend-required tools are NOT in offline set
 assert.ok(!offlineHrefs.has("/strikeout-pdf"), "Strikeout PDF must NOT be offline-capable");
-assert.ok(!offlineHrefs.has("/compress-pdf"), "Compress PDF must NOT be offline-capable");
 assert.ok(!offlineHrefs.has("/word-to-pdf"), "Word to PDF must NOT be offline-capable");
 assert.ok(!offlineHrefs.has("/redact-pdf"), "Redact PDF must NOT be offline-capable");
 

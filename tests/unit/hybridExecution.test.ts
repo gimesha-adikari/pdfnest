@@ -171,14 +171,14 @@ export async function runHybridExecutionTests(): Promise<{ passed: number; faile
         // Test 11: Unimplemented Client Tool -> Automatically Routes to Cloud
         cloudCallCount = 0;
         const res11 = await ExecutionManager.run({
-            tool: "compress",
+            tool: "word_to_pdf",
             files: [normalFile],
             params: {},
             mode: "auto",
         });
         assert(
             res11.executionMode === "cloud" && cloudCallCount === 1,
-            "11. Unimplemented client tool ('compress') automatically routes to Cloud"
+            "11. Unimplemented client tool ('word_to_pdf') automatically routes to Cloud"
         );
     } finally {
         CloudExecutor.execute = originalCloudExecute;

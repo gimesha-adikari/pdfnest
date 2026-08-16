@@ -10,6 +10,7 @@ import { runPdfToImagesExecutionTests } from "./unit/pdfToImagesExecution.test";
 import { runUnlockExecutionTests } from "./unit/unlockExecution.test";
 import { runLockExecutionTests } from "./unit/lockExecution.test";
 import { runPdfToTextExecutionTests } from "./unit/pdfToTextExecution.test";
+import { runCompressExecutionTests } from "./unit/compressExecution.test";
 import { setupNodeWasmWorker } from "./setupNodeWasmWorker";
 
 async function main() {
@@ -27,6 +28,7 @@ async function main() {
     await runUnlockExecutionTests();
     await runLockExecutionTests();
     await runPdfToTextExecutionTests();
+    await runCompressExecutionTests();
 
     const totalFailed =
         resRotate.failed +

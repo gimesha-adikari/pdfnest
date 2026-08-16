@@ -267,7 +267,7 @@ test.describe("PDFNest Full-Site Online & Offline Regression Audit", () => {
             "/strikeout-pdf",
             "/highlight-pdf",
             "/underline-pdf",
-            "/compress-pdf",
+            "/excel-to-pdf",
             "/word-to-pdf",
         ];
 

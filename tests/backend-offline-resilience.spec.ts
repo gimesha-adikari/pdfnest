@@ -236,7 +236,7 @@ test.describe('Backend Outage Resilience & Offline-Capable UX Suite', () => {
             });
         });
 
-        await page.goto('/compress-pdf');
+        await page.goto('/word-to-pdf');
         await page.waitForLoadState('domcontentloaded');
 
         // Should display friendly service unavailable notice

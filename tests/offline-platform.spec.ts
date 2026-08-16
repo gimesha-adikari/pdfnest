@@ -38,9 +38,8 @@ test.describe("PDFNest Truth-Based Capability & Offline Architecture", () => {
         const count = await toolCards.count();
         expect(count).toBe(OFFLINE_TOOL_COUNT);
 
-        // 3. Verify backend-required tools (e.g. Strikeout, Compress, Word to PDF, Redact, OCR) are NOT present in directory
+        // 3. Verify backend-required tools (e.g. Strikeout, Word to PDF, Redact, OCR) are NOT present in directory
         await expect(page.locator("main a[href='/strikeout-pdf']")).toHaveCount(0);
-        await expect(page.locator("main a[href='/compress-pdf']")).toHaveCount(0);
         await expect(page.locator("main a[href='/word-to-pdf']")).toHaveCount(0);
         await expect(page.locator("main a[href='/redact-pdf']")).toHaveCount(0);
         await expect(page.locator("main a[href='/image-to-searchable-pdf']")).toHaveCount(0);
@@ -61,6 +60,7 @@ test.describe("PDFNest Truth-Based Capability & Offline Architecture", () => {
         await expect(page.locator("main a[href='/unlock-pdf']")).toBeVisible();
         await expect(page.locator("main a[href='/lock-pdf']")).toBeVisible();
         await expect(page.locator("main a[href='/pdf-to-text']")).toBeVisible();
+        await expect(page.locator("main a[href='/compress-pdf']")).toBeVisible();
         await expect(page.locator("main a[href='/edit-metadata']")).toBeVisible();
         await expect(page.locator("main a[href='/studio']")).toBeVisible();
     });
@@ -75,7 +75,6 @@ test.describe("PDFNest Truth-Based Capability & Offline Architecture", () => {
 
         // Footer should NOT link to backend-required tools when offline
         await expect(footer.locator("a[href='/strikeout-pdf']")).toHaveCount(0);
-        await expect(footer.locator("a[href='/compress-pdf']")).toHaveCount(0);
         await expect(footer.locator("a[href='/word-to-pdf']")).toHaveCount(0);
         await expect(footer.locator("a[href='/redact-pdf']")).toHaveCount(0);
 
@@ -104,10 +103,10 @@ test.describe("PDFNest Truth-Based Capability & Offline Architecture", () => {
         await expect(alternativeButtons.first()).toBeVisible();
     });
 
-    test("4. Direct URLs to Compress and Word to PDF also show the offline guard", async ({ page }) => {
+    test("4. Direct URLs to Excel to PDF and Word to PDF also show the offline guard", async ({ page }) => {
         await simulateBackendOffline(page);
 
-        await page.goto("/compress-pdf");
+        await page.goto("/excel-to-pdf");
         await page.waitForLoadState("networkidle");
         await expect(page.locator("text=Service Temporarily Unavailable")).toBeVisible();
         await expect(page.locator("input[type='file']")).toHaveCount(0);
@@ -128,7 +127,7 @@ test.describe("PDFNest Truth-Based Capability & Offline Architecture", () => {
         await expect(page.locator("text=Local Tools (Cloud Offline)")).toBeVisible();
     });
 
-    test("6. Local tools (Merge, Rotate, Split) load functional workspaces without backend", async ({ page }) => {
+    test("6. Local tools (Merge, Rotate, Split, Compress) load functional workspaces without backend", async ({ page }) => {
         await simulateBackendOffline(page);
 
         // Visit /rotate-pdf
@@ -139,7 +138,13 @@ test.describe("PDFNest Truth-Based Capability & Offline Architecture", () => {
         await expect(page.locator("text=Service Temporarily Unavailable")).toHaveCount(0);
 
         // Should show upload dropzone
-        await expect(page.locator("input[type='file']")).toBeAttached();
+        await expect(page.locator("input[type='file']")).toBeVisible();
+
+        // Visit /compress-pdf
+        await page.goto("/compress-pdf");
+        await page.waitForLoadState("networkidle");
+        await expect(page.locator("text=Service Temporarily Unavailable")).toHaveCount(0);
+        await expect(page.locator("input[type='file']")).toBeVisible();
     });
 
     test("7. Edit Metadata workspace loads and provides functional metadata fields", async ({ page }) => {

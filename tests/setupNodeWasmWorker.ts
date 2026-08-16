@@ -239,6 +239,47 @@ export function setupNodeWasmWorker(): void {
                                     workerShim.onmessage?.({ data: resp });
                                     listeners.message.forEach((cb) => cb({ data: resp }));
                                 }
+                            } else if (request.type === "optimize") {
+                                const result = (global as any).pdfcpuOptimizePDF(
+                                    new Uint8Array(request.pdfBytes),
+                                    request.password || ""
+                                );
+                                if (result.error) {
+                                    const errStr = String(result.error);
+                                    let code = "CLIENT_FAILURE";
+                                    if (
+                                        errStr.toLowerCase().includes("password") ||
+                                        errStr.toLowerCase().includes("auth") ||
+                                        errStr.toLowerCase().includes("credentials")
+                                    ) {
+                                        code = "DECRYPTION_AUTH_FAILED";
+                                    } else if (
+                                        errStr.toLowerCase().includes("invalid") ||
+                                        errStr.toLowerCase().includes("corrupt") ||
+                                        errStr.toLowerCase().includes("header")
+                                    ) {
+                                        code = "INVALID_INPUT";
+                                    }
+                                    const resp = {
+                                        id: request.id,
+                                        type: "error",
+                                        code,
+                                        message: result.error,
+                                    };
+                                    workerShim.onmessage?.({ data: resp });
+                                    listeners.message.forEach((cb) => cb({ data: resp }));
+                                } else {
+                                    const resp = {
+                                        id: request.id,
+                                        type: "success",
+                                        pdfBytes: result.pdfBytes.buffer.slice(
+                                            result.pdfBytes.byteOffset,
+                                            result.pdfBytes.byteOffset + result.pdfBytes.byteLength
+                                        ),
+                                    };
+                                    workerShim.onmessage?.({ data: resp });
+                                    listeners.message.forEach((cb) => cb({ data: resp }));
+                                }
                             }
                         } catch (err: any) {
                             const resp = {
