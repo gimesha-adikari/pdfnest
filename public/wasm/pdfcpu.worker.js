@@ -61,6 +61,11 @@ self.onmessage = async (event) => {
                 new Uint8Array(pdfBytes),
                 elementsJson
             );
+        } else if (type === 'optimize') {
+            result = self.pdfcpuOptimizePDF(
+                new Uint8Array(pdfBytes),
+                event.data.password || ""
+            );
         } else {
             throw new Error(`Unsupported worker request type '${type}'`);
         }
