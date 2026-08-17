@@ -210,6 +210,13 @@ function getToolPolicy(tool: string): ToolPolicy {
         case "strikethrough":
         case "strikethrough_pdf":
         case "strikethrough-pdf":
+        case "sign":
+        case "sign_pdf":
+        case "sign-pdf":
+        case "repair":
+        case "repair_pdf":
+        case "repair-pdf":
+        case "structure_repair":
             return "CLIENT_PREFERRED";
         case "watermark":
         case "add_text":
@@ -225,7 +232,6 @@ function getToolPolicy(tool: string): ToolPolicy {
         case "unlock":
         case "pdf_to_images":
         case "pdf_to_text":
-        case "repair":
             return "HYBRID";
         case "grayscale":
         case "word_to_pdf":
@@ -239,8 +245,10 @@ function getToolPolicy(tool: string): ToolPolicy {
         case "ocr_extract":
         case "image_to_text":
             return "BACKEND_ONLY";
-        case "sign":
         case "redact_text":
+        case "redact":
+        case "redact_pdf":
+        case "redact-pdf":
             return "SECURITY_CRITICAL_BACKEND";
         default:
             return "CLIENT_PREFERRED";
@@ -273,6 +281,15 @@ function buildOutputFileName(tool: string, originalName: string): string {
         case "strikethrough_pdf":
         case "strikethrough-pdf":
             return `${base}-struckout.pdf`;
+        case "sign":
+        case "sign_pdf":
+        case "sign-pdf":
+            return `signed_${originalName}`;
+        case "repair":
+        case "repair_pdf":
+        case "repair-pdf":
+        case "structure_repair":
+            return `repaired_${originalName}`;
         default:
             return `${base}-${tool}.pdf`;
     }

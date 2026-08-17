@@ -76,8 +76,8 @@ export const TOTAL_TOOL_COUNT = 37;
 /**
  * Number of truly offline-capable tools (16 fully offline standalone + 1 metadata + 1 studio suite).
  */
-export const OFFLINE_TOOL_COUNT = 22;
-export const CLIENT_CAPABLE_TOOL_COUNT = 22;
+export const OFFLINE_TOOL_COUNT = 24;
+export const CLIENT_CAPABLE_TOOL_COUNT = 24;
 
 export const NAV_TOOLS_FALLBACK: ToolItem[] = [
     {
@@ -1058,9 +1058,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Rebuild cross reference tables and fix damaged dictionary tree layouts components so they open without corruption warnings.",
         href: "/repair-pdf",
         category: "optimize",
-        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side cross-reference repair engine" },
-        clientCapable: false,
-        toolPolicy: "BACKEND_ONLY",
+        capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false },
+        clientCapable: true,
+        toolPolicy: "CLIENT_PREFERRED",
         seoTitle: "Repair Corrupted PDF Online Free",
         seoDescription: "Repair damaged PDF files and restore documents that fail to open.",
         intent: "Users need to recover broken PDF files.",
@@ -1091,9 +1091,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Add signatures to PDF documents with a simple online signing tool.",
         href: "/sign-pdf",
         category: "edit",
-        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side signature stamp engine" },
-        clientCapable: false,
-        toolPolicy: "SECURITY_CRITICAL_BACKEND",
+        capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false },
+        clientCapable: true,
+        toolPolicy: "CLIENT_PREFERRED",
         seoTitle: "Sign PDF Online Free",
         seoDescription: "Add electronic signatures to PDF documents quickly and securely.",
         intent: "Users want to sign PDF documents digitally.",

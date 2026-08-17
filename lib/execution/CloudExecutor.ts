@@ -51,6 +51,8 @@ export class CloudExecutor {
                 if (val !== undefined && val !== null) {
                     if (typeof File !== "undefined" && val instanceof File) {
                         formData.append(key, val);
+                    } else if (typeof Blob !== "undefined" && val instanceof Blob) {
+                        formData.append(key, val, key === "signature" ? "signature.png" : "file.bin");
                     } else {
                         formData.append(key, typeof val === "object" ? JSON.stringify(val) : String(val));
                     }
@@ -169,6 +171,15 @@ function normalizeTool(tool: string): string {
         case "optimize-pdf":
         case "optimize_compress":
             return "compress";
+        case "sign":
+        case "sign_pdf":
+        case "sign-pdf":
+            return "sign";
+        case "repair":
+        case "repair_pdf":
+        case "repair-pdf":
+        case "structure_repair":
+            return "repair";
         default:
             return tool;
     }
@@ -256,6 +267,15 @@ function getEndpointForTool(tool: string, params?: Record<string, any>): string 
         case "strikethrough_pdf":
         case "strikethrough-pdf":
             return "/api/markup/strikeout";
+        case "sign":
+        case "sign_pdf":
+        case "sign-pdf":
+            return "/api/structure/sign";
+        case "repair":
+        case "repair_pdf":
+        case "repair-pdf":
+        case "structure_repair":
+            return "/api/structure/repair";
         default:
             return `/api/structure/${tool}`;
     }

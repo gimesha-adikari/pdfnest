@@ -6,6 +6,7 @@ import {
     buildPageNumbersDescription,
     executePdfcpuWasmAddText,
     executePdfcpuWasmLock,
+    executePdfcpuWasmOptimize,
     executePdfcpuWasmUnlock,
     executePdfcpuWasmWatermark,
 } from "./pdfcpu/pdfcpuClient";
@@ -14,6 +15,7 @@ import { executePdfToImages } from "./images/pdfToImageClient";
 import { executePdfToText } from "./text/pdfToTextClient";
 import { executeCompressPdf } from "./optimize/compressClient";
 import { executeMarkup } from "./markup/markupClient";
+import { executeSignPdf } from "./sign/signClient";
 
 export class ClientExecutor {
     static isSupported(tool: string): boolean {
@@ -40,6 +42,8 @@ export class ClientExecutor {
             "highlight",
             "underline",
             "strikeout",
+            "sign",
+            "repair",
         ].includes(normalized);
     }
 
@@ -127,6 +131,14 @@ export class ClientExecutor {
             }
             const mode = params.mode || "smart";
             return await executeMarkup(file, { action: normalizedTool as any, boxes: parsedBoxes, mode }, originalPassword);
+        }
+
+        if (normalizedTool === "sign") {
+            return await executeSignPdf(file, params, originalPassword);
+        }
+
+        if (normalizedTool === "repair") {
+            return await executePdfcpuWasmOptimize(file, originalPassword);
         }
 
         // Password-protected files route to Cloud to preserve existing relock pipeline
@@ -309,6 +321,15 @@ function normalizeTool(tool: string): string {
         case "strikethrough_pdf":
         case "strikethrough-pdf":
             return "strikeout";
+        case "sign":
+        case "sign_pdf":
+        case "sign-pdf":
+            return "sign";
+        case "repair":
+        case "repair_pdf":
+        case "repair-pdf":
+        case "structure_repair":
+            return "repair";
         default:
             return tool;
     }
