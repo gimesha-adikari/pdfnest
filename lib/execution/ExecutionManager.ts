@@ -40,18 +40,20 @@ export class ExecutionManager {
                     fallbackOccurred: false,
                 };
             } catch (err: unknown) {
-                if (mode === "cloud" && clientSupported) {
-                    throw new ExecutionError(
-                        "CLOUD_UNAVAILABLE",
-                        "Cloud processing is currently unavailable. The backend service is offline or unreachable. Switch to Auto or Device mode to process locally.",
-                        err
-                    );
-                } else if (!clientSupported) {
-                    throw new ExecutionError(
-                        "BACKEND_UNAVAILABLE",
-                        "This tool requires the PDFNest processing service, which is currently unavailable.",
-                        err
-                    );
+                if (err instanceof ExecutionError && err.code === "CLOUD_UNAVAILABLE") {
+                    if (mode === "cloud" && clientSupported) {
+                        throw new ExecutionError(
+                            "CLOUD_UNAVAILABLE",
+                            "Cloud processing is currently unavailable. The backend service is offline or unreachable. Switch to Auto or Device mode to process locally.",
+                            err
+                        );
+                    } else if (!clientSupported) {
+                        throw new ExecutionError(
+                            "BACKEND_UNAVAILABLE",
+                            "This tool requires the PDFNest processing service, which is currently unavailable.",
+                            err
+                        );
+                    }
                 }
                 throw err;
             }
@@ -77,7 +79,8 @@ export class ExecutionManager {
                 };
             } catch (err: unknown) {
                 // If password protected file requires cloud relocking pipeline, fallback to cloud
-                if (err instanceof ExecutionError && err.code === "UNSUPPORTED_CLIENT_OP") {
+                const hasPassword = Boolean(options.password || (files[0] as any)?.originalPassword);
+                if (err instanceof ExecutionError && err.code === "UNSUPPORTED_CLIENT_OP" && hasPassword) {
                     console.info("[ExecutionManager] Password-protected file detected in Device mode. Routing to Cloud relock pipeline.");
                     try {
                         const blob = await CloudExecutor.execute(options);
@@ -91,11 +94,14 @@ export class ExecutionManager {
                         if (cloudErr?.code === "USER_CANCELLATION" || options.signal?.aborted) {
                             throw cloudErr;
                         }
-                        throw new ExecutionError(
-                            "CLOUD_UNAVAILABLE",
-                            "This encrypted document requires server-side processing, but the backend service is currently unreachable.",
-                            cloudErr
-                        );
+                        if (cloudErr instanceof ExecutionError && cloudErr.code === "CLOUD_UNAVAILABLE") {
+                            throw new ExecutionError(
+                                "CLOUD_UNAVAILABLE",
+                                "This encrypted document requires server-side processing, but the backend service is currently unreachable.",
+                                cloudErr
+                            );
+                        }
+                        throw cloudErr;
                     }
                 }
 
@@ -148,11 +154,14 @@ export class ExecutionManager {
                     if (cloudErr?.code === "USER_CANCELLATION" || options.signal?.aborted) {
                         throw cloudErr;
                     }
-                    throw new ExecutionError(
-                        "CLOUD_UNAVAILABLE",
-                        "Local processing could not complete and cloud processing is currently unreachable.",
-                        cloudErr
-                    );
+                    if (cloudErr instanceof ExecutionError && cloudErr.code === "CLOUD_UNAVAILABLE") {
+                        throw new ExecutionError(
+                            "CLOUD_UNAVAILABLE",
+                            "Local processing could not complete and cloud processing is currently unreachable.",
+                            cloudErr
+                        );
+                    }
+                    throw cloudErr;
                 }
             }
         }
@@ -170,11 +179,14 @@ export class ExecutionManager {
             if (cloudErr?.code === "USER_CANCELLATION" || options.signal?.aborted) {
                 throw cloudErr;
             }
-            throw new ExecutionError(
-                "CLOUD_UNAVAILABLE",
-                "This document is too large for device processing, and cloud processing is currently unreachable.",
-                cloudErr
-            );
+            if (cloudErr instanceof ExecutionError && cloudErr.code === "CLOUD_UNAVAILABLE") {
+                throw new ExecutionError(
+                    "CLOUD_UNAVAILABLE",
+                    "This document is too large for device processing, and cloud processing is currently unreachable.",
+                    cloudErr
+                );
+            }
+            throw cloudErr;
         }
     }
 }
@@ -217,6 +229,14 @@ function getToolPolicy(tool: string): ToolPolicy {
         case "repair_pdf":
         case "repair-pdf":
         case "structure_repair":
+        case "code":
+        case "code_to_pdf":
+        case "code-to-pdf":
+        case "markdown":
+        case "markdown_to_pdf":
+        case "markdown-to-pdf":
+        case "md_to_pdf":
+        case "md-to-pdf":
             return "CLIENT_PREFERRED";
         case "watermark":
         case "add_text":
@@ -290,6 +310,17 @@ function buildOutputFileName(tool: string, originalName: string): string {
         case "repair-pdf":
         case "structure_repair":
             return `repaired_${originalName}`;
+        case "code":
+        case "code_to_pdf":
+        case "code-to-pdf":
+        case "markdown":
+        case "markdown_to_pdf":
+        case "markdown-to-pdf":
+        case "md_to_pdf":
+        case "md-to-pdf": {
+            const rawBase = originalName.substring(0, originalName.lastIndexOf(".")) || originalName;
+            return `converted_${rawBase}.pdf`;
+        }
         default:
             return `${base}-${tool}.pdf`;
     }

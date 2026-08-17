@@ -6,19 +6,22 @@ export function getFriendlyErrorMessage(error: unknown): string {
         return "Something went wrong.";
     }
 
-    const err = error as ClientError;
+    const err = error as any;
 
-    if (err.billing) {
-        return err.billing.message;
+    const billing: BackendError | undefined = err?.billing || err?.originalError?.billing;
+    if (billing) {
+        return billing.message || "Request limit reached.";
     }
 
-    if (err instanceof Error) {
-        const msg = err.message || "";
+    if (error instanceof Error) {
+        const msg = error.message || "";
         const lowerMsg = msg.toLowerCase();
 
+        const status = typeof err?.status === "number" ? err.status : err?.originalError?.status;
+
         if (
-            err.status === 0 ||
-            (err.status && err.status >= 502 && err.status <= 504) ||
+            status === 0 ||
+            (typeof status === "number" && status >= 502 && status <= 504) ||
             lowerMsg === "failed to fetch" ||
             lowerMsg === "network error" ||
             lowerMsg === "econnrefused"
@@ -62,10 +65,11 @@ export function getFriendlyErrorMessage(error: unknown): string {
 }
 
 export function handleClientError(error: unknown): string {
-    const err = error as ClientError;
-    if (err.billing) {
-        notifyBackendError(err.billing);
-        return err.billing.message;
+    const err = error as any;
+    const billing: BackendError | undefined = err.billing || err.originalError?.billing;
+    if (billing) {
+        notifyBackendError(billing);
+        return billing.message || "Request limit reached.";
     }
 
     const message = getFriendlyErrorMessage(error);
