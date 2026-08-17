@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { PenTool, ShieldCheck, Loader2, Plus, ChevronLeft, ChevronRight } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/api";
+import { getFriendlyErrorMessage } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
@@ -11,9 +11,12 @@ import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import SignaturePad from "@/components/pdf/SignaturePad";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
-import {DraggableSignaturePlaceholder} from "@/components/pdf/DraggableSignaturePlaceholder";
+import { DraggableSignaturePlaceholder } from "@/components/pdf/DraggableSignaturePlaceholder";
 import { usePreview } from "@/lib/preview/usePreview";
 import type { PreviewError } from "@/lib/preview/types";
+import { ExecutionManager } from "@/lib/execution/ExecutionManager";
+import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
+import type { ProcessingMode } from "@/lib/execution/types";
 
 type Stamp = {
     id: number;
@@ -35,6 +38,7 @@ export default function SignPdfWorkspace() {
 
     const [signatureBlob, setSignatureBlob] = useState<Blob | null>(null);
     const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
 
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
@@ -55,7 +59,6 @@ export default function SignPdfWorkspace() {
     useEffect(() => {
         if (signatureBlob) {
             const url = URL.createObjectURL(signatureBlob);
-            // eslint-disable-next-line react-hooks/set-state-in-effect
             setSignatureUrl(url);
             return () => URL.revokeObjectURL(url);
         } else {
@@ -176,7 +179,7 @@ export default function SignPdfWorkspace() {
     const handleSignDocument = async () => {
         requireAuth(async () => {
             if (!file || !signatureBlob || stamps.length === 0) {
-                notify("Please place at least one signature on the document.","warning");
+                notify("Please place at least one signature on the document.", "warning");
                 return;
             }
 
@@ -185,25 +188,16 @@ export default function SignPdfWorkspace() {
                 setSuccess(false);
 
                 const container = previewContainerRef.current;
-                if (!container) throw new Error("Preview container lost");
-
-                const img = container.querySelector("img");
-
-                if (!img) {
-                    throw new Error("Preview image missing");
-                }
-
-                const rect = img.getBoundingClientRect();
+                const img = container?.querySelector("img");
+                const rect = img ? img.getBoundingClientRect() : (container ? container.getBoundingClientRect() : { width: 600, height: 800 });
+                const baseWidth = (rect.width && rect.width > 0) ? rect.width : 600;
+                const baseHeight = (rect.height && rect.height > 0) ? rect.height : 800;
 
                 const backendStamps = stamps.map(stamp => {
-                    const pageDim = pageDimensions[stamp.page];
+                    const pageDim = pageDimensions[stamp.page] || { width: 600, height: 800 };
 
-                    if (!pageDim) {
-                        throw new Error(`Missing dimensions for page ${stamp.page}`);
-                    }
-
-                    const scaleX = pageDim.width / rect.width;
-                    const scaleY = pageDim.height / rect.height;
+                    const scaleX = pageDim.width / baseWidth;
+                    const scaleY = pageDim.height / baseHeight;
 
                     return {
                         page: stamp.page,
@@ -214,24 +208,26 @@ export default function SignPdfWorkspace() {
                     };
                 });
 
-                const formData = new FormData();
-                formData.append("file", file);
-                formData.append("signature", new File([signatureBlob], "signature.png", { type: "image/png" }));
-                formData.append("stamps", JSON.stringify(backendStamps));
-
-
-
-                const responseBlob = await uploadAndDownloadFile("/api/structure/sign", formData);
+                const result = await ExecutionManager.run({
+                    tool: "sign",
+                    files: [file],
+                    mode: processingMode,
+                    params: {
+                        signature: signatureBlob,
+                        stamps: backendStamps,
+                    },
+                    password: (file as any).originalPassword,
+                });
 
                 setDownloadData({
-                    blob: responseBlob,
-                    fileName: `signed_${file.name}`
+                    blob: result.blob,
+                    fileName: result.fileName,
                 });
 
                 setSuccess(true);
                 router.push(`/${toolId}/download`);
             } catch (err: any) {
-                notify(err.message || "Failed to sign document", err);
+                notify(getFriendlyErrorMessage(err) || "Failed to sign document", "error");
             } finally {
                 setIsProcessing(false);
             }
@@ -253,13 +249,19 @@ export default function SignPdfWorkspace() {
 
                     <hr className="border-[color:var(--border)]" />
 
-                    <h2 className="text-sm font-bold uppercase tracking-wider text-[color:var(--muted)]">2. Document Info</h2>
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-[color:var(--muted)]">2. Document Info & Settings</h2>
                     <div className="space-y-4">
                         <PdfFileInfo file={file} onClear={() => {
                             setFile(null);
                             setStamps([]);
                             router.push(`/${toolId}`);
                         }} />
+
+                        <ProcessingModeSelector
+                            mode={processingMode}
+                            onChange={setProcessingMode}
+                            disabled={isProcessing}
+                        />
 
                         {success && (
                             <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-900 dark:text-emerald-200 flex items-start gap-3">
