@@ -74,10 +74,10 @@ export function isToolAvailableOffline(tool: ToolItem): boolean {
 export const TOTAL_TOOL_COUNT = 37;
 
 /**
- * Number of truly offline-capable tools (16 fully offline standalone + 1 metadata + 1 studio suite).
+ * Number of truly offline-capable tools (16 fully offline standalone + 1 metadata + 1 studio suite + Wave 8 sign/repair + Wave 9 code/markdown).
  */
-export const OFFLINE_TOOL_COUNT = 24;
-export const CLIENT_CAPABLE_TOOL_COUNT = 24;
+export const OFFLINE_TOOL_COUNT = 26;
+export const CLIENT_CAPABLE_TOOL_COUNT = 26;
 
 export const NAV_TOOLS_FALLBACK: ToolItem[] = [
     {
@@ -793,9 +793,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Convert documentation markdown files (.md) into clean, typography-focused stylized portrait vector PDFs.",
         href: "/markdown-to-pdf",
         category: "create",
-        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side markdown conversion engine" },
-        clientCapable: false,
-        toolPolicy: "BACKEND_ONLY",
+        capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false },
+        clientCapable: true,
+        toolPolicy: "CLIENT_PREFERRED",
         seoTitle: "Convert Markdown to PDF Online Free",
         seoDescription: "Render MD files into beautiful, formatted PDF documents with proper typography and layouts.",
         intent: "Users want to turn plain text markdown into a visually appealing document.",
@@ -827,9 +827,9 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         description: "Convert development script source files into clean syntax-highlighted printable vector layout sheets.",
         href: "/code-to-pdf",
         category: "create",
-        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side syntax render engine" },
-        clientCapable: false,
-        toolPolicy: "BACKEND_ONLY",
+        capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false },
+        clientCapable: true,
+        toolPolicy: "CLIENT_PREFERRED",
         seoTitle: "Convert Source Code to PDF Online Free",
         seoDescription: "Format programming code files into beautiful PDFs with full syntax highlighting and line numbers.",
         intent: "Users want to print or share code snippets in a readable, formatted way.",

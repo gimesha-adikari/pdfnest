@@ -16,6 +16,8 @@ import { executePdfToText } from "./text/pdfToTextClient";
 import { executeCompressPdf } from "./optimize/compressClient";
 import { executeMarkup } from "./markup/markupClient";
 import { executeSignPdf } from "./sign/signClient";
+import { executeCodeToPdf } from "./document/codeClient";
+import { executeMarkdownToPdf } from "./document/markdownClient";
 
 export class ClientExecutor {
     static isSupported(tool: string): boolean {
@@ -44,6 +46,8 @@ export class ClientExecutor {
             "strikeout",
             "sign",
             "repair",
+            "code_to_pdf",
+            "markdown_to_pdf",
         ].includes(normalized);
     }
 
@@ -139,6 +143,34 @@ export class ClientExecutor {
 
         if (normalizedTool === "repair") {
             return await executePdfcpuWasmOptimize(file, originalPassword);
+        }
+
+        if (normalizedTool === "code_to_pdf") {
+            return await executeCodeToPdf(file, {
+                paperSize: params.paperSize,
+                marginTop: params.marginTop,
+                marginBottom: params.marginBottom,
+                marginLeft: params.marginLeft,
+                marginRight: params.marginRight,
+                fontSize: params.fontSize,
+                lineHeight: params.lineHeight,
+                tabSize: params.tabSize,
+                language: params.language,
+                fileName: file.name,
+            });
+        }
+
+        if (normalizedTool === "markdown_to_pdf") {
+            return await executeMarkdownToPdf(file, {
+                paperSize: params.paperSize,
+                marginTop: params.marginTop,
+                marginBottom: params.marginBottom,
+                marginLeft: params.marginLeft,
+                marginRight: params.marginRight,
+                fontSize: params.fontSize,
+                lineHeight: params.lineHeight,
+                fileName: file.name,
+            });
         }
 
         // Password-protected files route to Cloud to preserve existing relock pipeline
@@ -330,6 +362,16 @@ function normalizeTool(tool: string): string {
         case "repair-pdf":
         case "structure_repair":
             return "repair";
+        case "code_to_pdf":
+        case "code-to-pdf":
+        case "code":
+            return "code_to_pdf";
+        case "markdown_to_pdf":
+        case "markdown-to-pdf":
+        case "md_to_pdf":
+        case "md-to-pdf":
+        case "markdown":
+            return "markdown_to_pdf";
         default:
             return tool;
     }

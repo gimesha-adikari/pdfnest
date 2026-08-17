@@ -89,10 +89,35 @@ export class CloudExecutor {
             ) {
                 throw new ExecutionError("USER_CANCELLATION", "Request cancelled by user.", err);
             }
+
+            const clientErr = err as any;
+            const isUnavailable = isNetworkOrServiceUnavailable(clientErr);
+            const errorCode = isUnavailable ? "CLOUD_UNAVAILABLE" : "CLOUD_FAILURE";
             const message = err instanceof Error ? err.message : "Cloud execution rejected or failed.";
-            throw new ExecutionError("CLOUD_FAILURE", message, err);
+
+            const execErr = new ExecutionError(errorCode, message, err);
+            if (typeof clientErr?.status === "number") execErr.status = clientErr.status;
+            if (clientErr?.billing) execErr.billing = clientErr.billing;
+            throw execErr;
         }
     }
+}
+
+function isNetworkOrServiceUnavailable(err: any): boolean {
+    if (!err) return false;
+    if (err.status === 0) return true;
+    if (typeof err.status === "number" && err.status >= 502 && err.status <= 504) return true;
+    const msg = typeof err.message === "string" ? err.message.toLowerCase() : "";
+    if (
+        msg === "pdfnest processing service is currently unavailable." ||
+        msg === "network transport failure" ||
+        msg.includes("econnrefused") ||
+        msg.includes("failed to fetch") ||
+        msg.includes("network error")
+    ) {
+        return true;
+    }
+    return false;
 }
 
 function normalizeTool(tool: string): string {
@@ -180,6 +205,16 @@ function normalizeTool(tool: string): string {
         case "repair-pdf":
         case "structure_repair":
             return "repair";
+        case "code_to_pdf":
+        case "code-to-pdf":
+        case "code":
+            return "code_to_pdf";
+        case "markdown_to_pdf":
+        case "markdown-to-pdf":
+        case "md_to_pdf":
+        case "md-to-pdf":
+        case "markdown":
+            return "markdown_to_pdf";
         default:
             return tool;
     }
@@ -276,6 +311,16 @@ function getEndpointForTool(tool: string, params?: Record<string, any>): string 
         case "repair-pdf":
         case "structure_repair":
             return "/api/structure/repair";
+        case "code_to_pdf":
+        case "code-to-pdf":
+        case "code":
+            return "/api/conversion/code-to-pdf";
+        case "markdown_to_pdf":
+        case "markdown-to-pdf":
+        case "md_to_pdf":
+        case "md-to-pdf":
+        case "markdown":
+            return "/api/conversion/markdown-to-pdf";
         default:
             return `/api/structure/${tool}`;
     }

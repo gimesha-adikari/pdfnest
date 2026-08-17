@@ -1,5 +1,7 @@
 "use client";
 
+import type { BackendError } from "@/lib/api";
+
 export type ProcessingMode = "auto" | "device" | "cloud";
 
 export type ToolPolicy =
@@ -56,11 +58,19 @@ export type ExecutionErrorCode =
 export class ExecutionError extends Error {
     code: ExecutionErrorCode;
     originalError?: unknown;
+    status?: number;
+    billing?: BackendError;
 
     constructor(code: ExecutionErrorCode, message: string, originalError?: unknown) {
         super(message);
         this.name = "ExecutionError";
         this.code = code;
         this.originalError = originalError;
+
+        if (originalError && typeof originalError === "object") {
+            const orig = originalError as any;
+            if (typeof orig.status === "number") this.status = orig.status;
+            if (orig.billing) this.billing = orig.billing;
+        }
     }
 }
