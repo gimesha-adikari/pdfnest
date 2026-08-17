@@ -67,6 +67,7 @@ test.describe("PDFNest Truth-Based Capability & Offline Architecture", () => {
         await expect(page.locator("main a[href='/strikeout-pdf']")).toBeVisible();
         await expect(page.locator("main a[href='/sign-pdf']")).toBeVisible();
         await expect(page.locator("main a[href='/repair-pdf']")).toBeVisible();
+        await expect(page.locator("main a[href='/code-to-pdf']")).toBeVisible();
         await expect(page.locator("main a[href='/studio']")).toBeVisible();
     });
 
@@ -79,7 +80,7 @@ test.describe("PDFNest Truth-Based Capability & Offline Architecture", () => {
         await expect(footer).toBeVisible();
 
         // Footer should NOT link to backend-required tools when offline
-        await expect(footer.locator("a[href='/strikeout-pdf']")).toHaveCount(0);
+        await expect(footer.locator("a[href='/edit-pdf']")).toHaveCount(0);
         await expect(footer.locator("a[href='/word-to-pdf']")).toHaveCount(0);
         await expect(footer.locator("a[href='/redact-pdf']")).toHaveCount(0);
 

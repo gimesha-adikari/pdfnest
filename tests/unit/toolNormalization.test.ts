@@ -62,6 +62,8 @@ assert.ok(offlineHrefs.has("/compress-pdf"), "Compress PDF must be offline-capab
 assert.ok(offlineHrefs.has("/highlight-pdf"), "Highlight PDF must be offline-capable");
 assert.ok(offlineHrefs.has("/underline-pdf"), "Underline PDF must be offline-capable");
 assert.ok(offlineHrefs.has("/strikeout-pdf"), "Strikeout PDF must be offline-capable");
+assert.ok(offlineHrefs.has("/code-to-pdf"), "Code to PDF must be offline-capable");
+assert.ok(offlineHrefs.has("/markdown-to-pdf"), "Markdown to PDF must be offline-capable");
 assert.ok(offlineHrefs.has("/edit-metadata"), "Edit Metadata must be offline-capable (with fallback)");
 assert.ok(offlineHrefs.has("/studio"), "Studio must be offline-capable (hybrid workspace)");
 
