@@ -264,11 +264,11 @@ test.describe("PDFNest Full-Site Online & Offline Regression Audit", () => {
         await simulateBackendOffline(page);
 
         const backendOnlyRoutes = [
-            "/strikeout-pdf",
-            "/highlight-pdf",
-            "/underline-pdf",
             "/excel-to-pdf",
             "/word-to-pdf",
+            "/powerpoint-to-pdf",
+            "/redact-pdf",
+            "/url-to-pdf",
         ];
 
         for (const route of backendOnlyRoutes) {

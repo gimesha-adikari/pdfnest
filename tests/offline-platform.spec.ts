@@ -38,9 +38,9 @@ test.describe("PDFNest Truth-Based Capability & Offline Architecture", () => {
         const count = await toolCards.count();
         expect(count).toBe(OFFLINE_TOOL_COUNT);
 
-        // 3. Verify backend-required tools (e.g. Strikeout, Word to PDF, Redact, OCR) are NOT present in directory
-        await expect(page.locator("main a[href='/strikeout-pdf']")).toHaveCount(0);
+        // 3. Verify backend-required tools (e.g. Word to PDF, Excel to PDF, Redact, OCR, Edit) are NOT present in directory
         await expect(page.locator("main a[href='/word-to-pdf']")).toHaveCount(0);
+        await expect(page.locator("main a[href='/excel-to-pdf']")).toHaveCount(0);
         await expect(page.locator("main a[href='/redact-pdf']")).toHaveCount(0);
         await expect(page.locator("main a[href='/image-to-searchable-pdf']")).toHaveCount(0);
         await expect(page.locator("main a[href='/edit-pdf']")).toHaveCount(0);
@@ -62,6 +62,11 @@ test.describe("PDFNest Truth-Based Capability & Offline Architecture", () => {
         await expect(page.locator("main a[href='/pdf-to-text']")).toBeVisible();
         await expect(page.locator("main a[href='/compress-pdf']")).toBeVisible();
         await expect(page.locator("main a[href='/edit-metadata']")).toBeVisible();
+        await expect(page.locator("main a[href='/highlight-pdf']")).toBeVisible();
+        await expect(page.locator("main a[href='/underline-pdf']")).toBeVisible();
+        await expect(page.locator("main a[href='/strikeout-pdf']")).toBeVisible();
+        await expect(page.locator("main a[href='/sign-pdf']")).toBeVisible();
+        await expect(page.locator("main a[href='/repair-pdf']")).toBeVisible();
         await expect(page.locator("main a[href='/studio']")).toBeVisible();
     });
 
@@ -86,8 +91,8 @@ test.describe("PDFNest Truth-Based Capability & Offline Architecture", () => {
     test("3. Direct URLs to backend-required tools render BackendOnlyToolGuard without upload controls", async ({ page }) => {
         await simulateBackendOffline(page);
 
-        // Visit /strikeout-pdf directly
-        await page.goto("/strikeout-pdf");
+        // Visit /word-to-pdf directly (which is BACKEND_ONLY)
+        await page.goto("/word-to-pdf");
         await page.waitForLoadState("networkidle");
 
         // Should render Service Unavailable guard
