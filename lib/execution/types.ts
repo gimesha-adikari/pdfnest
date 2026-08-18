@@ -31,10 +31,21 @@ export interface ExecutionResult {
     telemetry?: Record<string, any>;
 }
 
+export type SafetyRejectionCategory =
+    | "POLICY_RESTRICTION"
+    | "OCR_REQUIRED"
+    | "FILE_SIZE_LIMIT"
+    | "FILE_COUNT_LIMIT"
+    | "LOW_DEVICE_MEMORY"
+    | "UNSUPPORTED_WASM"
+    | "WASM_UNAVAILABLE"
+    | "WASM_MEMORY_LIMIT";
+
 export interface SafetyGateEvaluation {
     eligible: boolean;
     recommendedMode: "client" | "cloud";
     reason?: string;
+    rejectionCategory?: SafetyRejectionCategory;
     metrics?: {
         fileSizeMB: number;
         totalFiles: number;

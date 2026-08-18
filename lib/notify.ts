@@ -212,3 +212,13 @@ export function notifyBackendError(error: BackendError | null | undefined) {
         action,
     });
 }
+
+export function notifyHybridFallback(reason?: string) {
+    if (typeof window === "undefined") return;
+
+    notify("Processed using Cloud fallback", "info", {
+        title: "Cloud Fallback Engaged",
+        description: "Your browser couldn't safely process this file locally, so it was processed securely in the cloud.",
+        duration: 5000,
+    });
+}
