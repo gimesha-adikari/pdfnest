@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
     FileText,
@@ -13,6 +13,8 @@ import {
     X,
     Loader2,
     Braces,
+    Languages,
+    ChevronDown,
 } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
@@ -22,11 +24,26 @@ import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { useAsyncTask } from "@/hooks/useAsyncTask";
+import { getOCRLanguages, OCRLanguage } from "@/lib/ocr";
+
+const AUTO_LANGUAGE: OCRLanguage = { code: "auto", name: "Auto detect" };
 
 export default function PdfToMarkdownWorkspace() {
     const { requireAuth } = useAuth();
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
+
+    // Reusable OCR Language State
+    const [languages, setLanguages] = useState<OCRLanguage[]>([
+        AUTO_LANGUAGE,
+        { code: "eng", name: "English" },
+    ]);
+    const [lang, setLang] = useState("auto");
+    const [isLoadingLanguages, setIsLoadingLanguages] = useState(true);
+    const [isLanguageOpen, setIsLanguageOpen] = useState(false);
+    const [languageSearch, setLanguageSearch] = useState("");
+
+    const languagePickerRef = useRef<HTMLDivElement | null>(null);
 
     const currentFileRef = useRef<File | null>(file);
     useEffect(() => {
@@ -34,6 +51,81 @@ export default function PdfToMarkdownWorkspace() {
             currentFileRef.current = file;
         }
     }, [file]);
+
+    // Fetch centralized OCR languages on mount (reusing @/lib/ocr getOCRLanguages)
+    useEffect(() => {
+        let cancelled = false;
+
+        (async () => {
+            try {
+                setIsLoadingLanguages(true);
+                const data = await getOCRLanguages();
+
+                if (cancelled) return;
+
+                const nextLanguages = data.languages?.length
+                    ? data.languages
+                    : [{ code: "eng", name: "English" }];
+
+                const nextLanguagesWithAuto = [
+                    AUTO_LANGUAGE,
+                    ...nextLanguages.filter((item) => item.code !== "auto"),
+                ];
+
+                setLanguages(nextLanguagesWithAuto);
+                setLang("auto");
+            } catch (err) {
+                // Gracefully fallback to default languages if offline or backend error
+                if (!cancelled) {
+                    setLanguages([
+                        AUTO_LANGUAGE,
+                        { code: "eng", name: "English" },
+                    ]);
+                    setLang("auto");
+                }
+            } finally {
+                if (!cancelled) setIsLoadingLanguages(false);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    // Dismiss language dropdown on click outside
+    useEffect(() => {
+        const onMouseDown = (event: MouseEvent) => {
+            if (!languagePickerRef.current) return;
+            if (!languagePickerRef.current.contains(event.target as Node)) {
+                setIsLanguageOpen(false);
+                setLanguageSearch("");
+            }
+        };
+
+        document.addEventListener("mousedown", onMouseDown);
+        return () => document.removeEventListener("mousedown", onMouseDown);
+    }, []);
+
+    const selectedLanguage = useMemo(() => {
+        return (
+            languages.find((item) => item.code === lang) ?? {
+                code: lang,
+                name: lang,
+            }
+        );
+    }, [lang, languages]);
+
+    const filteredLanguages = useMemo(() => {
+        const q = languageSearch.trim().toLowerCase();
+        if (!q) return languages;
+
+        return languages.filter(
+            (item) =>
+                item.name.toLowerCase().includes(q) ||
+                item.code.toLowerCase().includes(q)
+        );
+    }, [languageSearch, languages]);
 
     const handleTaskComplete = async (downloadUrl: string) => {
         try {
@@ -78,7 +170,7 @@ export default function PdfToMarkdownWorkspace() {
         try {
             const formData = new FormData();
             formData.append("file", file);
-            formData.append("lang", "eng");
+            formData.append("lang", lang);
 
             const typedFile = file as any;
             if (typedFile.originalPassword) {
@@ -172,8 +264,101 @@ export default function PdfToMarkdownWorkspace() {
                         </div>
                     </div>
 
+                    {/* OCR Language Selector (Reusing Centralized System) */}
+                    <div className="mt-6 pt-5 border-t border-[color:var(--border)]/40">
+                        <label className="block mb-2 text-xs font-semibold uppercase tracking-wider text-[color:var(--muted)] flex items-center gap-1.5">
+                            <Languages size={14} className="text-indigo-400" />
+                            OCR Language (for scanned pages)
+                        </label>
+
+                        <div ref={languagePickerRef} className="relative" data-testid="pdf-to-markdown-language-selector">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsLanguageOpen((prev) => !prev);
+                                    setLanguageSearch("");
+                                }}
+                                className="flex w-full items-center justify-between gap-3 rounded-xl border border-[color:var(--border)] bg-[var(--card)] px-3.5 py-2.5 text-left text-sm font-medium text-[color:var(--foreground)] outline-none transition hover:border-indigo-500 focus:border-indigo-500"
+                                aria-expanded={isLanguageOpen}
+                                aria-haspopup="listbox"
+                            >
+                                <div className="min-w-0">
+                                    <div className="truncate font-semibold">
+                                        {selectedLanguage.name}
+                                    </div>
+                                    <div className="truncate text-[11px] text-[color:var(--muted)]">
+                                        {selectedLanguage.code}
+                                    </div>
+                                </div>
+                                <ChevronDown
+                                    size={16}
+                                    className={`shrink-0 transition ${isLanguageOpen ? "rotate-180" : ""}`}
+                                />
+                            </button>
+
+                            {isLanguageOpen && (
+                                <div className="absolute left-0 top-[calc(100%+8px)] z-50 w-full rounded-2xl border border-[color:var(--border)] bg-[var(--card)] shadow-2xl">
+                                    <div className="border-b border-[color:var(--border)] p-3">
+                                        <div className="relative">
+                                            <input
+                                                value={languageSearch}
+                                                onChange={(e) => setLanguageSearch(e.target.value)}
+                                                placeholder="Search language..."
+                                                className="w-full rounded-xl border border-[color:var(--border)] bg-[var(--background)] py-2 pl-3 pr-3 text-sm outline-none focus:border-indigo-500"
+                                                autoComplete="off"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="max-h-60 overflow-y-auto p-2">
+                                        {isLoadingLanguages ? (
+                                            <div className="px-3 py-4 text-sm text-[color:var(--muted)]">
+                                                Loading languages...
+                                            </div>
+                                        ) : filteredLanguages.length === 0 ? (
+                                            <div className="px-3 py-4 text-sm text-[color:var(--muted)]">
+                                                No languages match your search.
+                                            </div>
+                                        ) : (
+                                            filteredLanguages.map((item) => {
+                                                const active = item.code === lang;
+
+                                                return (
+                                                    <button
+                                                        key={item.code}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setLang(item.code);
+                                                            setIsLanguageOpen(false);
+                                                            setLanguageSearch("");
+                                                        }}
+                                                        className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left transition ${
+                                                            active
+                                                                ? "bg-indigo-500/10 text-[color:var(--foreground)]"
+                                                                : "hover:bg-[color:var(--background)]"
+                                                        }`}
+                                                    >
+                                                        <div className="min-w-0">
+                                                            <div className="truncate font-semibold text-sm">
+                                                                {item.name}
+                                                            </div>
+                                                            <div className="truncate text-[11px] text-[color:var(--muted)]">
+                                                                {item.code}
+                                                            </div>
+                                                        </div>
+                                                        {active && <Check size={14} className="text-indigo-400 shrink-0" />}
+                                                    </button>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
                     {/* Primary Action Button */}
-                    <div className="mt-8">
+                    <div className="mt-6">
                         <PdfActionButton
                             onClick={handleConvert}
                             loading={isSubmitting}
