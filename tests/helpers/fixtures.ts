@@ -12,4 +12,6 @@ export const FIXTURES = {
   SAMPLE_PY: path.join(FIXTURES_DIR, 'sample.py'),
   SAMPLE_PNG: path.join(FIXTURES_DIR, 'sample.png'),
   SAMPLE_JPG: path.join(FIXTURES_DIR, 'sample.jpg'),
+  GIMESHA_CV: path.join(FIXTURES_DIR, 'gimesha_cv.pdf'),
+  LOCKED_SAMPLE_PDF: path.join(FIXTURES_DIR, 'locked_sample.pdf'),
 } as const;

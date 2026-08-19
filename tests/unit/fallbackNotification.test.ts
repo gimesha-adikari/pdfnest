@@ -14,6 +14,18 @@
 
 import assert from "assert";
 import { PDFDocument } from "pdf-lib";
+
+let toastNotifications: any[] = [];
+
+// Setup global window mock BEFORE notify imports
+const windowMock = {
+    __GLOBAL_NOTIFY__: (toast: any) => {
+        toastNotifications.push(toast);
+    },
+};
+(globalThis as any).window = windowMock;
+(global as any).window = windowMock;
+
 import { ExecutionManager } from "../../lib/execution/ExecutionManager";
 import { ClientExecutor } from "../../lib/execution/ClientExecutor";
 import { CloudExecutor } from "../../lib/execution/CloudExecutor";
@@ -61,7 +73,7 @@ async function runTests() {
 
         // 1. Client Success -> No Fallback Notification
         console.log("\n[Test 1] Client Success -> No Fallback Notification");
-        toastNotifications = [];
+        toastNotifications.length = 0;
         const resClient = await ExecutionManager.run({
             tool: "rotate",
             files: [validPdf],
@@ -76,7 +88,7 @@ async function runTests() {
 
         // 2. Explicit Cloud Mode -> No Fallback Notification
         console.log("\n[Test 2] Explicit Cloud Mode -> No Fallback Notification");
-        toastNotifications = [];
+        toastNotifications.length = 0;
         const resDirectCloud = await ExecutionManager.run({
             tool: "rotate",
             files: [validPdf],
@@ -91,7 +103,7 @@ async function runTests() {
 
         // 3. Client Failure -> Cloud Success -> Fallback Notification Emitted
         console.log("\n[Test 3] Client Failure in Auto Mode -> Fallback Notification Emitted");
-        toastNotifications = [];
+        toastNotifications.length = 0;
         ClientExecutor.execute = async () => {
             throw new Error("Simulated WASM memory corruption error: OOM at 0x00FF89");
         };
@@ -116,7 +128,7 @@ async function runTests() {
 
         // 4. WASM SafetyGate Rejection -> Cloud Success -> Fallback Notification Emitted
         console.log("\n[Test 4] WASM SafetyGate Rejection in Auto Mode -> Fallback Notification Emitted");
-        toastNotifications = [];
+        toastNotifications.length = 0;
         resetWasmProbeCache();
         // @ts-ignore
         delete globalThis.WebAssembly;
