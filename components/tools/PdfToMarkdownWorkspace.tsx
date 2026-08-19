@@ -26,19 +26,16 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { useAsyncTask } from "@/hooks/useAsyncTask";
 import { getOCRLanguages, OCRLanguage } from "@/lib/ocr";
 
-const AUTO_LANGUAGE: OCRLanguage = { code: "auto", name: "Auto detect" };
-
 export default function PdfToMarkdownWorkspace() {
     const { requireAuth } = useAuth();
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
 
-    // Reusable OCR Language State
+    // Reusable OCR Language State (Scoped to English 'eng' default for PDF to Markdown, excluding 'auto')
     const [languages, setLanguages] = useState<OCRLanguage[]>([
-        AUTO_LANGUAGE,
         { code: "eng", name: "English" },
     ]);
-    const [lang, setLang] = useState("auto");
+    const [lang, setLang] = useState("eng");
     const [isLoadingLanguages, setIsLoadingLanguages] = useState(true);
     const [isLanguageOpen, setIsLanguageOpen] = useState(false);
     const [languageSearch, setLanguageSearch] = useState("");
@@ -52,7 +49,7 @@ export default function PdfToMarkdownWorkspace() {
         }
     }, [file]);
 
-    // Fetch centralized OCR languages on mount (reusing @/lib/ocr getOCRLanguages)
+    // Fetch centralized OCR languages on mount (excluding 'auto' and defaulting to 'eng')
     useEffect(() => {
         let cancelled = false;
 
@@ -63,25 +60,21 @@ export default function PdfToMarkdownWorkspace() {
 
                 if (cancelled) return;
 
-                const nextLanguages = data.languages?.length
+                const rawLanguages = data.languages?.length
                     ? data.languages
                     : [{ code: "eng", name: "English" }];
 
-                const nextLanguagesWithAuto = [
-                    AUTO_LANGUAGE,
-                    ...nextLanguages.filter((item) => item.code !== "auto"),
-                ];
+                const filteredLanguages = rawLanguages.filter((item) => item.code !== "auto");
 
-                setLanguages(nextLanguagesWithAuto);
-                setLang("auto");
+                setLanguages(filteredLanguages);
+                setLang((prev) => (prev && prev !== "auto" ? prev : "eng"));
             } catch (err) {
                 // Gracefully fallback to default languages if offline or backend error
                 if (!cancelled) {
                     setLanguages([
-                        AUTO_LANGUAGE,
                         { code: "eng", name: "English" },
                     ]);
-                    setLang("auto");
+                    setLang("eng");
                 }
             } finally {
                 if (!cancelled) setIsLoadingLanguages(false);
