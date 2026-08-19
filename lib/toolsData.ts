@@ -71,7 +71,7 @@ export function isToolAvailableOffline(tool: ToolItem): boolean {
 }
 
 /** Total number of tools in the full static registry. */
-export const TOTAL_TOOL_COUNT = 37;
+export const TOTAL_TOOL_COUNT = 38;
 
 /**
  * Number of truly offline-capable tools (16 fully offline standalone + 1 metadata + 1 studio suite + Wave 8 sign/repair + Wave 9 code/markdown).
@@ -544,6 +544,7 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         ],
         related: [
             "/pdf-to-word",
+            "/pdf-to-markdown",
             "/image-to-searchable-pdf"
         ],
         accept: ".pdf",
@@ -1018,6 +1019,41 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
             {
                 question: "Are images in the PDF transferred to the presentation?",
                 answer: "Yes, all vector graphics, raster images, and text are accurately extracted and placed onto the appropriate sequence layout slides."
+            }
+        ]
+    },
+    {
+        title: "PDF to Markdown",
+        description: "Convert PDF documents into clean, formatted GitHub-Flavored Markdown (GFM) text with preserved headers, tables, and images.",
+        href: "/pdf-to-markdown",
+        category: "convert",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side PDF analysis and Markdown conversion engine" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
+        seoTitle: "Convert PDF to Markdown Online Free",
+        seoDescription: "Convert PDF documents to clean GitHub-Flavored Markdown (GFM) while preserving headings, tables, code blocks, lists, and images.",
+        intent: "Users want to convert PDF documents into structured Markdown text for codebases and LLMs.",
+        keywords: [
+            "pdf to markdown",
+            "convert pdf to gfm",
+            "extract pdf markdown text",
+            "pdf to md converter"
+        ],
+        related: [
+            "/pdf-to-word",
+            "/pdf-to-text"
+        ],
+        accept: ".pdf",
+        multiple: false,
+        iconName: "FileCode",
+        faq: [
+            {
+                question: "Can I convert complex PDFs with tables and code blocks?",
+                answer: "Yes, our document analysis engine reconstructs headers, multi-column layouts, tables, code blocks, and embedded figures into valid GitHub-Flavored Markdown."
+            },
+            {
+                question: "Is the output safe for web display?",
+                answer: "Yes, all converted Markdown output is sanitized using DOMPurify before rendering."
             }
         ]
     },

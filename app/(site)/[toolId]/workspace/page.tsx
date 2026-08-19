@@ -23,6 +23,7 @@ import PdfToExcelWorkspace from "@/components/tools/PdfToExcelWorkspace";
 import PdfToImagesWorkspace from "@/components/tools/PdfToImagesWorkspace";
 import PdfToPowerPointWorkspace from "@/components/tools/PdfToPowerPointWorkspace";
 import PdfToTextWorkspace from "@/components/tools/PdfToTextWorkspace";
+import PdfToMarkdownWorkspace from "@/components/tools/PdfToMarkdownWorkspace";
 import PdfToWordWorkspace from "@/components/tools/PdfToWordWorkspace";
 import PowerPointToPdfWorkspace from "@/components/tools/PowerPointToPdfWorkspace";
 import RedactPdfWorkspace from "@/components/tools/RedactPdfWorkspace";
@@ -88,6 +89,7 @@ export default function SharedWorkspacePage() {
             {toolId === "pdf-to-images" && <PdfToImagesWorkspace />}
             {toolId === "pdf-to-powerpoint" && <PdfToPowerPointWorkspace />}
             {toolId === "pdf-to-text" && <PdfToTextWorkspace />}
+            {toolId === "pdf-to-markdown" && <PdfToMarkdownWorkspace />}
             {toolId === "pdf-to-word" && <PdfToWordWorkspace />}
             {toolId === "powerpoint-to-pdf" && <PowerPointToPdfWorkspace />}
             {toolId === "redact-pdf" && <RedactPdfWorkspace />}

@@ -188,6 +188,13 @@ function normalizeTool(tool: string): string {
         case "extract-text":
         case "ocr_extract_text":
             return "pdf_to_text";
+        case "pdf_to_markdown":
+        case "pdf-to-markdown":
+        case "to_markdown":
+        case "to-markdown":
+        case "extract_markdown":
+        case "extract-markdown":
+            return "pdf_to_markdown";
         case "compress":
         case "compress_pdf":
         case "compress-pdf":
@@ -285,6 +292,9 @@ function getEndpointForTool(tool: string, params?: Record<string, any>): string 
             return "/api/security/unlock";
         case "pdf_to_text":
             return "/api/ocr/extract-text";
+        case "pdf_to_markdown":
+        case "pdf-to-markdown":
+            return "/api/conversion/pdf-to-markdown-async";
         case "highlight":
         case "highlight_pdf":
         case "highlight-pdf":

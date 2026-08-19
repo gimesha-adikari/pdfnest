@@ -71,28 +71,65 @@ export function normalizeTool(rawTool: any): ToolItem | null {
     } as ToolItem;
 }
 
+export function getToolCanonicalKey(tool: ToolItem): string {
+    const href = tool.href || (tool as any).Href || (tool as any).slug || (tool as any).Slug || "";
+    if (!href || typeof href !== "string") return "";
+    return href.startsWith("/") ? href.toLowerCase() : `/${href.toLowerCase()}`;
+}
+
+export function mergeToolCatalog(
+    backendTools: ToolItem[],
+    staticTools: ToolItem[]
+): ToolItem[] {
+    const result: ToolItem[] = [];
+    const seenKeys = new Set<string>();
+
+    if (Array.isArray(backendTools)) {
+        for (const tool of backendTools) {
+            if (!tool) continue;
+            const key = getToolCanonicalKey(tool);
+            if (key && !seenKeys.has(key)) {
+                seenKeys.add(key);
+                result.push(tool);
+            }
+        }
+    }
+
+    if (Array.isArray(staticTools)) {
+        for (const tool of staticTools) {
+            if (!tool) continue;
+            const key = getToolCanonicalKey(tool);
+            if (key && !seenKeys.has(key)) {
+                seenKeys.add(key);
+                result.push(tool);
+            }
+        }
+    }
+
+    return result;
+}
+
 export async function getTools(): Promise<ToolItem[]> {
+    const staticNormalized = NAV_TOOLS_FALLBACK.map(normalizeTool).filter((t): t is ToolItem => t !== null);
+
     try {
         const tools = await fetchJson<any[]>("/site-content/tools", {
             next: { revalidate: 3600, tags: ["tools"] },
         });
 
         if (Array.isArray(tools) && tools.length > 0) {
-            const normalized = tools
+            const backendNormalized = tools
                 .filter((t) => t.isActive !== false && t.is_active !== false && t.IsActive !== false)
                 .map(normalizeTool)
                 .filter((t): t is ToolItem => t !== null);
 
-            if (normalized.length > 0) {
-                return normalized;
-            }
+            return mergeToolCatalog(backendNormalized, staticNormalized);
         }
 
-        console.warn("No active tools returned by the backend; using the bundled fallback list.");
-        return NAV_TOOLS_FALLBACK.map(normalizeTool).filter((t): t is ToolItem => t !== null);
+        return staticNormalized;
     } catch (err) {
-        console.error("Failed to load tools from the backend; using the bundled fallback list:", err);
-        return NAV_TOOLS_FALLBACK.map(normalizeTool).filter((t): t is ToolItem => t !== null);
+        console.warn("Failed to load tools from backend; using bundled static catalog:", err);
+        return staticNormalized;
     }
 }
 

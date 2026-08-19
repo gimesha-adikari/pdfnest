@@ -7,6 +7,7 @@ import {
     removeStoredTask,
     updateStoredTask,
 } from "@/lib/taskStorage";
+import { notify, notifyBackendError } from "@/lib/notify";
 
 export type TaskStatus =
     | "PENDING"
@@ -25,10 +26,11 @@ export interface TaskStatusResponse {
 }
 
 function buildDownloadUrl(taskId: string, downloadToken?: string): string {
+    const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
     if (downloadToken) {
-        return `/api/v1/download/${taskId}?token=${encodeURIComponent(downloadToken)}`;
+        return `${base}/api/v1/download/${taskId}?token=${encodeURIComponent(downloadToken)}`;
     }
-    return `/api/v1/download/${taskId}`;
+    return `${base}/api/v1/download/${taskId}`;
 }
 
 export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string) => void) {
@@ -54,8 +56,16 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
     // Restore an in-flight task after navigation or a browser refresh.
     useEffect(() => {
         const stored = getStoredTasks();
-        const existing = stored.find((t) => t.tool === toolName);
-        if (!existing) return;
+        const existing = stored.find(
+            (t) => (t.tool === toolName || (t as any).toolName === toolName) && (t.status === "PENDING" || t.status === "PROCESSING")
+        );
+
+        if (!existing) {
+            // Clean up any stale completed/failed tasks for this tool
+            const stale = stored.filter((t) => t.tool === toolName || (t as any).toolName === toolName);
+            stale.forEach((t) => removeStoredTask(t.taskId));
+            return;
+        }
 
         let isMounted = true;
 
@@ -70,23 +80,12 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
             .then((data: TaskStatusResponse | null) => {
                 if (!isMounted || !data) return;
 
-                setTaskId(existing.taskId);
-
-                if (data.status === "COMPLETED") {
-                    setStatus("COMPLETED");
-                    setProgress(100);
-                    onCompleteRef.current?.(buildDownloadUrl(data.id || existing.taskId, data.downloadToken));
-                } else if (data.status === "FAILED") {
-                    setStatus("FAILED");
-                    setError(data.error || "Task failed");
-                    updateStoredTask(existing.taskId, { status: "FAILED", error: data.error });
-                } else if (data.status === "CANCELLED") {
-                    setStatus("CANCELLED");
-                    setError(data.error || "Task was cancelled");
-                    updateStoredTask(existing.taskId, { status: "CANCELLED", error: data.error });
-                } else if (data.status === "PENDING" || data.status === "PROCESSING") {
+                if (data.status === "PENDING" || data.status === "PROCESSING") {
+                    setTaskId(existing.taskId);
                     setStatus(data.status);
                     setProgress(data.progress || 0);
+                } else {
+                    removeStoredTask(existing.taskId);
                 }
             })
             .catch((err) => {
@@ -242,16 +241,39 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
 
                 if (res.status === 422) {
                     const errData = await res.json().catch(() => ({}));
-                    throw new Error(errData.error || "Idempotency key reused with a different payload");
+                    const errMsg = errData.message || errData.error || "Idempotency key reused with a different payload";
+                    setIsSubmitting(false);
+                    setError(errMsg);
+                    setStatus("FAILED");
+                    idempotencyKeyRef.current = "";
+                    notifyBackendError(errData) || notify(errMsg, "error");
+                    return null;
                 }
 
                 if (!res.ok) {
                     const errData = await res.json().catch(() => ({}));
-                    throw new Error(errData.message || errData.error || `Server error (${res.status})`);
+                    const errMsg = errData.message || errData.error || errData.description || `Server error (${res.status})`;
+
+                    // Terminal client / billing / quota errors MUST NOT be retried.
+                    const NON_RETRYABLE_STATUS_CODES = [400, 401, 402, 403, 404, 413, 422, 429];
+                    if (NON_RETRYABLE_STATUS_CODES.includes(res.status)) {
+                        setIsSubmitting(false);
+                        setError(errMsg);
+                        setStatus("FAILED");
+                        idempotencyKeyRef.current = "";
+                        if (errData && typeof errData === "object" && (errData.code || errData.message)) {
+                            notifyBackendError(errData);
+                        } else {
+                            notify(errMsg, "error");
+                        }
+                        return null;
+                    }
+
+                    throw new Error(errMsg);
                 }
 
-                const data: { taskId: string } = await res.json();
-                const newTaskId = data.taskId;
+                const data: any = await res.json();
+                const newTaskId = data.taskId || data.task_id || data.job_id;
 
                 setTaskId(newTaskId);
                 setStatus("PENDING");
@@ -374,9 +396,16 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
     };
 
     const resetTask = () => {
-        if (taskId) {
-            removeStoredTask(taskId);
-        }
+        try {
+            if (taskId) {
+                removeStoredTask(taskId);
+            }
+            const stored = getStoredTasks().filter(
+                (t) => t.tool === toolName || (t as any).toolName === toolName || (taskId && t.taskId === taskId)
+            );
+            stored.forEach((t) => removeStoredTask(t.taskId));
+        } catch (_) {}
+
         setTaskId("");
         setStatus(null);
         setProgress(0);
