@@ -241,12 +241,16 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
 
                 if (res.status === 422) {
                     const errData = await res.json().catch(() => ({}));
-                    const errMsg = errData.message || errData.error || "Idempotency key reused with a different payload";
+                    const errMsg =
+                        errData.message ||
+                        errData.error ||
+                        "Idempotency key reused with a different payload";
+
                     setIsSubmitting(false);
                     setError(errMsg);
                     setStatus("FAILED");
                     idempotencyKeyRef.current = "";
-                    notifyBackendError(errData) || notify(errMsg, "error");
+                    notifyBackendError(errData);
                     return null;
                 }
 
