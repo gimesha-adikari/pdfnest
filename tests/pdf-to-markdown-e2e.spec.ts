@@ -15,7 +15,7 @@ test.describe('PDF to Markdown Real Production E2E Suite', () => {
     await authenticateProUser(page);
     const helper = new PdfToolHelper(page, 'pdf-to-markdown');
     await helper.navigateToTool();
-    await helper.uploadFile(FIXTURES.GIMESHA_CV_PDF);
+    await helper.uploadFile(FIXTURES.GIMESHA_CV);
     await helper.clickAction();
     await helper.waitForSyncDownload(60000);
 
@@ -27,7 +27,7 @@ test.describe('PDF to Markdown Real Production E2E Suite', () => {
     await authenticateProUser(page);
     const helper = new PdfToolHelper(page, 'pdf-to-markdown');
     await helper.navigateToTool();
-    await helper.uploadFile(FIXTURES.GIMESHA_CV_PDF);
+    await helper.uploadFile(FIXTURES.GIMESHA_CV);
     await helper.clickAction();
     await helper.waitForSyncDownload(60000);
 
@@ -54,7 +54,7 @@ test.describe('PDF to Markdown Real Production E2E Suite', () => {
 
     // Convert PDF A
     await helper.navigateToTool();
-    await helper.uploadFile(FIXTURES.GIMESHA_CV_PDF);
+    await helper.uploadFile(FIXTURES.GIMESHA_CV);
     await helper.clickAction();
     await helper.waitForSyncDownload(60000);
 
@@ -94,7 +94,7 @@ test.describe('PDF to Markdown Real Production E2E Suite', () => {
     await page.click('a:has-text("Convert Another File"), button:has-text("Convert Another File"), button:has-text("Start Over")');
     await expect(page).toHaveURL(/\/pdf-to-markdown$/, { timeout: 10000 });
 
-    await helper.uploadFile(FIXTURES.GIMESHA_CV_PDF);
+    await helper.uploadFile(FIXTURES.GIMESHA_CV);
     await expect(page.locator('text=gimesha_cv.pdf')).toBeVisible();
   });
 
@@ -116,7 +116,7 @@ test.describe('PDF to Markdown Real Production E2E Suite', () => {
     await authenticateProUser(page);
     const helper = new PdfToolHelper(page, 'pdf-to-markdown');
     await helper.navigateToTool();
-    await helper.uploadFile(FIXTURES.GIMESHA_CV_PDF);
+    await helper.uploadFile(FIXTURES.GIMESHA_CV);
     await helper.clickAction();
 
     await expect(page.locator('[data-testid="pdf-to-markdown-error-banner"]')).toBeVisible({ timeout: 10000 });
@@ -182,7 +182,7 @@ test.describe('PDF to Markdown Real Production E2E Suite', () => {
       (window as any).__xss_executed = false;
     });
 
-    await helper.uploadFile(FIXTURES.GIMESHA_CV_PDF);
+    await helper.uploadFile(FIXTURES.GIMESHA_CV);
     await helper.clickAction();
     await helper.waitForSyncDownload(60000);
 
