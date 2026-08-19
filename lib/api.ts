@@ -199,7 +199,7 @@ async function handleAxiosError(error: unknown): Promise<never> {
         backendHealth.markOnline();
     }
 
-    const isAuthEndpoint = configUrl.includes("/status") || configUrl.includes("/auth");
+    const isAuthEndpoint = configUrl.includes("/status") || configUrl.includes("/auth") || configUrl.includes("/security/unlock");
     if (response.status === 401 && !isAuthEndpoint) {
         if (typeof window !== "undefined") {
             const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
