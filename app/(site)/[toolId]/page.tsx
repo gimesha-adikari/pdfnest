@@ -10,6 +10,7 @@ import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
+import RepositoryAnalyzerSourceSelector from "@/components/tools/RepositoryAnalyzerSourceSelector";
 
 interface ExtendedFile extends File {
     initialBatch?: File[];
@@ -146,7 +147,9 @@ export default function SharedUploadPage() {
             />
 
             <div className="mx-auto max-w-5xl px-4 py-8">
-                {toolId === "url-to-pdf" ? (
+                {toolId === "repository-analyzer" ? (
+                    <RepositoryAnalyzerSourceSelector />
+                ) : toolId === "url-to-pdf" ? (
                     <form
                         onSubmit={handleUrlSubmit}
                         className="mx-auto max-w-2xl space-y-4 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8 shadow-lg"

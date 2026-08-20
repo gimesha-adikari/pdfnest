@@ -9,6 +9,7 @@ import { useWorkflow } from "@/context/WorkflowContext";
 import { useTools } from "@/context/ToolContext";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import { getSuggestedNextTools } from "@/lib/toolSuggestions";
+import RepositoryAnalyzerDownload from "@/components/tools/RepositoryAnalyzerDownload";
 
 export default function SharedDownloadPage() {
     const router = useRouter();
@@ -25,11 +26,16 @@ export default function SharedDownloadPage() {
 
     useEffect(() => {
         if (leavingForNextToolRef.current) return;
+        if (toolId === "repository-analyzer") return;
 
         if (!downloadData) {
             router.replace(`/${toolId}`);
         }
     }, [downloadData, router, toolId]);
+
+    if (toolId === "repository-analyzer") {
+        return <RepositoryAnalyzerDownload />;
+    }
 
     if (!downloadData) return null;
 

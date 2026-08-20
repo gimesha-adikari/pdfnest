@@ -71,13 +71,13 @@ export function isToolAvailableOffline(tool: ToolItem): boolean {
 }
 
 /** Total number of tools in the full static registry. */
-export const TOTAL_TOOL_COUNT = 38;
+export const TOTAL_TOOL_COUNT = 39;
 
 /**
- * Number of truly offline-capable tools (16 fully offline standalone + 1 metadata + 1 studio suite + Wave 8 sign/repair + Wave 9 code/markdown).
+ * Number of truly offline-capable tools (16 fully offline standalone + 1 metadata + 1 studio suite + Wave 8 sign/repair + Wave 9 code/markdown + repository-analyzer).
  */
-export const OFFLINE_TOOL_COUNT = 26;
-export const CLIENT_CAPABLE_TOOL_COUNT = 26;
+export const OFFLINE_TOOL_COUNT = 27;
+export const CLIENT_CAPABLE_TOOL_COUNT = 27;
 
 export const NAV_TOOLS_FALLBACK: ToolItem[] = [
     {
@@ -1656,6 +1656,70 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
             {
                 question: "Can I strike through text in password-protected PDFs?",
                 answer: "Yes. If your PDF is password-protected, simply provide the correct password before applying strikeout annotations."
+            }
+        ]
+    },
+    {
+        title: "Repository Analyzer",
+        description: "Analyze a software repository and generate useful project documentation such as folder trees, technology stacks, dependencies, and setup guides.",
+        href: "/repository-analyzer",
+        category: "studio",
+        isNew: true,
+
+        capability: {
+            clientExecutable: true,
+            workspaceOffline: true,
+            requiresBackend: false,
+            isHybridWorkspace: false
+        },
+
+        clientCapable: true,
+        toolPolicy: "CLIENT_PREFERRED",
+
+        seoTitle: "Repository Analyzer - Generate Project Documentation",
+        seoDescription: "Analyze a Git repository, local project, or ZIP archive and generate useful project documentation including folder structure, technology stack, dependencies, and setup guides.",
+
+        intent: "Users want to understand and document a software repository without manually inspecting the entire project.",
+
+        keywords: [
+            "repository analyzer",
+            "github repository analyzer",
+            "git repository documentation",
+            "project documentation generator",
+            "repository structure",
+            "technology stack detector",
+            "codebase analyzer",
+            "project structure generator",
+            "github project analyzer",
+            "codebase documentation"
+        ],
+
+        related: [
+            "/code-to-pdf",
+            "/markdown-to-pdf"
+        ],
+
+        accept: ".zip",
+        multiple: false,
+
+        iconName: "GitBranch",
+
+        faq: [
+            {
+                question: "What can the Repository Analyzer generate?",
+                answer: "It can generate documentation covering project structure, technology stack, dependencies, setup instructions, environment configuration, APIs, testing, and deployment."
+            },
+            {
+                question: "Can I analyze a local project?",
+                answer: "Yes. You can select a local project folder directly from your device."
+            },
+            {
+                question: "Can I use a Git repository URL?",
+                answer: "Yes. You can provide a Git repository URL as the project source."
+            },
+            {
+                question: "Can I upload a ZIP repository?",
+                answer: "Yes. ZIP archives can be used as another way to provide a project."
             }
         ]
     },

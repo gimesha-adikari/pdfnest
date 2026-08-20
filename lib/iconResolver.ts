@@ -36,6 +36,7 @@ import {
     Presentation,
     FileType,
     Download,
+    GitBranch,
     type LucideProps,
 } from "lucide-react";
 import type { FC } from "react";
@@ -72,6 +73,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
     Presentation,
     FileType,
     Download,
+    GitBranch,
 };
 
 /**

@@ -14,6 +14,7 @@ import ToolFAQ from "@/components/SEO/ToolFAQ";
 import ToolSchema from "@/components/SEO/ToolSchema";
 import { resolveIcon, type LucideIcon } from "@/lib/iconResolver";
 import { BackendOnlyToolGuard } from "@/components/pdf/BackendOnlyToolGuard";
+import { RepositoryAnalyzerProvider } from "@/context/RepositoryAnalyzerContext";
 
 interface ToolItem {
     title: string;
@@ -186,7 +187,11 @@ export default function ClientToolLayout({ children }: { children: ReactNode }) 
                 toolPolicy={toolPolicyValue}
             >
                 <ToolSchema toolHref={`/${toolId}`} />
-                {children}
+                {toolId === "repository-analyzer" ? (
+                    <RepositoryAnalyzerProvider>{children}</RepositoryAnalyzerProvider>
+                ) : (
+                    children
+                )}
                 <ToolFAQ toolHref={`/${toolId}`} />
             </BackendOnlyToolGuard>
         </SharedToolContext.Provider>
