@@ -10,7 +10,7 @@ import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
-import RepositoryAnalyzerSourceSelector from "@/components/tools/RepositoryAnalyzerSourceSelector";
+import RepositoryAnalyzerSourceSelector from "@/components/repo-tool/RepositoryAnalyzerSourceSelector";
 
 interface ExtendedFile extends File {
     initialBatch?: File[];

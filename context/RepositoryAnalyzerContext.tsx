@@ -22,42 +22,42 @@ export const ALL_REPORTS = [
     {
         id: "Project Structure",
         title: "Project Structure",
-        description: "Visual directory tree hierarchy and top-level architecture overview.",
+        description: "Understand how the repository is organized.",
     },
     {
         id: "Technology Stack",
         title: "Technology Stack",
-        description: "Identified languages, frontend/backend frameworks, and runtime environments.",
+        description: "Identify languages, frameworks, databases, and infrastructure.",
     },
     {
         id: "Dependencies",
         title: "Dependencies",
-        description: "Direct dependencies, package managers, and production/dev manifest breakdown.",
+        description: "See the packages and libraries used by the project.",
     },
     {
         id: "Setup & Run Guide",
         title: "Setup & Run Guide",
-        description: "Installation, environment setup, build, and local development run commands.",
+        description: "Understand how to install, build, and run the project.",
     },
     {
         id: "Environment Configuration",
         title: "Environment Configuration",
-        description: "Required environment variables, configuration files, and secrets template.",
+        description: "Understand configuration files and required environment variables.",
     },
     {
         id: "API Overview",
         title: "API Overview",
-        description: "Discovered REST/RPC endpoints, route handlers, and request/response shapes.",
+        description: "Understand detected routes and service interfaces.",
     },
     {
         id: "Testing",
         title: "Testing",
-        description: "Test frameworks, test script discovery, coverage runners, and verification suites.",
+        description: "Understand test frameworks and available test commands.",
     },
     {
         id: "Deployment",
         title: "Deployment",
-        description: "Containerization, Dockerfiles, CI/CD workflows, and hosting configurations.",
+        description: "Understand Docker, CI/CD, hosting, and deployment configuration.",
     },
 ] as const;
 
