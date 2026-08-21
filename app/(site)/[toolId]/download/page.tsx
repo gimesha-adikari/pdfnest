@@ -9,7 +9,7 @@ import { useWorkflow } from "@/context/WorkflowContext";
 import { useTools } from "@/context/ToolContext";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import { getSuggestedNextTools } from "@/lib/toolSuggestions";
-import RepositoryAnalyzerDownload from "@/components/repo-tool/RepositoryAnalyzerDownload";
+import RepositoryAnalyzerDownload from "@/components/tools/RepositoryAnalyzerDownload";
 
 export default function SharedDownloadPage() {
     const router = useRouter();
