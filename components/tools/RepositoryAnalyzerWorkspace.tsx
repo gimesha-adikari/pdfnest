@@ -180,18 +180,38 @@ export default function RepositoryAnalyzerWorkspace() {
                         className="inline-flex items-center gap-1.5 rounded-xl border border-[color:var(--border)] bg-[var(--background)] px-3.5 py-2 text-xs font-semibold text-[color:var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[color:var(--foreground)]"
                     >
                         <ArrowLeft size={14} />
-                        Change Repository
+                        Change Source
                     </button>
                 </div>
             </div>
 
-            {/* Error Banner if any */}
+            {/* Error Banner with Retry Action */}
             {error && (
-                <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-xs font-semibold text-red-600 dark:text-red-400 flex items-center gap-2">
-                    <AlertCircle size={16} />
-                    {error}
+                <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 shadow-sm animate-in fade-in duration-200">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-start gap-3">
+                            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600 dark:text-rose-400" />
+                            <div className="space-y-1">
+                                <h4 className="text-sm font-bold text-rose-900 dark:text-rose-200">
+                                    Analysis Could Not Complete
+                                </h4>
+                                <p className="text-xs text-rose-700 dark:text-rose-300">
+                                    {error}
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={startAnalysis}
+                            disabled={isAnalyzing || selectedDomains.length === 0}
+                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-rose-700 disabled:opacity-50"
+                        >
+                            Retry Analysis
+                        </button>
+                    </div>
                 </div>
             )}
+
 
             {/* 3. Scoping & Analysis Grid */}
             <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
