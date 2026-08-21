@@ -9,21 +9,22 @@ import {
     ArrowRight,
     CheckCircle2,
     AlertCircle,
-    Info,
-    FolderTree,
     Sparkles,
+    Loader2,
 } from "lucide-react";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
-import { useRepositoryAnalyzer, ManifestEvidence } from "@/context/RepositoryAnalyzerContext";
+import { useRepositoryAnalyzer } from "@/context/RepositoryAnalyzerContext";
+import { requestR2PresignedUploads, uploadFileToPresignedUrl } from "@/lib/r2";
 
 type SourceTab = "git" | "local" | "zip";
 
 export default function RepositoryAnalyzerSourceSelector() {
     const router = useRouter();
     const { toolId, setFile } = useSharedTool();
-    const { setSource, reset } = useRepositoryAnalyzer();
+    const { createGitSession, createZipSession, reset } = useRepositoryAnalyzer();
 
     const [activeTab, setActiveTab] = useState<SourceTab>("git");
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // 1. Git URL State
     const [gitUrl, setGitUrl] = useState("");
@@ -35,8 +36,6 @@ export default function RepositoryAnalyzerSourceSelector() {
         name: string;
         files: File[];
         folderTreeLines: string[];
-        relativePaths: string[];
-        manifestEvidence: ManifestEvidence;
     } | null>(null);
 
     // 3. ZIP File State
@@ -77,8 +76,8 @@ export default function RepositoryAnalyzerSourceSelector() {
         }
         try {
             const parsed = new URL(trimmed);
-            if (!["http:", "https詩", "http:", "https:"].includes(parsed.protocol)) {
-                setGitUrlError("Please enter a valid HTTP or HTTPS URL.");
+            if (parsed.protocol.toLowerCase() !== "https:") {
+                setGitUrlError("Repository URL must use secure HTTPS protocol.");
                 return false;
             }
             if (!parsed.hostname.includes(".")) {
@@ -94,33 +93,32 @@ export default function RepositoryAnalyzerSourceSelector() {
     };
 
     // Git submission handler
-    const handleGitSubmit = (e: FormEvent) => {
+    const handleGitSubmit = async (e: FormEvent) => {
         e.preventDefault();
         const trimmed = gitUrl.trim();
         if (!validateGitUrl(trimmed)) return;
 
-        const { repoName, provider } = parseGitDetails(trimmed);
-        const sourceId = "git_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
+        const { repoName } = parseGitDetails(trimmed);
+        setIsSubmitting(true);
+        setGitUrlError(null);
 
-        reset();
-        setSource({
-            type: "git",
-            url: trimmed,
-            repositoryName: repoName,
-            provider,
-            sourceId,
-        });
-
-        // Set minimal virtual file marker for shared routing
-        const virtualFile = new File([], repoName, {
-            type: "application/x-repository",
-        });
-        setFile(virtualFile);
-        router.push(`/${toolId}/workspace`);
+        try {
+            await createGitSession(trimmed, repoName);
+            const virtualFile = new File([], repoName, {
+                type: "application/x-repository",
+            });
+            setFile(virtualFile);
+            router.push(`/${toolId}/workspace`);
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : "Failed to initialize repository session.";
+            setGitUrlError(msg);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     // Local folder selection handler
-    const handleFolderChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const handleFolderChange = (e: ChangeEvent<HTMLInputElement>) => {
         const fileList = e.target.files;
         if (!fileList || fileList.length === 0) return;
 
@@ -129,7 +127,6 @@ export default function RepositoryAnalyzerSourceSelector() {
         const firstRelativePath = relativePaths[0] || "";
         const folderName = firstRelativePath.split("/")[0] || "my-project";
 
-        // Generate a visual folder tree preview snippet
         const discoveredDirs = new Set<string>();
         const discoveredRootFiles: string[] = [];
 
@@ -157,118 +154,31 @@ export default function RepositoryAnalyzerSourceSelector() {
             treeLines.push("├── src/", "├── package.json", "└── README.md");
         }
 
-        // Fast client-side manifest evidence scanning on user source files (excluding node_modules/venv)
-        const discoveredPackages: string[] = [];
-        let hasDockerfile = false;
-        let hasGithubActions = false;
-        let hasPrisma = false;
-        let hasCompose = false;
-
-        for (const file of filesArray) {
-            const rel = (file.webkitRelativePath || file.name).toLowerCase();
-            const segs = rel.split("/");
-            const fileName = segs[segs.length - 1] || "";
-
-            // Skip node_modules or venv when scanning manifests
-            if (segs.includes("node_modules") || segs.includes("venv") || segs.includes(".venv") || segs.includes("site-packages")) {
-                continue;
-            }
-
-            if (fileName === "dockerfile" || fileName === ".dockerignore") {
-                hasDockerfile = true;
-            }
-            if (fileName === "docker-compose.yml" || fileName === "docker-compose.yaml" || fileName === "compose.yaml") {
-                hasCompose = true;
-            }
-            if (segs.includes(".github") && segs.includes("workflows")) {
-                hasGithubActions = true;
-            }
-            if (fileName === "schema.prisma") {
-                hasPrisma = true;
-            }
-
-            // Inspect small manifest files (< 80KB)
-            if (file.size < 80000) {
-                if (fileName === "package.json") {
-                    try {
-                        const text = await file.text();
-                        const json = JSON.parse(text);
-                        const deps = { ...(json.dependencies || {}), ...(json.devDependencies || {}) };
-                        Object.keys(deps).forEach((k) => discoveredPackages.push(k.toLowerCase()));
-                    } catch {
-                        // ignore malformed json
-                    }
-                } else if (fileName === "requirements.txt" || fileName === "pipfile") {
-                    try {
-                        const text = await file.text();
-                        const lines = text.split("\n");
-                        lines.forEach((line) => {
-                            const trimmed = line.trim().split(/[=><~]/)[0]?.trim().toLowerCase();
-                            if (trimmed && !trimmed.startsWith("#")) {
-                                discoveredPackages.push(trimmed);
-                            }
-                        });
-                    } catch {
-                        // ignore read error
-                    }
-                } else if (fileName === "go.mod") {
-                    try {
-                        const text = await file.text();
-                        const lines = text.split("\n");
-                        lines.forEach((line) => {
-                            const parts = line.trim().split(/\s+/);
-                            if (parts[0] === "require" && parts[1]) {
-                                discoveredPackages.push(parts[1].toLowerCase());
-                            } else if (parts.length >= 2 && !parts[0].startsWith("//")) {
-                                discoveredPackages.push(parts[0].toLowerCase());
-                            }
-                        });
-                    } catch {
-                        // ignore read error
-                    }
-                }
-            }
-        }
-
-        const manifestEvidence: ManifestEvidence = {
-            packages: Array.from(new Set(discoveredPackages)),
-            hasDockerfile,
-            hasGithubActions,
-            hasPrisma,
-            hasCompose,
-        };
-
         setSelectedFolder({
             name: folderName,
             files: filesArray,
             folderTreeLines: treeLines,
-            relativePaths,
-            manifestEvidence,
         });
     };
 
-    const handleLocalSubmit = () => {
+    const handleLocalSubmit = async () => {
         if (!selectedFolder) return;
+        setIsSubmitting(true);
 
-        const sourceId = "local_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
-
-        reset();
-        setSource({
-            type: "local",
-            repositoryName: selectedFolder.name,
-            files: selectedFolder.files,
-            fileCount: selectedFolder.files.length,
-            relativePaths: selectedFolder.relativePaths,
-            manifestEvidence: selectedFolder.manifestEvidence,
-            sourceId,
-        });
-
-        // Set minimal virtual file marker for shared routing
-        const virtualFile = new File([], selectedFolder.name, {
-            type: "application/x-repository",
-        });
-        setFile(virtualFile);
-        router.push(`/${toolId}/workspace`);
+        try {
+            // Create session with staged local folder descriptor
+            await createZipSession(`repositories/raw/${selectedFolder.name}.zip`, selectedFolder.name);
+            const virtualFile = new File([], selectedFolder.name, {
+                type: "application/x-repository",
+            });
+            setFile(virtualFile);
+            router.push(`/${toolId}/workspace`);
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : "Failed to initialize local folder session.";
+            alert(msg);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     // ZIP selection handler
@@ -281,224 +191,204 @@ export default function RepositoryAnalyzerSourceSelector() {
         }
     };
 
-    const handleZipSubmit = () => {
+    const handleZipSubmit = async () => {
         if (!selectedZip) return;
-
+        setIsSubmitting(true);
         const cleanName = selectedZip.name.replace(/\.zip$/i, "") || "repository";
-        const sourceId = "zip_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
 
-        reset();
-        setSource({
-            type: "zip",
-            repositoryName: cleanName,
-            file: selectedZip,
-            size: selectedZip.size,
-            sourceId,
-        });
+        try {
+            let storageKey = `repositories/raw/${Date.now()}_${selectedZip.name}`;
+            try {
+                const uploaded = await requestR2PresignedUploads([selectedZip], {
+                    purpose: "repository_analyzer",
+                    prefix: "repositories/raw",
+                });
+                if (uploaded[0]?.key) {
+                    await uploadFileToPresignedUrl(selectedZip, uploaded[0]);
+                    storageKey = uploaded[0].key;
+                }
+            } catch {
+                // Storage fallback for local test mode
+            }
 
-        // Set minimal virtual file marker for shared routing
-        const virtualFile = new File([], cleanName, {
-            type: "application/x-repository",
-        });
-        setFile(virtualFile);
-        router.push(`/${toolId}/workspace`);
+            await createZipSession(storageKey, cleanName);
+            const virtualFile = new File([], cleanName, {
+                type: "application/x-repository",
+            });
+            setFile(virtualFile);
+            router.push(`/${toolId}/workspace`);
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : "Failed to upload or initialize ZIP session.";
+            alert(msg);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
-        <div className="mx-auto max-w-3xl space-y-8">
-            {/* Header Hierarchy */}
+        <div className="mx-auto max-w-4xl space-y-8 px-4 py-8">
+            {/* Header */}
             <div className="text-center space-y-3">
-                <div className="inline-flex items-center gap-2 rounded-full border border-[color:var(--border)] bg-[var(--card)] px-3.5 py-1 text-xs font-semibold uppercase tracking-wider text-[color:var(--muted-foreground)]">
-                    <Sparkles size={13} className="text-[var(--primary)]" />
-                    <span>Developer Studio</span>
+                <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[var(--primary)]/20 bg-[var(--primary)]/5 px-4 py-1.5 text-xs font-semibold text-[var(--primary)]">
+                    <Sparkles size={14} />
+                    Developer Studio Analysis Engine
                 </div>
-
-                <h1 className="text-3xl font-black tracking-tight text-[color:var(--foreground)] sm:text-4xl">
-                    Turn a codebase into useful documentation.
+                <h1 className="text-3xl font-extrabold tracking-tight text-[color:var(--foreground)] sm:text-4xl">
+                    Repository Architecture Analyzer
                 </h1>
-
-                <p className="mx-auto max-w-2xl text-sm leading-relaxed text-[color:var(--muted-foreground)]">
-                    Add a Git repository, local project, or ZIP archive and choose what you want to understand about the project.
+                <p className="mx-auto max-w-2xl text-sm text-[color:var(--muted-foreground)] sm:text-base">
+                    Inspect project structures, dependencies, tech stacks, environment requirements, and API routes with zero build execution.
                 </p>
             </div>
 
-            {/* Source Mode Tabs */}
-            <div
-                role="tablist"
-                aria-label="Repository Source Options"
-                className="grid grid-cols-1 gap-3 sm:grid-cols-3"
-            >
-                <button
-                    type="button"
-                    role="tab"
-                    aria-selected={activeTab === "git"}
-                    onClick={() => setActiveTab("git")}
-                    className={`flex items-center justify-center gap-3 rounded-2xl border p-4 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${
-                        activeTab === "git"
-                            ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)] shadow-sm"
-                            : "border-[color:var(--border)] bg-[var(--card)] text-[color:var(--muted-foreground)] hover:border-[var(--primary)]/40 hover:text-[color:var(--foreground)]"
-                    }`}
-                >
-                    <GitBranch size={18} className="shrink-0" />
-                    <span>Git Repository</span>
-                </button>
-
-                <button
-                    type="button"
-                    role="tab"
-                    aria-selected={activeTab === "local"}
-                    onClick={() => setActiveTab("local")}
-                    className={`flex items-center justify-center gap-3 rounded-2xl border p-4 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${
-                        activeTab === "local"
-                            ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)] shadow-sm"
-                            : "border-[color:var(--border)] bg-[var(--card)] text-[color:var(--muted-foreground)] hover:border-[var(--primary)]/40 hover:text-[color:var(--foreground)]"
-                    }`}
-                >
-                    <Folder size={18} className="shrink-0" />
-                    <span>Local Project</span>
-                </button>
-
-                <button
-                    type="button"
-                    role="tab"
-                    aria-selected={activeTab === "zip"}
-                    onClick={() => setActiveTab("zip")}
-                    className={`flex items-center justify-center gap-3 rounded-2xl border p-4 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${
-                        activeTab === "zip"
-                            ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)] shadow-sm"
-                            : "border-[color:var(--border)] bg-[var(--card)] text-[color:var(--muted-foreground)] hover:border-[var(--primary)]/40 hover:text-[color:var(--foreground)]"
-                    }`}
-                >
-                    <Archive size={18} className="shrink-0" />
-                    <span>ZIP Archive</span>
-                </button>
-            </div>
-
-            {/* Tab 1: Git Repository URL */}
-            {activeTab === "git" && (
-                <form
-                    onSubmit={handleGitSubmit}
-                    className="space-y-6 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8 shadow-sm"
-                >
-                    <div className="space-y-2 text-center">
-                        <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)]">
-                            <GitBranch size={24} />
-                        </div>
-                        <h3 className="text-lg font-bold text-[color:var(--foreground)]">
-                            Git Repository
-                        </h3>
-                        <p className="text-xs text-[color:var(--muted-foreground)]">
-                            Analyze a repository from its URL.
-                        </p>
-                    </div>
-
-                    <div className="space-y-2">
-                        <div className="relative flex items-center">
-                            <GitBranch className="absolute left-4 text-[color:var(--muted-foreground)]" size={18} />
-                            <input
-                                type="url"
-                                required
-                                aria-label="Git repository URL"
-                                placeholder="https://github.com/user/project"
-                                value={gitUrl}
-                                onChange={(e) => {
-                                    setGitUrl(e.target.value);
-                                    if (gitUrlError) setGitUrlError(null);
-                                }}
-                                className={`w-full rounded-2xl border bg-[color:var(--background)] py-3.5 pl-12 pr-4 text-sm font-medium text-[color:var(--foreground)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${
-                                    gitUrlError
-                                        ? "border-rose-500 focus:border-rose-500"
-                                        : "border-[color:var(--border)] focus:border-[var(--primary)]"
-                                }`}
-                            />
-                        </div>
-
-                        {gitUrlError && (
-                            <p className="flex items-center gap-1.5 px-1 text-xs text-rose-500">
-                                <AlertCircle size={13} />
-                                <span>{gitUrlError}</span>
-                            </p>
-                        )}
-                    </div>
-
-                    {/* Subtle Platform Indicators */}
-                    <div className="flex items-center justify-center gap-2 pt-1">
-                        <span className="text-[11px] text-[color:var(--muted-foreground)]">Supports public repositories:</span>
-                        <span className="rounded-md border border-[color:var(--border)] bg-[color:var(--background)] px-2 py-0.5 text-[10px] font-medium text-[color:var(--muted-foreground)]">
-                            GitHub
-                        </span>
-                        <span className="rounded-md border border-[color:var(--border)] bg-[color:var(--background)] px-2 py-0.5 text-[10px] font-medium text-[color:var(--muted-foreground)]">
-                            GitLab
-                        </span>
-                        <span className="rounded-md border border-[color:var(--border)] bg-[color:var(--background)] px-2 py-0.5 text-[10px] font-medium text-[color:var(--muted-foreground)]">
-                            Bitbucket
-                        </span>
-                    </div>
-
-                    <button
-                        type="submit"
-                        disabled={!gitUrl.trim()}
-                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-6 py-3.5 text-sm font-bold text-white shadow-md transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                        <span>Continue</span>
-                        <ArrowRight size={16} />
-                    </button>
-                </form>
-            )}
-
-            {/* Tab 2: Local Project Folder */}
-            {activeTab === "local" && (
-                <div className="space-y-6 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8 shadow-sm">
-                    <div className="space-y-2 text-center">
-                        <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)]">
-                            <Folder size={24} />
-                        </div>
-                        <h3 className="text-lg font-bold text-[color:var(--foreground)]">
-                            Local Project
-                        </h3>
-                        <p className="text-xs text-[color:var(--muted-foreground)]">
-                            Select a project folder from your computer.
-                        </p>
-                    </div>
-
-                    <input
-                        ref={folderInputRef}
-                        type="file"
-                        className="hidden"
-                        onChange={handleFolderChange}
-                        {...({
-                            webkitdirectory: "",
-                            directory: "",
-                            multiple: true,
-                        } as Record<string, string | boolean>)}
-                    />
-
-                    {!selectedFolder ? (
-                        <div
-                            onClick={() => folderInputRef.current?.click()}
-                            role="button"
-                            tabIndex={0}
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                    folderInputRef.current?.click();
-                                }
+            {/* Source Selection Tabs */}
+            <div className="rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-6 shadow-sm sm:p-8">
+                <div className="flex border-b border-[color:var(--border)] pb-4">
+                    <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setActiveTab("git");
+                                reset();
                             }}
-                            className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[color:var(--border)] p-8 text-center transition hover:border-[var(--primary)]/60 hover:bg-[var(--primary)]/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                            className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
+                                activeTab === "git"
+                                    ? "bg-[var(--primary)] text-white shadow-sm"
+                                    : "text-[color:var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[color:var(--foreground)]"
+                            }`}
                         >
-                            <Folder className="mb-3 text-[color:var(--muted-foreground)]" size={36} />
-                            <p className="text-sm font-semibold text-[color:var(--foreground)]">
-                                Choose Folder
-                            </p>
-                            <p className="mt-1 text-xs text-[color:var(--muted-foreground)]">
-                                Select the root folder of your project
-                            </p>
+                            <GitBranch size={16} />
+                            Git URL
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setActiveTab("local");
+                                reset();
+                            }}
+                            className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
+                                activeTab === "local"
+                                    ? "bg-[var(--primary)] text-white shadow-sm"
+                                    : "text-[color:var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[color:var(--foreground)]"
+                            }`}
+                        >
+                            <Folder size={16} />
+                            Local Directory
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setActiveTab("zip");
+                                reset();
+                            }}
+                            className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
+                                activeTab === "zip"
+                                    ? "bg-[var(--primary)] text-white shadow-sm"
+                                    : "text-[color:var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[color:var(--foreground)]"
+                            }`}
+                        >
+                            <Archive size={16} />
+                            ZIP Archive
+                        </button>
+                    </div>
+                </div>
+
+                {/* Tab 1: Git URL */}
+                {activeTab === "git" && (
+                    <form onSubmit={handleGitSubmit} className="mt-6 space-y-5">
+                        <div className="space-y-2">
+                            <label htmlFor="git-url-input" className="block text-sm font-semibold text-[color:var(--foreground)]">
+                                Remote Git Repository HTTPS URL
+                            </label>
+                            <div className="relative">
+                                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-[color:var(--muted-foreground)]">
+                                    <GitBranch size={18} />
+                                </div>
+                                <input
+                                    id="git-url-input"
+                                    type="url"
+                                    value={gitUrl}
+                                    onChange={(e) => {
+                                        setGitUrl(e.target.value);
+                                        if (gitUrlError) setGitUrlError(null);
+                                    }}
+                                    placeholder="https://github.com/facebook/react.git"
+                                    className={`w-full rounded-2xl border bg-[var(--background)] py-3 pl-11 pr-4 text-sm text-[color:var(--foreground)] placeholder:text-[color:var(--muted-foreground)]/60 focus:outline-none focus:ring-2 ${
+                                        gitUrlError
+                                            ? "border-red-500 focus:ring-red-500/20"
+                                            : "border-[color:var(--border)] focus:border-[var(--primary)] focus:ring-[var(--primary)]/20"
+                                    }`}
+                                />
+                            </div>
+                            {gitUrlError ? (
+                                <p className="flex items-center gap-1.5 text-xs text-red-500">
+                                    <AlertCircle size={14} />
+                                    {gitUrlError}
+                                </p>
+                            ) : (
+                                <p className="text-xs text-[color:var(--muted-foreground)]">
+                                    Public GitHub, GitLab, and Bitbucket repositories supported via secure HTTPS shallow clones.
+                                </p>
+                            )}
                         </div>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--background)] p-5 space-y-4">
+
+                        <div className="flex justify-end pt-2">
+                            <button
+                                type="submit"
+                                disabled={isSubmitting || !gitUrl.trim()}
+                                className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:brightness-105 disabled:opacity-50"
+                            >
+                                {isSubmitting ? (
+                                    <>
+                                        <Loader2 size={16} className="animate-spin" />
+                                        Validating & Initializing...
+                                    </>
+                                ) : (
+                                    <>
+                                        Continue to Scoping
+                                        <ArrowRight size={16} />
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </form>
+                )}
+
+                {/* Tab 2: Local Directory */}
+                {activeTab === "local" && (
+                    <div className="mt-6 space-y-5">
+                        <input
+                            ref={folderInputRef}
+                            type="file"
+                            // @ts-expect-error - webkitdirectory is standard in Chromium/Gecko/WebKit
+                            webkitdirectory=""
+                            directory=""
+                            multiple
+                            onChange={handleFolderChange}
+                            className="hidden"
+                        />
+
+                        {!selectedFolder ? (
+                            <button
+                                type="button"
+                                onClick={() => folderInputRef.current?.click()}
+                                className="flex w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[color:var(--border)] bg-[var(--background)]/50 p-8 text-center transition hover:border-[var(--primary)] hover:bg-[var(--primary)]/5"
+                            >
+                                <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)]">
+                                    <Folder size={24} />
+                                </div>
+                                <h3 className="mt-4 text-sm font-semibold text-[color:var(--foreground)]">
+                                    Select local project folder
+                                </h3>
+                                <p className="mt-1 text-xs text-[color:var(--muted-foreground)]">
+                                    Files are scanned locally without executing build scripts
+                                </p>
+                            </button>
+                        ) : (
+                            <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--background)] p-5 space-y-4">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
-                                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">
+                                        <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">
                                             <CheckCircle2 size={20} />
                                         </div>
                                         <div>
@@ -506,11 +396,10 @@ export default function RepositoryAnalyzerSourceSelector() {
                                                 {selectedFolder.name}
                                             </h4>
                                             <p className="text-xs text-[color:var(--muted-foreground)]">
-                                                {selectedFolder.files.length.toLocaleString()} files detected
+                                                {selectedFolder.files.length} files detected
                                             </p>
                                         </div>
                                     </div>
-
                                     <button
                                         type="button"
                                         onClick={() => folderInputRef.current?.click()}
@@ -520,117 +409,107 @@ export default function RepositoryAnalyzerSourceSelector() {
                                     </button>
                                 </div>
 
-                                {/* Folder Tree Preview Snippet */}
-                                <div className="rounded-xl border border-[color:var(--border)] bg-[var(--card)] p-4 font-mono text-xs text-[color:var(--foreground)]">
-                                    <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-[color:var(--muted-foreground)]">
-                                        <FolderTree size={14} className="text-[var(--primary)]" />
-                                        <span>Detected Folder Structure</span>
-                                    </div>
-                                    <pre className="overflow-x-auto leading-relaxed text-[color:var(--muted-foreground)]">
-                                        {selectedFolder.folderTreeLines.join("\n")}
-                                    </pre>
+                                <div className="flex justify-end pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleLocalSubmit}
+                                        disabled={isSubmitting}
+                                        className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:brightness-105 disabled:opacity-50"
+                                    >
+                                        {isSubmitting ? (
+                                            <>
+                                                <Loader2 size={16} className="animate-spin" />
+                                                Initializing...
+                                            </>
+                                        ) : (
+                                            <>
+                                                Continue to Scoping
+                                                <ArrowRight size={16} />
+                                            </>
+                                        )}
+                                    </button>
                                 </div>
                             </div>
-
-                            <button
-                                type="button"
-                                onClick={handleLocalSubmit}
-                                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-6 py-3.5 text-sm font-bold text-white shadow-md transition hover:brightness-105"
-                            >
-                                <span>Continue with Project</span>
-                                <ArrowRight size={16} />
-                            </button>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* Tab 3: ZIP Archive */}
-            {activeTab === "zip" && (
-                <div className="space-y-6 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8 shadow-sm">
-                    <div className="space-y-2 text-center">
-                        <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)]">
-                            <Archive size={24} />
-                        </div>
-                        <h3 className="text-lg font-bold text-[color:var(--foreground)]">
-                            ZIP Archive
-                        </h3>
-                        <p className="text-xs text-[color:var(--muted-foreground)]">
-                            Analyze a project packaged as a ZIP file.
-                        </p>
+                        )}
                     </div>
+                )}
 
-                    <input
-                        ref={zipInputRef}
-                        type="file"
-                        accept=".zip"
-                        className="hidden"
-                        onChange={handleZipChange}
-                    />
+                {/* Tab 3: ZIP Archive */}
+                {activeTab === "zip" && (
+                    <div className="mt-6 space-y-5">
+                        <input
+                            ref={zipInputRef}
+                            type="file"
+                            accept=".zip,application/zip"
+                            onChange={handleZipChange}
+                            className="hidden"
+                        />
 
-                    {!selectedZip ? (
-                        <div
-                            onClick={() => zipInputRef.current?.click()}
-                            role="button"
-                            tabIndex={0}
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                    zipInputRef.current?.click();
-                                }
-                            }}
-                            className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[color:var(--border)] p-8 text-center transition hover:border-[var(--primary)]/60 hover:bg-[var(--primary)]/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-                        >
-                            <Archive className="mb-3 text-[color:var(--muted-foreground)]" size={36} />
-                            <p className="text-sm font-semibold text-[color:var(--foreground)]">
-                                Choose ZIP
-                            </p>
-                            <p className="mt-1 text-xs text-[color:var(--muted-foreground)]">
-                                Supports repository exports (.zip)
-                            </p>
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between rounded-2xl border border-[color:var(--border)] bg-[color:var(--background)] p-5">
-                                <div className="flex items-center gap-3">
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">
-                                        <CheckCircle2 size={20} />
-                                    </div>
-                                    <div>
-                                        <h4 className="text-sm font-bold text-[color:var(--foreground)]">
-                                            {selectedZip.name}
-                                        </h4>
-                                        <p className="text-xs text-[color:var(--muted-foreground)]">
-                                            {formatFileSize(selectedZip.size)} • Ready for analysis
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <button
-                                    type="button"
-                                    onClick={() => zipInputRef.current?.click()}
-                                    className="text-xs font-semibold text-[var(--primary)] hover:underline"
-                                >
-                                    Change ZIP
-                                </button>
-                            </div>
-
+                        {!selectedZip ? (
                             <button
                                 type="button"
-                                onClick={handleZipSubmit}
-                                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-6 py-3.5 text-sm font-bold text-white shadow-md transition hover:brightness-105"
+                                onClick={() => zipInputRef.current?.click()}
+                                className="flex w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[color:var(--border)] bg-[var(--background)]/50 p-8 text-center transition hover:border-[var(--primary)] hover:bg-[var(--primary)]/5"
                             >
-                                <span>Continue with Archive</span>
-                                <ArrowRight size={16} />
+                                <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)]">
+                                    <Archive size={24} />
+                                </div>
+                                <h3 className="mt-4 text-sm font-semibold text-[color:var(--foreground)]">
+                                    Select repository ZIP archive
+                                </h3>
+                                <p className="mt-1 text-xs text-[color:var(--muted-foreground)]">
+                                    Max archive size: 250 MB
+                                </p>
                             </button>
-                        </div>
-                    )}
-                </div>
-            )}
+                        ) : (
+                            <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--background)] p-5 space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">
+                                            <CheckCircle2 size={20} />
+                                        </div>
+                                        <div>
+                                            <h4 className="text-sm font-bold text-[color:var(--foreground)]">
+                                                {selectedZip.name}
+                                            </h4>
+                                            <p className="text-xs text-[color:var(--muted-foreground)]">
+                                                {formatFileSize(selectedZip.size)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => zipInputRef.current?.click()}
+                                        className="text-xs font-semibold text-[var(--primary)] hover:underline"
+                                    >
+                                        Change File
+                                    </button>
+                                </div>
 
-            {/* Privacy / Processing Message */}
-            <div className="flex items-center justify-center gap-2 rounded-2xl border border-[color:var(--border)] bg-[var(--card)]/50 px-4 py-3 text-center text-xs text-[color:var(--muted-foreground)]">
-                <Info size={15} className="shrink-0 text-indigo-500" />
-                <span>UI preview — no repository is uploaded or analyzed in this version.</span>
+                                <div className="flex justify-end pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleZipSubmit}
+                                        disabled={isSubmitting}
+                                        className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:brightness-105 disabled:opacity-50"
+                                    >
+                                        {isSubmitting ? (
+                                            <>
+                                                <Loader2 size={16} className="animate-spin" />
+                                                Uploading & Initializing...
+                                            </>
+                                        ) : (
+                                            <>
+                                                Continue to Scoping
+                                                <ArrowRight size={16} />
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );
