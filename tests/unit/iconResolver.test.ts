@@ -40,6 +40,7 @@ const KNOWN_ICON_NAMES = [
     "Presentation",
     "FileType",
     "Download",
+    "GitBranch",
 ];
 
 const tests: Array<[string, () => void]> = [
