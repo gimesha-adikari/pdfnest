@@ -31,6 +31,9 @@ import {
     PRESET_OPTIONS,
     MANDATORY_SECURITY_PATTERNS,
 } from "@/context/RepositoryAnalyzerContext";
+import FlowExplorer from "./explorers/FlowExplorer";
+import ImpactExplorer from "./explorers/ImpactExplorer";
+import HotspotExplorer from "./explorers/HotspotExplorer";
 
 export default function RepositoryAnalyzerWorkspace() {
     const router = useRouter();
@@ -64,6 +67,7 @@ export default function RepositoryAnalyzerWorkspace() {
     const [forceIncludeInput, setForceIncludeInput] = useState("");
     const [isAddingPattern, setIsAddingPattern] = useState(false);
     const [isAddingForce, setIsAddingForce] = useState(false);
+    const [activeExplorerTab, setActiveExplorerTab] = useState<"flow" | "impact" | "hotspot">("hotspot");
 
     // Auto-navigate to download page once analysis completes
     useEffect(() => {
@@ -610,6 +614,44 @@ export default function RepositoryAnalyzerWorkspace() {
                         <p className="text-[11px] text-[color:var(--muted-foreground)] text-center">
                             Scanning manifests, extracting AST facts, and validating technology evidence.
                         </p>
+                    </div>
+                </div>
+            )}
+
+            {/* 5. Deep Intelligence Explorers (Wave 2) */}
+            {result && (
+                <div className="space-y-6 pt-8 border-t border-[color:var(--border)]">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h3 className="text-xl font-bold text-[color:var(--foreground)]">Intelligence Explorers</h3>
+                            <p className="text-sm text-[color:var(--muted-foreground)]">Explore architectural insights, dependencies, and hotspots.</p>
+                        </div>
+                        <div className="flex bg-[var(--card)] border border-[color:var(--border)] rounded-lg p-1">
+                            <button
+                                onClick={() => setActiveExplorerTab("hotspot")}
+                                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeExplorerTab === "hotspot" ? "bg-[var(--primary)] text-white shadow" : "text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)]"}`}
+                            >
+                                Hotspots
+                            </button>
+                            <button
+                                onClick={() => setActiveExplorerTab("flow")}
+                                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeExplorerTab === "flow" ? "bg-[var(--primary)] text-white shadow" : "text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)]"}`}
+                            >
+                                Execution Flow
+                            </button>
+                            <button
+                                onClick={() => setActiveExplorerTab("impact")}
+                                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeExplorerTab === "impact" ? "bg-[var(--primary)] text-white shadow" : "text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)]"}`}
+                            >
+                                Blast Radius
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="mt-6">
+                        {activeExplorerTab === "hotspot" && <HotspotExplorer result={result} />}
+                        {activeExplorerTab === "flow" && <FlowExplorer result={result} />}
+                        {activeExplorerTab === "impact" && <ImpactExplorer result={result} />}
                     </div>
                 </div>
             )}
