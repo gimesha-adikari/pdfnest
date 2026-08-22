@@ -182,6 +182,39 @@ export interface ArchitectureSummary {
     durationMs?: number;
 }
 
+export type EpistemicConfidence = "CONFIRMED" | "STRONGLY_INFERRED" | "WEAKLY_INFERRED";
+
+export interface Evidence {
+    id: string;
+    sourceType: string;
+    filePath: string;
+    lineStart?: number | null;
+    lineEnd?: number | null;
+    symbol?: string | null;
+    detector: string;
+    confidence: EpistemicConfidence;
+    description: string;
+}
+
+export type StructureNodeType = "directory" | "file";
+
+export interface StructureNode {
+    path: string;
+    name: string;
+    type: StructureNodeType;
+    size?: number | null;
+    category?: string | null;
+    language?: string | null;
+    children?: StructureNode[] | null;
+}
+
+export interface ProjectStructure {
+    rootName: string;
+    root: StructureNode;
+    totalFiles: number;
+    totalDirs: number;
+}
+
 export interface CanonicalAnalysisResult {
     schemaVersion: string;
     analysisId: string;
@@ -196,6 +229,8 @@ export interface CanonicalAnalysisResult {
     testing: TestingInfo;
     deployment: DeploymentInfo;
     structureTree: string;
+    structure?: ProjectStructure | null;
+    evidence?: Evidence[] | null;
     provenance: Provenance;
     architectureSummary?: ArchitectureSummary | null;
 }
