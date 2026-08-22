@@ -230,6 +230,8 @@ export interface CanonicalAnalysisResult {
     deployment: DeploymentInfo;
     structureTree: string;
     structure?: ProjectStructure | null;
+    graph?: SerializedGraph | null;
+    graphMetrics?: GraphMetrics | null;
     evidence?: Evidence[] | null;
     provenance: Provenance;
     architectureSummary?: ArchitectureSummary | null;
@@ -317,4 +319,81 @@ export interface AnalyzeResponse {
     sessionId: string;
     status: string;
     message: string;
+}
+
+export type EntityKind =
+    | "file"
+    | "directory"
+    | "symbol"
+    | "package"
+    | "route"
+    | "model"
+    | "config"
+    | "test"
+    | "service"
+    | "queue"
+    | "storage"
+    | "deployment";
+
+export interface GraphEntity {
+    id: string;
+    kind: EntityKind;
+    name: string;
+    path: string;
+    properties?: Record<string, any>;
+    evidence?: Evidence[];
+}
+
+export type RelationType =
+    | "defines"
+    | "exports"
+    | "imports"
+    | "implements"
+    | "exposes"
+    | "calls"
+    | "consumes"
+    | "depends_on"
+    | "configures"
+    | "tests"
+    | "persists_to"
+    | "publishes_to"
+    | "consumes_from"
+    | "deploys";
+
+export type RelationshipKind = "direct" | "inferred";
+
+export interface RelationshipProvenance {
+    kind: RelationshipKind;
+    detector: string;
+    evidenceIds?: string[];
+    derivedFrom?: string[];
+}
+
+export interface GraphEdge {
+    id: string;
+    sourceId: string;
+    targetId: string;
+    type: RelationType;
+    confidence: EpistemicConfidence;
+    provenance: RelationshipProvenance;
+    evidence?: Evidence[];
+    properties?: Record<string, string>;
+}
+
+export interface SerializedGraph {
+    entities: GraphEntity[];
+    edges: GraphEdge[];
+}
+
+export interface GraphMetrics {
+    EntityCount: number;
+    EdgeCount: number;
+    RelationshipCounts: Record<string, number>;
+    EvidenceCoveragePct: number;
+    ConfirmedEdgeCount: number;
+    InferredEdgeCount: number;
+    UnresolvedReferences: number;
+    CycleCount: number;
+    OrphanEntityCount: number;
+    LanguageResolutionCoverage: Record<string, string>;
 }
