@@ -25,34 +25,32 @@ describe("PDFNest Repository Analyzer — Final Real-User E2E Acceptance Suite",
         repository: {
             name: "e2e-polyglot-monorepo",
             sourceType: "zip",
-            totalFiles: 1305,
-            analyzedFiles: 1305,
-            primaryLanguage: "Go",
-            fileTree: {
-                name: "root",
-                path: "",
-                type: "directory",
-                children: [
-                    { name: "services", path: "services", type: "directory" },
-                    { name: "package.json", path: "package.json", type: "file", extension: ".json" },
-                ],
-            },
         },
         metrics: {
             totalFiles: 1305,
             includedFiles: 1305,
             excludedFiles: 0,
-            totalLines: 45000,
+            linesOfCode: 45000,
             totalBytes: 5242880,
             languages: [
-                { name: "Go", fileCount: 500, lines: 25000, bytes: 2621440, percentage: 50.0 },
-                { name: "TypeScript", fileCount: 405, lines: 12000, bytes: 1572864, percentage: 30.0 },
-                { name: "Python", fileCount: 400, lines: 8000, bytes: 1048576, percentage: 20.0 },
+                { name: "Go", fileCount: 500, bytes: 2621440, percentage: 50.0 },
+                { name: "TypeScript", fileCount: 405, bytes: 1572864, percentage: 30.0 },
+                { name: "Python", fileCount: 400, bytes: 1048576, percentage: 20.0 },
             ],
-            categories: {
-                source: 1300,
-                manifest: 3,
-                config: 2,
+        },
+        structureTree: "root/\n  services/\n  package.json",
+        structure: {
+            rootName: "root",
+            totalDirs: 1,
+            totalFiles: 1,
+            root: {
+                name: "root",
+                path: "",
+                type: "directory",
+                children: [
+                    { name: "services", path: "services", type: "directory" },
+                    { name: "package.json", path: "package.json", type: "file" },
+                ],
             },
         },
         technologies: [
@@ -61,12 +59,12 @@ describe("PDFNest Repository Analyzer — Final Real-User E2E Acceptance Suite",
                 name: "Fiber",
                 category: "framework",
                 version: "v2.52.0",
-                confidence: "CONFIRMED",
+                confidence: "confirmed",
                 evidence: [
                     {
-                        type: "manifest_dependency",
-                        sourceFile: "services/api/go.mod",
-                        details: "github.com/gofiber/fiber/v2",
+                        ruleType: "manifest_dep",
+                        filePath: "services/api/go.mod",
+                        detail: "github.com/gofiber/fiber/v2",
                     },
                 ],
             },
@@ -75,12 +73,12 @@ describe("PDFNest Repository Analyzer — Final Real-User E2E Acceptance Suite",
                 name: "FastAPI",
                 category: "framework",
                 version: "0.110.0",
-                confidence: "CONFIRMED",
+                confidence: "confirmed",
                 evidence: [
                     {
-                        type: "manifest_dependency",
-                        sourceFile: "services/worker/requirements.txt",
-                        details: "fastapi==0.110.0",
+                        ruleType: "manifest_dep",
+                        filePath: "services/worker/requirements.txt",
+                        detail: "fastapi==0.110.0",
                     },
                 ],
             },
@@ -89,50 +87,66 @@ describe("PDFNest Repository Analyzer — Final Real-User E2E Acceptance Suite",
                 name: "React",
                 category: "framework",
                 version: "18.2.0",
-                confidence: "CONFIRMED",
+                confidence: "confirmed",
                 evidence: [
                     {
-                        type: "manifest_dependency",
-                        sourceFile: "web/package.json",
-                        details: "react@18.2.0",
+                        ruleType: "manifest_dep",
+                        filePath: "web/package.json",
+                        detail: "react@18.2.0",
                     },
                 ],
             },
         ],
-        dependencies: [
-            { name: "github.com/gofiber/fiber/v2", version: "v2.52.0", ecosystem: "go", isDirect: true },
-            { name: "fastapi", version: "0.110.0", ecosystem: "pip", isDirect: true },
-            { name: "react", version: "^18.2.0", ecosystem: "npm", isDirect: true },
-        ],
+        dependencies: {
+            runtime: [
+                { name: "github.com/gofiber/fiber/v2", version: "v2.52.0", manager: "go", isDev: false },
+                { name: "fastapi", version: "0.110.0", manager: "pip", isDev: false },
+                { name: "react", version: "^18.2.0", manager: "npm", isDev: false },
+            ],
+            development: []
+        },
         setup: {
             prerequisites: ["Go 1.22+", "Python 3.12+", "Node.js 20+"],
-            installCommands: ["go mod download", "pip install -r requirements.txt", "npm install"],
-            startCommands: ["go run main.go", "uvicorn main:app", "npm run dev"],
-            buildCommands: ["go build", "npm run build"],
+            installCommands: [
+                { label: "Go", cmd: "go mod download" },
+                { label: "Python", cmd: "pip install -r requirements.txt" },
+                { label: "Node", cmd: "npm install" }
+            ],
+            runCommands: [
+                { label: "Go", cmd: "go run main.go" },
+                { label: "Python", cmd: "uvicorn main:app" },
+                { label: "Node", cmd: "npm run dev" }
+            ],
+            buildCommands: [
+                { label: "Go", cmd: "go build" },
+                { label: "Node", cmd: "npm run build" }
+            ],
         },
         environment: {
             variables: [
-                { name: "PORT", description: "HTTP Port", isSecret: false },
-                { name: "DATABASE_URL", description: "Database DSN", isSecret: true },
+                { name: "PORT", inferredType: "number", required: true, source: ".env", references: [] },
+                { name: "DATABASE_URL", inferredType: "secret", required: true, source: ".env", references: [] },
             ],
         },
         routes: [
-            { method: "GET", path: "/api/v1/health", handler: "healthHandler", sourceFile: "services/api/main.go" },
-            { method: "POST", path: "/api/v1/users", handler: "createUserHandler", sourceFile: "services/api/main.go" },
-            { method: "GET", path: "/worker/ping", handler: "ping", sourceFile: "services/worker/main.py" },
-        ],
-        models: [
-            { name: "User", fields: [{ name: "id", type: "string" }, { name: "email", type: "string" }] },
+            { method: "GET", path: "/api/v1/health", inferredHandler: "healthHandler", sourceFile: "services/api/main.go", authRequired: false },
+            { method: "POST", path: "/api/v1/users", inferredHandler: "createUserHandler", sourceFile: "services/api/main.go", authRequired: true },
+            { method: "GET", path: "/worker/ping", inferredHandler: "ping", sourceFile: "services/worker/main.py", authRequired: false },
         ],
         testing: {
             frameworks: ["pytest", "vitest"],
             testFileCount: 45,
-            testDirectory: "tests",
+            testDirectories: ["tests"],
+            testCommands: ["pytest", "vitest run"]
         },
         deployment: {
             dockerAvailable: true,
-            dockerComposeAvailable: true,
-            ciWorkflows: [".github/workflows/ci.yml"],
+            dockerfilePaths: ["Dockerfile"],
+            composePaths: ["docker-compose.yml"],
+            targetPlatforms: ["linux/amd64"],
+            ciWorkflows: [
+                { name: "CI", path: ".github/workflows/ci.yml", triggers: ["push"] }
+            ],
         },
         provenance: {
             engine: "go-analyzer-worker",
@@ -147,51 +161,41 @@ describe("PDFNest Repository Analyzer — Final Real-User E2E Acceptance Suite",
             sourceArtifactSha256: "sha256:source-zip-test",
         },
         architectureSummary: {
-            schemaVersion: "1.0.0",
-            overview: "Polyglot enterprise application featuring a Go Fiber HTTP API, Python FastAPI background worker, and React frontend.",
-            projectType: "Full-Stack Web Application",
-            primaryArchitecturePattern: "Microservices / Service-Oriented Architecture",
-            systemComponents: [
+            protocolVersion: "1.0",
+            taskId: "t1",
+            summary: "Polyglot enterprise application featuring a Go Fiber HTTP API, Python FastAPI background worker, and React frontend.",
+            architecturePattern: "Microservices / Service-Oriented Architecture",
+            keyComponents: [
                 {
                     name: "API Gateway",
                     role: "HTTP REST Coordinator",
-                    technologies: ["Fiber", "Go"],
-                    evidenceFactIds: ["fact-tech-fiber", "fact-lang-go"],
+                    factIds: ["fact-tech-fiber", "fact-lang-go"],
                 },
                 {
                     name: "Background Worker",
                     role: "Async Task Execution",
-                    technologies: ["FastAPI", "Python"],
-                    evidenceFactIds: ["fact-tech-fastapi", "fact-lang-python"],
+                    factIds: ["fact-tech-fastapi", "fact-lang-python"],
                 },
             ],
-            dataFlow: "Clients send requests to Fiber API which enqueues heavy tasks to the FastAPI worker.",
-            identifiedRisks: [
+            dataFlow: [
+                { step: 1, description: "Clients send requests to Fiber API which enqueues heavy tasks to the FastAPI worker." }
+            ],
+            risks: [
                 {
                     category: "Scalability",
                     description: "Polyglot services require independent container deployments.",
-                    severity: "LOW",
-                    evidenceFactIds: ["fact-tech-docker"],
+                    factIds: ["fact-tech-docker"],
                 },
-            ],
-            confidence: "HIGH",
-            evidenceFactIds: [
-                "fact-tech-fiber",
-                "fact-tech-fastapi",
-                "fact-tech-react",
-                "fact-lang-go",
-                "fact-lang-python",
-                "fact-lang-typescript",
             ],
         },
     };
 
     it("verifies all 8 documentation domains are complete and renderable", () => {
         assert.equal(ALL_REPORTS.length, 8);
-        assert.ok(sampleCanonicalResult.repository.fileTree);
+        assert.ok(sampleCanonicalResult.structure);
         assert.ok(sampleCanonicalResult.technologies.length > 0);
-        assert.ok(sampleCanonicalResult.dependencies.length > 0);
-        assert.ok(sampleCanonicalResult.setup.startCommands.length > 0);
+        assert.ok(sampleCanonicalResult.dependencies.runtime.length > 0);
+        assert.ok(sampleCanonicalResult.setup.runCommands.length > 0);
         assert.ok(sampleCanonicalResult.environment.variables.length > 0);
         assert.ok(sampleCanonicalResult.routes.length > 0);
         assert.ok(sampleCanonicalResult.testing.frameworks.length > 0);
@@ -201,13 +205,12 @@ describe("PDFNest Repository Analyzer — Final Real-User E2E Acceptance Suite",
     it("verifies architecture summary grounding and fact ID traceability", () => {
         const summary = sampleCanonicalResult.architectureSummary;
         assert.ok(summary);
-        assert.ok(summary.evidenceFactIds.length >= 6);
-        assert.equal(summary.confidence, "HIGH");
-        assert.equal(summary.systemComponents.length, 2);
+        assert.ok(summary.keyComponents);
+        assert.equal(summary.keyComponents.length, 2);
 
-        for (const comp of summary.systemComponents) {
-            assert.ok(comp.evidenceFactIds.length > 0);
-            for (const fid of comp.evidenceFactIds) {
+        for (const comp of summary.keyComponents) {
+            assert.ok(comp.factIds && comp.factIds.length > 0);
+            for (const fid of comp.factIds!) {
                 assert.ok(fid.startsWith("fact-"));
             }
         }
