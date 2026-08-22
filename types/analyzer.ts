@@ -234,6 +234,7 @@ export interface CanonicalAnalysisResult {
     graphMetrics?: GraphMetrics | null;
     evidence?: Evidence[] | null;
     provenance: Provenance;
+    intelligence?: IntelligenceAnalysis | null;
     ai?: ArchitectureSummary | null;
     architectureSummary?: ArchitectureSummary | null;
 }
@@ -393,14 +394,165 @@ export interface SerializedGraph {
 }
 
 export interface GraphMetrics {
-    EntityCount: number;
-    EdgeCount: number;
-    RelationshipCounts: Record<string, number>;
-    EvidenceCoveragePct: number;
-    ConfirmedEdgeCount: number;
-    InferredEdgeCount: number;
-    UnresolvedReferences: number;
-    CycleCount: number;
-    OrphanEntityCount: number;
-    LanguageResolutionCoverage: Record<string, string>;
+    entityCount: number;
+    edgeCount: number;
+    relationshipCounts: Record<string, number>;
+    evidenceCoveragePct: number;
+    confirmedEdgeCount: number;
+    inferredEdgeCount: number;
+    unresolvedReferences: number;
+    cycleCount: number;
+    orphanEntityCount: number;
+    languageResolutionCoverage: Record<string, string>;
+
+    // Backward compatibility aliases
+    EntityCount?: number;
+    EdgeCount?: number;
+    RelationshipCounts?: Record<string, number>;
+    EvidenceCoveragePct?: number;
+    ConfirmedEdgeCount?: number;
+    InferredEdgeCount?: number;
+    UnresolvedReferences?: number;
+    CycleCount?: number;
+    OrphanEntityCount?: number;
+    LanguageResolutionCoverage?: Record<string, string>;
 }
+
+// Deep Intelligence Engines Models
+export type ComponentTier =
+    | "Frontend"
+    | "API"
+    | "Queue"
+    | "Worker"
+    | "Storage"
+    | "Database"
+    | "Deployment";
+
+export interface ArchitectureComponent {
+    entityId: string;
+    tier: ComponentTier;
+    confidence: EpistemicConfidence;
+    evidence?: Evidence[];
+}
+
+export interface FlowStep {
+    entityId: string;
+    action: string;
+    targetId: string;
+    confidence: EpistemicConfidence;
+}
+
+export interface ExecutionFlow {
+    id: string;
+    steps: FlowStep[];
+}
+
+export type RiskScore = "HIGH" | "MEDIUM" | "LOW";
+
+export interface ImpactAnalysis {
+    entityId: string;
+    directDependents: number;
+    indirectDependents: number;
+    forwardDependencies: number;
+    affectedRoutes: number;
+    affectedServices: number;
+    affectedTests: number;
+    riskScore: RiskScore;
+}
+
+export interface HotspotScore {
+    entityId: string;
+    fanIn: number;
+    fanOut: number;
+    centrality: number;
+    complexity: number;
+    isTested: boolean;
+    hotspotMetric: number;
+}
+
+export type Severity = "HIGH" | "MEDIUM" | "LOW";
+
+export interface SecurityFinding {
+    ruleId: string;
+    title: string;
+    description: string;
+    severity: Severity;
+    confidence: EpistemicConfidence;
+    entityId: string;
+    evidence?: Evidence[];
+    remediation: string;
+}
+
+export interface UntestedComponent {
+    entityId: string;
+    name: string;
+    kind: EntityKind;
+    fanIn: number;
+}
+
+export interface TestMapping {
+    entityId: string;
+    entityName: string;
+    testFiles: string[];
+}
+
+export interface TestIntelligence {
+    mappings: TestMapping[];
+    untestedComponents: UntestedComponent[];
+}
+
+export interface ConfigUsage {
+    configId: string;
+    configName: string;
+    isSecret: boolean;
+    isOptional: boolean;
+    inDocs: boolean;
+    usedInCode: boolean;
+    usageLocations: string[];
+}
+
+export interface RuntimeDeploymentInfo {
+    dockerfiles: string[];
+    dockerCompose: string[];
+    ciWorkflows: string[];
+    startupCmds: string[];
+    portMappings: string[];
+}
+
+export interface ConfigRuntimeIntelligence {
+    configUsages: Record<string, ConfigUsage>;
+    runtime: RuntimeDeploymentInfo;
+}
+
+export interface ScorecardRecommendation {
+    title: string;
+    description: string;
+    priority: string;
+    targetNodeId?: string;
+}
+
+export interface ScorecardQualityScore {
+    component: string;
+    score: number;
+    grade: string;
+    rationale: string;
+}
+
+export interface Scorecard {
+    overallScore: number;
+    overallGrade: string;
+    components: ScorecardQualityScore[];
+    recommendations: ScorecardRecommendation[];
+}
+
+export interface IntelligenceAnalysis {
+    architecture?: ArchitectureComponent[];
+    flow?: ExecutionFlow[];
+    impact?: Record<string, ImpactAnalysis>;
+    hotspots?: HotspotScore[];
+    security?: SecurityFinding[];
+    test?: TestIntelligence;
+    config?: ConfigRuntimeIntelligence;
+    scorecard?: Scorecard;
+}
+

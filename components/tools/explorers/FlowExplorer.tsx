@@ -10,12 +10,37 @@ interface FlowExplorerProps {
 export default function FlowExplorer({ result }: FlowExplorerProps) {
     const [selectedStep, setSelectedStep] = useState<DataFlowStep | null>(null);
 
-    const flows = result.architectureSummary?.dataFlow || [];
+    // Prefer deterministic intelligence flows, falling back to AI summary flows
+    const intelFlows = result.intelligence?.flow || [];
+    const aiFlows = (result.ai || result.architectureSummary)?.dataFlow || [];
 
-    if (flows.length === 0) {
+    const displaySteps: DataFlowStep[] = [];
+
+    if (intelFlows.length > 0) {
+        let stepCounter = 1;
+        intelFlows.forEach((f) => {
+            f.steps.forEach((st) => {
+                const entityId = st.entityId || (st as unknown as { EntityID?: string }).EntityID || "";
+                const targetId = st.targetId || (st as unknown as { TargetID?: string }).TargetID || "";
+                const action = st.action || (st as unknown as { Action?: string }).Action || "Executes";
+                const srcName = entityId ? entityId.replace(/^[^:]+:/, "") : "Unknown Source";
+                const tgtName = targetId ? targetId.replace(/^[^:]+:/, "") : "Unknown Target";
+
+                displaySteps.push({
+                    step: stepCounter++,
+                    description: `${action}: ${srcName} → ${tgtName}`,
+                    factIds: [entityId, targetId].filter(Boolean),
+                });
+            });
+        });
+    } else if (aiFlows.length > 0) {
+        displaySteps.push(...aiFlows);
+    }
+
+    if (displaySteps.length === 0) {
         return (
             <div className="flex items-center justify-center p-8 border border-[color:var(--border)] rounded-2xl bg-[var(--background)]">
-                <p className="text-sm text-[color:var(--muted-foreground)]">No execution flows available.</p>
+                <p className="text-sm text-[color:var(--muted-foreground)]">No execution flows available for this repository.</p>
             </div>
         );
     }
@@ -69,8 +94,8 @@ export default function FlowExplorer({ result }: FlowExplorerProps) {
                 </div>
 
                 <div className="relative space-y-0 before:absolute before:inset-y-0 before:left-[19px] before:w-0.5 before:bg-[color:var(--border)]">
-                    {flows.map((flow, index) => {
-                        const isLast = index === flows.length - 1;
+                    {displaySteps.map((flow, index) => {
+                        const isLast = index === displaySteps.length - 1;
                         return (
                             <div key={flow.step} className="relative flex items-start gap-6 pb-6">
                                 {/* Timeline Node */}

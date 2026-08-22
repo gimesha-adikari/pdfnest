@@ -11,6 +11,7 @@ import type {
     CanonicalAnalysisResult,
     TaskStatusResponse,
 } from "@/types/analyzer";
+import { normalizeCanonicalAnalysisResult } from "@/lib/analyzer/normalize";
 
 const client = axios.create({
     withCredentials: true,
@@ -71,7 +72,7 @@ export const analyzerApi = {
     async getResult(sessionId: string): Promise<CanonicalAnalysisResult> {
         const base = getBaseUrl();
         const resp = await client.get<CanonicalAnalysisResult>(`${base}/api/v1/analyzer/sessions/${encodeURIComponent(sessionId)}/result`);
-        return resp.data;
+        return normalizeCanonicalAnalysisResult(resp.data);
     },
 
     /**
