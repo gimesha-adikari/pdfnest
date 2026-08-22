@@ -234,10 +234,17 @@ export interface CanonicalAnalysisResult {
     graphMetrics?: GraphMetrics | null;
     evidence?: Evidence[] | null;
     provenance: Provenance;
+    ai?: ArchitectureSummary | null;
     architectureSummary?: ArchitectureSummary | null;
 }
 
 // API DTOs
+export interface AnalyzeRequest {
+    selectedDomains?: string[];
+    deepAst?: boolean;
+    enableAi?: boolean;
+}
+
 export interface CreateSessionRequest {
     sourceType: SourceType;
     gitUrl?: string;

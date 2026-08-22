@@ -123,11 +123,14 @@ interface RepositoryAnalyzerContextType {
     isAnalyzing: boolean;
     isLoading: boolean;
     error: string | null;
+    enableAi: boolean;
 
     // Evidence Modal State
     evidenceModalTech: TechnologyItem | null;
 
     // Actions
+    setEnableAi: (enable: boolean) => void;
+    toggleEnableAi: () => void;
     createGitSession: (url: string, repoName?: string) => Promise<string>;
     createZipSession: (storageKey: string, repoName?: string) => Promise<string>;
     loadSession: (sessionId: string) => Promise<void>;
@@ -191,11 +194,16 @@ export function RepositoryAnalyzerProvider({ children }: { children: ReactNode }
     const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
+    const [enableAi, setEnableAi] = useState<boolean>(false);
 
     const [evidenceModalTech, setEvidenceModalTech] = useState<TechnologyItem | null>(null);
 
     const unsubscribeWsRef = useRef<(() => void) | null>(null);
     const activeSessionRef = useRef<string | null>(null);
+
+    const toggleEnableAi = useCallback(() => {
+        setEnableAi((prev) => !prev);
+    }, []);
 
     // Hard Session Reset helper
     const reset = useCallback(() => {
@@ -219,6 +227,7 @@ export function RepositoryAnalyzerProvider({ children }: { children: ReactNode }
         setIsAnalyzing(false);
         setIsLoading(false);
         setError(null);
+        setEnableAi(false);
         setEvidenceModalTech(null);
     }, []);
 
@@ -458,6 +467,7 @@ export function RepositoryAnalyzerProvider({ children }: { children: ReactNode }
         try {
             const resp = await analyzerApi.analyzeSession(sessionId, {
                 selectedDomains: selectedDomains,
+                enableAi: enableAi,
             });
             setTaskId(resp.taskId);
             subscribeToTaskProgress(sessionId, resp.taskId);
@@ -493,7 +503,10 @@ export function RepositoryAnalyzerProvider({ children }: { children: ReactNode }
                 isAnalyzing,
                 isLoading,
                 error,
+                enableAi,
                 evidenceModalTech,
+                setEnableAi,
+                toggleEnableAi,
                 createGitSession,
                 createZipSession,
                 loadSession,

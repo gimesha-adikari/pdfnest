@@ -68,4 +68,12 @@ test.describe('Repository Analyzer Phase 5 Interactive Explorers', () => {
         await expect(evidenceModal).toBeVisible();
     }
   });
+
+  test('should render AI Architecture Synthesis when available', async ({ page }) => {
+    const aiSection = page.locator('section[aria-labelledby="ai-architecture-summary-heading"]');
+    if (await aiSection.count() > 0) {
+        await expect(aiSection).toBeVisible();
+        await expect(page.locator('#ai-architecture-summary-heading')).toContainText('AI Architecture Summary');
+    }
+  });
 });

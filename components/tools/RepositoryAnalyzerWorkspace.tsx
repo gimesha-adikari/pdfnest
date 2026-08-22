@@ -23,6 +23,8 @@ import {
     X,
     Lock,
     AlertCircle,
+    Sparkles,
+    ShieldCheck,
 } from "lucide-react";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import {
@@ -51,6 +53,9 @@ export default function RepositoryAnalyzerWorkspace() {
         result,
         isAnalyzing,
         error,
+        enableAi,
+        setEnableAi,
+        toggleEnableAi,
         togglePreset,
         addCustomPattern,
         removeCustomPattern,
@@ -547,6 +552,47 @@ export default function RepositoryAnalyzerWorkspace() {
                                 </p>
                             </div>
                         )}
+
+                        {/* AI Architecture Synthesis Consent Card */}
+                        <div className="rounded-2xl border border-violet-500/30 bg-violet-500/[0.04] p-4 space-y-3">
+                            <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400">
+                                        <Sparkles size={16} />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-bold text-[color:var(--foreground)]">
+                                            AI Architecture Synthesis
+                                        </p>
+                                        <p className="text-[10px] text-[color:var(--muted-foreground)]">
+                                            Powered by Google Gemini
+                                        </p>
+                                    </div>
+                                </div>
+                                <label className="relative inline-flex cursor-pointer items-center">
+                                    <input
+                                        type="checkbox"
+                                        checked={enableAi}
+                                        onChange={toggleEnableAi}
+                                        className="peer sr-only"
+                                    />
+                                    <div className="peer h-5 w-9 rounded-full bg-gray-300 dark:bg-gray-700 after:absolute after:top-[2px] after:left-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-violet-600 peer-checked:after:translate-x-full peer-focus:outline-hidden" />
+                                </label>
+                            </div>
+
+                            <p className="text-[11px] leading-relaxed text-[color:var(--muted-foreground)]">
+                                {enableAi
+                                    ? "Enabled: Sends only sanitized metadata and deterministic fact projections (never raw source code or secrets) to Gemini to generate high-level architectural explanations."
+                                    : "Disabled (Default): Analysis runs purely deterministically using local AST parsers and graph engines without external AI calls."}
+                            </p>
+
+                            {enableAi && (
+                                <div className="inline-flex items-center gap-1 text-[10px] font-semibold text-violet-600 dark:text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded-md">
+                                    <ShieldCheck size={12} />
+                                    <span>Closed-World Grounding • Fact-ID Whitelisted</span>
+                                </div>
+                            )}
+                        </div>
 
                         <div className="space-y-3 pt-2">
                             <button

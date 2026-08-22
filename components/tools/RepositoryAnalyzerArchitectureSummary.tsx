@@ -13,10 +13,27 @@ import type { ArchitectureSummary } from "@/types/analyzer";
 
 interface ArchitectureSummaryProps {
     summary?: ArchitectureSummary | null;
+    aiRequested?: boolean;
 }
 
-export default function RepositoryAnalyzerArchitectureSummary({ summary }: ArchitectureSummaryProps) {
+export default function RepositoryAnalyzerArchitectureSummary({
+    summary,
+    aiRequested = false,
+}: ArchitectureSummaryProps) {
     if (!summary || !summary.summary) {
+        if (aiRequested) {
+            return (
+                <div className="rounded-3xl border border-amber-500/30 bg-amber-500/[0.04] p-5 text-xs text-[color:var(--foreground)]">
+                    <div className="flex items-center gap-2 font-bold text-amber-700 dark:text-amber-400">
+                        <AlertTriangle size={15} />
+                        <span>AI Architecture Synthesis Unavailable</span>
+                    </div>
+                    <p className="mt-1 text-[color:var(--muted-foreground)]">
+                        AI synthesis was requested, but could not be generated (provider unconfigured, rate-limited, or failed fact-grounding validation). All deterministic AST &amp; graph analysis results below remain 100% verified.
+                    </p>
+                </div>
+            );
+        }
         return null;
     }
 
@@ -27,7 +44,7 @@ export default function RepositoryAnalyzerArchitectureSummary({ summary }: Archi
     return (
         <section
             aria-labelledby="ai-architecture-summary-heading"
-            className="rounded-3xl border border-violet-500/20 bg-gradient-to-br from-violet-500/[0.04] via-transparent to-purple-500/[0.04] p-6 shadow-sm backdrop-blur-sm sm:p-8"
+            className="rounded-3xl border border-violet-500/20 bg-gradient-to-br from-violet-500/[0.04] via-transparent to-purple-500/[0.04] p-6 shadow-sm backdrop-blur-sm sm:p-8 space-y-6"
         >
             {/* Header / Disclosure Badge */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -55,13 +72,13 @@ export default function RepositoryAnalyzerArchitectureSummary({ summary }: Archi
             </div>
 
             {/* Main Executive Summary */}
-            <div className="mt-5 rounded-2xl border border-[color:var(--border)] bg-[color:var(--card)]/60 p-5 text-sm leading-relaxed text-[color:var(--foreground)]">
+            <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--card)]/60 p-5 text-sm leading-relaxed text-[color:var(--foreground)]">
                 <p>{summary.summary}</p>
             </div>
 
             {/* Architecture Pattern */}
             {summary.architecturePattern && (
-                <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
                     <span className="font-semibold text-[color:var(--muted-foreground)]">
                         Identified Architecture Pattern:
                     </span>
@@ -74,7 +91,7 @@ export default function RepositoryAnalyzerArchitectureSummary({ summary }: Archi
 
             {/* Key Components Grid */}
             {keyComponents.length > 0 && (
-                <div className="mt-6">
+                <div>
                     <h4 className="flex items-center gap-2 text-xs font-bold tracking-wider text-[color:var(--muted-foreground)] uppercase">
                         <Layers size={14} className="text-violet-500" />
                         Key Architectural Components
@@ -113,7 +130,7 @@ export default function RepositoryAnalyzerArchitectureSummary({ summary }: Archi
 
             {/* Data Flow Workflow */}
             {dataFlow.length > 0 && (
-                <div className="mt-6">
+                <div>
                     <h4 className="flex items-center gap-2 text-xs font-bold tracking-wider text-[color:var(--muted-foreground)] uppercase">
                         <Workflow size={14} className="text-violet-500" />
                         Data &amp; Execution Flow
@@ -150,7 +167,7 @@ export default function RepositoryAnalyzerArchitectureSummary({ summary }: Archi
 
             {/* Considerations & Risks */}
             {risks.length > 0 && (
-                <div className="mt-6">
+                <div>
                     <h4 className="flex items-center gap-2 text-xs font-bold tracking-wider text-[color:var(--muted-foreground)] uppercase">
                         <AlertTriangle size={14} className="text-amber-500" />
                         Architectural Considerations
@@ -184,6 +201,24 @@ export default function RepositoryAnalyzerArchitectureSummary({ summary }: Archi
                     </div>
                 </div>
             )}
+
+            {/* Provider & Model Metadata Footer */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[color:var(--border)] pt-4 text-[11px] text-[color:var(--muted-foreground)]">
+                <div className="flex items-center gap-2">
+                    <span className="font-medium text-[color:var(--foreground)]">Synthesis Engine:</span>
+                    <span className="rounded bg-[var(--accent)] px-2 py-0.5 font-mono text-[10px]">
+                        {summary.provider ? `${summary.provider} / ${summary.model || "default"}` : "Gemini"}
+                    </span>
+                </div>
+                <div className="flex items-center gap-3">
+                    {summary.durationMs ? (
+                        <span>Synthesis Time: {summary.durationMs}ms</span>
+                    ) : null}
+                    {summary.outputTokens ? (
+                        <span>Tokens: {summary.inputTokens || 0} in / {summary.outputTokens} out</span>
+                    ) : null}
+                </div>
+            </div>
         </section>
     );
 }

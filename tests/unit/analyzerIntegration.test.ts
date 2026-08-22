@@ -195,4 +195,76 @@ describe("PDFNest Repository Analyzer — Phase 6 Frontend Integration", () => {
         handleResultArrival("session-B", { analysisId: "res-B" });
         assert.equal((sessionResult as { analysisId?: string } | null)?.analysisId, "res-B");
     });
+
+    it("verifies AI synthesis result schema and markdown generation", () => {
+        const mockCanonicalWithAI: CanonicalAnalysisResult = {
+            schemaVersion: "1.0.0",
+            analysisId: "test-ai-analysis-1",
+            createdAt: new Date().toISOString(),
+            repository: {
+                name: "demo-service",
+                sourceType: "git",
+            },
+            metrics: {
+                totalFiles: 50,
+                includedFiles: 50,
+                excludedFiles: 0,
+                totalBytes: 120000,
+                linesOfCode: 3500,
+                languages: [{ name: "Go", percentage: 100, fileCount: 50, bytes: 120000 }],
+            },
+            technologies: [
+                {
+                    id: "TECH-1",
+                    name: "Fiber",
+                    category: "framework",
+                    confidence: "confirmed",
+                    evidence: [{ filePath: "go.mod", ruleType: "manifest_dep", detail: "fiber v2" }],
+                },
+            ],
+            dependencies: { runtime: [], development: [] },
+            routes: [{ method: "GET", path: "/health", sourceFile: "main.go", authRequired: false }],
+            environment: { variables: [] },
+            setup: { prerequisites: [], installCommands: [], runCommands: [], buildCommands: [] },
+            testing: { frameworks: ["Go Test"], testCommands: ["go test ./..."], testDirectories: [], testFileCount: 4 },
+            deployment: { dockerAvailable: true, dockerfilePaths: ["Dockerfile"], composePaths: [], ciWorkflows: [], targetPlatforms: ["linux"] },
+            structureTree: "demo-service/\n├── main.go\n└── go.mod\n",
+            provenance: {
+                engine: "go_analyzer_worker",
+                engineVersion: "1.0.0",
+                rulesVersion: "1.0.0",
+                schemaVersion: "1.0.0",
+                durationMs: 320,
+                rulesEvaluatedCount: 180,
+                complexityTier: "Tier1Instant",
+                complexityScore: 12,
+                sourceArtifactSha256: "sha256demo",
+                scopeHash: "scope123",
+            },
+            ai: {
+                protocolVersion: "1.0.0",
+                taskId: "task-demo-ai",
+                summary: "A robust Go backend microservice utilizing the Fiber framework for HTTP routing and Docker for deployment.",
+                architecturePattern: "Microservice REST API",
+                provider: "gemini",
+                model: "gemini-3.6-flash",
+                keyComponents: [
+                    { name: "HTTP Server", role: "Handles HTTP routing and middleware", factIds: ["TECH-1", "ROUTE-1"] },
+                ],
+                dataFlow: [
+                    { step: 1, description: "Client issues GET /health request", factIds: ["ROUTE-1"] },
+                ],
+                risks: [
+                    { category: "Testing", description: "Minimal test suite detected", factIds: ["TECH-1"] },
+                ],
+            },
+        };
+
+        assert.ok(mockCanonicalWithAI.ai);
+        assert.equal(mockCanonicalWithAI.ai.provider, "gemini");
+        assert.equal(mockCanonicalWithAI.ai.architecturePattern, "Microservice REST API");
+        assert.equal(mockCanonicalWithAI.ai.keyComponents?.length, 1);
+        assert.equal(mockCanonicalWithAI.ai.dataFlow?.length, 1);
+        assert.equal(mockCanonicalWithAI.ai.risks?.length, 1);
+    });
 });

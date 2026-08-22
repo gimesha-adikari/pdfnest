@@ -6,6 +6,7 @@ import type {
     UpdateScopeRequest,
     ScopeResponse,
     TreeResponse,
+    AnalyzeRequest,
     AnalyzeResponse,
     CanonicalAnalysisResult,
     TaskStatusResponse,
@@ -58,7 +59,7 @@ export const analyzerApi = {
     /**
      * POST /api/v1/analyzer/sessions/:id/analyze
      */
-    async analyzeSession(sessionId: string, data?: { selectedDomains?: string[] }): Promise<AnalyzeResponse> {
+    async analyzeSession(sessionId: string, data?: AnalyzeRequest): Promise<AnalyzeResponse> {
         const base = getBaseUrl();
         const resp = await client.post<AnalyzeResponse>(`${base}/api/v1/analyzer/sessions/${encodeURIComponent(sessionId)}/analyze`, data || {});
         return resp.data;
