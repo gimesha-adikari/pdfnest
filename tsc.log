@@ -1,0 +1,31 @@
+tests/unit/e2eReleaseValidation.test.ts(28,13): error TS2353: Object literal may only specify known properties, and 'totalFiles' does not exist in type 'RepositoryInfo'.
+tests/unit/e2eReleaseValidation.test.ts(48,47): error TS2353: Object literal may only specify known properties, and 'lines' does not exist in type 'LanguageMetric'.
+tests/unit/e2eReleaseValidation.test.ts(49,55): error TS2353: Object literal may only specify known properties, and 'lines' does not exist in type 'LanguageMetric'.
+tests/unit/e2eReleaseValidation.test.ts(50,51): error TS2353: Object literal may only specify known properties, and 'lines' does not exist in type 'LanguageMetric'.
+tests/unit/e2eReleaseValidation.test.ts(64,17): error TS2820: Type '"CONFIRMED"' is not assignable to type 'ConfidenceLevel'. Did you mean '"confirmed"'?
+tests/unit/e2eReleaseValidation.test.ts(67,25): error TS2353: Object literal may only specify known properties, and 'type' does not exist in type 'EvidenceItem'.
+tests/unit/e2eReleaseValidation.test.ts(78,17): error TS2820: Type '"CONFIRMED"' is not assignable to type 'ConfidenceLevel'. Did you mean '"confirmed"'?
+tests/unit/e2eReleaseValidation.test.ts(81,25): error TS2353: Object literal may only specify known properties, and 'type' does not exist in type 'EvidenceItem'.
+tests/unit/e2eReleaseValidation.test.ts(92,17): error TS2820: Type '"CONFIRMED"' is not assignable to type 'ConfidenceLevel'. Did you mean '"confirmed"'?
+tests/unit/e2eReleaseValidation.test.ts(95,25): error TS2353: Object literal may only specify known properties, and 'type' does not exist in type 'EvidenceItem'.
+tests/unit/e2eReleaseValidation.test.ts(102,9): error TS2739: Type '{ name: string; version: string; ecosystem: string; isDirect: true; }[]' is missing the following properties from type 'DependenciesBlock': runtime, development
+tests/unit/e2eReleaseValidation.test.ts(109,31): error TS2322: Type 'string' is not assignable to type 'SetupCommand'.
+tests/unit/e2eReleaseValidation.test.ts(109,50): error TS2322: Type 'string' is not assignable to type 'SetupCommand'.
+tests/unit/e2eReleaseValidation.test.ts(109,85): error TS2322: Type 'string' is not assignable to type 'SetupCommand'.
+tests/unit/e2eReleaseValidation.test.ts(111,29): error TS2322: Type 'string' is not assignable to type 'SetupCommand'.
+tests/unit/e2eReleaseValidation.test.ts(111,41): error TS2322: Type 'string' is not assignable to type 'SetupCommand'.
+tests/unit/e2eReleaseValidation.test.ts(115,33): error TS2353: Object literal may only specify known properties, and 'description' does not exist in type 'EnvironmentVariable'.
+tests/unit/e2eReleaseValidation.test.ts(116,41): error TS2353: Object literal may only specify known properties, and 'description' does not exist in type 'EnvironmentVariable'.
+tests/unit/e2eReleaseValidation.test.ts(120,54): error TS2353: Object literal may only specify known properties, and 'handler' does not exist in type 'ApiRouteItem'.
+tests/unit/e2eReleaseValidation.test.ts(121,54): error TS2353: Object literal may only specify known properties, and 'handler' does not exist in type 'ApiRouteItem'.
+tests/unit/e2eReleaseValidation.test.ts(122,52): error TS2353: Object literal may only specify known properties, and 'handler' does not exist in type 'ApiRouteItem'.
+tests/unit/e2eReleaseValidation.test.ts(130,13): error TS2561: Object literal may only specify known properties, but 'testDirectory' does not exist in type 'TestingInfo'. Did you mean to write 'testDirectories'?
+tests/unit/e2eReleaseValidation.test.ts(135,27): error TS2322: Type 'string' is not assignable to type 'DeploymentCIWorkflow'.
+tests/unit/e2eReleaseValidation.test.ts(168,13): error TS2322: Type 'string' is not assignable to type 'DataFlowStep[]'.
+tests/unit/e2eReleaseValidation.test.ts(191,52): error TS2339: Property 'fileTree' does not exist on type 'RepositoryInfo'.
+tests/unit/e2eReleaseValidation.test.ts(193,54): error TS2339: Property 'length' does not exist on type 'DependenciesBlock'.
+tests/unit/e2eReleaseValidation.test.ts(194,47): error TS2339: Property 'startCommands' does not exist on type 'SetupInfo'.
+tests/unit/e2eReleaseValidation.test.ts(204,27): error TS2339: Property 'evidenceFactIds' does not exist on type 'ArchitectureSummary'.
+tests/unit/e2eReleaseValidation.test.ts(205,30): error TS2339: Property 'confidence' does not exist on type 'ArchitectureSummary'.
+tests/unit/e2eReleaseValidation.test.ts(206,30): error TS2339: Property 'systemComponents' does not exist on type 'ArchitectureSummary'.
+tests/unit/e2eReleaseValidation.test.ts(208,36): error TS2339: Property 'systemComponents' does not exist on type 'ArchitectureSummary'.
