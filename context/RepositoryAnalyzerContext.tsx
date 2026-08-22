@@ -153,8 +153,11 @@ interface RepositoryAnalyzerContextType {
 
 function extractErrorMessage(err: unknown, fallback: string): string {
     if (err && typeof err === "object") {
-        const ax = err as { response?: { data?: { message?: string } }; message?: string };
-        if (ax.response?.data?.message) return ax.response.data.message;
+        const ax = err as { response?: { data?: { code?: string; message?: string } }; message?: string };
+        if (ax.response?.data?.message) {
+            const code = ax.response.data.code;
+            return code ? `[${code}] ${ax.response.data.message}` : ax.response.data.message;
+        }
         if (ax.message) return ax.message;
     }
     return fallback;

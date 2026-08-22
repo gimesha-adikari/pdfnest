@@ -14,7 +14,8 @@ import {
 } from "lucide-react";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import { useRepositoryAnalyzer } from "@/context/RepositoryAnalyzerContext";
-import { requestR2PresignedUploads, uploadFileToPresignedUrl } from "@/lib/r2";
+import { uploadArchiveToStorage } from "@/lib/analyzerUploader";
+import { bundleDirectoryToZip } from "@/lib/folderZipper";
 
 type SourceTab = "git" | "local" | "zip";
 
@@ -25,6 +26,7 @@ export default function RepositoryAnalyzerSourceSelector() {
 
     const [activeTab, setActiveTab] = useState<SourceTab>("git");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [bundlingProgress, setBundlingProgress] = useState<string | null>(null);
 
     // 1. Git URL State
     const [gitUrl, setGitUrl] = useState("");
@@ -164,20 +166,40 @@ export default function RepositoryAnalyzerSourceSelector() {
     const handleLocalSubmit = async () => {
         if (!selectedFolder) return;
         setIsSubmitting(true);
+        setBundlingProgress("Preparing directory files...");
 
         try {
-            // Create session with staged local folder descriptor
-            await createZipSession(`repositories/raw/${selectedFolder.name}.zip`, selectedFolder.name);
-            const virtualFile = new File([], selectedFolder.name, {
+            // 1. Bundle directory to ZIP client-side with relative paths
+            const { zipBlob, folderName } = await bundleDirectoryToZip(
+                selectedFolder.files,
+                (percent, currentFile) => {
+                    setBundlingProgress(`${currentFile} (${percent}%)`);
+                }
+            );
+
+            setBundlingProgress("Uploading repository archive...");
+
+            // 2. Upload archive atomically to authoritative storage
+            const uploadRes = await uploadArchiveToStorage(
+                zipBlob,
+                `${folderName}.zip`,
+                folderName
+            );
+
+            // 3. Create Analyzer Session with verified canonical storageKey
+            await createZipSession(uploadRes.storageKey, uploadRes.repositoryName);
+
+            const virtualFile = new File([], uploadRes.repositoryName, {
                 type: "application/x-repository",
             });
             setFile(virtualFile);
             router.push(`/${toolId}/workspace`);
         } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : "Failed to initialize local folder session.";
+            const msg = err instanceof Error ? err.message : "Failed to bundle or upload folder.";
             alert(msg);
         } finally {
             setIsSubmitting(false);
+            setBundlingProgress(null);
         }
     };
 
@@ -197,22 +219,13 @@ export default function RepositoryAnalyzerSourceSelector() {
         const cleanName = selectedZip.name.replace(/\.zip$/i, "") || "repository";
 
         try {
-            let storageKey = `repositories/raw/${Date.now()}_${selectedZip.name}`;
-            try {
-                const uploaded = await requestR2PresignedUploads([selectedZip], {
-                    purpose: "repository_analyzer",
-                    prefix: "repositories/raw",
-                });
-                if (uploaded[0]?.key) {
-                    await uploadFileToPresignedUrl(selectedZip, uploaded[0]);
-                    storageKey = uploaded[0].key;
-                }
-            } catch {
-                // Storage fallback for local test mode
-            }
+            // 1. Upload ZIP atomically to authoritative storage
+            const uploadRes = await uploadArchiveToStorage(selectedZip, selectedZip.name, cleanName);
 
-            await createZipSession(storageKey, cleanName);
-            const virtualFile = new File([], cleanName, {
+            // 2. Create Session with verified canonical storageKey
+            await createZipSession(uploadRes.storageKey, uploadRes.repositoryName);
+
+            const virtualFile = new File([], uploadRes.repositoryName, {
                 type: "application/x-repository",
             });
             setFile(virtualFile);
@@ -419,7 +432,7 @@ export default function RepositoryAnalyzerSourceSelector() {
                                         {isSubmitting ? (
                                             <>
                                                 <Loader2 size={16} className="animate-spin" />
-                                                Initializing...
+                                                {bundlingProgress || "Initializing..."}
                                             </>
                                         ) : (
                                             <>
