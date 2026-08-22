@@ -17,7 +17,6 @@ import {
     Rocket,
     GitBranch,
     Eye,
-    X,
     Clock,
     CheckCircle2,
 } from "lucide-react";
@@ -26,7 +25,10 @@ import {
     useRepositoryAnalyzer,
     ALL_REPORTS,
 } from "@/context/RepositoryAnalyzerContext";
-import RepositoryAnalyzerArchitectureSummary from "./RepositoryAnalyzerArchitectureSummary";
+import RepositoryMapExplorer from "./explorers/RepositoryMapExplorer";
+import ArchitectureExplorer from "./explorers/ArchitectureExplorer";
+import EvidenceExplorer from "./explorers/EvidenceExplorer";
+import { Evidence } from "@/types/analyzer";
 
 export default function RepositoryAnalyzerDownload() {
     const router = useRouter();
@@ -246,7 +248,7 @@ export default function RepositoryAnalyzerDownload() {
 
             {/* Optional AI Architecture Summary (Phase 7C) */}
             {result.architectureSummary && (
-                <RepositoryAnalyzerArchitectureSummary summary={result.architectureSummary} />
+                <ArchitectureExplorer result={result} />
             )}
 
             {/* 8 Documentation Domain Tabs */}
@@ -290,9 +292,9 @@ export default function RepositoryAnalyzerDownload() {
                             </button>
                         </div>
 
-                        <pre className="overflow-x-auto rounded-2xl border border-[color:var(--border)] bg-[var(--background)] p-4 font-mono text-xs text-[color:var(--foreground)] leading-relaxed">
-                            {result.structureTree || "No structure tree generated."}
-                        </pre>
+                        <div className="h-[500px]">
+                            <RepositoryMapExplorer result={result} />
+                        </div>
 
                         {/* Language Distribution Breakdown */}
                         {result.metrics.languages.length > 0 && (
@@ -713,70 +715,23 @@ export default function RepositoryAnalyzerDownload() {
 
             {/* Evidence Inspector Modal */}
             {evidenceModalTech && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-                    <div className="w-full max-w-lg rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-6 shadow-2xl space-y-5">
-                        <div className="flex items-center justify-between border-b border-[color:var(--border)] pb-3">
-                            <div className="flex items-center gap-2">
-                                <Eye size={18} className="text-[var(--primary)]" />
-                                <h3 className="text-base font-bold text-[color:var(--foreground)]">
-                                    Evidence for {evidenceModalTech.name}
-                                </h3>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={closeEvidenceModal}
-                                className="rounded-lg p-1 text-[color:var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[color:var(--foreground)]"
-                            >
-                                <X size={18} />
-                            </button>
-                        </div>
-
-                        <div className="max-h-80 overflow-y-auto space-y-3 pr-1">
-                            {evidenceModalTech.evidence.map((ev, i) => (
-                                <div
-                                    key={i}
-                                    className="rounded-xl border border-[color:var(--border)] bg-[var(--background)] p-3 space-y-1.5"
-                                >
-                                    <div className="flex items-center justify-between text-xs font-semibold">
-                                        <span className="font-mono text-[color:var(--foreground)]">
-                                            {ev.filePath}
-                                            {ev.lineNumber ? `:${ev.lineNumber}` : ""}
-                                        </span>
-                                        <span className="rounded-md bg-[var(--primary)]/10 px-1.5 py-0.5 text-[10px] text-[var(--primary)]">
-                                            {ev.ruleType}
-                                        </span>
-                                    </div>
-                                    <p className="text-xs text-[color:var(--muted-foreground)]">
-                                        {ev.detail}
-                                    </p>
-                                    {ev.snippet && (
-                                        <pre className="rounded-lg bg-[var(--card)] p-2 font-mono text-[10px] text-[color:var(--foreground)] overflow-x-auto">
-                                            {ev.snippet}
-                                        </pre>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-
-                        {evidenceModalTech.negativeAssertionsPassed &&
-                            evidenceModalTech.negativeAssertionsPassed.length > 0 && (
-                                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-emerald-600 dark:text-emerald-400">
-                                    <span className="font-bold">Passed Negative Assertions:</span>{" "}
-                                    {evidenceModalTech.negativeAssertionsPassed.join(", ")}
-                                </div>
-                            )}
-
-                        <div className="flex justify-end pt-2">
-                            <button
-                                type="button"
-                                onClick={closeEvidenceModal}
-                                className="rounded-xl bg-[var(--primary)] px-4 py-2 text-xs font-semibold text-white hover:brightness-105"
-                            >
-                                Close
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <EvidenceExplorer
+                    isOpen={!!evidenceModalTech}
+                    onClose={closeEvidenceModal}
+                    title={evidenceModalTech.name}
+                    evidenceList={evidenceModalTech.evidence.map((ev, i) => ({
+                        id: `tech-ev-${i}`,
+                        sourceType: "technology",
+                        filePath: ev.filePath,
+                        lineStart: ev.lineNumber,
+                        lineEnd: ev.lineNumber,
+                        symbol: null,
+                        detector: ev.ruleType,
+                        confidence: evidenceModalTech.confidence === "confirmed" ? "CONFIRMED" : "STRONGLY_INFERRED",
+                        description: ev.detail
+                    })) as unknown as Evidence[]}
+                    negativeAssertions={evidenceModalTech.negativeAssertionsPassed}
+                />
             )}
         </div>
     );
