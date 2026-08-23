@@ -123,7 +123,7 @@ export default function AboutPage() {
               { value: `${totalCount || TOTAL_TOOL_COUNT}+`, label: "PDF Tools Available" },
               { value: String(workspaceCount), label: "Workspace Modules" },
               { value: "Free", label: "Plan Available" },
-              { value: "Pro", label: "Advanced Workspaces" },
+              { value: "Pro", label: "High-Capacity Plans" },
           ];
 
     const parse = (json: string) => {

@@ -24,24 +24,26 @@ export default function PdfToolHero({
         const IconComponent = icon as LucideIcon;
         iconNode = (
             <IconComponent
-                size={48}
-                strokeWidth={1.5}
+                size={24}
+                strokeWidth={1.75}
                 className="text-[var(--primary)]"
             />
         );
     }
 
     return (
-        <div className="text-center">
+        <div className="text-center max-w-2xl mx-auto mb-8">
             {iconNode && (
                 <div className="mb-4 flex justify-center">
-                    {iconNode}
+                    <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface-secondary)] text-[var(--accent)] shadow-sm">
+                        {iconNode}
+                    </div>
                 </div>
             )}
 
-            <h1 className="text-5xl font-black">{title}</h1>
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-[var(--foreground)]">{title}</h1>
 
-            <p className="mt-4 text-lg text-muted">
+            <p className="mt-3 text-sm text-[var(--muted)] leading-relaxed">
                 {description}
             </p>
         </div>

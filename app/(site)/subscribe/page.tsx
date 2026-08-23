@@ -4,7 +4,7 @@ import React, {useEffect, useState} from "react";
 import Link from "next/link";
 import {useAuth} from "@/context/AuthContext";
 import {fetchJson} from "@/lib/api";
-import {ArrowUpRight, CheckCircle2, ChevronDown, Eye, HelpCircle, Layout, Sparkles, Zap,} from "lucide-react";
+import {ArrowUpRight, CheckCircle2, ChevronDown, Cpu, HelpCircle, Layers, Sparkles, Zap} from "lucide-react";
 import {fallbackSubscribeContent, SubscribeContent} from "@/lib/contentSubscribe";
 import PlanButtons from "@/components/subscription/PlanButtons";
 import {notify} from "@/lib/notify";
@@ -143,7 +143,7 @@ export default function SubscribePage() {
                         <div
                             className="rounded-3xl border border-[color:var(--border)] bg-[var(--card)]/40 p-6 backdrop-blur-md">
                             <div className="p-3 bg-indigo-500/10 text-indigo-500 rounded-xl w-fit mb-4">
-                                <Layout size={20}/>
+                                <Layers size={20}/>
                             </div>
                             <h3 className="font-extrabold text-md text-[color:var(--foreground)]">{content.studioTitle}</h3>
                             <p className="text-xs text-[color:var(--muted)] mt-2 leading-relaxed">{content.studioDescription}</p>
@@ -157,7 +157,7 @@ export default function SubscribePage() {
                         <div
                             className="rounded-3xl border border-[color:var(--border)] bg-[var(--card)]/40 p-6 backdrop-blur-md">
                             <div className="p-3 bg-purple-500/10 text-purple-500 rounded-xl w-fit mb-4">
-                                <Eye size={20}/>
+                                <Cpu size={20}/>
                             </div>
                             <h3 className="font-extrabold text-md text-[color:var(--foreground)]">{content.canvasTitle}</h3>
                             <p className="text-xs text-[color:var(--muted)] mt-2 leading-relaxed">{content.canvasDescription}</p>
@@ -383,7 +383,7 @@ export default function SubscribePage() {
                                 onClick={() => handlePlanUpgrade("pro", "monthly")}
                                 className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-3 text-xs font-bold text-white transition-transform hover:scale-[1.02]"
                             >
-                                Upgrade to Pro Workspace
+                                Upgrade to Pro Capacity
                             </button>
                         </>
                     )}
@@ -393,10 +393,10 @@ export default function SubscribePage() {
                             <h3 className="text-xl font-black text-[color:var(--foreground)]">{content.ctaProTitle}</h3>
                             <p className="text-xs text-[color:var(--muted)] mt-1 font-medium">{content.ctaProSubtitle}</p>
                             <Link
-                                href="/studio"
+                                href="/dashboard"
                                 className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-3 text-xs font-bold text-white transition-transform hover:scale-[1.02]"
                             >
-                                Open Studio Workspace <ArrowUpRight size={14}/>
+                                Open Dashboard <ArrowUpRight size={14}/>
                             </Link>
                         </>
                     )}

@@ -47,38 +47,35 @@ export default function ToolsDirectory() {
     const studioCount = toolsList.filter((t) => (t.category || (t as any).Category) === "studio").length;
 
     return (
-        <main className="mx-auto max-w-7xl px-6 py-16">
+        <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16 transition-colors">
             {/* Hero */}
-            <section className="text-center">
-                <div className={`inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-semibold ${
+            <section className="text-center max-w-3xl mx-auto">
+                <div className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1 text-xs font-mono shadow-sm ${
                     isOfflineMode
-                        ? "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300"
-                        : "border-indigo-500/20 bg-indigo-500/10 text-indigo-500"
+                        ? "border-rose-500/30 bg-rose-500/10 text-rose-500"
+                        : "border-[var(--border)] bg-[var(--surface-card)] text-[var(--muted)]"
                 }`}>
+                    <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
                     {isOfflineMode ? (
-                        <>
-                            <span>●</span>
-                            <span>{toolsList.length} Local Tools Available (Cloud Offline)</span>
-                        </>
+                        <span>{toolsList.length} Local Tools Available (Offline)</span>
                     ) : (
-                        <span>{toolsList.length} PDF Tools Available</span>
+                        <span>{toolsList.length} Document Utilities Online</span>
                     )}
                 </div>
 
-                <h1 className="mt-6 text-5xl font-black tracking-tight">
+                <h1 className="mt-6 text-3xl sm:text-5xl font-bold tracking-tight text-[var(--foreground)]">
                     PDF Tools Directory
                 </h1>
 
-                <p className="mx-auto mt-4 max-w-2xl text-lg text-[color:var(--muted)]">
+                <p className="mx-auto mt-4 max-w-2xl text-sm sm:text-base text-[var(--muted)] leading-relaxed">
                     {isOfflineMode
                         ? "Process, merge, split, watermark, and organize PDF documents directly in your browser with zero data leaving your device."
-                        : "Edit, convert, optimize and secure PDF documents with Platen PDF."}
+                        : "Comprehensive suite of precision document manipulation, conversion, and security tools."}
                 </p>
             </section>
 
-
             {/* Stats */}
-            <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="mt-10 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
                 <Stat title="organize" value={organizeCount} />
                 <Stat title="edit" value={editingCount} />
                 <Stat title="convert" value={convertCount} />
@@ -92,109 +89,85 @@ export default function ToolsDirectory() {
             <div className="mx-auto mt-10 max-w-xl">
                 <div className="relative">
                     <Search
-                        size={18}
-                        className="absolute left-4 top-1/2 -translate-y-1/2 text-[color:var(--muted)]"
+                        size={16}
+                        className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]"
                     />
 
                     <input
                         type="text"
-                        placeholder="Search tools..."
+                        placeholder="Search tools by name, action or category..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        className="
-                            w-full
-                            rounded-2xl
-                            border border-[color:var(--border)]
-                            bg-[var(--card)]
-                            py-3 pl-12 pr-4
-                            outline-none
-                            focus:ring-2
-                            focus:ring-indigo-500/30
-                        "
+                        className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-card)] py-2.5 pl-10 pr-4 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] outline-none transition-colors focus:border-[var(--accent)] focus:bg-[var(--surface)] shadow-sm"
                     />
                 </div>
             </div>
 
             {/* Filters */}
-            <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <div className="mt-6 flex flex-wrap justify-center gap-2">
                 <CategoryButton active={category === "all"} onClick={() => setCategory("all")}>
                     All
                 </CategoryButton>
-
                 <CategoryButton active={category === "organize"} onClick={() => setCategory("organize")}>
                     Organize
                 </CategoryButton>
-
                 <CategoryButton active={category === "edit"} onClick={() => setCategory("edit")}>
                     Edit
                 </CategoryButton>
-
                 <CategoryButton active={category === "convert"} onClick={() => setCategory("convert")}>
                     Convert
                 </CategoryButton>
-
                 <CategoryButton active={category === "create"} onClick={() => setCategory("create")}>
                     Create
                 </CategoryButton>
-
                 <CategoryButton active={category === "security"} onClick={() => setCategory("security")}>
                     Security
                 </CategoryButton>
-
                 <CategoryButton active={category === "optimize"} onClick={() => setCategory("optimize")}>
                     Optimize
                 </CategoryButton>
-
                 <CategoryButton active={category === "studio"} onClick={() => setCategory("studio")}>
                     Studio
                 </CategoryButton>
             </div>
 
-            {/* Results */}
-            <div className="mt-6 text-center text-sm text-[color:var(--muted)]">
+            {/* Results counter */}
+            <div className="mt-6 text-center font-mono text-xs text-[var(--muted-foreground)]">
                 Showing {filteredTools.length} tools
             </div>
 
             {/* Grid */}
-            <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {filteredTools.map((tool) => (
                     <Link
                         key={tool.href}
                         href={tool.href}
-                        className="
-                            group
-                            rounded-3xl
-                            border border-[color:var(--border)]
-                            bg-[var(--card)]
-                            p-5
-                            transition-all
-                            hover:-translate-y-1
-                            hover:border-indigo-500/30
-                            hover:shadow-xl
-                        "
+                        className="group flex flex-col justify-between rounded-lg border border-[var(--border)] bg-[var(--surface-card)] p-5 transition-all duration-200 hover:border-[var(--accent)]/40 hover:bg-[var(--surface-hover)] shadow-sm"
                     >
-                        <div className="flex items-start justify-between">
-                            <h3 className="font-bold">
-                                {tool.title}
-                            </h3>
+                        <div>
+                            <div className="flex items-start justify-between gap-2">
+                                <h3 className="text-sm font-semibold text-[var(--foreground)] group-hover:text-[var(--accent)] transition-colors">
+                                    {tool.title}
+                                </h3>
 
-                            {tool.isNew && (
-                                <span className="rounded-full bg-indigo-500 px-2 py-1 text-[10px] font-black uppercase text-white">
-                                    New
-                                </span>
-                            )}
+                                {tool.isNew && (
+                                    <span className="rounded bg-[var(--accent)] px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase text-white">
+                                        NEW
+                                    </span>
+                                )}
+                            </div>
+
+                            <p className="mt-2 line-clamp-2 text-xs text-[var(--muted)] leading-relaxed">
+                                {tool.description}
+                            </p>
                         </div>
 
-                        <p className="mt-3 line-clamp-3 text-sm text-[color:var(--muted)]">
-                            {tool.description}
-                        </p>
-
-                        <div className="mt-4 flex items-center justify-between">
-                            <span className="rounded-full border border-[color:var(--border)] px-2 py-1 text-[10px] uppercase">
+                        <div className="mt-5 flex items-center justify-between border-t border-[var(--border-subtle)] pt-3">
+                            <span className="font-mono text-[10px] uppercase text-[var(--muted-foreground)] tracking-wider">
                                 {tool.category}
                             </span>
 
-                            <span className="text-sm font-semibold text-indigo-500">
+                            <span className="font-mono text-[11px] uppercase tracking-wider text-[var(--accent-muted)] group-hover:text-[var(--foreground)] transition-colors font-semibold">
                                 Open →
                             </span>
                         </div>
@@ -203,10 +176,10 @@ export default function ToolsDirectory() {
             </div>
 
             {filteredTools.length === 0 && (
-                <div className="mt-20 text-center">
-                    <h3 className="text-xl font-bold">No tools found</h3>
-                    <p className="mt-2 text-[color:var(--muted)]">
-                        Try another keyword.
+                <div className="mt-16 text-center py-12 rounded-lg border border-dashed border-[var(--border)] max-w-md mx-auto bg-[var(--surface-card)]">
+                    <h3 className="text-sm font-semibold text-[var(--foreground)]">No tools found</h3>
+                    <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                        Try searching for a different keyword.
                     </p>
                 </div>
             )}
@@ -227,16 +200,16 @@ function CategoryButton({
         <button
             onClick={onClick}
             className={`
-                rounded-full
-                px-4 py-2
-                text-sm
-                font-semibold
-                transition-all
+                rounded-md
+                px-3 py-1.5
+                font-mono
+                text-xs
+                transition-colors
                 border
                 ${
                 active
-                    ? "bg-indigo-500 text-white border-indigo-500"
-                    : "border-[color:var(--border)] hover:bg-[var(--card)]"
+                    ? "bg-[var(--accent)] text-white border-[var(--accent)]"
+                    : "border-[var(--border)] bg-[var(--surface-card)] text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-hover)] hover:border-[var(--muted)]"
             }
             `}
         >

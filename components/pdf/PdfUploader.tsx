@@ -165,26 +165,26 @@ export default function PdfUploader({
 
     if (activeLockedFile) {
         return (
-            <div className="flex flex-col items-center justify-center p-10 w-full h-full border-2 border-dashed border-amber-500/40 bg-amber-500/5 rounded-2xl select-none">
-                <div className="p-4 rounded-full bg-amber-500/10 text-amber-500 mb-4">
-                    <Lock size={28} />
+            <div className="flex flex-col items-center justify-center p-8 sm:p-10 w-full h-full border border-dashed border-rose-500/40 bg-rose-500/5 rounded-xl select-none">
+                <div className="p-3.5 rounded-lg bg-rose-500/10 text-rose-500 mb-4">
+                    <Lock size={22} />
                 </div>
 
-                <p className="text-sm font-semibold text-[color:var(--foreground)] text-center mb-1">
+                <p className="text-sm font-semibold text-[var(--foreground)] text-center mb-1">
                     Protected Document Detected {queue.remaining.length > 1 && `(1 of ${queue.remaining.length})`}
                 </p>
 
-                <p className="text-xs text-[color:var(--muted)] text-center mb-4 max-w-sm">
+                <p className="text-xs text-[var(--muted)] text-center mb-4 max-w-sm">
                     &quot;{activeLockedFile.name}&quot; is encrypted. Provide the document password to continue.
                 </p>
 
-                <div className="w-full max-w-xs flex flex-col gap-2 pointer-events-auto">
+                <div className="w-full max-w-xs flex flex-col gap-2.5 pointer-events-auto">
                     <input
                         type="password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Enter PDF Password"
-                        className="w-full rounded-xl border border-[color:var(--border)] bg-[var(--background)] px-4 py-2 text-sm focus:border-amber-500 focus:outline-none text-center"
+                        className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-card)] px-4 py-2.5 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:border-[var(--accent)] focus:outline-none text-center shadow-sm"
                         onKeyDown={(e) => {
                             if (e.key === "Enter" && password && !isUnlocking) {
                                 handleUnlock();
@@ -193,16 +193,16 @@ export default function PdfUploader({
                     />
 
                     {error && (
-                        <span className="text-xs text-red-500 text-center font-medium">
+                        <span className="text-[11px] text-rose-500 text-center font-mono font-semibold">
                             {error}
                         </span>
                     )}
 
-                    <div className="flex justify-center gap-3 mt-2">
+                    <div className="flex justify-center gap-2 mt-1">
                         <button
                             type="button"
                             onClick={handleCancelUnlock}
-                            className="px-4 py-2 text-xs font-medium text-[color:var(--muted)] hover:text-[color:var(--foreground)] transition-colors"
+                            className="px-3 py-1.5 text-xs font-mono text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
                         >
                             Cancel All
                         </button>
@@ -210,11 +210,11 @@ export default function PdfUploader({
                             type="button"
                             onClick={handleUnlock}
                             disabled={isUnlocking || !password}
-                            className="flex items-center gap-2 px-4 py-2 text-xs font-medium text-white bg-amber-500 rounded-xl hover:bg-amber-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium text-white bg-[var(--accent)] rounded-lg hover:bg-[var(--accent-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                         >
                             {isUnlocking ? (
                                 <>
-                                    <Loader2 className="animate-spin" size={14} />
+                                    <Loader2 className="animate-spin" size={13} />
                                     Unlocking...
                                 </>
                             ) : (
@@ -231,7 +231,7 @@ export default function PdfUploader({
         <div
             onDrop={handleDrop}
             onDragOver={handleDragOver}
-            className="relative border-2 border-dashed rounded-2xl transition-all outline-none border-[color:var(--border)] bg-[var(--background)]/30 hover:border-[color:var(--muted)] overflow-hidden"
+            className="relative border border-dashed rounded-xl transition-all outline-none border-[var(--border)] bg-[var(--surface-card)] hover:border-[var(--accent)]/50 hover:bg-[var(--surface-hover)] overflow-hidden group shadow-sm"
         >
             <input
                 type="file"
@@ -241,16 +241,16 @@ export default function PdfUploader({
                 className="absolute inset-0 z-20 h-full w-full cursor-pointer opacity-0"
             />
 
-            <div className="flex flex-col items-center justify-center p-10 w-full h-full select-none pointer-events-none">
-                <div className="p-4 rounded-full bg-indigo-500/10 text-indigo-500 mb-4">
-                    <UploadCloud size={28} />
+            <div className="flex flex-col items-center justify-center py-14 px-6 w-full h-full select-none pointer-events-none text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface-secondary)] text-[var(--accent)] mb-4 group-hover:border-[var(--accent)]/30 group-hover:bg-[var(--accent-subtle)] transition-colors">
+                    <UploadCloud size={22} />
                 </div>
 
-                <p className="text-sm font-semibold text-[color:var(--foreground)] text-center mb-1">
+                <p className="text-sm font-semibold text-[var(--foreground)] mb-1 group-hover:text-[var(--accent)] transition-colors">
                     {title}
                 </p>
 
-                <p className="text-xs text-[color:var(--muted)] text-center">
+                <p className="text-xs text-[var(--muted)] max-w-sm">
                     {description}
                 </p>
             </div>

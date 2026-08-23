@@ -53,49 +53,49 @@ export interface SubscribeContent {
 }
 
 export const fallbackSubscribeContent: SubscribeContent = {
-    heroBadge: "Value Upgrades",
+    heroBadge: "Transparent Computing Tiers",
 
-    heroTitle: "Unlock More With",
+    heroTitle: "Choose the Right Capacity for",
 
-    heroTitleGradient: "Platen PDF Pro Ecosystem",
+    heroTitleGradient: "Your Document Workflows",
 
     heroSubtitle:
-        "Everything you need to edit, convert, organize and secure PDFs. Start free and upgrade only when you need more.",
+        "All tools, Studio, and privacy features are available on every plan. Upgrade for higher processing unit allowances and demanding workloads.",
 
-    premiumSectionTitle: "Premium Features Built For Production Workflows",
+    premiumSectionTitle: "Processing Capacity Built for Every Workload",
 
-    studioTitle: "Virtual Document Studio",
+    studioTitle: "More Processing Capacity",
 
     studioDescription:
-        "Manage complex PDF workflows from a single workspace.",
+        "Handle more document-processing work with higher 3-hour burst and daily unit allowances.",
 
     studioBulletPoints:
-        "Edit pages,Watermarks,Metadata,Security controls,Multi-step workflows",
+        "Higher daily unit allowances,3-hour burst capacity,Seamless workflow continuity,Predictable usage resets",
 
-    canvasTitle: "Interactive Canvas",
+    canvasTitle: "Built for Demanding Documents",
 
     canvasDescription:
-        "Create professional PDFs visually with drag-and-drop editing.",
+        "Resource-intensive operations scale transparently with document complexity, page count, and images.",
 
     canvasBulletPoints:
-        "Drag and drop,Custom layouts,Multiple images,Professional exports",
+        "Page-weighted unit cost scaling,Multi-page batch conversions,Intensive OCR text extraction,High-volume document compilation",
 
-    speedTitle: "Faster Processing",
+    speedTitle: "Room for Heavy Workloads",
 
     speedDescription:
-        "Priority infrastructure built for power users.",
+        "Higher tiers provide substantially more processing capacity for regular and heavy multi-document jobs.",
 
     speedBulletPoints:
-        "Priority queues,Larger limits,Faster operations,Premium tools",
+        "100 to 400 daily processing units,Extended page duplication limits,Optional credit top-ups,7-day free trial on Plus & Pro",
 
     freeTitle: "Free",
 
     freePrice: "0",
 
-    freeSubtitle: "Perfect for getting started",
+    freeSubtitle: "For everyday, occasional document tasks",
 
     freeBulletPoints:
-        "Core PDF tools,Basic OCR,Secure processing,5 operations/day",
+        "Access to all 39+ PDF tools,Studio workspace access,20 processing units per day,8 units per 3-hour window,80 units per month allowance",
 
     plusTitle: "Plus",
 
@@ -104,10 +104,10 @@ export const fallbackSubscribeContent: SubscribeContent = {
     plusYearlyPrice: "49.99",
 
     plusSubtitle:
-        "Everything you need for frequent PDF work.",
+        "For active users and frequent document tasks",
 
     plusBulletPoints:
-        "Everything in Free,50 operations/day,Full OCR,Priority processing,Larger file support",
+        "Everything in Free,100 processing units per day,50 units per 3-hour window,500 units per month allowance,Higher capacity for multi-page jobs",
 
     proTitle: "Pro",
 
@@ -116,10 +116,10 @@ export const fallbackSubscribeContent: SubscribeContent = {
     proYearlyPrice: "99.99",
 
     proSubtitle:
-        "Designed for professionals and heavy workloads.",
+        "For power users and demanding batch workloads",
 
     proBulletPoints:
-        "Everything in Plus,500 operations/day,Virtual Studio Workspace,Interactive Canvas,Premium Workspace features",
+        "Everything in Plus,400 processing units per day,150 units per 3-hour window,2000 units per month allowance,Maximum capacity for heavy OCR and conversion jobs,Extended page duplication limits",
 
     trialText: "7-day free trial",
 
@@ -144,7 +144,7 @@ export const fallbackSubscribeContent: SubscribeContent = {
         "Need even higher limits?",
 
     ctaPlusSubtitle:
-        "Upgrade to Pro for Studio, Interactive Canvas, and maximum limits.",
+        "Upgrade to Pro for 400 daily units and maximum processing capacity.",
 
     ctaProTitle:
         "You're on our most powerful plan.",
@@ -155,7 +155,11 @@ export const fallbackSubscribeContent: SubscribeContent = {
     faqsJson: `[
         {
             "q":"Is Platen PDF free?",
-            "a":"Yes. The Free plan includes essential PDF tools with a daily usage allowance."
+            "a":"Yes. The Free plan includes all 39+ PDF tools and the Studio workspace with 20 processing units per day."
+        },
+        {
+            "q":"How do processing units work?",
+            "a":"Each tool operation consumes units based on document size and complexity. Simple operations use 1–2 units, while complex OCR or conversions consume units proportionally to page count."
         },
         {
             "q":"Do Plus and Pro include a free trial?",
@@ -170,12 +174,12 @@ export const fallbackSubscribeContent: SubscribeContent = {
             "a":"Yes. You can cancel at any time during the trial and you won't be charged. You'll continue to have access until the trial ends."
         },
         {
-            "q":"Can I cancel after subscribing?",
+            "q":"What happens if I cancel after subscribing?",
             "a":"Yes. You can cancel anytime. Your subscription remains active until the end of the current billing period, after which your account automatically returns to the Free plan."
         },
         {
             "q":"Are my files stored?",
-            "a":"No. Files are processed temporarily and automatically deleted after processing."
+            "a":"No. Files are processed temporarily in ephemeral sandboxes and automatically deleted after processing."
         }
     ]`,
 };

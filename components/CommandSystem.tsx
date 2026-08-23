@@ -95,60 +95,77 @@ export default function CommandSystem({
 
     return (
         <div
-            className="fixed inset-0 z-[999] bg-black/60 flex items-start justify-center pt-28"
+            className="fixed inset-0 z-[999] bg-black/60 backdrop-blur-sm flex items-start justify-center pt-24 px-4"
             onClick={closeCommand}
         >
             <div
-                className="w-full max-w-2xl rounded-2xl border border-[color:var(--border)] bg-[var(--card)] shadow-2xl overflow-hidden"
+                className="w-full max-w-xl rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] shadow-2xl overflow-hidden"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Search */}
-                <input
-                    autoFocus
-                    value={query}
-                    onChange={(e) => {
-                        setQuery(e.target.value);
-                        setActive(0);
-                    }}
-                    placeholder="Search commands, tools, pages..."
-                    className="w-full px-4 py-3 border-b border-[color:var(--border)] bg-transparent outline-none"
-                />
+                <div className="relative border-b border-[var(--border-subtle)]">
+                    <input
+                        autoFocus
+                        value={query}
+                        onChange={(e) => {
+                            setQuery(e.target.value);
+                            setActive(0);
+                        }}
+                        placeholder="Search commands, tools, actions..."
+                        className="w-full px-4 py-3.5 bg-transparent text-sm text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] outline-none"
+                    />
+                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
+                        <kbd className="rounded border border-[var(--border)] bg-[var(--surface-secondary)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--muted-foreground)]">
+                            ESC
+                        </kbd>
+                    </div>
+                </div>
 
                 {/* List */}
-                <div className="max-h-[420px] overflow-y-auto">
+                <div className="max-h-[380px] overflow-y-auto p-1.5 space-y-0.5">
                     {filtered.map((cmd, i) => (
                         <div
                             key={cmd.id}
                             onClick={() => execute(cmd)}
                             className={`
-                                px-4 py-3 cursor-pointer
+                                px-3 py-2 rounded-lg cursor-pointer flex items-center justify-between transition-colors
                                 ${
                                 i === active
-                                    ? "bg-indigo-500 text-white"
-                                    : "hover:bg-[var(--background)]"
+                                    ? "bg-[var(--accent)] text-white"
+                                    : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-hover)]"
                             }
                             `}
                         >
-                            <div className="font-semibold">
-                                {cmd.title}
+                            <div className="flex flex-col">
+                                <span className={`text-xs font-medium ${i === active ? "text-white" : "text-[var(--foreground)]"}`}>
+                                    {cmd.title}
+                                </span>
+                                {cmd.description && (
+                                    <span className={`text-[11px] ${i === active ? "text-white/85" : "text-[var(--muted-foreground)]"}`}>
+                                        {cmd.description}
+                                    </span>
+                                )}
                             </div>
 
-                            {cmd.description && (
-                                <div className="text-xs opacity-70">
-                                    {cmd.description}
-                                </div>
-                            )}
-
-                            <div className="text-[10px] uppercase opacity-50 mt-1">
+                            <span className={`font-mono text-[9px] uppercase px-1.5 py-0.5 rounded border ${
+                                i === active
+                                    ? "bg-white/20 border-white/30 text-white"
+                                    : "bg-[var(--surface-secondary)] border-[var(--border)] text-[var(--muted-foreground)]"
+                            }`}>
                                 {cmd.type}
-                            </div>
+                            </span>
                         </div>
                     ))}
                 </div>
 
                 {/* Footer */}
-                <div className="px-4 py-2 text-xs text-[color:var(--muted)] border-t border-[color:var(--border)]">
-                    Ctrl+K • Navigate • Enter • Esc
+                <div className="px-4 py-2 text-[11px] font-mono text-[var(--muted-foreground)] border-t border-[var(--border-subtle)] bg-[var(--surface-secondary)] flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                        <span>↑↓ to navigate</span>
+                        <span>•</span>
+                        <span>↵ to select</span>
+                    </span>
+                    <span>Platen Command Core</span>
                 </div>
             </div>
         </div>

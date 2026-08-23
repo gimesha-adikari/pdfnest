@@ -1,16 +1,23 @@
 "use client";
 
-import {useEffect, useState} from "react";
+import {useState} from "react";
 import Link from "next/link";
-import Image from "next/image";
 import {usePathname} from "next/navigation";
 import ThemeToggle from "./ThemeToggle";
 import ToolSearch from "./ui/ToolSearch";
-import { useTools } from "@/context/ToolContext";
-import {ChevronDown, LogOut, ShieldAlert, Sparkles, Zap} from "lucide-react";
+import {useTools} from "@/context/ToolContext";
+import {
+    ChevronDown,
+    Cpu,
+    FileText,
+    FolderKanban,
+    LogOut,
+    Shield,
+    ShieldAlert,
+    Wand2,
+    Zap,
+} from "lucide-react";
 import {useAuth} from "@/context/AuthContext";
-import {fetchJson} from "@/lib/api";
-import {useTheme} from "next-themes";
 import Logo from "@/components/ui/Logo";
 
 export default function Header() {
@@ -21,91 +28,94 @@ export default function Header() {
         logout,
         user,
     } = useAuth();
-    const { displayTools: toolsList } = useTools();
+
+    const {displayTools: toolsList} = useTools();
     const pathname = usePathname();
     const [forceHide, setForceHide] = useState(false);
-    const {resolvedTheme} = useTheme();
 
     const closeMenu = () => {
         setForceHide(true);
         setTimeout(() => setForceHide(false), 150);
     };
 
-    const organizeTools = toolsList.filter((tool) => tool.category === "organize" && !!tool.href);
-    const editTools = toolsList.filter((tool) => tool.category === "edit" && !!tool.href);
-    const convertTools = toolsList.filter((tool) => tool.category === "convert" && !!tool.href);
-    const createTools = toolsList.filter((tool) => tool.category === "create" && !!tool.href);
-    const securityTools = toolsList.filter((tool) => tool.category === "security" && !!tool.href);
-    const optimizeTools = toolsList.filter((tool) => tool.category === "optimize" && !!tool.href);
-    const studioTools = toolsList.filter((tool) => tool.category === "studio" && !!tool.href);
+    const organizeTools = toolsList.filter(
+        (tool) => tool.category === "organize" && !!tool.href
+    );
+
+    const editTools = toolsList.filter(
+        (tool) => tool.category === "edit" && !!tool.href
+    );
+
+    const convertTools = toolsList.filter(
+        (tool) => tool.category === "convert" && !!tool.href
+    );
+
+    const createTools = toolsList.filter(
+        (tool) => tool.category === "create" && !!tool.href
+    );
+
+    const securityTools = toolsList.filter(
+        (tool) => tool.category === "security" && !!tool.href
+    );
+
+    const optimizeTools = toolsList.filter(
+        (tool) => tool.category === "optimize" && !!tool.href
+    );
+
+    const studioTools = toolsList.filter(
+        (tool) => tool.category === "studio" && !!tool.href
+    );
 
     const isPro = subscription?.tier === "pro";
 
     return (
         <header
-            className="
-                sticky top-0 z-50
-                border-b border-[color:var(--border)]
-                bg-[var(--background)]/80
-                backdrop-blur-xl
-            "
+            className="sticky top-0 z-50 w-full border-b border-[var(--header-border)] bg-[var(--header-bg)]/90 backdrop-blur-md transition-colors"
         >
-            <div className="mx-auto max-w-7xl px-6">
-                <div className="flex h-16 items-center justify-between">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div className="flex h-16 items-center justify-between gap-4">
+
+                    {/* =====================================================
+                        BRAND
+                    ====================================================== */}
                     <Link
                         href="/"
-                        className="
-                            flex items-center gap-2.5
-                            group
-                            rounded-xl
-                            p-1
-                        "
+                        className="group flex shrink-0 items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
                     >
                         <div
                             className="
-        relative
-        h-10 w-10
-        rounded-xl
-        border border-indigo-500/20
-        bg-indigo-500/10
-        dark:bg-indigo-500/20
-        overflow-hidden
-        transition-transform
-        group-hover:scale-105
-    "
+                                relative
+                                flex
+                                h-10
+                                w-10
+                                shrink-0
+                                items-center
+                                justify-center
+                                rounded-[10px]
+                                border
+                                border-[var(--border)]
+                                bg-[var(--surface-secondary)]
+                                transition-all
+                                duration-200
+                                group-hover:border-[var(--accent)]/50
+                                group-hover:bg-[var(--surface-hover)]
+                            "
                         >
-                            <div
-                                className="
-        relative
-        h-10 w-10
-        rounded-xl
-        border border-indigo-500/20
-        bg-indigo-500/10
-        dark:bg-indigo-500/20
-        overflow-hidden
-        transition-transform
-        group-hover:scale-105
-    "
-                            >
-
-                                <div className="relative h-10 w-10">
-                                    <Logo/>
-                                </div>
+                            <div className="relative h-10 w-10 shrink-0">
+                                <Logo />
                             </div>
                         </div>
 
-                        <div className="leading-tight">
+                        <div className="flex min-w-0 flex-col">
                             <span
                                 className="
-                                    block
-                                    text-md
-                                    font-black
+                                    text-sm
+                                    font-bold
+                                    leading-none
                                     tracking-tight
-                                    bg-gradient-to-r
-                                    from-indigo-500
-                                    to-purple-500
-                                    bg-clip-text
-                                    text-transparent
+                                    text-[var(--foreground)]
+                                    transition-colors
+                                    group-hover:text-[var(--accent)]
                                 "
                             >
                                 PLATEN
@@ -113,70 +123,73 @@ export default function Header() {
 
                             <span
                                 className="
-                                    block
-                                    -mt-0.5
-                                    text-[10px]
-                                    font-bold
+                                    mt-1
+                                    text-[9px]
+                                    font-mono
                                     uppercase
+                                    leading-none
                                     tracking-wider
-                                    text-[color:var(--muted)]
+                                    text-[var(--muted-foreground)]
                                 "
                             >
-                                Free PDF Tools
+                                CORE v2.0
                             </span>
                         </div>
                     </Link>
 
-                    <nav className="hidden md:flex items-center gap-2">
+                    {/* =====================================================
+                        PRIMARY NAVIGATION
+                    ====================================================== */}
+                    <nav className="hidden items-center gap-1.5 md:flex">
+
+                        {/* Home */}
                         <Link
                             href="/"
-                            className="
-                                rounded-xl
-                                px-3 py-2
-                                text-sm
-                                font-semibold
-                                hover:bg-[color:var(--border)]/30
-                            "
+                            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                                pathname === "/"
+                                    ? "bg-[var(--surface-hover)] font-semibold text-[var(--foreground)]"
+                                    : "text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
+                            }`}
                         >
                             Home
                         </Link>
 
-                        <div className="static group/menu">
+                        {/* =================================================
+                            TOOLS MEGA MENU
+                        ================================================== */}
+                        <div className="group/menu relative">
                             <button
-                                className="
-                                    flex items-center gap-1
-                                    rounded-xl
-                                    px-3 py-2
-                                    text-sm
-                                    font-semibold
-                                    hover:bg-[color:var(--border)]/30
-                                "
+                                type="button"
+                                className={`flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                                    pathname.startsWith("/tools")
+                                        ? "bg-[var(--surface-hover)] font-semibold text-[var(--foreground)]"
+                                        : "text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
+                                }`}
                             >
-                                Tools
+                                <span>Tools</span>
 
                                 <ChevronDown
-                                    size={14}
-                                    className="
-                                        transition-transform
-                                        duration-200
-                                        group-hover/menu:rotate-180
-                                    "
+                                    size={12}
+                                    className="text-[var(--muted-foreground)] transition-transform duration-200 group-hover/menu:rotate-180"
                                 />
                             </button>
 
+                            {/* Mega Menu */}
                             <div
                                 style={forceHide ? {display: "none"} : undefined}
                                 className="
                                     invisible
                                     absolute
-                                    left-6 right-6
+                                    left-1/2
                                     top-full
+                                    z-50
                                     mt-2
-                                    mx-auto
-                                    max-w-7xl
-                                    rounded-3xl
-                                    border border-[color:var(--border)]
-                                    bg-[var(--card)]
+                                    w-[820px]
+                                    -translate-x-1/2
+                                    rounded-xl
+                                    border
+                                    border-[var(--border)]
+                                    bg-[var(--surface-elevated)]
                                     p-6
                                     opacity-0
                                     shadow-2xl
@@ -186,185 +199,519 @@ export default function Header() {
                                     group-hover/menu:opacity-100
                                 "
                             >
-                                <div className="mb-5">
-                                    <h3 className="font-black text-lg">
-                                        PDF Tools
-                                    </h3>
-
-                                    <p className="text-sm text-[color:var(--muted)]">
-                                        Everything you need to edit, convert and
-                                        secure PDFs.
-                                    </p>
-                                </div>
-
-                                <div className="grid grid-cols-4 gap-8">
-                                    {[
-                                        {icon: "📄", title: "Organize", tools: organizeTools},
-                                        {icon: "✏️", title: "Edit", tools: editTools},
-                                        {icon: "🔄", title: "Convert", tools: convertTools},
-                                        {icon: "➕", title: "Create", tools: createTools},
-                                        {icon: "🔒", title: "Security", tools: securityTools},
-                                        {icon: "⚡", title: "Optimize", tools: optimizeTools},
-                                        {icon: "🛠️", title: "Studio", tools: studioTools},
-                                    ].map((group) => (
-                                        <div key={group.title}>
-                                            <h4 className="mb-3 font-bold">
-                                                {group.icon} {group.title}
-                                            </h4>
-
-                                            <div className="space-y-1">
-                                                {group.tools.map((tool, idx) => (
-                                                    <Link
-                                                        key={tool.href || idx}
-                                                        href={tool.href}
-                                                        onClick={closeMenu}
-                                                        className="flex items-center justify-between rounded-xl px-3 py-2 text-sm hover:bg-[color:var(--background)]"
-                                                    >
-                                                        <span>{tool.title}</span>
-
-                                                        {(tool.isNew) && (
-                                                            <span
-                                                                className="rounded-md bg-indigo-500 px-1.5 py-0.5 text-[9px] font-black uppercase text-white">
-                                New
-                            </span>
-                                                        )}
-                                                    </Link>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-
                                 <div
                                     className="
-                                        mt-6
-                                        border-t border-[color:var(--border)]
-                                        pt-4
+                                        mb-4
+                                        flex
+                                        items-center
+                                        justify-between
+                                        border-b
+                                        border-[var(--border-subtle)]
+                                        pb-3
                                     "
                                 >
+                                    <div className="flex items-center gap-2">
+                                        <div
+                                            className="h-2 w-2 rounded-full bg-[var(--accent)]"
+                                        />
+
+                                        <h3
+                                            className="
+                                                font-mono
+                                                text-xs
+                                                font-semibold
+                                                uppercase
+                                                tracking-wider
+                                                text-[var(--foreground)]
+                                            "
+                                        >
+                                            Tool Matrix Scope
+                                        </h3>
+
+                                        <span
+                                            className="text-[11px] text-[var(--muted-foreground)]"
+                                        >
+                                            — Precision utilities & workspaces
+                                        </span>
+                                    </div>
+
                                     <Link
                                         href="/tools"
                                         onClick={closeMenu}
                                         className="
-                                            text-sm
+                                            flex
+                                            items-center
+                                            gap-1
+                                            font-mono
+                                            text-xs
                                             font-semibold
-                                            text-indigo-500
-                                            hover:underline
+                                            text-[var(--accent-muted)]
+                                            transition-colors
+                                            hover:text-[var(--accent)]
                                         "
                                     >
-                                        View all tools →
+                                        View all {toolsList.length} tools →
                                     </Link>
+                                </div>
+
+                                <div className="grid grid-cols-4 gap-5">
+
+                                    {/* ================================
+                                        ORGANIZE
+                                    ================================= */}
+                                    <div className="space-y-2">
+                                        <div
+                                            className="
+                                                flex
+                                                items-center
+                                                gap-1.5
+                                                border-b
+                                                border-[var(--border-subtle)]
+                                                pb-1.5
+                                                font-mono
+                                                text-[11px]
+                                                uppercase
+                                                tracking-wider
+                                                text-[var(--muted-foreground)]
+                                            "
+                                        >
+                                            <FolderKanban
+                                                size={13}
+                                                className="text-[var(--accent)]"
+                                            />
+
+                                            <span>Organize</span>
+                                        </div>
+
+                                        <div className="space-y-0.5">
+                                            {organizeTools
+                                                .slice(0, 5)
+                                                .map((tool, idx) => (
+                                                    <Link
+                                                        key={tool.href || idx}
+                                                        href={tool.href}
+                                                        onClick={closeMenu}
+                                                        className="
+                                                            flex
+                                                            items-center
+                                                            justify-between
+                                                            rounded
+                                                            px-2
+                                                            py-1
+                                                            text-xs
+                                                            text-[var(--muted)]
+                                                            transition-colors
+                                                            hover:bg-[var(--surface-hover)]
+                                                            hover:text-[var(--foreground)]
+                                                        "
+                                                    >
+                                                        <span className="truncate">
+                                                            {tool.title}
+                                                        </span>
+                                                    </Link>
+                                                ))}
+                                        </div>
+                                    </div>
+
+                                    {/* ================================
+                                        EDIT
+                                    ================================= */}
+                                    <div className="space-y-2">
+                                        <div
+                                            className="
+                                                flex
+                                                items-center
+                                                gap-1.5
+                                                border-b
+                                                border-[var(--border-subtle)]
+                                                pb-1.5
+                                                font-mono
+                                                text-[11px]
+                                                uppercase
+                                                tracking-wider
+                                                text-[var(--muted-foreground)]
+                                            "
+                                        >
+                                            <FileText
+                                                size={13}
+                                                className="text-[var(--accent)]"
+                                            />
+
+                                            <span>Edit</span>
+                                        </div>
+
+                                        <div className="space-y-0.5">
+                                            {editTools
+                                                .slice(0, 5)
+                                                .map((tool, idx) => (
+                                                    <Link
+                                                        key={tool.href || idx}
+                                                        href={tool.href}
+                                                        onClick={closeMenu}
+                                                        className="
+                                                            flex
+                                                            items-center
+                                                            justify-between
+                                                            rounded
+                                                            px-2
+                                                            py-1
+                                                            text-xs
+                                                            text-[var(--muted)]
+                                                            transition-colors
+                                                            hover:bg-[var(--surface-hover)]
+                                                            hover:text-[var(--foreground)]
+                                                        "
+                                                    >
+                                                        <span className="truncate">
+                                                            {tool.title}
+                                                        </span>
+
+                                                        {tool.isNew && (
+                                                            <span
+                                                                className="
+                                                                    rounded
+                                                                    bg-[var(--accent)]
+                                                                    px-1
+                                                                    py-0.5
+                                                                    font-mono
+                                                                    text-[8px]
+                                                                    font-bold
+                                                                    uppercase
+                                                                    text-white
+                                                                "
+                                                            >
+                                                                NEW
+                                                            </span>
+                                                        )}
+                                                    </Link>
+                                                ))}
+                                        </div>
+                                    </div>
+
+                                    {/* ================================
+                                        CONVERT
+                                    ================================= */}
+                                    <div className="space-y-2">
+                                        <div
+                                            className="
+                                                flex
+                                                items-center
+                                                gap-1.5
+                                                border-b
+                                                border-[var(--border-subtle)]
+                                                pb-1.5
+                                                font-mono
+                                                text-[11px]
+                                                uppercase
+                                                tracking-wider
+                                                text-[var(--muted-foreground)]
+                                            "
+                                        >
+                                            <Cpu
+                                                size={13}
+                                                className="text-[var(--accent)]"
+                                            />
+
+                                            <span>Convert</span>
+                                        </div>
+
+                                        <div className="space-y-0.5">
+                                            {convertTools
+                                                .slice(0, 5)
+                                                .map((tool, idx) => (
+                                                    <Link
+                                                        key={tool.href || idx}
+                                                        href={tool.href}
+                                                        onClick={closeMenu}
+                                                        className="
+                                                            flex
+                                                            items-center
+                                                            justify-between
+                                                            rounded
+                                                            px-2
+                                                            py-1
+                                                            text-xs
+                                                            text-[var(--muted)]
+                                                            transition-colors
+                                                            hover:bg-[var(--surface-hover)]
+                                                            hover:text-[var(--foreground)]
+                                                        "
+                                                    >
+                                                        <span className="truncate">
+                                                            {tool.title}
+                                                        </span>
+                                                    </Link>
+                                                ))}
+                                        </div>
+                                    </div>
+
+                                    {/* ================================
+                                        SECURITY + ECOSYSTEM
+                                    ================================= */}
+                                    <div className="space-y-4">
+
+                                        <div className="space-y-2">
+                                            <div
+                                                className="
+                                                    flex
+                                                    items-center
+                                                    gap-1.5
+                                                    border-b
+                                                    border-[var(--border-subtle)]
+                                                    pb-1.5
+                                                    font-mono
+                                                    text-[11px]
+                                                    uppercase
+                                                    tracking-wider
+                                                    text-[var(--muted-foreground)]
+                                                "
+                                            >
+                                                <Shield
+                                                    size={13}
+                                                    className="text-[var(--accent)]"
+                                                />
+
+                                                <span>Security</span>
+                                            </div>
+
+                                            <div className="space-y-0.5">
+                                                {securityTools
+                                                    .slice(0, 3)
+                                                    .map((tool, idx) => (
+                                                        <Link
+                                                            key={tool.href || idx}
+                                                            href={tool.href}
+                                                            onClick={closeMenu}
+                                                            className="
+                                                                flex
+                                                                items-center
+                                                                justify-between
+                                                                rounded
+                                                                px-2
+                                                                py-1
+                                                                text-xs
+                                                                text-[var(--muted)]
+                                                                transition-colors
+                                                                hover:bg-[var(--surface-hover)]
+                                                                hover:text-[var(--foreground)]
+                                                            "
+                                                        >
+                                                            <span className="truncate">
+                                                                {tool.title}
+                                                            </span>
+                                                        </Link>
+                                                    ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Ecosystem */}
+                                        <div
+                                            className="
+                                                space-y-1.5
+                                                rounded-lg
+                                                border
+                                                border-[var(--border)]
+                                                bg-[var(--surface-secondary)]
+                                                p-2.5
+                                            "
+                                        >
+                                            <div
+                                                className="
+                                                    flex
+                                                    items-center
+                                                    gap-1
+                                                    font-mono
+                                                    text-[10px]
+                                                    font-semibold
+                                                    uppercase
+                                                    tracking-wider
+                                                    text-[var(--muted-foreground)]
+                                                "
+                                            >
+                                                <Wand2
+                                                    size={11}
+                                                    className="text-[var(--accent)]"
+                                                />
+
+                                                Ecosystem
+                                            </div>
+
+                                            <Link
+                                                href="/studio"
+                                                onClick={closeMenu}
+                                                className="
+                                                    block
+                                                    text-xs
+                                                    font-semibold
+                                                    text-[var(--foreground)]
+                                                    transition-colors
+                                                    hover:text-[var(--accent)]
+                                                "
+                                            >
+                                                PDF Studio →
+                                            </Link>
+
+                                            <Link
+                                                href="/repository-analyzer"
+                                                onClick={closeMenu}
+                                                className="
+                                                    block
+                                                    text-xs
+                                                    font-semibold
+                                                    text-[var(--foreground)]
+                                                    transition-colors
+                                                    hover:text-[var(--accent)]
+                                                "
+                                            >
+                                                Repository Analyzer →
+                                            </Link>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <ToolSearch/>
-
-                        {isLoggedIn && !isPro && (
-                            <Link
-                                href="/subscribe"
-                                className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold border border-amber-500/20 bg-amber-500/5 text-amber-500 hover:bg-amber-500/10 transition shadow-sm"
-                            >
-                                <Sparkles size={12} className="animate-pulse"/>
-                                Go Pro
-                            </Link>
-                        )}
-
+                        {/* Pricing */}
                         <Link
                             href="/pricing"
-                            className="
-                                rounded-xl
-                                px-3 py-2
-                                text-sm
-                                font-semibold
-                                hover:bg-[color:var(--border)]/30
-                            "
+                            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                                pathname === "/pricing"
+                                    ? "bg-[var(--surface-hover)] font-semibold text-[var(--foreground)]"
+                                    : "text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
+                            }`}
                         >
                             Pricing
                         </Link>
 
+                        {/* About */}
                         <Link
                             href="/about"
-                            className="
-                                rounded-xl
-                                px-3 py-2
-                                text-sm
-                                font-semibold
-                                hover:bg-[color:var(--border)]/30
-                            "
+                            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                                pathname === "/about"
+                                    ? "bg-[var(--surface-hover)] font-semibold text-[var(--foreground)]"
+                                    : "text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
+                            }`}
                         >
                             About
                         </Link>
 
+                        {/* Search */}
+                        <ToolSearch />
+
+                        {/* Admin */}
                         {isLoggedIn && user?.role === "admin" && (
                             <Link
                                 href="/admin"
                                 className="
-                                    rounded-xl
-                                    px-3 py-2
-                                    text-sm
-                                    font-bold
-                                    text-indigo-500
-                                    bg-indigo-500/5
-                                    border border-indigo-500/10
-                                    hover:bg-indigo-500/10
-                                    transition flex items-center gap-1.5
+                                    flex
+                                    items-center
+                                    gap-1
+                                    rounded-md
+                                    border
+                                    border-[var(--accent)]/30
+                                    bg-[var(--accent-subtle)]
+                                    px-2.5
+                                    py-1
+                                    font-mono
+                                    text-xs
+                                    text-[var(--accent-muted)]
+                                    transition-colors
+                                    hover:bg-[var(--accent)]/20
                                 "
                             >
-                                <ShieldAlert size={14}/>
-                                Admin Panel
+                                <ShieldAlert size={12}/>
+                                Admin
                             </Link>
                         )}
                     </nav>
 
-                    <div className="flex items-center gap-4">
+                    {/* =====================================================
+                        SECONDARY ACTIONS
+                    ====================================================== */}
+                    <div className="flex shrink-0 items-center gap-2.5">
+
                         {isLoggedIn && subscription ? (
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
+
                                 <Link
                                     href="/dashboard"
-                                    className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm border transition-all hover:scale-105 active:scale-95 duration-150 cursor-pointer ${
+                                    className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 font-mono text-xs transition-all ${
                                         subscription.tier === "pro"
-                                            ? "bg-amber-500/10 text-amber-500 border-amber-500/30 hover:bg-amber-500/20"
-                                            : "bg-[color:var(--border)] text-[color:var(--muted-foreground)] border-transparent hover:bg-[color:var(--border)]/80"
+                                            ? "border-[var(--accent)]/40 bg-[var(--accent-subtle)] text-[var(--accent-muted)] hover:bg-[var(--accent)]/25"
+                                            : "border-[var(--border)] bg-[var(--surface-secondary)] text-[var(--muted)] hover:border-[var(--muted)] hover:text-[var(--foreground)]"
                                     }`}
                                 >
-                                    <Zap size={14} className={subscription.tier === "pro" ? "animate-pulse" : ""}/>
-                                    <span className="uppercase tracking-wider">
-                                        {subscription.tier} <span className="hidden sm:inline">Account</span>
+                                    <Zap
+                                        size={12}
+                                        className={
+                                            subscription.tier === "pro"
+                                                ? "animate-pulse text-[var(--accent)]"
+                                                : "text-[var(--muted-foreground)]"
+                                        }
+                                    />
+
+                                    <span className="font-semibold uppercase tracking-wider">
+                                        {subscription.tier}
                                     </span>
                                 </Link>
+
                                 <button
+                                    type="button"
                                     onClick={logout}
-                                    className="p-2 rounded-xl text-[color:var(--muted-foreground)] hover:bg-[color:var(--border)]/50 hover:text-[color:var(--foreground)] transition-colors"
+                                    className="
+                                        rounded-md
+                                        p-1.5
+                                        text-[var(--muted-foreground)]
+                                        transition-colors
+                                        hover:bg-[var(--surface-hover)]
+                                        hover:text-[var(--foreground)]
+                                    "
                                     title="Sign Out"
                                 >
-                                    <LogOut size={18}/>
+                                    <LogOut size={15}/>
                                 </button>
                             </div>
                         ) : (
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
+
                                 <Link
-                                    href="/subscribe"
-                                    className="text-xs font-bold text-indigo-500 hover:underline md:hidden"
+                                    href={`/login?callbackUrl=${encodeURIComponent(pathname)}`}
+                                    className="
+                                        hidden
+                                        rounded-md
+                                        px-2.5
+                                        py-1.5
+                                        text-xs
+                                        font-medium
+                                        text-[var(--muted)]
+                                        transition-colors
+                                        hover:bg-[var(--surface-hover)]
+                                        hover:text-[var(--foreground)]
+                                        sm:block
+                                    "
                                 >
-                                    Upgrade
+                                    Sign In
                                 </Link>
 
                                 {isGuest && (
                                     <Link
                                         href={`/register?callbackUrl=${encodeURIComponent(pathname)}`}
-                                        className="rounded-xl bg-indigo-500 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-600 transition"
+                                        className="
+                                            rounded-lg
+                                            bg-[var(--accent)]
+                                            px-3.5
+                                            py-1.5
+                                            text-xs
+                                            font-medium
+                                            text-white
+                                            shadow-sm
+                                            transition-colors
+                                            hover:bg-[var(--accent-hover)]
+                                        "
                                     >
                                         Create Account
                                     </Link>
                                 )}
-
-                                <Link
-                                    href={`/login?callbackUrl=${encodeURIComponent(pathname)}`}
-                                    className="text-sm font-semibold hover:text-indigo-500 transition-colors"
-                                >
-                                    Sign In
-                                </Link>
                             </div>
                         )}
 

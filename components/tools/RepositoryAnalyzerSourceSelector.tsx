@@ -242,21 +242,21 @@ export default function RepositoryAnalyzerSourceSelector() {
         <div className="mx-auto max-w-4xl space-y-8 px-4 py-8">
             {/* Header */}
             <div className="text-center space-y-3">
-                <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[var(--primary)]/20 bg-[var(--primary)]/5 px-4 py-1.5 text-xs font-semibold text-[var(--primary)]">
-                    <Sparkles size={14} />
-                    Developer Studio Analysis Engine
+                <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-white/10 bg-[#1c1b1b] px-3.5 py-1 font-mono text-xs text-[#d2bbff]">
+                    <Sparkles size={13} />
+                    DEVELOPER ARCHITECTURE ENGINE
                 </div>
-                <h1 className="text-3xl font-extrabold tracking-tight text-[color:var(--foreground)] sm:text-4xl">
+                <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
                     Repository Architecture Analyzer
                 </h1>
-                <p className="mx-auto max-w-2xl text-sm text-[color:var(--muted-foreground)] sm:text-base">
+                <p className="mx-auto max-w-2xl text-xs sm:text-sm text-[#a1a1aa] leading-relaxed">
                     Inspect project structures, dependencies, tech stacks, environment requirements, and API routes with zero build execution.
                 </p>
             </div>
 
             {/* Source Selection Tabs */}
-            <div className="rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-6 shadow-sm sm:p-8">
-                <div className="flex border-b border-[color:var(--border)] pb-4">
+            <div className="rounded-xl border border-white/10 bg-[#121212] p-6 shadow-sm sm:p-8">
+                <div className="flex border-b border-white/10 pb-4">
                     <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto">
                         <button
                             type="button"
@@ -264,13 +264,13 @@ export default function RepositoryAnalyzerSourceSelector() {
                                 setActiveTab("git");
                                 reset();
                             }}
-                            className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
+                            className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 font-mono text-xs transition ${
                                 activeTab === "git"
-                                    ? "bg-[var(--primary)] text-white shadow-sm"
-                                    : "text-[color:var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[color:var(--foreground)]"
+                                    ? "bg-[#7c3aed] text-white shadow-sm font-semibold"
+                                    : "text-[#a1a1aa] hover:bg-[#1c1b1b] hover:text-white"
                             }`}
                         >
-                            <GitBranch size={16} />
+                            <GitBranch size={15} />
                             Git URL
                         </button>
                         <button

@@ -28,11 +28,11 @@ export function MobileLink({
             href={href}
             onClick={close}
             className="
-        flex items-center gap-3 rounded-xl px-3 py-3
-        text-sm font-semibold text-[color:var(--foreground)]
-        transition
-        hover:bg-[color:var(--primary)]/10
-        hover:text-[color:var(--primary)]
+        flex items-center gap-3 rounded-lg px-3 py-2
+        text-xs font-medium text-[var(--muted)]
+        transition-colors
+        hover:bg-[var(--surface-hover)]
+        hover:text-[var(--foreground)]
       "
         >
             {icon}
@@ -56,36 +56,36 @@ export function ToolGroup({
     const tools = allTools.filter((t) => (t.category || (t as any).Category) === category);
 
     return (
-        <div className="mt-6">
-            <div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-[color:var(--muted-foreground)]">
+        <div className="mt-4">
+            <div className="mb-2 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-[var(--muted-foreground)]">
                 {icon}
                 {title}
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-0.5">
                 {tools.map((tool) => (
                     <Link
                         key={tool.href}
                         href={tool.href}
                         onClick={close}
                         className="
-              block rounded-xl px-3 py-2 text-sm font-medium
-              text-[color:var(--foreground)]
-              transition
-              hover:bg-[color:var(--background)]
-              hover:text-[color:var(--primary)]
+              block rounded-md px-2.5 py-1.5 text-xs font-normal
+              text-[var(--muted)]
+              transition-colors
+              hover:bg-[var(--surface-hover)]
+              hover:text-[var(--foreground)]
             "
                     >
-                        <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center justify-between gap-2">
                             <span className="truncate">{tool.title}</span>
 
                             {tool.isNew && (
                                 <span className="
-                  rounded-full bg-[color:var(--primary)]
-                  px-2 py-0.5 text-[9px]
-                  font-black uppercase tracking-wider text-white
+                  rounded bg-[var(--accent)]
+                  px-1.5 py-0.2 font-mono text-[9px]
+                  font-bold uppercase tracking-wider text-white
                 ">
-                  New
+                  NEW
                 </span>
                             )}
                         </div>

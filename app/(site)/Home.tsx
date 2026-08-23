@@ -3,11 +3,22 @@
 import Link from "next/link";
 import {useEffect, useMemo, useState} from "react";
 import {
+    ArrowRight,
     ArrowUpRight,
+    Check,
     CheckCircle2,
+    Code,
+    Cpu,
+    ExternalLink,
+    FileText,
+    FolderKanban,
+    Layers,
+    Lock,
     Search,
     Shield,
     Sparkles,
+    Terminal,
+    Wand2,
     Zap,
 } from "lucide-react";
 
@@ -16,9 +27,6 @@ import { useTools } from "@/context/ToolContext";
 import {useAuth} from "@/context/AuthContext";
 import {fetchJson} from "@/lib/api";
 import {fallbackHomeContent, HomeContent} from "@/lib/contentHome";
-
-import { ToolItem } from "@/lib/toolsData";
-
 
 export default function Home() {
     const {
@@ -114,294 +122,546 @@ export default function Home() {
 
     const visibleGroups = toolGroups.filter((group) => group.tools.length > 0);
 
-    const panelClass =
-        "rounded-3xl border border-[color:var(--border)] bg-[var(--card)] shadow-[0_18px_50px_rgba(0,0,0,0.08)]";
-    const subtlePanelClass =
-        "rounded-2xl border border-[color:var(--border)] bg-[var(--card)] shadow-[0_10px_28px_rgba(0,0,0,0.06)]";
-
     return (
-        <div
-            className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
+        <div className="flex h-full min-h-0 w-full flex-col bg-[var(--background)] text-[var(--foreground)] transition-colors">
             <main className="relative min-h-screen overflow-hidden pb-24">
+                {/* Subtle Ambient Background */}
                 <div className="pointer-events-none absolute inset-0 -z-10 select-none overflow-hidden">
-                    <div
-                        className="absolute inset-0 bg-[linear-gradient(to_right,rgba(109,94,245,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(109,94,245,0.08)_1px,transparent_1px)] bg-[size:72px_72px] opacity-20"/>
-                    <div
-                        className="absolute -top-40 left-0 h-[38rem] w-[38rem] rounded-full bg-indigo-500/10 blur-[170px]"/>
-                    <div
-                        className="absolute right-0 top-10 h-[32rem] w-[32rem] rounded-full bg-fuchsia-500/10 blur-[170px]"/>
-                    <div
-                        className="absolute bottom-0 left-1/3 h-[34rem] w-[34rem] rounded-full bg-cyan-500/5 blur-[180px]"/>
+                    <div className="absolute inset-0 bg-[radial-gradient(var(--border)_1px,transparent_1px)] bg-[size:24px_24px] opacity-40" />
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 h-[32rem] w-[50rem] rounded-full bg-[var(--accent)]/5 blur-[160px]" />
                 </div>
 
-                <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-                    <div className="mx-auto mt-10 flex max-w-5xl flex-col items-center text-center sm:mt-14">
-                        {!isLoading && (
-                            <>
-                                {isProUser && (
-                                    <span
-                                        className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/25 bg-amber-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-amber-700 shadow-sm">
-                                        <Zap size={12} className="animate-pulse"/>
-                                        {content.heroBadgePro || "Pro Workspace Active"}
-                                    </span>
-                                )}
-
-                                {isPlusUser && (
-                                    <span
-                                        className="inline-flex items-center gap-1.5 rounded-full border border-gray-500/25 bg-gray-300/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-gray-500 shadow-sm">
-                                        <Zap size={12} className="animate-pulse"/>
-                                        {content.heroBadgePlus || "Plus Workspace Active"}
-                                    </span>
-                                )}
-
-                                {isFreeUser && (
-                                    <span
-                                        className="inline-flex items-center gap-1.5 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-indigo-600 shadow-sm">
-                                        <Zap size={12}/>
-                                        {content.heroBadgeFree || "Free Tier Active"}
-                                    </span>
-                                )}
-
-                                {isGuest && (
-                                    <span
-                                        className="inline-flex items-center gap-1.5 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-indigo-600 shadow-sm">
-                                        <Sparkles size={12} className="animate-pulse"/>
-                                        {content.heroBadgeGuest || "Modern Document Platform"}
-                                    </span>
-                                )}
-                            </>
-                        )}
-
-                        <div className="mt-8 max-w-4xl">
-                            <h1 className="text-balance text-4xl font-black tracking-tight sm:text-6xl lg:text-8xl">
+                <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                    {/* Hero Section */}
+                    <section className="py-20 sm:py-28 flex flex-col items-center text-center">
+                        {/* Status / Telemetry Badge */}
+                        <div className="inline-flex items-center gap-2 border border-[var(--border)] bg-[var(--surface-card)] px-3.5 py-1 rounded-full mb-8 shadow-sm">
+                            <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
+                            <span className="font-mono text-xs text-[var(--muted-foreground)] font-medium">
                                 {!isLoading && isLoggedIn
-                                    ? content.heroWelcomeBack
-                                    : "Platen"}
-                                <span
-                                    className="mt-2 block bg-gradient-to-r from-[color:var(--foreground)] via-[#6d5ef5] to-[#ff61c7] bg-clip-text text-transparent">
-                                    {!isLoading
-                                        ? isProUser
-                                            ? content.heroTitlePro
+                                    ? isProUser
+                                        ? content.heroBadgePro || "PLATEN_CORE_v2.0 • PRO_ACTIVE"
+                                        : isPlusUser
+                                            ? content.heroBadgePlus || "PLATEN_CORE_v2.0 • PLUS_ACTIVE"
+                                            : content.heroBadgeFree || "PLATEN_CORE_v2.0 • FREE_TIER"
+                                    : content.heroBadgeGuest || "PLATEN_CORE_v2.0 • DOCUMENT_ENGINE"}
+                            </span>
+                        </div>
+
+                        {/* Hero Headline */}
+                        <h1 className="text-4xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-[var(--foreground)] max-w-4xl leading-[1.1]">
+                            {!isLoading && isLoggedIn && content.heroWelcomeBack ? (
+                                <>
+                                    {content.heroWelcomeBack},{" "}
+                                    <span className="text-[var(--accent-muted)]">
+                                        {isProUser
+                                            ? content.heroTitlePro || "Pro Workspace"
                                             : isPlusUser
-                                                ? content.heroTitlePlus
-                                                : isFreeUser
-                                                    ? content.heroTitleGuest
-                                                    : "Modern Document Platform"
-                                        : "Modern Document Platform"}
-                                </span>
-                            </h1>
+                                                ? content.heroTitlePlus || "Plus Workspace"
+                                                : content.heroTitleGuest || "Document Platform"}
+                                    </span>
+                                </>
+                            ) : (
+                                <>
+                                    The modern document platform for{" "}
+                                    <span className="text-[var(--accent-muted)]">everyone.</span>
+                                </>
+                            )}
+                        </h1>
 
-                            <div className="mx-auto mt-8 max-w-2xl">
-                                {!isLoading && isProUser && (
-                                    <div
-                                        className={`${subtlePanelClass} flex w-full flex-col items-center justify-between gap-4 p-4 sm:flex-row`}
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <CheckCircle2 className="text-emerald-500" size={18}/>
-                                            <span
-                                                className="text-sm font-medium text-[color:var(--muted-foreground)]">
-                                                Access:{" "}
-                                                <span
-                                                    className="font-bold uppercase text-[color:var(--foreground)]">
-                                                    All Premium Workspaces & Advanced Tools
-                                                </span>
-                                            </span>
-                                        </div>
-                                    </div>
-                                )}
+                        {/* Hero Subtitle */}
+                        <p className="mt-6 text-base sm:text-lg text-[var(--muted)] max-w-2xl leading-relaxed">
+                            {!isLoading && isLoggedIn ? (
+                                isProUser || isPlusUser
+                                    ? "High-capacity processing allowance for demanding document workflows and multi-page batch operations."
+                                    : "Access baseline document utilities and local tools with 20 daily units. Upgrade for higher capacity."
+                            ) : (
+                                content.heroSubtitleGuest ||
+                                "Edit, convert, organize, and secure your documents with professional-grade tools. Start for free today."
+                            )}
+                        </p>
 
-                                {!isLoading && isPlusUser && (
-                                    <div
-                                        className={`${subtlePanelClass} flex w-full flex-col items-center justify-between gap-4 p-4 sm:flex-row`}
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <CheckCircle2 className="text-emerald-500" size={18}/>
-                                            <span
-                                                className="text-sm font-medium text-[color:var(--muted-foreground)]">
-                                                Access:{" "}
-                                                <span
-                                                    className="font-bold uppercase text-[color:var(--foreground)]">
-                                                    All Premium Workspaces & Advanced Tools
-                                                </span>
-                                            </span>
-                                        </div>
-                                    </div>
-                                )}
+                        {/* Hero Actions (Dynamic User-Tier CTAs) */}
+                        <div className="mt-10 flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+                            {/* Guest CTA */}
+                            {(!isLoggedIn || isGuest) && (
+                                <Link
+                                    href="/register"
+                                    className="w-full sm:w-auto bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] px-8 py-3 rounded-lg text-sm font-medium transition-colors shadow-sm text-center"
+                                >
+                                    Start for Free
+                                </Link>
+                            )}
 
-                                {!isLoading && isFreeUser && (
-                                    <div
-                                        className={`${subtlePanelClass} flex w-full flex-col items-center justify-between gap-4 p-4 sm:flex-row`}
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <Zap className="text-indigo-500" size={18}/>
-                                            <span
-                                                className="text-sm font-medium text-[color:var(--muted-foreground)]">
-                                                Daily Usage:{" "}
-                                                <span className="font-bold text-[color:var(--foreground)]">
-                                                    5 operations remaining today
-                                                </span>
-                                            </span>
-                                        </div>
+                            {/* Logged-in Free user CTA */}
+                            {isLoggedIn && isFreeUser && (
+                                <Link
+                                    href="/subscribe"
+                                    className="w-full sm:w-auto bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] px-8 py-3 rounded-lg text-sm font-medium transition-colors shadow-sm text-center"
+                                >
+                                    Upgrade to Plus
+                                </Link>
+                            )}
 
-                                        <div className="hidden h-4 w-px bg-[color:var(--border)] sm:block"/>
+                            {/* Logged-in Plus or Pro user CTA */}
+                            {isLoggedIn && (isPlusUser || isProUser) && (
+                                <Link
+                                    href="/dashboard"
+                                    className="w-full sm:w-auto bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] px-8 py-3 rounded-lg text-sm font-medium transition-colors shadow-sm text-center"
+                                >
+                                    Open Dashboard
+                                </Link>
+                            )}
 
-                                        <Link
-                                            href="/subscribe"
-                                            className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 transition hover:text-indigo-500 hover:underline"
-                                        >
-                                            {content.authBannerFreeAction || "Upgrade"} <ArrowUpRight size={12}/>
-                                        </Link>
-                                    </div>
-                                )}
-
-                                {(isLoading || isGuest) && (
-                                    <p className="text-pretty text-base leading-relaxed text-[color:var(--muted-foreground)] sm:text-lg">
-                                        {content.heroSubtitleGuest ||
-                                            "Edit, convert, secure, and organize documents online."}
-                                        <span className="mt-2 block font-bold text-indigo-600">
-                                            {content.heroSubtitleGuestBold || "Start free. Upgrade anytime."}
-                                        </span>
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    {(isLoading || isGuest) && (
-                        <div className="mt-20 grid gap-6 sm:grid-cols-2 md:grid-cols-3">
-                            <div className={`${panelClass} p-6 text-center transition-all hover:-translate-y-0.5`}>
-                                <div
-                                    className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-500">
-                                    <Sparkles className="h-6 w-6"/>
-                                </div>
-                                <h3 className="text-lg font-bold text-[color:var(--foreground)]">
-                                    {content.feature1Title || "Free Tier Included"}
-                                </h3>
-                                <p className="mt-2 text-xs leading-relaxed font-medium text-[color:var(--muted-foreground)]">
-                                    {content.feature1Description ||
-                                        "Access baseline document utilities instantly with no upfront cost."}
-                                </p>
-                            </div>
-
-                            <div className={`${panelClass} p-6 text-center transition-all hover:-translate-y-0.5`}>
-                                <div
-                                    className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-500/10 text-violet-500">
-                                    <Zap className="h-6 w-6"/>
-                                </div>
-                                <h3 className="text-lg font-bold text-[color:var(--foreground)]">
-                                    {content.feature2Title || "Pro Ecosystem"}
-                                </h3>
-                                <p className="mt-2 text-xs leading-relaxed font-medium text-[color:var(--muted-foreground)]">
-                                    {content.feature2Description ||
-                                        "Unlock high-performance processing, interactive canvas features, and larger workflows."}
-                                </p>
-                            </div>
-
-                            <div
-                                className={`${panelClass} p-6 text-center transition-all hover:-translate-y-0.5 sm:col-span-2 md:col-span-1`}
+                            {/* Secondary CTA for all users */}
+                            <Link
+                                href="/tools"
+                                className="w-full sm:w-auto border border-[var(--border)] bg-[var(--surface-card)] text-[var(--foreground)] hover:bg-[var(--surface-hover)] hover:border-[var(--muted)] px-8 py-3 rounded-lg text-sm font-medium transition-colors text-center shadow-sm"
                             >
-                                <div
-                                    className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-500">
-                                    <Shield className="h-6 w-6"/>
+                                Explore all tools
+                            </Link>
+                        </div>
+
+                        {/* Logged in User Usage / Access Banner */}
+                        {!isLoading && isLoggedIn && (
+                            <div className="mt-8 w-full max-w-lg rounded-lg border border-[var(--border)] bg-[var(--surface-card)] p-3.5 text-xs text-[var(--muted)] flex items-center justify-between shadow-sm">
+                                <div className="flex items-center gap-2">
+                                    {isProUser || isPlusUser ? (
+                                        <CheckCircle2 className="text-emerald-500" size={16} />
+                                    ) : (
+                                        <Zap className="text-[var(--accent)]" size={16} />
+                                    )}
+                                    <span>
+                                        {isProUser || isPlusUser
+                                            ? content.authBannerProAccess || "Capacity: High-allowance unit allocation for intensive processing"
+                                            : content.authBannerFreeUsage || "Usage: 20 daily units • 8 per 3-hour window • 80 per month"}
+                                    </span>
                                 </div>
-                                <h3 className="text-lg font-bold text-[color:var(--foreground)]">
-                                    {content.feature3Title || "Isolated Sandbox"}
-                                </h3>
-                                <p className="mt-2 text-xs leading-relaxed font-medium text-[color:var(--muted-foreground)]">
-                                    {content.feature3Description ||
-                                        "Secure processing sandboxes compile your document jobs and clear data after completion."}
+                                {isFreeUser && (
+                                    <Link
+                                        href="/subscribe"
+                                        className="font-mono text-[var(--accent-muted)] hover:underline flex items-center gap-1 font-semibold"
+                                    >
+                                        {content.authBannerFreeAction || "Upgrade"} <ArrowUpRight size={12} />
+                                    </Link>
+                                )}
+                            </div>
+                        )}
+                    </section>
+
+                    {/* Popular Workflows / "Engineered for Efficiency" */}
+                    <section className="py-14 border-t border-[var(--border)]">
+                        <div className="text-center mb-12">
+                            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--foreground)]">
+                                Engineered for Efficiency
+                            </h2>
+                            <p className="text-sm text-[var(--muted)] mt-2">
+                                Powerful tools to manage your documents with ease.
+                            </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                            {/* Card 1 */}
+                            <Link
+                                href="/merge-pdf"
+                                className="group bg-[var(--surface-card)] border border-[var(--border)] rounded-lg p-6 hover:border-[var(--accent)]/40 hover:bg-[var(--surface-hover)] transition-all flex flex-col justify-between shadow-sm"
+                            >
+                                <div>
+                                    <div className="w-10 h-10 rounded-md bg-[var(--surface-secondary)] border border-[var(--border)] flex items-center justify-center mb-4 group-hover:border-[var(--accent)]/30 group-hover:bg-[var(--accent-subtle)] transition-colors">
+                                        <Layers className="text-[var(--accent)]" size={18} />
+                                    </div>
+                                    <h3 className="font-semibold text-base text-[var(--foreground)] mb-2 group-hover:text-[var(--accent)] transition-colors">
+                                        Merge PDF
+                                    </h3>
+                                    <p className="text-xs text-[var(--muted)] leading-relaxed mb-6">
+                                        Combine multiple PDF files into a single document with lossless precision.
+                                    </p>
+                                </div>
+                                <div className="inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-wider text-[var(--accent-muted)] group-hover:text-[var(--foreground)] transition-colors">
+                                    Open Module <ArrowRight size={12} className="transition-transform group-hover:translate-x-1" />
+                                </div>
+                            </Link>
+
+                            {/* Card 2 */}
+                            <Link
+                                href="/edit-pdf"
+                                className="group bg-[var(--surface-card)] border border-[var(--border)] rounded-lg p-6 hover:border-[var(--accent)]/40 hover:bg-[var(--surface-hover)] transition-all flex flex-col justify-between shadow-sm"
+                            >
+                                <div>
+                                    <div className="w-10 h-10 rounded-md bg-[var(--surface-secondary)] border border-[var(--border)] flex items-center justify-center mb-4 group-hover:border-[var(--accent)]/30 group-hover:bg-[var(--accent-subtle)] transition-colors">
+                                        <FileText className="text-[var(--accent)]" size={18} />
+                                    </div>
+                                    <h3 className="font-semibold text-base text-[var(--foreground)] mb-2 group-hover:text-[var(--accent)] transition-colors">
+                                        PDF Editor
+                                    </h3>
+                                    <p className="text-xs text-[var(--muted)] leading-relaxed mb-6">
+                                        Edit text, signatures, annotations, and elements directly in your browser.
+                                    </p>
+                                </div>
+                                <div className="inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-wider text-[var(--accent-muted)] group-hover:text-[var(--foreground)] transition-colors">
+                                    Open Module <ArrowRight size={12} className="transition-transform group-hover:translate-x-1" />
+                                </div>
+                            </Link>
+
+                            {/* Card 3 */}
+                            <Link
+                                href="/pdf-to-word"
+                                className="group bg-[var(--surface-card)] border border-[var(--border)] rounded-lg p-6 hover:border-[var(--accent)]/40 hover:bg-[var(--surface-hover)] transition-all flex flex-col justify-between shadow-sm"
+                            >
+                                <div>
+                                    <div className="w-10 h-10 rounded-md bg-[var(--surface-secondary)] border border-[var(--border)] flex items-center justify-center mb-4 group-hover:border-[var(--accent)]/30 group-hover:bg-[var(--accent-subtle)] transition-colors">
+                                        <Cpu className="text-[var(--accent)]" size={18} />
+                                    </div>
+                                    <h3 className="font-semibold text-base text-[var(--foreground)] mb-2 group-hover:text-[var(--accent)] transition-colors">
+                                        PDF to Word
+                                    </h3>
+                                    <p className="text-xs text-[var(--muted)] leading-relaxed mb-6">
+                                        Transform PDF documents into formatted, editable Word (.docx) files.
+                                    </p>
+                                </div>
+                                <div className="inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-wider text-[var(--accent-muted)] group-hover:text-[var(--foreground)] transition-colors">
+                                    Open Module <ArrowRight size={12} className="transition-transform group-hover:translate-x-1" />
+                                </div>
+                            </Link>
+                        </div>
+                    </section>
+
+                    {/* Tool Matrix Scope / Category Navigation */}
+                    <section className="py-14 border-t border-[var(--border)]">
+                        <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 gap-4">
+                            <div>
+                                <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--foreground)]">
+                                    Tool Matrix Scope
+                                </h2>
+                                <p className="text-sm text-[var(--muted)] mt-1">
+                                    Comprehensive suite of document utilities.
                                 </p>
                             </div>
+                            <Link
+                                href="/tools"
+                                className="text-xs font-mono text-[var(--accent-muted)] hover:text-[var(--foreground)] flex items-center gap-1.5 transition-colors self-start sm:self-auto font-semibold"
+                            >
+                                View all {toolsList.length} tools <ArrowRight size={13} />
+                            </Link>
                         </div>
-                    )}
 
-                    <div className="mx-auto mt-16 max-w-2xl">
-                        <div className={`${subtlePanelClass} p-3 transition-all focus-within:border-indigo-500/50`}>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            {/* Organize Category */}
+                            <div className="bg-[var(--surface-card)] border border-[var(--border)] rounded-lg p-5 hover:border-[var(--accent)]/30 transition-colors shadow-sm">
+                                <div className="flex items-center gap-2 mb-3.5 pb-2 border-b border-[var(--border-subtle)]">
+                                    <FolderKanban size={16} className="text-[var(--accent)]" />
+                                    <span className="font-semibold text-sm text-[var(--foreground)]">Organize</span>
+                                </div>
+                                <ul className="space-y-2 text-xs text-[var(--muted)]">
+                                    <li><Link href="/rotate-pdf" className="hover:text-[var(--foreground)] transition-colors">Rotate PDF</Link></li>
+                                    <li><Link href="/split-pdf" className="hover:text-[var(--foreground)] transition-colors">Split PDF</Link></li>
+                                    <li><Link href="/crop-pdf" className="hover:text-[var(--foreground)] transition-colors">Crop PDF</Link></li>
+                                    <li><Link href="/reorder-pages" className="hover:text-[var(--foreground)] transition-colors">Reorder Pages</Link></li>
+                                </ul>
+                            </div>
+
+                            {/* Edit Category */}
+                            <div className="bg-[var(--surface-card)] border border-[var(--border)] rounded-lg p-5 hover:border-[var(--accent)]/30 transition-colors shadow-sm">
+                                <div className="flex items-center gap-2 mb-3.5 pb-2 border-b border-[var(--border-subtle)]">
+                                    <FileText size={16} className="text-[var(--accent)]" />
+                                    <span className="font-semibold text-sm text-[var(--foreground)]">Edit</span>
+                                </div>
+                                <ul className="space-y-2 text-xs text-[var(--muted)]">
+                                    <li><Link href="/sign-pdf" className="hover:text-[var(--foreground)] transition-colors">Sign On PDF</Link></li>
+                                    <li><Link href="/watermark-pdf" className="hover:text-[var(--foreground)] transition-colors">Watermark PDF</Link></li>
+                                    <li><Link href="/add-text" className="hover:text-[var(--foreground)] transition-colors">Add Text</Link></li>
+                                    <li><Link href="/highlight-pdf" className="hover:text-[var(--foreground)] transition-colors">Highlight PDF</Link></li>
+                                </ul>
+                            </div>
+
+                            {/* Convert Category */}
+                            <div className="bg-[var(--surface-card)] border border-[var(--border)] rounded-lg p-5 hover:border-[var(--accent)]/30 transition-colors shadow-sm">
+                                <div className="flex items-center gap-2 mb-3.5 pb-2 border-b border-[var(--border-subtle)]">
+                                    <Cpu size={16} className="text-[var(--accent)]" />
+                                    <span className="font-semibold text-sm text-[var(--foreground)]">Convert</span>
+                                </div>
+                                <ul className="space-y-2 text-xs text-[var(--muted)]">
+                                    <li><Link href="/pdf-to-markdown" className="hover:text-[var(--foreground)] transition-colors">PDF to Markdown</Link></li>
+                                    <li><Link href="/pdf-to-images" className="hover:text-[var(--foreground)] transition-colors">PDF to Images</Link></li>
+                                    <li><Link href="/pdf-to-excel" className="hover:text-[var(--foreground)] transition-colors">PDF to Excel</Link></li>
+                                    <li><Link href="/markdown-to-pdf" className="hover:text-[var(--foreground)] transition-colors">Markdown to PDF</Link></li>
+                                </ul>
+                            </div>
+
+                            {/* Security Category */}
+                            <div className="bg-[var(--surface-card)] border border-[var(--border)] rounded-lg p-5 hover:border-[var(--accent)]/30 transition-colors shadow-sm">
+                                <div className="flex items-center gap-2 mb-3.5 pb-2 border-b border-[var(--border-subtle)]">
+                                    <Shield size={16} className="text-[var(--accent)]" />
+                                    <span className="font-semibold text-sm text-[var(--foreground)]">Security</span>
+                                </div>
+                                <ul className="space-y-2 text-xs text-[var(--muted)]">
+                                    <li><Link href="/lock-pdf" className="hover:text-[var(--foreground)] transition-colors">Protect PDF</Link></li>
+                                    <li><Link href="/unlock-pdf" className="hover:text-[var(--foreground)] transition-colors">Unlock PDF</Link></li>
+                                    <li><Link href="/redact-pdf" className="hover:text-[var(--foreground)] transition-colors">Secure Redaction</Link></li>
+                                    <li><Link href="/repair-pdf" className="hover:text-[var(--foreground)] transition-colors">Repair PDF</Link></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Advanced Ecosystem: PDF Studio & Repository Analyzer */}
+                    <section className="py-16 border-t border-[var(--border)]">
+                        <div className="text-center mb-12">
+                            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--foreground)]">
+                                Advanced Ecosystem
+                            </h2>
+                            <p className="text-sm text-[var(--muted)] mt-2">
+                                Workspaces for complete document management and repository analysis.
+                            </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Studio Card */}
+                            <div className="bg-[var(--surface-card)] border border-[var(--border)] rounded-xl p-7 hover:border-[var(--accent)]/40 transition-colors group flex flex-col justify-between shadow-sm">
+                                <div>
+                                    <div className="flex justify-between items-start mb-5">
+                                        <div className="h-10 w-10 rounded-lg bg-[var(--surface-secondary)] border border-[var(--border)] flex items-center justify-center">
+                                            <Wand2 className="text-[var(--accent)]" size={20} />
+                                        </div>
+                                        <span className="bg-[var(--surface-secondary)] text-[var(--muted)] border border-[var(--border)] font-mono text-[10px] uppercase px-2.5 py-1 rounded">
+                                            WORKSPACE
+                                        </span>
+                                    </div>
+                                    <h3 className="text-lg font-bold text-[var(--foreground)] mb-2">
+                                        PDF Studio
+                                    </h3>
+                                    <p className="text-xs text-[var(--muted)] leading-relaxed mb-6">
+                                        An advanced interactive environment for complete PDF editing, multi-layer annotation, and document manipulation.
+                                    </p>
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="border-t border-[var(--border-subtle)] pt-3 font-mono text-[11px] text-[var(--muted-foreground)]">
+                                        &gt; init --env local_studio
+                                    </div>
+                                    <Link
+                                        href="/studio"
+                                        className="inline-flex items-center gap-2 bg-[var(--surface-secondary)] text-[var(--foreground)] border border-[var(--border)] px-4 py-2 rounded-lg text-xs font-medium hover:bg-[var(--surface-hover)] transition-colors"
+                                    >
+                                        Launch Studio <ExternalLink size={13} />
+                                    </Link>
+                                </div>
+                            </div>
+
+                            {/* Analyzer Card */}
+                            <div className="bg-[var(--surface-card)] border border-[var(--border)] rounded-xl p-7 hover:border-[var(--accent)]/40 transition-colors group flex flex-col justify-between shadow-sm">
+                                <div>
+                                    <div className="flex justify-between items-start mb-5">
+                                        <div className="h-10 w-10 rounded-lg bg-[var(--surface-secondary)] border border-[var(--border)] flex items-center justify-center">
+                                            <Code className="text-[var(--accent)]" size={20} />
+                                        </div>
+                                        <span className="bg-[var(--accent)] text-white font-mono text-[10px] uppercase px-2.5 py-1 rounded font-bold">
+                                            NEW
+                                        </span>
+                                    </div>
+                                    <h3 className="text-lg font-bold text-[var(--foreground)] mb-2">
+                                        Repository Analyzer
+                                    </h3>
+                                    <p className="text-xs text-[var(--muted)] leading-relaxed mb-6">
+                                        Analyze software repositories and generate architectural diagrams, project documentation, and compile direct to PDF.
+                                    </p>
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="border-t border-[var(--border-subtle)] pt-3 font-mono text-[11px] text-[var(--muted-foreground)]">
+                                        &gt; scan ./repo --architecture
+                                    </div>
+                                    <Link
+                                        href="/repository-analyzer"
+                                        className="inline-flex items-center gap-2 bg-[var(--surface-secondary)] text-[var(--foreground)] border border-[var(--border)] px-4 py-2 rounded-lg text-xs font-medium hover:bg-[var(--surface-hover)] transition-colors"
+                                    >
+                                        Analyze Repo <ExternalLink size={13} />
+                                    </Link>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Isolated Execution Environments / Security First */}
+                    <section className="py-16 border-t border-[var(--border)]">
+                        <div className="bg-[var(--surface-card)] border border-[var(--border)] rounded-xl p-6 sm:p-10 flex flex-col md:flex-row items-center justify-between gap-8 shadow-sm">
+                            <div className="md:w-1/2 space-y-4">
+                                <div className="inline-flex items-center gap-2">
+                                    <Shield className="text-rose-500" size={16} />
+                                    <span className="font-mono text-xs uppercase tracking-wider text-rose-500 font-semibold">
+                                        Zero Trust Architecture
+                                    </span>
+                                </div>
+                                <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--foreground)]">
+                                    Isolated Execution Environments.
+                                </h2>
+                                <p className="text-xs sm:text-sm text-[var(--muted)] leading-relaxed">
+                                    Files are processed in secure, isolated containers and automatically purged immediately after completion. Platen is engineered with privacy and security as core principles.
+                                </p>
+                                <div>
+                                    <Link
+                                        href="/security"
+                                        className="text-xs font-mono text-[var(--foreground)] border-b border-[var(--foreground)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition-colors pb-0.5"
+                                    >
+                                        Read Architecture Details →
+                                    </Link>
+                                </div>
+                            </div>
+
+                            {/* Terminal Mockup */}
+                            <div className="md:w-1/2 w-full bg-[var(--terminal-bg)] text-[var(--terminal-foreground)] border border-[var(--terminal-border)] rounded-lg p-5 font-mono text-xs leading-relaxed shadow-inner">
+                                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-[var(--terminal-border)] text-[11px] text-[var(--muted-foreground)]">
+                                    <div className="w-2.5 h-2.5 rounded-full bg-rose-500/80" />
+                                    <div className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
+                                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
+                                    <span className="ml-2">system.log</span>
+                                </div>
+                                <div className="space-y-1">
+                                    <div>&gt; INIT secure_sandbox_environment</div>
+                                    <div className="text-[var(--accent-muted)]">&gt; STATUS: <span className="text-[var(--terminal-foreground)]">SANDBOX_ENABLED</span></div>
+                                    <div>&gt; ALLOCATE ephemeral_storage_volume</div>
+                                    <div className="text-[var(--accent-muted)]">&gt; STATUS: <span className="text-[var(--terminal-foreground)]">EPHEMERAL_STORAGE_ACTIVE</span></div>
+                                    <div>&gt; PROCESS document_payload</div>
+                                    <div>&gt; PURGE memory_cache</div>
+                                    <div className="text-rose-400">&gt; DESTRUCT data_blocks_complete</div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Transparent Scaling / Free vs Pro */}
+                    <section className="py-16 border-t border-[var(--border)]">
+                        <div className="text-center mb-12">
+                            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--foreground)]">
+                                Built for everyone. Scaled for power users.
+                            </h2>
+                            <p className="text-sm text-[var(--muted)] mt-2">
+                                Transparent computing tiers for your daily document workflows.
+                            </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+                            {/* Free */}
+                            <div className="bg-[var(--surface-card)] border border-[var(--border)] rounded-xl p-7 flex flex-col justify-between shadow-sm">
+                                <div>
+                                    <h3 className="text-base font-bold text-[var(--foreground)] mb-1">
+                                        Free Plan Included
+                                    </h3>
+                                    <p className="text-xs text-[var(--muted)] mb-6">
+                                        Access all 39+ PDF tools and Studio workspace with a daily processing allowance at zero cost.
+                                    </p>
+                                    <ul className="space-y-3 text-xs text-[var(--muted)] mb-8">
+                                        <li className="flex items-center gap-2.5">
+                                            <Check size={14} className="text-[var(--foreground)]" /> Access to all 39+ PDF tools & Studio
+                                        </li>
+                                        <li className="flex items-center gap-2.5">
+                                            <Check size={14} className="text-[var(--foreground)]" /> 20 processing units per day allowance
+                                        </li>
+                                        <li className="flex items-center gap-2.5">
+                                            <Check size={14} className="text-[var(--foreground)]" /> 8 units / 3-hour window • 80 units / month
+                                        </li>
+                                    </ul>
+                                </div>
+                                <Link
+                                    href="/tools"
+                                    className="block w-full text-center border border-[var(--border)] bg-[var(--surface-secondary)] text-[var(--foreground)] py-2.5 rounded-lg text-xs font-medium hover:bg-[var(--surface-hover)] transition-colors"
+                                >
+                                    {!isLoggedIn || isGuest ? "Start Free" : "Explore Baseline Tools"}
+                                </Link>
+                            </div>
+
+                            {/* Pro */}
+                            <div className="bg-[var(--surface-card)] border-2 border-[var(--accent)] rounded-xl p-7 relative flex flex-col justify-between shadow-lg">
+                                <div className="absolute top-0 right-0 bg-[var(--accent)] text-white font-mono text-[10px] uppercase tracking-wider px-3 py-1 rounded-bl-lg rounded-tr-lg font-bold">
+                                    HIGH CAPACITY
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-bold text-[var(--foreground)] mb-1 flex items-center gap-2">
+                                        Pro High-Capacity <Zap size={15} className="text-[var(--accent)] fill-[var(--accent)]" />
+                                    </h3>
+                                    <p className="text-xs text-[var(--muted)] mb-6">
+                                        Maximum unit allowance for high-volume document workflows, multi-page batch conversions, and heavy OCR.
+                                    </p>
+                                    <ul className="space-y-3 text-xs text-[var(--muted)] mb-8">
+                                        <li className="flex items-center gap-2.5">
+                                            <Check size={14} className="text-[var(--accent)]" /> 400 processing units per day allowance
+                                        </li>
+                                        <li className="flex items-center gap-2.5">
+                                            <Check size={14} className="text-[var(--accent)]" /> 150 units / 3-hour window • 2,000 units / month
+                                        </li>
+                                        <li className="flex items-center gap-2.5">
+                                            <Check size={14} className="text-[var(--accent)]" /> Extended page duplication batch limits
+                                        </li>
+                                    </ul>
+                                </div>
+                                <Link
+                                    href={isProUser ? "/dashboard" : "/subscribe"}
+                                    className="block w-full text-center bg-[var(--accent)] text-white py-2.5 rounded-lg text-xs font-medium hover:bg-[var(--accent-hover)] transition-colors shadow-sm"
+                                >
+                                    {isProUser ? "Current Plan (Dashboard)" : "Upgrade Anytime"}
+                                </Link>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Tool Search & Categorized Tool Matrix */}
+                    <section className="py-16 border-t border-[var(--border)]">
+                        <div className="mx-auto max-w-xl text-center mb-10">
+                            <h2 className="text-2xl font-bold tracking-tight text-[var(--foreground)] mb-3">
+                                Search & Filter All Utilities
+                            </h2>
                             <div className="relative">
                                 <Search
-                                    className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[color:var(--muted-foreground)]"/>
+                                    className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]"
+                                    size={16}
+                                />
                                 <input
                                     type="text"
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
-                                    placeholder={content.searchPlaceholder || "Search tools..."}
-                                    className="w-full rounded-xl border border-[color:var(--border)] bg-[var(--background)] px-4 py-3.5 pl-12 pr-4 text-sm text-[var(--foreground)] outline-none placeholder:text-[color:var(--muted-foreground)] focus:border-indigo-500/50"
+                                    placeholder={content.searchPlaceholder || "Search tools (e.g. merge, word, sign)..."}
+                                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-card)] px-4 py-3 pl-10 pr-12 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] outline-none transition-colors focus:border-[var(--accent)] focus:bg-[var(--surface)] shadow-sm"
                                 />
-                            </div>
-
-                            <div
-                                className="mt-3 text-center text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--muted-foreground)]">
-                                {filteredTools.length} {content.searchScopeSuffix || "tools matching your search"}
-                            </div>
-                        </div>
-                    </div>
-
-                    {search === "" && (
-                        <section className="mx-auto mt-16 max-w-5xl">
-                            <div
-                                className="rounded-[28px] border border-indigo-500/15 bg-gradient-to-br from-[var(--card)] to-indigo-500/5 p-8 shadow-[0_20px_60px_rgba(0,0,0,0.08)] transition hover:border-indigo-500/30">
-                                <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-                                    <div className="max-w-xl space-y-2">
-                    <span
-                        className="inline-flex items-center rounded-md bg-indigo-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-white">
-                      Most Popular
-                    </span>
-                                        <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[color:var(--foreground)]">
-                                            {content.popularToolTitle || "Start with the essentials"}
-                                        </h2>
-                                        <p className="text-sm leading-relaxed font-medium text-[color:var(--muted-foreground)]">
-                                            {content.popularToolDescription ||
-                                                "Merge, split, convert, secure, and optimize documents with a clean workflow."}
-                                        </p>
-                                    </div>
-
-                                    <Link
-                                        href="/merge-pdf"
-                                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 px-6 py-3.5 text-sm font-bold whitespace-nowrap text-white shadow-md transition hover:brightness-105"
-                                    >
-                                        {content.popularToolAction || "Try Merge PDF"} <ArrowUpRight size={16}/>
-                                    </Link>
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 font-mono text-[10px] text-[var(--muted-foreground)]">
+                                    {filteredTools.length} tools
                                 </div>
                             </div>
-                        </section>
-                    )}
-
-                    {filteredTools.length === 0 && (
-                        <div
-                            className="mx-auto mt-20 max-w-md rounded-[28px] border border-dashed border-[color:var(--border)] bg-[var(--card)] p-12 text-center">
-                            <h3 className="text-lg font-bold text-[color:var(--foreground)]">
-                                {content.searchEmptyTitle || "No tools found"}
-                            </h3>
-                            <p className="mt-2 text-xs font-medium text-[color:var(--muted-foreground)]">
-                                {content.searchEmptyDescription || "Try a different search term."}
-                            </p>
                         </div>
-                    )}
 
-                    {visibleGroups.map((group) => (
-                        <section key={group.title} className="mt-20 border-t border-[color:var(--border)] pt-16">
-                            <div className="mb-8">
-                                <h2 className="text-2xl font-black tracking-tight text-[color:var(--foreground)]">
-                                    {group.title}
-                                </h2>
-                                <p className="mt-1 text-sm font-medium text-[color:var(--muted-foreground)]">
-                                    {group.desc}
+                        {filteredTools.length === 0 && (
+                            <div className="mx-auto max-w-md rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface-card)] p-10 text-center shadow-sm">
+                                <h3 className="text-sm font-semibold text-[var(--foreground)]">
+                                    {content.searchEmptyTitle || "No tools found"}
+                                </h3>
+                                <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                                    {content.searchEmptyDescription || "Try a different search query."}
                                 </p>
                             </div>
+                        )}
 
-                            <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3">
-                                {group.tools.map((tool, idx) => (
-                                    <ToolCard
-                                        key={tool.href || idx}
-                                        title={tool.title || ""}
-                                        description={tool.description || ""}
-                                        href={tool.href || ""}
-                                    />
-                                ))}
+                        {visibleGroups.map((group) => (
+                            <div key={group.title} className="mb-14">
+                                <div className="mb-6">
+                                    <h3 className="text-lg font-bold tracking-tight text-[var(--foreground)]">
+                                        {group.title}
+                                    </h3>
+                                    <p className="text-xs text-[var(--muted)] mt-1">
+                                        {group.desc}
+                                    </p>
+                                </div>
+
+                                <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                                    {group.tools.map((tool, idx) => (
+                                        <ToolCard
+                                            key={tool.href || idx}
+                                            title={tool.title || ""}
+                                            description={tool.description || ""}
+                                            href={tool.href || ""}
+                                        />
+                                    ))}
+                                </div>
                             </div>
-                        </section>
-                    ))}
-                </section>
+                        ))}
+                    </section>
+                </div>
             </main>
         </div>
     );

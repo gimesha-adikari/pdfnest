@@ -22,13 +22,13 @@ export default function ThemeToggle() {
             aria-label={`Switch to ${isDark ? "light" : "dark"} theme`}
             onClick={() => setTheme(isDark ? "light" : "dark")}
             className="
-        flex h-11 w-11 items-center justify-center
-        rounded-xl border border-[color:var(--border)]
-        bg-[var(--card)] text-[var(--foreground)]
-        shadow-md transition-transform hover:scale-105
+        flex h-8 w-8 items-center justify-center
+        rounded-lg border border-[var(--border)]
+        bg-[var(--surface-secondary)] text-[var(--muted)]
+        transition-colors hover:text-[var(--foreground)] hover:bg-[var(--surface-hover)] hover:border-[var(--muted)]
       "
         >
-            {isDark ? <Sun size={18} /> : <Moon size={18} />}
+            {isDark ? <Sun size={15} /> : <Moon size={15} />}
         </button>
     );
 }

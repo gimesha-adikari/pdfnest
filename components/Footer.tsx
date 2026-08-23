@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useTools } from "@/context/ToolContext";
+import Logo from "@/components/ui/Logo";
 
 interface BackendTool {
     Title?: string;
@@ -20,166 +21,399 @@ export default function Footer() {
     const organizeTools = toolsList.filter(
         (t: BackendTool) => (t.Category || t.category) === "organize"
     );
+
     const editTools = toolsList.filter(
         (t: BackendTool) => (t.Category || t.category) === "edit"
     );
+
     const convertTools = toolsList.filter(
         (t: BackendTool) => (t.Category || t.category) === "convert"
     );
+
     const createTools = toolsList.filter(
         (t: BackendTool) => (t.Category || t.category) === "create"
     );
+
     const securityTools = toolsList.filter(
         (t: BackendTool) => (t.Category || t.category) === "security"
     );
+
     const optimizeTools = toolsList.filter(
         (t: BackendTool) => (t.Category || t.category) === "optimize"
     );
+
     const studioTools = toolsList.filter(
         (t: BackendTool) => (t.Category || t.category) === "studio"
     );
 
     return (
-        <footer className="mt-auto border-t border-border bg-(--card)/50 backdrop-blur-md relative z-10">
-            <div className="mx-auto max-w-7xl px-6 py-12">
-                <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-5">
-                    <div className="space-y-3">
-                        <h3 className="text-md font-black tracking-tight bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent select-none">
-                            Platen PDF Engine
-                        </h3>
+        <footer
+            className="
+                relative
+                z-10
+                mt-auto
+                border-t
+                border-[var(--border)]
+                bg-[var(--surface)]
+                text-[var(--foreground)]
+                transition-colors
+            "
+        >
+            <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
+                <div className="grid grid-cols-2 gap-8 md:grid-cols-4 lg:grid-cols-6">
 
-                        <p className="text-xs leading-relaxed text-muted font-medium">
-                            Files are processed inside secure, isolated execution environments.
-                            Uploaded and generated files are automatically deleted after processing.
-                            Platen PDF is designed with privacy and security as core principles.
+                    {/* =====================================================
+                        BRAND
+                    ====================================================== */}
+                    <div className="col-span-2 flex flex-col items-start gap-4 pr-6">
+
+                        <Link
+                            href="/"
+                            className="
+                                group
+                                flex
+                                items-center
+                                gap-3
+                                rounded-lg
+                                focus-visible:outline-none
+                                focus-visible:ring-2
+                                focus-visible:ring-[var(--accent)]
+                            "
+                        >
+                            {/* Platen Logo */}
+                            <div
+                                className="
+                                    relative
+                                    flex
+                                    h-9
+                                    w-9
+                                    shrink-0
+                                    items-center
+                                    justify-center
+                                    rounded-[9px]
+                                    border
+                                    border-[var(--border)]
+                                    bg-[var(--surface-secondary)]
+                                    transition-all
+                                    duration-200
+                                    group-hover:border-[var(--accent)]/50
+                                    group-hover:bg-[var(--surface-hover)]
+                                "
+                            >
+                                <div className="relative h-11 w-11 shrink-0">
+                                    <Logo />
+                                </div>
+                            </div>
+
+                            {/* Wordmark */}
+                            <div className="flex flex-col">
+                                <span
+                                    className="
+                                        text-base
+                                        font-bold
+                                        leading-none
+                                        tracking-tight
+                                        text-[var(--foreground)]
+                                        transition-colors
+                                        group-hover:text-[var(--accent)]
+                                    "
+                                >
+                                    PLATEN
+                                </span>
+
+                                <span
+                                    className="
+                                        mt-1
+                                        font-mono
+                                        text-[9px]
+                                        uppercase
+                                        leading-none
+                                        tracking-wider
+                                        text-[var(--muted-foreground)]
+                                    "
+                                >
+                                    CORE v2.0
+                                </span>
+                            </div>
+                        </Link>
+
+                        <p className="max-w-sm text-xs leading-relaxed text-[var(--muted-foreground)]">
+                            Files are processed in secure, isolated sandbox
+                            environments and automatically purged. Precision
+                            document infrastructure.
+                        </p>
+
+                        <p className="font-mono text-[11px] text-[var(--muted-foreground)]">
+                            © {new Date().getFullYear()} Platen Engine. All rights reserved.
                         </p>
                     </div>
 
-                    <div className="space-y-3">
-                        <h3 className="text-md font-black tracking-tight">
-                            Legal
-                        </h3>
+                    {/* =====================================================
+                        PRODUCTS
+                    ====================================================== */}
+                    <div className="flex flex-col gap-2.5">
+                        <span
+                            className="
+                                font-mono
+                                text-[11px]
+                                font-semibold
+                                uppercase
+                                tracking-wider
+                                text-[var(--foreground)]
+                            "
+                        >
+                            PRODUCTS
+                        </span>
 
-                        <div className="flex flex-col gap-2 text-xs font-medium">
+                        <div className="flex flex-col gap-1.5 text-xs text-[var(--muted)]">
+                            <Link
+                                href="/merge-pdf"
+                                className="transition-colors hover:text-[var(--foreground)]"
+                            >
+                                Merge PDF
+                            </Link>
+
+                            <Link
+                                href="/edit-pdf"
+                                className="transition-colors hover:text-[var(--foreground)]"
+                            >
+                                Edit PDF
+                            </Link>
+
+                            <Link
+                                href="/pdf-to-word"
+                                className="transition-colors hover:text-[var(--foreground)]"
+                            >
+                                PDF to Word
+                            </Link>
+
+                            <Link
+                                href="/pdf-to-markdown"
+                                className="transition-colors hover:text-[var(--foreground)]"
+                            >
+                                PDF to Markdown
+                            </Link>
+
+                            <Link
+                                href="/tools"
+                                className="
+                                    pt-1
+                                    font-medium
+                                    text-[var(--accent-muted)]
+                                    hover:underline
+                                "
+                            >
+                                Browse all tools →
+                            </Link>
+                        </div>
+                    </div>
+
+                    {/* =====================================================
+                        ECOSYSTEM
+                    ====================================================== */}
+                    <div className="flex flex-col gap-2.5">
+                        <span
+                            className="
+                                font-mono
+                                text-[11px]
+                                font-semibold
+                                uppercase
+                                tracking-wider
+                                text-[var(--foreground)]
+                            "
+                        >
+                            ECOSYSTEM
+                        </span>
+
+                        <div className="flex flex-col gap-1.5 text-xs text-[var(--muted)]">
+                            <Link
+                                href="/studio"
+                                className="
+                                    flex
+                                    items-center
+                                    gap-1.5
+                                    transition-colors
+                                    hover:text-[var(--foreground)]
+                                "
+                            >
+                                <span>PDF Studio</span>
+
+                                <span
+                                    className="
+                                        rounded
+                                        border
+                                        border-[var(--border)]
+                                        bg-[var(--surface-secondary)]
+                                        px-1
+                                        py-0.5
+                                        font-mono
+                                        text-[9px]
+                                        uppercase
+                                        text-[var(--muted)]
+                                    "
+                                >
+                                    WORKSPACE
+                                </span>
+                            </Link>
+
+                            <Link
+                                href="/repository-analyzer"
+                                className="
+                                    flex
+                                    items-center
+                                    gap-1.5
+                                    transition-colors
+                                    hover:text-[var(--foreground)]
+                                "
+                            >
+                                <span>Repository Analyzer</span>
+
+                                <span
+                                    className="
+                                        rounded
+                                        bg-[var(--accent-subtle)]
+                                        px-1
+                                        py-0.5
+                                        font-mono
+                                        text-[9px]
+                                        font-semibold
+                                        uppercase
+                                        text-[var(--accent-muted)]
+                                    "
+                                >
+                                    NEW
+                                </span>
+                            </Link>
+
                             <Link
                                 href="/pricing"
-                                className="text-muted hover:text-indigo-500 transition-colors"
+                                className="transition-colors hover:text-[var(--foreground)]"
                             >
-                                Pricing
+                                Pricing & Compute
+                            </Link>
+
+                            <Link
+                                href="/about"
+                                className="transition-colors hover:text-[var(--foreground)]"
+                            >
+                                Architecture Details
+                            </Link>
+                        </div>
+                    </div>
+
+                    {/* =====================================================
+                        LEGAL & SECURE
+                    ====================================================== */}
+                    <div className="flex flex-col gap-2.5">
+                        <span
+                            className="
+                                font-mono
+                                text-[11px]
+                                font-semibold
+                                uppercase
+                                tracking-wider
+                                text-[var(--foreground)]
+                            "
+                        >
+                            LEGAL & SECURE
+                        </span>
+
+                        <div className="flex flex-col gap-1.5 text-xs text-[var(--muted)]">
+                            <Link
+                                href="/security"
+                                className="transition-colors hover:text-[var(--foreground)]"
+                            >
+                                Security Architecture
                             </Link>
 
                             <Link
                                 href="/privacy"
-                                className="text-muted hover:text-indigo-500 transition-colors"
+                                className="transition-colors hover:text-[var(--foreground)]"
                             >
                                 Privacy Policy
                             </Link>
 
                             <Link
                                 href="/terms"
-                                className="text-muted hover:text-indigo-500 transition-colors"
+                                className="transition-colors hover:text-[var(--foreground)]"
                             >
                                 Terms of Service
                             </Link>
 
                             <Link
+                                href="/acceptable-use"
+                                className="transition-colors hover:text-[var(--foreground)]"
+                            >
+                                Acceptable Use
+                            </Link>
+
+                            <Link
                                 href="/cookies"
-                                className="text-muted hover:text-indigo-500 transition-colors"
+                                className="transition-colors hover:text-[var(--foreground)]"
                             >
                                 Cookie Policy
                             </Link>
 
                             <Link
                                 href="/refund"
-                                className="text-muted hover:text-indigo-500 transition-colors"
+                                className="transition-colors hover:text-[var(--foreground)]"
                             >
                                 Refund Policy
                             </Link>
 
                             <Link
-                                href="/acceptable-use"
-                                className="text-muted hover:text-indigo-500 transition-colors"
-                            >
-                                Acceptable Use
-                            </Link>
-
-                            <Link
-                                href="/security"
-                                className="text-muted hover:text-indigo-500 transition-colors"
-                            >
-                                Security
-                            </Link>
-
-                            <Link
                                 href="/contact"
-                                className="text-muted hover:text-indigo-500 transition-colors"
+                                className="transition-colors hover:text-[var(--foreground)]"
                             >
                                 Contact
                             </Link>
                         </div>
                     </div>
 
-                    {[
-                        { title: "Organize", tools: organizeTools },
-                        { title: "Edit", tools: editTools },
-                        { title: "Convert", tools: convertTools },
-                        { title: "Create", tools: createTools },
-                        { title: "Security", tools: securityTools },
-                        { title: "Optimize", tools: optimizeTools },
-                        { title: "Studio", tools: studioTools },
-                    ].map((group) => (
-                        <div key={group.title}>
-                            <h4 className="font-bold text-xs uppercase tracking-widest text-foreground mb-3">
-                                {group.title}
-                            </h4>
+                    {/* =====================================================
+                        SYSTEM STATUS
+                    ====================================================== */}
+                    <div className="flex flex-col gap-2.5">
+                        <span
+                            className="
+                                font-mono
+                                text-[11px]
+                                font-semibold
+                                uppercase
+                                tracking-wider
+                                text-[var(--foreground)]
+                            "
+                        >
+                            SYSTEM
+                        </span>
 
-                            <div className="flex flex-col gap-2 text-xs font-medium text-muted">
-                                {group.tools.slice(0, 6).map((tool: BackendTool, idx) => {
-                                    const href = tool.Href || tool.href || "#";
-                                    const title = tool.Title || tool.title || "";
-                                    const isNew =
-                                        tool.IsNew !== undefined ? tool.IsNew : tool.isNew;
+                        <div className="mt-1 flex items-center gap-2">
+                            <div className="h-2 w-2 animate-pulse rounded-full bg-emerald-500"/>
 
-                                    return (
-                                        <Link
-                                            key={href + idx}
-                                            href={href}
-                                            className={`hover:text-indigo-500 transition-colors py-0.5 ${
-                                                isNew ? "font-bold text-indigo-500" : ""
-                                            }`}
-                                        >
-                                            {title}
-                                        </Link>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    ))}
-
-                    <div>
-                        <h4 className="font-bold text-xs uppercase tracking-widest text-[color:var(--foreground)] mb-3">
-                            Architecture Info
-                        </h4>
-                        <div className="flex flex-col gap-2 text-xs font-medium text-[color:var(--muted)]">
-                            <span className="flex items-center gap-1.5">
-                                Isolated Security Run
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                                Privacy Compliant Proxy
-                            </span>
-
-                            <Link
-                                href="/about"
-                                className="mt-2 hover:text-indigo-500 transition-colors text-[var(--foreground)] font-bold uppercase tracking-wide text-[10px]"
+                            <span
+                                className="
+                                    font-mono
+                                    text-xs
+                                    font-medium
+                                    text-[var(--muted)]
+                                "
                             >
-                                About Platen PDF Setup →
-                            </Link>
+                                All Systems Operational
+                            </span>
+                        </div>
+
+                        <div
+                            className="
+                                mt-2
+                                font-mono
+                                text-[11px]
+                                leading-relaxed
+                                text-[var(--muted-foreground)]
+                            "
+                        >
+                            Zero-trust sandbox ready.
                         </div>
                     </div>
-                </div>
-
-                <div className="mt-12 border-t border-[color:var(--border)] pt-6 text-center text-xs font-medium text-[color:var(--muted)]">
-                    © {new Date().getFullYear()} Platen Core Document Engine. All privileges reserved.
                 </div>
             </div>
         </footer>

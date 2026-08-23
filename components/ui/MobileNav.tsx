@@ -113,44 +113,44 @@ export default function MobileNav() {
                 className="
           md:hidden fixed bottom-4 left-4 right-4 z-50
           flex items-center justify-around
-          rounded-2xl border
-          border-[color:var(--border)]
-          bg-[var(--card)]
-          px-2 py-2.5
-          shadow-xl shadow-black/5
-          backdrop-blur-xl
+          rounded-xl border
+          border-[var(--border)]
+          bg-[var(--surface-elevated)]/90
+          px-3 py-2
+          shadow-xl
+          backdrop-blur-md
         "
             >
                 <Link
                     href="/"
-                    className="flex flex-col items-center gap-1 text-[10px] font-bold text-[color:var(--muted-foreground)] transition-colors active:scale-90 hover:text-[color:var(--primary)]"
+                    className="flex flex-col items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-[var(--muted)] transition-colors active:scale-95 hover:text-[var(--foreground)]"
                 >
-                    <Home size={20} />
-                    <div>Home</div>
+                    <Home size={18} />
+                    <span>Home</span>
                 </Link>
 
                 <button
                     onClick={() => setCommandOpen(true)}
-                    className="flex flex-col items-center gap-1 text-[10px] font-bold text-[color:var(--muted-foreground)] transition-colors active:scale-90 hover:text-[color:var(--primary)]"
+                    className="flex flex-col items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-[var(--muted)] transition-colors active:scale-95 hover:text-[var(--foreground)]"
                 >
-                    <Search size={20} />
-                    <div>Search</div>
+                    <Search size={18} />
+                    <span>Search</span>
                 </button>
 
                 <Link
                     href="/tools"
-                    className="flex flex-col items-center gap-1 text-[10px] font-bold text-[color:var(--muted-foreground)] transition-colors active:scale-90 hover:text-[color:var(--primary)]"
+                    className="flex flex-col items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-[var(--muted)] transition-colors active:scale-95 hover:text-[var(--foreground)]"
                 >
-                    <FileText size={20} />
-                    <div>Tools</div>
+                    <FileText size={18} />
+                    <span>Tools</span>
                 </Link>
 
                 <button
                     onClick={openSidebar}
-                    className="flex flex-col items-center gap-1 text-[10px] font-bold text-[color:var(--muted-foreground)] transition-colors active:scale-90 hover:text-[color:var(--primary)]"
+                    className="flex flex-col items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-[var(--muted)] transition-colors active:scale-95 hover:text-[var(--foreground)]"
                 >
-                    <Menu size={20} />
-                    <div>Menu</div>
+                    <Menu size={18} />
+                    <span>Menu</span>
                 </button>
             </div>
 
@@ -159,7 +159,7 @@ export default function MobileNav() {
                 <div
                     className={`
             fixed inset-0 z-[300]
-            bg-black/40
+            bg-black/60
             backdrop-blur-sm
             transition-opacity duration-300
             ${open ? "opacity-100" : "opacity-0"}
@@ -169,8 +169,8 @@ export default function MobileNav() {
                     <aside
                         className={`
               absolute right-0 top-0 h-full w-[85%] max-w-sm
-              border-l border-[color:var(--border)]
-              bg-[var(--card)]
+              border-l border-[var(--border)]
+              bg-[var(--surface-elevated)]
               p-6
               shadow-2xl
               overflow-y-auto
@@ -182,44 +182,45 @@ export default function MobileNav() {
                         onTouchMove={handleTouchMove}
                         onTouchEnd={handleTouchEnd}
                     >
-                        <div className="flex items-center justify-between border-b border-[color:var(--border)] pb-5">
+                        <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-4">
                             <div>
-                                <h2 className="text-xl font-black bg-gradient-to-r from-indigo-500 to-fuchsia-500 bg-clip-text text-transparent">
-                                    Platen PDF
+                                <h2 className="text-base font-bold tracking-tight text-[var(--foreground)]">
+                                    PLATEN
                                 </h2>
-                                <p className="text-xs font-medium text-[color:var(--muted-foreground)]">
-                                    Free PDF Tools
+                                <p className="text-[10px] font-mono text-[var(--muted-foreground)] uppercase">
+                                    CORE v2.0
                                 </p>
                             </div>
 
                             <button
                                 onClick={closeSidebar}
-                                className="rounded-xl border border-[color:var(--border)] bg-[color:var(--background)] p-2 text-[color:var(--muted-foreground)] transition active:scale-95 hover:text-[color:var(--foreground)]"
+                                className="rounded-lg border border-[var(--border)] bg-[var(--surface-secondary)] p-1.5 text-[var(--muted)] transition active:scale-95 hover:text-[var(--foreground)] hover:bg-[var(--surface-hover)]"
                             >
-                                <X size={20} />
+                                <X size={18} />
                             </button>
                         </div>
 
-                        <div className="mt-6 space-y-1">
-                            <MobileLink href="/" icon={<Home size={18} />} text="Home" close={closeSidebar} />
+                        <div className="mt-5 space-y-1">
+                            <MobileLink href="/" icon={<Home size={16} />} text="Home" close={closeSidebar} />
                             <MobileLink
                                 href="/tools"
-                                icon={<FileText size={18} />}
-                                text="All Tools"
+                                icon={<FileText size={16} />}
+                                text="Tools Directory"
                                 close={closeSidebar}
                             />
-                            <MobileLink href="/pricing" icon={<Zap size={18} />} text="Pricing" close={closeSidebar} />
-                            <MobileLink href="/about" icon={<Info size={18} />} text="About" close={closeSidebar} />
+                            <MobileLink href="/studio" icon={<Sparkles size={16} />} text="PDF Studio" close={closeSidebar} />
+                            <MobileLink href="/pricing" icon={<Zap size={16} />} text="Pricing" close={closeSidebar} />
+                            <MobileLink href="/about" icon={<Info size={16} />} text="About" close={closeSidebar} />
                         </div>
 
-                        <div className="mt-4 space-y-4 border-t border-[color:var(--border)] pt-4">
-                            <ToolGroup title="Organize" icon={<RefreshCw size={16} />} category="organize" close={closeSidebar} />
-                            <ToolGroup title="Edit" icon={<PenTool size={16} />} category="edit" close={closeSidebar} />
-                            <ToolGroup title="Convert" icon={<RefreshCw size={16} />} category="convert" close={closeSidebar} />
-                            <ToolGroup title="Create" icon={<FileText size={16} />} category="create" close={closeSidebar} />
-                            <ToolGroup title="Security" icon={<Shield size={16} />} category="security" close={closeSidebar} />
-                            <ToolGroup title="Optimize" icon={<Zap size={16} />} category="optimize" close={closeSidebar} />
-                            <ToolGroup title="Studio" icon={<Sparkles size={16} />} category="studio" close={closeSidebar} />
+                        <div className="mt-4 space-y-3 border-t border-[var(--border-subtle)] pt-4">
+                            <ToolGroup title="Organize" icon={<RefreshCw size={14} />} category="organize" close={closeSidebar} />
+                            <ToolGroup title="Edit" icon={<PenTool size={14} />} category="edit" close={closeSidebar} />
+                            <ToolGroup title="Convert" icon={<RefreshCw size={14} />} category="convert" close={closeSidebar} />
+                            <ToolGroup title="Create" icon={<FileText size={14} />} category="create" close={closeSidebar} />
+                            <ToolGroup title="Security" icon={<Shield size={14} />} category="security" close={closeSidebar} />
+                            <ToolGroup title="Optimize" icon={<Zap size={14} />} category="optimize" close={closeSidebar} />
+                            <ToolGroup title="Studio" icon={<Sparkles size={14} />} category="studio" close={closeSidebar} />
                         </div>
                     </aside>
                 </div>

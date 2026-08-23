@@ -87,9 +87,9 @@ export default function UserDashboard() {
     };
 
     const getDailyLimitText = () => {
-        if (currentTier === "pro") return "500 processes per day";
-        if (currentTier === "plus") return "50 processes per day";
-        return "5 processes per day";
+        if (currentTier === "pro") return "400 daily processing units (150 per 3-hour window)";
+        if (currentTier === "plus") return "100 daily processing units (50 per 3-hour window)";
+        return "20 daily processing units (8 per 3-hour window)";
     };
 
     return (
@@ -100,8 +100,7 @@ export default function UserDashboard() {
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
                         <h1 className="text-3xl font-black text-[color:var(--foreground)]">Account & Billing</h1>
-                        <p className="text-[color:var(--muted-foreground)] mt-2">Manage your subscription tier level matrix
-                            and add standalone credit buckets.</p>
+                        <p className="text-[color:var(--muted-foreground)] mt-2">Manage your subscription capacity plan and add standalone credit buckets.</p>
                     </div>
                     <Link
                         href="/dashboard/settings"
@@ -132,7 +131,7 @@ export default function UserDashboard() {
                             <p className="text-sm mt-3 text-[color:var(--muted-foreground)]">
                                 {hasActiveSubscription
                                     ? `Your subscription is active. Renews on ${new Date(subscription.current_period_end).toLocaleDateString()}.`
-                                    : "Standard daily account allocation threshold capped at 5 files per day."}
+                                    : "Standard daily account allocation: 20 processing units per day across all 39+ tools."}
                             </p>
 
                             {hasActiveSubscription && (subscription.update_url || subscription.cancel_url) && (
@@ -175,11 +174,9 @@ export default function UserDashboard() {
                             className="inline-flex items-center gap-1 text-[10px] font-black tracking-widest bg-indigo-500 text-white px-2.5 py-1 rounded-md uppercase">
                             <Sparkles size={10}/> Plans Comparison
                         </span>
-                        <h3 className="text-xl font-extrabold text-[color:var(--foreground)] pt-1">Looking for higher
-                            limits or Pro Studio?</h3>
+                        <h3 className="text-xl font-extrabold text-[color:var(--foreground)] pt-1">Looking for higher processing capacity?</h3>
                         <p className="text-xs text-[color:var(--muted-foreground)] leading-relaxed max-w-xl">
-                            Unlock feature tiers including full entry to the Virtual Document Studio, priority server
-                            queues, custom metadata adjustments, and higher batch thresholds.
+                            Upgrade your plan for higher 3-hour burst and daily unit allowances to process multi-page documents, batch OCR, and high-volume workflows without interruptions.
                         </p>
                     </div>
                     <Link
