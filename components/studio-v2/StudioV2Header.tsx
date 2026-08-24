@@ -10,6 +10,8 @@ import {
   User,
   CheckCircle2,
   Download,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { DocumentInfo } from "./types";
 
@@ -32,6 +34,40 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
   onOpenCommandPalette,
   onExport,
 }) => {
+  const renderStatusBadge = () => {
+    switch (document.syncStatus) {
+      case "saving":
+        return (
+          <div className="h-[48px] flex items-center gap-1.5 px-3 text-[#d2bbff] text-xs">
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-[#d2bbff]" />
+            <span>Syncing...</span>
+          </div>
+        );
+      case "error":
+        return (
+          <div className="h-[48px] flex items-center gap-1.5 px-3 text-red-400 text-xs">
+            <AlertCircle className="w-3.5 h-3.5 text-red-400" />
+            <span>Sync Error</span>
+          </div>
+        );
+      case "loading":
+        return (
+          <div className="h-[48px] flex items-center gap-1.5 px-3 text-[#9AA1AD] text-xs">
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-[#9AA1AD]" />
+            <span>Loading...</span>
+          </div>
+        );
+      case "saved":
+      default:
+        return (
+          <div className="h-[48px] flex items-center gap-1.5 px-3 text-[#9AA1AD] text-xs">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Status: Saved</span>
+          </div>
+        );
+    }
+  };
+
   return (
     <header className="fixed top-0 left-0 right-0 h-[48px] bg-[#101216] border-b border-[#292D35] flex items-center justify-between px-4 z-50 transition-colors duration-200">
       {/* Brand & Left Navigation */}
@@ -50,16 +86,13 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
           <div className="h-[48px] flex items-center px-3 text-[#d2bbff] font-medium border-b-2 border-[#7c3aed] text-sm">
             Document
           </div>
-          <div className="h-[48px] flex items-center gap-1.5 px-3 text-[#9AA1AD] text-xs">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span>{document.saved ? "Status: Saved" : "Syncing..."}</span>
-          </div>
+          {renderStatusBadge()}
           <button
             onClick={onUndo}
             disabled={!canUndo}
             className="h-[48px] flex items-center gap-1.5 px-3 text-[#9AA1AD] hover:text-white hover:bg-[#181B21] transition-colors text-sm disabled:opacity-40 disabled:hover:bg-transparent"
-            aria-label="Undo operation (Phase 3B)"
-            title={canUndo ? "Undo" : "Undo (Connects in Phase 3B)"}
+            aria-label="Undo"
+            title={canUndo ? "Undo" : "Undo (no parent revision)"}
           >
             <Undo2 className="w-4 h-4" />
             <span className="hidden lg:inline">Undo</span>
@@ -68,8 +101,8 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
             onClick={onRedo}
             disabled={!canRedo}
             className="h-[48px] flex items-center gap-1.5 px-3 text-[#9AA1AD] hover:text-white hover:bg-[#181B21] transition-colors text-sm disabled:opacity-40 disabled:hover:bg-transparent"
-            aria-label="Redo operation (Phase 3B)"
-            title={canRedo ? "Redo" : "Redo (Connects in Phase 3B)"}
+            aria-label="Redo"
+            title={canRedo ? "Redo" : "Redo (no child branch)"}
           >
             <Redo2 className="w-4 h-4" />
             <span className="hidden lg:inline">Redo</span>

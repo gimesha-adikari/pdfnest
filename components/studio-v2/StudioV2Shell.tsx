@@ -1,30 +1,67 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { StudioV2Header } from "./StudioV2Header";
 import { StudioV2Workspace } from "./StudioV2Workspace";
 import { StudioV2CommandPalette } from "./StudioV2CommandPalette";
 import { StudioV2MobileNav } from "./StudioV2MobileNav";
 import { StudioV2BottomSheet } from "./StudioV2BottomSheet";
+import { useStudioSession } from "@/hooks/studio-v2/useStudioSession";
 import {
   DocumentInfo,
   HistoryItem,
   InspectorTab,
   ToolCategory,
 } from "./types";
+import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
+
+function formatBytes(bytes: number): string {
+  if (!bytes || bytes === 0) return "0 KB";
+  const k = 1024;
+  const sizes = ["Bytes", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
+function formatRelativeTime(dateStr: string): string {
+  if (!dateStr) return "Just now";
+  try {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diffSec = Math.floor((now.getTime() - d.getTime()) / 1000);
+    if (diffSec < 60) return "Just now";
+    if (diffSec < 3600) return `${Math.floor(diffSec / 60)} mins ago`;
+    return `${Math.floor(diffSec / 3600)} hours ago`;
+  } catch {
+    return dateStr;
+  }
+}
 
 export const StudioV2Shell: React.FC = () => {
-  // Phase 3A Development Fixture Document State (Replaced by useStudioSession in Phase 3B)
-  const [docInfo] = useState<DocumentInfo>({
-    id: "doc_demo_annual_report",
-    name: "annual-report.pdf",
-    version: "Version 2.4",
-    pageCount: 12,
-    fileSize: "1.2 MB",
-    saved: true,
-  });
+  const searchParams = useSearchParams();
+  const sessionIdParam = searchParams ? searchParams.get("session_id") : null;
 
-  // UI States
+  // Authoritative Backend Session Hook
+  const {
+    session,
+    document,
+    activeVersion,
+    vdm,
+    history: backendHistory,
+    syncStatus,
+    isLoading,
+    isSaving,
+    error,
+    canUndo,
+    canRedo,
+    undo,
+    redo,
+    checkout,
+    refetch,
+  } = useStudioSession(sessionIdParam);
+
+  // Local Ephemeral UI State
   const [activeTool, setActiveTool] = useState<ToolCategory>("edit");
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("properties");
   const [zoomScale, setZoomScale] = useState<number>(0.9);
@@ -32,37 +69,48 @@ export const StudioV2Shell: React.FC = () => {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState<boolean>(false);
   const [mobileSheetOpen, setMobileSheetOpen] = useState<boolean>(false);
 
-  // Phase 3A Visual Fixture History Timeline (Replaced by live backend DAG in Phase 3B)
-  const [history, setHistory] = useState<HistoryItem[]>([
-    {
-      id: "ver_3",
-      action: "Crop Page 4",
-      timestamp: "Just now",
-      versionNumber: 3,
-      isActive: true,
-    },
-    {
-      id: "ver_2",
-      action: "Add Watermark",
-      timestamp: "2 mins ago",
-      versionNumber: 2,
-      isActive: false,
-    },
-    {
-      id: "ver_1",
-      action: "Rotate Page 1",
-      timestamp: "5 mins ago",
-      versionNumber: 1,
-      isActive: false,
-    },
-    {
-      id: "ver_0",
-      action: "Initial Upload",
-      timestamp: "10 mins ago",
-      versionNumber: 0,
-      isActive: false,
-    },
-  ]);
+  // Transform Authoritative State for UI Components
+  const docInfo: DocumentInfo = useMemo(() => {
+    return {
+      id: document?.id || session?.document_id || "doc_init",
+      name: document?.original_file_name || "untitled.pdf",
+      version: activeVersion
+        ? `Version ${activeVersion.version_number}`
+        : "Version 0",
+      pageCount: vdm?.page_count || document?.initial_page_count || 1,
+      fileSize: formatBytes(document?.file_size || 0),
+      saved: syncStatus === "saved",
+      syncStatus: syncStatus,
+    };
+  }, [document, session, activeVersion, vdm, syncStatus]);
+
+  const historyItems: HistoryItem[] = useMemo(() => {
+    if (!backendHistory || backendHistory.length === 0) {
+      if (activeVersion) {
+        return [
+          {
+            id: activeVersion.id,
+            action: activeVersion.operation_type || "Initial State",
+            timestamp: formatRelativeTime(activeVersion.created_at),
+            versionNumber: activeVersion.version_number,
+            isActive: true,
+          },
+        ];
+      }
+      return [];
+    }
+
+    return backendHistory.map((ver) => ({
+      id: ver.id,
+      action:
+        ver.operation_type === "initial_upload"
+          ? "Initial Document"
+          : ver.operation_type || "Operation",
+      timestamp: formatRelativeTime(ver.created_at),
+      versionNumber: ver.version_number,
+      isActive: ver.id === activeVersion?.id,
+    }));
+  }, [backendHistory, activeVersion]);
 
   // Zoom Handlers
   const handleZoomIn = useCallback(() => {
@@ -84,31 +132,18 @@ export const StudioV2Shell: React.FC = () => {
   // Tool Selection Handler
   const handleSelectTool = useCallback((tool: ToolCategory) => {
     setActiveTool(tool);
-    // On mobile viewports (<768px), opening a tool category opens the contextual bottom sheet
     if (typeof window !== "undefined" && window.innerWidth < 768) {
       setMobileSheetOpen(true);
     }
   }, []);
 
-  // History Version Checkout (Local Shell UI State; Real backend checkout connects in Phase 3B)
-  const handleCheckoutVersion = useCallback((versionId: string) => {
-    setHistory((prev) =>
-      prev.map((item) => ({
-        ...item,
-        isActive: item.id === versionId,
-      }))
-    );
-  }, []);
-
   // Global Keyboard Shortcuts (Cmd+K, 0)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd/Ctrl + K
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setCommandPaletteOpen((prev) => !prev);
       }
-      // Fit to screen '0' when not focused on an input
       if (
         e.key === "0" &&
         !["INPUT", "TEXTAREA"].includes((e.target as HTMLElement).tagName)
@@ -122,15 +157,49 @@ export const StudioV2Shell: React.FC = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleFitToScreen]);
 
+  // Loading State
+  if (isLoading && !session) {
+    return (
+      <div className="h-screen w-screen bg-[#0B0C0F] text-[#F5F7FA] flex flex-col items-center justify-center gap-3">
+        <Loader2 className="w-8 h-8 animate-spin text-[#d2bbff]" />
+        <span className="font-mono text-xs text-[#9AA1AD]">
+          Loading Studio session...
+        </span>
+      </div>
+    );
+  }
+
+  // Error State (with retry)
+  if (error && !session) {
+    return (
+      <div className="h-screen w-screen bg-[#0B0C0F] text-[#F5F7FA] flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-12 h-12 rounded-full bg-red-900/30 border border-red-800 flex items-center justify-center text-red-400 mb-4">
+          <AlertTriangle className="w-6 h-6" />
+        </div>
+        <h2 className="text-base font-semibold text-white mb-1">
+          Unable to Load Studio Session
+        </h2>
+        <p className="text-xs text-[#9AA1AD] max-w-sm mb-6 font-mono">{error}</p>
+        <button
+          onClick={refetch}
+          className="flex items-center gap-2 bg-[#7c3aed] text-white text-xs font-medium px-4 py-2 rounded hover:bg-[#6d28d9] transition-colors"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          <span>Retry Session</span>
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen w-screen bg-[#0B0C0F] text-[#F5F7FA] font-sans antialiased overflow-hidden flex flex-col select-none">
       {/* Top Fixed Header */}
       <StudioV2Header
         document={docInfo}
-        canUndo={false}
-        canRedo={false}
-        onUndo={() => {}}
-        onRedo={() => {}}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onUndo={undo}
+        onRedo={redo}
         onOpenCommandPalette={() => setCommandPaletteOpen(true)}
         onExport={() => {}}
       />
@@ -140,7 +209,7 @@ export const StudioV2Shell: React.FC = () => {
         document={docInfo}
         activeTool={activeTool}
         inspectorTab={inspectorTab}
-        history={history}
+        history={historyItems}
         zoomScale={zoomScale}
         isPanning={isPanning}
         onSelectTool={handleSelectTool}
@@ -150,7 +219,7 @@ export const StudioV2Shell: React.FC = () => {
         onFitToScreen={handleFitToScreen}
         onTogglePan={handleTogglePan}
         onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-        onCheckoutVersion={handleCheckoutVersion}
+        onCheckoutVersion={checkout}
         onAddNewPage={() => {}}
       />
 

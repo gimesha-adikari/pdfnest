@@ -9,6 +9,7 @@ export interface DocumentInfo {
   pageCount: number;
   fileSize: string;
   saved: boolean;
+  syncStatus: "loading" | "saved" | "saving" | "error";
 }
 
 export interface HistoryItem {
