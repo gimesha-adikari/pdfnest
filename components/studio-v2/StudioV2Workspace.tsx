@@ -5,9 +5,14 @@ import { StudioV2Sidebar } from "./StudioV2Sidebar";
 import { StudioV2Canvas } from "./StudioV2Canvas";
 import { StudioV2Inspector } from "./StudioV2Inspector";
 import { DocumentInfo, HistoryItem, InspectorTab, ToolCategory } from "./types";
+import { StudioVDMDTO } from "@/lib/studio-v2/api";
 
 interface StudioV2WorkspaceProps {
   document: DocumentInfo;
+  sessionId?: string | null;
+  versionId?: string | null;
+  vdm?: StudioVDMDTO | null;
+  selectedPageId?: string | null;
   activeTool: ToolCategory;
   inspectorTab: InspectorTab;
   history: HistoryItem[];
@@ -15,6 +20,7 @@ interface StudioV2WorkspaceProps {
   isPanning: boolean;
   onSelectTool: (tool: ToolCategory) => void;
   onSelectInspectorTab: (tab: InspectorTab) => void;
+  onSelectPage?: (pageId: string) => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onFitToScreen: () => void;
@@ -26,6 +32,10 @@ interface StudioV2WorkspaceProps {
 
 export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
   document,
+  sessionId,
+  versionId,
+  vdm,
+  selectedPageId,
   activeTool,
   inspectorTab,
   history,
@@ -33,6 +43,7 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
   isPanning,
   onSelectTool,
   onSelectInspectorTab,
+  onSelectPage,
   onZoomIn,
   onZoomOut,
   onFitToScreen,
@@ -57,8 +68,13 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
       <main className="flex-1 md:ml-[260px] md:mr-[300px] mt-[48px] mb-[56px] md:mb-0 h-[calc(100vh-48px-56px)] md:h-[calc(100vh-48px)] relative flex bg-[#0B0C0F] overflow-hidden">
         <StudioV2Canvas
           document={document}
+          sessionId={sessionId}
+          versionId={versionId}
+          vdm={vdm}
+          selectedPageId={selectedPageId}
           zoomScale={zoomScale}
           isPanning={isPanning}
+          onSelectPage={onSelectPage}
           onZoomIn={onZoomIn}
           onZoomOut={onZoomOut}
           onFitToScreen={onFitToScreen}

@@ -68,6 +68,7 @@ export const StudioV2Shell: React.FC = () => {
   const [isPanning, setIsPanning] = useState<boolean>(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState<boolean>(false);
   const [mobileSheetOpen, setMobileSheetOpen] = useState<boolean>(false);
+  const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
 
   // Transform Authoritative State for UI Components
   const docInfo: DocumentInfo = useMemo(() => {
@@ -207,6 +208,10 @@ export const StudioV2Shell: React.FC = () => {
       {/* Main Workspace (Sidebar + Canvas + Inspector) */}
       <StudioV2Workspace
         document={docInfo}
+        sessionId={session?.id}
+        versionId={activeVersion?.id}
+        vdm={vdm}
+        selectedPageId={selectedPageId}
         activeTool={activeTool}
         inspectorTab={inspectorTab}
         history={historyItems}
@@ -214,6 +219,7 @@ export const StudioV2Shell: React.FC = () => {
         isPanning={isPanning}
         onSelectTool={handleSelectTool}
         onSelectInspectorTab={setInspectorTab}
+        onSelectPage={setSelectedPageId}
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
         onFitToScreen={handleFitToScreen}
