@@ -15,31 +15,33 @@ import {
 interface CommandItem {
   id: string;
   label: string;
+  badge?: string;
   category: string;
   icon: React.ElementType;
   shortcut?: string;
+  disabled?: boolean;
   action: () => void;
 }
 
 interface StudioV2CommandPaletteProps {
   isOpen: boolean;
   onClose: () => void;
+  onFitToScreen?: () => void;
   onRotatePage?: () => void;
   onCropPage?: () => void;
   onAddWatermark?: () => void;
   onExport?: () => void;
-  onFitToScreen?: () => void;
   onNewPage?: () => void;
 }
 
 export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
   isOpen,
   onClose,
+  onFitToScreen,
   onRotatePage,
   onCropPage,
   onAddWatermark,
   onExport,
-  onFitToScreen,
   onNewPage,
 }) => {
   const [query, setQuery] = useState("");
@@ -48,51 +50,9 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
 
   const commands: CommandItem[] = [
     {
-      id: "rotate",
-      label: "Rotate Page Clockwise (90°)",
-      category: "PAGE ACTIONS",
-      icon: RotateCw,
-      shortcut: "R",
-      action: () => {
-        onRotatePage?.();
-        onClose();
-      },
-    },
-    {
-      id: "crop",
-      label: "Crop Selected Page Area",
-      category: "PAGE ACTIONS",
-      icon: Crop,
-      shortcut: "C",
-      action: () => {
-        onCropPage?.();
-        onClose();
-      },
-    },
-    {
-      id: "watermark",
-      label: "Add Confidential Watermark",
-      category: "DOCUMENT TOOLS",
-      icon: Droplets,
-      action: () => {
-        onAddWatermark?.();
-        onClose();
-      },
-    },
-    {
-      id: "new_page",
-      label: "Insert Blank Page",
-      category: "DOCUMENT TOOLS",
-      icon: FilePlus,
-      action: () => {
-        onNewPage?.();
-        onClose();
-      },
-    },
-    {
       id: "fit_screen",
       label: "Fit Canvas to Screen",
-      category: "VIEWPORT",
+      category: "VIEWPORT ACTIONS",
       icon: Maximize2,
       shortcut: "0",
       action: () => {
@@ -101,11 +61,62 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
       },
     },
     {
+      id: "rotate",
+      label: "Rotate Page Clockwise (90°)",
+      badge: "Phase 3F",
+      category: "PAGE MUTATIONS",
+      icon: RotateCw,
+      shortcut: "R",
+      disabled: true,
+      action: () => {
+        onRotatePage?.();
+        onClose();
+      },
+    },
+    {
+      id: "crop",
+      label: "Crop Selected Page Area",
+      badge: "Phase 3F",
+      category: "PAGE MUTATIONS",
+      icon: Crop,
+      disabled: true,
+      action: () => {
+        onCropPage?.();
+        onClose();
+      },
+    },
+    {
+      id: "watermark",
+      label: "Add Confidential Watermark",
+      badge: "Phase 3F",
+      category: "DOCUMENT TOOLS",
+      icon: Droplets,
+      disabled: true,
+      action: () => {
+        onAddWatermark?.();
+        onClose();
+      },
+    },
+    {
+      id: "new_page",
+      label: "Insert Blank Page",
+      badge: "Phase 3F",
+      category: "DOCUMENT TOOLS",
+      icon: FilePlus,
+      disabled: true,
+      action: () => {
+        onNewPage?.();
+        onClose();
+      },
+    },
+    {
       id: "export",
       label: "Export Final PDF",
+      badge: "Phase 3H",
       category: "FILE ACTIONS",
       icon: Download,
       shortcut: "⇧⌘E",
+      disabled: true,
       action: () => {
         onExport?.();
         onClose();
@@ -207,6 +218,11 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
                   <div className="flex items-center gap-3">
                     <Icon className="w-4 h-4 text-[#d2bbff]" />
                     <span className="font-medium">{cmd.label}</span>
+                    {cmd.badge && (
+                      <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-[#101216] border border-[#292D35] text-[#9AA1AD]">
+                        {cmd.badge}
+                      </span>
+                    )}
                   </div>
                   {cmd.shortcut && (
                     <kbd className="font-mono text-[10px] bg-[#101216] border border-[#292D35] rounded px-1.5 py-0.5 text-[#9AA1AD]">

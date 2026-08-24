@@ -14,8 +14,8 @@ import {
 } from "./types";
 
 export const StudioV2Shell: React.FC = () => {
-  // Initial Document Info
-  const [docInfo, setDocInfo] = useState<DocumentInfo>({
+  // Phase 3A Development Fixture Document State (Replaced by useStudioSession in Phase 3B)
+  const [docInfo] = useState<DocumentInfo>({
     id: "doc_demo_annual_report",
     name: "annual-report.pdf",
     version: "Version 2.4",
@@ -32,7 +32,7 @@ export const StudioV2Shell: React.FC = () => {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState<boolean>(false);
   const [mobileSheetOpen, setMobileSheetOpen] = useState<boolean>(false);
 
-  // History Timeline State
+  // Phase 3A Visual Fixture History Timeline (Replaced by live backend DAG in Phase 3B)
   const [history, setHistory] = useState<HistoryItem[]>([
     {
       id: "ver_3",
@@ -84,13 +84,13 @@ export const StudioV2Shell: React.FC = () => {
   // Tool Selection Handler
   const handleSelectTool = useCallback((tool: ToolCategory) => {
     setActiveTool(tool);
-    // On mobile, selecting a tool opens the contextual bottom sheet
-    if (window.innerWidth < 768) {
+    // On mobile viewports (<768px), opening a tool category opens the contextual bottom sheet
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
       setMobileSheetOpen(true);
     }
   }, []);
 
-  // History Version Checkout
+  // History Version Checkout (Local Shell UI State; Real backend checkout connects in Phase 3B)
   const handleCheckoutVersion = useCallback((versionId: string) => {
     setHistory((prev) =>
       prev.map((item) => ({
@@ -100,7 +100,7 @@ export const StudioV2Shell: React.FC = () => {
     );
   }, []);
 
-  // Global Keyboard Shortcuts (Cmd+K, Cmd+Z, Cmd+Shift+Z, 0, R)
+  // Global Keyboard Shortcuts (Cmd+K, 0)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Cmd/Ctrl + K
@@ -108,7 +108,7 @@ export const StudioV2Shell: React.FC = () => {
         e.preventDefault();
         setCommandPaletteOpen((prev) => !prev);
       }
-      // Fit to screen '0' when not in input
+      // Fit to screen '0' when not focused on an input
       if (
         e.key === "0" &&
         !["INPUT", "TEXTAREA"].includes((e.target as HTMLElement).tagName)
@@ -127,12 +127,12 @@ export const StudioV2Shell: React.FC = () => {
       {/* Top Fixed Header */}
       <StudioV2Header
         document={docInfo}
-        canUndo={true}
+        canUndo={false}
         canRedo={false}
         onUndo={() => {}}
         onRedo={() => {}}
         onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-        onExport={() => alert("Export Dialog (Phase 3H)")}
+        onExport={() => {}}
       />
 
       {/* Main Workspace (Sidebar + Canvas + Inspector) */}
@@ -172,7 +172,7 @@ export const StudioV2Shell: React.FC = () => {
         isOpen={commandPaletteOpen}
         onClose={() => setCommandPaletteOpen(false)}
         onFitToScreen={handleFitToScreen}
-        onExport={() => alert("Export PDF (Phase 3H)")}
+        onExport={() => {}}
       />
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { FileText, Clock, RotateCcw } from "lucide-react";
+import { FileText, Clock, RotateCcw, Info } from "lucide-react";
 import { DocumentInfo, HistoryItem, InspectorTab } from "./types";
 
 interface StudioV2InspectorProps {
@@ -103,7 +103,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
           </div>
         ) : (
           <div className="p-4">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-[#d2bbff]" />
                 <h3 className="text-xs font-semibold text-[#F5F7FA]">
@@ -112,6 +112,14 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
               </div>
               <span className="text-[10px] font-mono text-[#9AA1AD]">
                 DAG LINEAGE
+              </span>
+            </div>
+
+            {/* Explicit Notice of Shell Placeholder */}
+            <div className="mb-4 p-2 bg-[#14171C] rounded border border-[#292D35] flex items-start gap-2 text-[10px] text-[#9AA1AD]">
+              <Info className="w-3.5 h-3.5 text-[#d2bbff] shrink-0 mt-0.5" />
+              <span>
+                Visual shell timeline. Live backend lineage & checkout connect in Phase 3B.
               </span>
             </div>
 
@@ -145,7 +153,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                         <button
                           onClick={() => onCheckoutVersion(item.id)}
                           className="opacity-0 group-hover:opacity-100 p-1 hover:text-[#d2bbff] transition-opacity"
-                          title="Restore this version"
+                          title="Restore this version (Phase 3B)"
                           aria-label={`Restore version ${item.versionNumber}`}
                         >
                           <RotateCcw className="w-3 h-3" />

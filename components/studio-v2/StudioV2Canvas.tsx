@@ -8,6 +8,7 @@ import {
   Plus,
   Maximize2,
   FileText,
+  Layers,
 } from "lucide-react";
 import { DocumentInfo } from "./types";
 
@@ -39,7 +40,7 @@ export const StudioV2Canvas: React.FC<StudioV2CanvasProps> = ({
         <Search className="w-4 h-4 text-[#9AA1AD] mr-2 shrink-0" />
         <button
           onClick={onOpenCommandPalette}
-          className="bg-transparent border-none w-full text-left text-[#9AA1AD] hover:text-white text-xs truncate focus:outline-none p-0"
+          className="bg-transparent border-none w-full text-left text-[#9AA1AD] hover:text-white text-xs truncate focus:outline-none p-0 cursor-pointer"
         >
           Type a command or search...
         </button>
@@ -59,79 +60,54 @@ export const StudioV2Canvas: React.FC<StudioV2CanvasProps> = ({
           isPanning ? "cursor-grab active:cursor-grabbing" : "cursor-default"
         }`}
       >
-        {/* Document Page Container */}
+        {/* Document Page Container (Visual Canvas Surface) */}
         <div
           style={{ transform: `scale(${zoomScale})` }}
           className="relative w-[595px] h-[842px] bg-white border border-[#292D35] shadow-2xl flex flex-col origin-center transition-transform duration-100 ease-out text-gray-900 rounded-[2px]"
         >
-          {/* Mock Document Surface Preview */}
+          {/* Truthful Development Shell Canvas Surface */}
           <div className="p-10 flex flex-col h-full relative">
-            <header className="flex justify-between items-end border-b border-gray-200 pb-4 mb-6">
+            <header className="flex justify-between items-center border-b border-gray-200 pb-4 mb-6">
               <div>
-                <h1 className="text-xl font-bold text-gray-900 tracking-tight">
-                  Q3 Financial Report
+                <h1 className="text-lg font-bold text-gray-900 tracking-tight">
+                  {document.name}
                 </h1>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  Global Operations Summary
+                <p className="text-xs text-gray-500 font-mono mt-0.5">
+                  Page 1 of {document.pageCount} • {document.version}
                 </p>
               </div>
-              <div className="w-8 h-8 rounded bg-purple-100 flex items-center justify-center text-purple-600">
+              <div className="w-8 h-8 rounded bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-600">
                 <FileText className="w-4 h-4" />
               </div>
             </header>
 
-            <div className="grid grid-cols-2 gap-6 flex-1 text-xs">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="font-semibold text-gray-900 mb-1">
-                    Revenue Streams
-                  </h3>
-                  <p className="text-gray-600 leading-relaxed text-justify">
-                    In Q3, enterprise solutions saw a significant uptick,
-                    driving core metrics above the projected baseline. The
-                    integration of the new Platen Studio engine resulted in a 40%
-                    decrease in processing overhead.
-                  </p>
-                </div>
-
-                {/* Selection Highlight with Corner Handles */}
-                <div className="relative border-2 border-[#7c3aed] p-3 rounded bg-purple-50/30 cursor-move group">
-                  <div className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-[#7c3aed] rounded-sm" />
-                  <div className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-[#7c3aed] rounded-sm" />
-                  <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-[#7c3aed] rounded-sm" />
-                  <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-[#7c3aed] rounded-sm" />
-                  <div className="h-28 bg-[#101216] rounded border border-[#292D35] flex items-center justify-center text-white text-[11px] font-mono">
-                    [ Performance Chart Object ]
-                  </div>
-                </div>
+            {/* Wireframe Placeholder Layout */}
+            <div className="flex-1 flex flex-col gap-6 text-xs">
+              <div className="p-4 bg-gray-50 rounded border border-dashed border-gray-300 text-center text-gray-500 font-mono text-[11px] flex flex-col items-center justify-center gap-1">
+                <Layers className="w-5 h-5 text-purple-500 mb-1" />
+                <span className="font-semibold text-gray-700">
+                  PDF Preview Surface (Phase 3A Shell Placeholder)
+                </span>
+                <span>
+                  Real PyMuPDF tile streaming and page rasterization connects in Phase 3C
+                </span>
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <h3 className="font-semibold text-gray-900 mb-2">
-                    Key Performance Metrics
-                  </h3>
-                  <ul className="space-y-2.5">
-                    <li className="flex justify-between border-b border-gray-100 pb-1.5">
-                      <span className="text-gray-500">Active Users</span>
-                      <span className="font-semibold text-gray-900">1.2M</span>
-                    </li>
-                    <li className="flex justify-between border-b border-gray-100 pb-1.5">
-                      <span className="text-gray-500">Retention Rate</span>
-                      <span className="font-semibold text-gray-900">94.2%</span>
-                    </li>
-                    <li className="flex justify-between border-b border-gray-100 pb-1.5">
-                      <span className="text-gray-500">Avg Response Time</span>
-                      <span className="font-semibold text-gray-900">42ms</span>
-                    </li>
-                  </ul>
+              {/* Visual Selection Layer Indicator (Placeholder for Phase 3C) */}
+              <div className="relative border-2 border-dashed border-[#7c3aed] p-4 rounded bg-purple-50/20">
+                <div className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-[#7c3aed] rounded-sm" />
+                <div className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-[#7c3aed] rounded-sm" />
+                <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-[#7c3aed] rounded-sm" />
+                <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-[#7c3aed] rounded-sm" />
+                <div className="py-6 text-center text-[11px] font-mono text-purple-700">
+                  [ Interactive Object & Transform Handles Layer — Phase 3C ]
                 </div>
               </div>
             </div>
 
-            <footer className="mt-auto pt-4 border-t border-gray-100 text-[10px] text-gray-400 flex justify-between">
+            <footer className="mt-auto pt-4 border-t border-gray-100 text-[10px] text-gray-400 font-mono flex justify-between">
               <span>{document.name}</span>
-              <span>Page 1 of {document.pageCount}</span>
+              <span>{document.fileSize}</span>
             </footer>
           </div>
         </div>

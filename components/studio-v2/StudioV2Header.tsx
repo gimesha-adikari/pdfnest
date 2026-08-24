@@ -25,7 +25,7 @@ interface StudioV2HeaderProps {
 
 export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
   document,
-  canUndo = true,
+  canUndo = false,
   canRedo = false,
   onUndo,
   onRedo,
@@ -58,7 +58,8 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
             onClick={onUndo}
             disabled={!canUndo}
             className="h-[48px] flex items-center gap-1.5 px-3 text-[#9AA1AD] hover:text-white hover:bg-[#181B21] transition-colors text-sm disabled:opacity-40 disabled:hover:bg-transparent"
-            aria-label="Undo"
+            aria-label="Undo operation (Phase 3B)"
+            title={canUndo ? "Undo" : "Undo (Connects in Phase 3B)"}
           >
             <Undo2 className="w-4 h-4" />
             <span className="hidden lg:inline">Undo</span>
@@ -67,7 +68,8 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
             onClick={onRedo}
             disabled={!canRedo}
             className="h-[48px] flex items-center gap-1.5 px-3 text-[#9AA1AD] hover:text-white hover:bg-[#181B21] transition-colors text-sm disabled:opacity-40 disabled:hover:bg-transparent"
-            aria-label="Redo"
+            aria-label="Redo operation (Phase 3B)"
+            title={canRedo ? "Redo" : "Redo (Connects in Phase 3B)"}
           >
             <Redo2 className="w-4 h-4" />
             <span className="hidden lg:inline">Redo</span>
@@ -80,7 +82,7 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
         {/* Search / Command Palette Trigger */}
         <button
           onClick={onOpenCommandPalette}
-          className="hidden sm:flex items-center gap-2 bg-[#181B21] border border-[#292D35] text-[#9AA1AD] hover:text-white px-3 py-1 rounded text-xs transition-colors"
+          className="hidden sm:flex items-center gap-2 bg-[#181B21] border border-[#292D35] text-[#9AA1AD] hover:text-white px-3 py-1 rounded text-xs transition-colors cursor-pointer"
           aria-label="Search commands"
         >
           <Search className="w-3.5 h-3.5 text-[#9AA1AD]" />
@@ -106,14 +108,15 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
 
         <div className="w-px h-4 bg-[#292D35] mx-1" />
 
-        {/* Auth / Export */}
+        {/* Auth / Export Button */}
         <button className="hidden sm:inline text-xs text-[#9AA1AD] hover:text-white transition-colors">
           Sign In
         </button>
         <button
           onClick={onExport}
-          className="bg-[#7c3aed] text-white text-xs font-medium px-3.5 py-1.5 rounded hover:bg-[#6d28d9] transition-colors flex items-center gap-1.5 shadow-sm"
-          aria-label="Export PDF"
+          className="bg-[#7c3aed] text-white text-xs font-medium px-3.5 py-1.5 rounded hover:bg-[#6d28d9] transition-colors flex items-center gap-1.5 shadow-sm opacity-90 hover:opacity-100"
+          aria-label="Export PDF (Phase 3H)"
+          title="Export delivery pipeline connects in Phase 3H"
         >
           <Download className="w-3.5 h-3.5" />
           <span>Export</span>
