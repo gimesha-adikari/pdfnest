@@ -1,10 +1,12 @@
 import axios, { AxiosError } from "axios";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
+const rawBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
+const normalizedBaseUrl = rawBaseUrl.endsWith("/api")
+  ? `${rawBaseUrl}/studio/v1`
+  : `${rawBaseUrl}/api/studio/v1`;
 
 const studioV2Client = axios.create({
-  baseURL: `${API_BASE_URL}/studio/v1`,
+  baseURL: normalizedBaseUrl,
   withCredentials: true,
   headers: {
     "Content-Type": "application/json",
@@ -23,7 +25,8 @@ export interface StudioSessionDTO {
 
 export interface StudioDocumentDTO {
   id: string;
-  original_file_name: string;
+  original_filename?: string;
+  original_file_name?: string;
   file_size: number;
   initial_page_count: number;
   created_at: string;

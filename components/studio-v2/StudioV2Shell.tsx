@@ -74,7 +74,7 @@ export const StudioV2Shell: React.FC = () => {
   const docInfo: DocumentInfo = useMemo(() => {
     return {
       id: document?.id || session?.document_id || "doc_init",
-      name: document?.original_file_name || "untitled.pdf",
+      name: document?.original_filename || document?.original_file_name || "untitled.pdf",
       version: activeVersion
         ? `Version ${activeVersion.version_number}`
         : "Version 0",

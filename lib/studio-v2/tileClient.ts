@@ -1,5 +1,7 @@
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
+const rawBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
+const API_BASE_URL = rawBaseUrl.endsWith("/api")
+  ? `${rawBaseUrl}/studio/v1`
+  : `${rawBaseUrl}/api/studio/v1`;
 
 export interface TileOptions {
   scale?: number;
@@ -72,7 +74,7 @@ export function buildTileUrl(
   options?: TileOptions
 ): string {
   const url = new URL(
-    `${API_BASE_URL}/studio/v1/sessions/${sessionId}/versions/${versionId}/pages/${pageId}/tile`
+    `${API_BASE_URL}/sessions/${sessionId}/versions/${versionId}/pages/${pageId}/tile`
   );
   if (options?.scale) {
     url.searchParams.set("scale", options.scale.toFixed(2));
