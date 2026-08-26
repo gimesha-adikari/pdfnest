@@ -191,6 +191,92 @@ export interface HistoryResponse {
   operations: StudioOperationDTO[];
 }
 
+export interface StudioExportDTO {
+  id: string;
+  document_id: string;
+  version_id: string;
+  export_format: string;
+  r2_key: string;
+  byte_size: number;
+  expires_at: string;
+  created_at: string;
+}
+
+export interface FinalizeExportResponse {
+  export: StudioExportDTO;
+  file_name: string;
+  download_path: string;
+}
+
+export type StudioCompressionLevel = "low" | "medium" | "high";
+export type StudioMaterializationOperation = "compress" | "grayscale" | "repair" | "redact" | "merge" | "split";
+
+export interface StudioRedactParameters {
+  keywords: string[];
+  boxes: string;
+}
+
+export interface StudioMergeParameters {
+  source_asset_ids: string[];
+}
+
+export interface StudioSplitParameters {
+  page_ids: string[];
+}
+
+export type StudioMaterializationRequest = {
+  base_version_id: string;
+  idempotency_key: string;
+  operation: "compress";
+  parameters: { level: StudioCompressionLevel };
+} | {
+  base_version_id: string;
+  idempotency_key: string;
+  operation: "grayscale" | "repair";
+  parameters: Record<string, never>;
+} | {
+  base_version_id: string;
+  idempotency_key: string;
+  operation: "redact";
+  parameters: StudioRedactParameters;
+} | {
+  base_version_id: string;
+  idempotency_key: string;
+  operation: "merge";
+  parameters: StudioMergeParameters;
+} | {
+  base_version_id: string;
+  idempotency_key: string;
+  operation: "split";
+  parameters: StudioSplitParameters;
+};
+
+export interface StudioAssetDTO {
+  id: string;
+  document_id: string;
+  asset_type: string;
+  byte_size: number;
+  mime_type: string;
+}
+
+export interface StudioAssetUploadResponse {
+  asset: StudioAssetDTO;
+}
+
+export interface StudioMaterializationResponse {
+  version: StudioVersionDTO;
+  operation: StudioOperationDTO;
+  asset: {
+    id: string;
+    document_id: string;
+    asset_type: string;
+    byte_size: number;
+    mime_type: string;
+  };
+  vdm: StudioVDMDTO;
+  is_idempotent_replay: boolean;
+}
+
 export interface CheckoutRequest {
   target_version_id: string;
 }
@@ -239,6 +325,21 @@ export const studioV2Api = {
     try {
       const res = await studioV2Client.post<StudioSessionResponse>(
         "/sessions/from-upload",
+        form,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
+      return res.data;
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  async uploadAsset(sessionId: string, file: File): Promise<StudioAssetUploadResponse> {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    try {
+      const res = await studioV2Client.post<StudioAssetUploadResponse>(
+        `/sessions/${sessionId}/assets`,
         form,
         { headers: { "Content-Type": "multipart/form-data" } }
       );
@@ -336,5 +437,37 @@ export const studioV2Api = {
     } catch (err) {
       return handleAxiosError(err);
     }
+  },
+
+  async finalizeExport(sessionId: string): Promise<FinalizeExportResponse> {
+    try {
+      const res = await studioV2Client.post<FinalizeExportResponse>(
+        `/sessions/${sessionId}/export`
+      );
+      return res.data;
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  async materialize(
+    sessionId: string,
+    request: StudioMaterializationRequest
+  ): Promise<StudioMaterializationResponse> {
+    try {
+      const res = await studioV2Client.post<StudioMaterializationResponse>(
+        `/sessions/${sessionId}/materializations`,
+        request
+      );
+      return res.data;
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  exportDownloadURL(sessionId: string, exportId: string): string {
+    return studioV2Client.getUri({
+      url: `/sessions/${sessionId}/exports/${exportId}/download`,
+    });
   },
 };

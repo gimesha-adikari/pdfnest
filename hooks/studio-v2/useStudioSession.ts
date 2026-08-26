@@ -12,6 +12,8 @@ import {
   ApplyOperationResponse,
   CreateSessionRequest,
   StudioApiError,
+  StudioMaterializationRequest,
+  StudioMaterializationResponse,
 } from "@/lib/studio-v2/api";
 
 export type SyncStatus = "loading" | "saved" | "saving" | "error";
@@ -307,6 +309,31 @@ export function useStudioSession(initialSessionId?: string | null) {
     [session, activeVersion, syncStatus, refreshHistory, loadSession]
   );
 
+  const materialize = useCallback(
+    async (request: StudioMaterializationRequest): Promise<StudioMaterializationResponse | null> => {
+      if (!session || !activeVersion || syncStatus === "saving") return null;
+      setSyncStatus("saving");
+      setError(null);
+      try {
+        const res = await studioV2Api.materialize(session.id, request);
+        if (isMountedRef.current) {
+          setActiveVersion(res.version);
+          setVdm(res.vdm);
+          setSyncStatus("saved");
+        }
+        await refreshHistory(session.id);
+        return res;
+      } catch (err: unknown) {
+        if (isMountedRef.current) {
+          setError(err instanceof Error ? err.message : "Studio materialization failed");
+          setSyncStatus("error");
+        }
+        throw err;
+      }
+    },
+    [session, activeVersion, syncStatus, refreshHistory]
+  );
+
   useEffect(() => {
     if (initialSessionId) {
       loadSession(initialSessionId);
@@ -347,6 +374,7 @@ export function useStudioSession(initialSessionId?: string | null) {
     redo,
     checkout,
     executeCommand,
+    materialize,
     refetch: () => session && loadSession(session.id),
   };
 }

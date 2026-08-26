@@ -15,7 +15,12 @@ import {
   InspectorTab,
   ToolCategory,
 } from "./types";
-import { StudioCommand } from "@/lib/studio-v2/api";
+import {
+  studioV2Api,
+  StudioCommand,
+  StudioCompressionLevel,
+  StudioMaterializationRequest,
+} from "@/lib/studio-v2/api";
 import { AlertTriangle, Loader2, RefreshCw, Upload } from "lucide-react";
 
 function formatBytes(bytes: number): string {
@@ -38,6 +43,40 @@ function formatRelativeTime(dateStr: string): string {
   } catch {
     return dateStr;
   }
+}
+
+export function parseStudioPageSelection(input: string, pageCount: number): number[] {
+  const trimmed = input.trim();
+  if (!trimmed) throw new Error("Enter at least one page or range to keep.");
+
+  const selected = new Set<number>();
+  for (const rawToken of trimmed.split(",")) {
+    const token = rawToken.trim();
+    if (!token) throw new Error("Page selection contains an empty token.");
+
+    let start: number;
+    let end: number;
+    if (/^\d+$/.test(token)) {
+      start = Number(token);
+      end = start;
+    } else {
+      const range = /^(\d+)-(\d+)$/.exec(token);
+      if (!range) throw new Error(`Invalid page selection token: ${token}`);
+      start = Number(range[1]);
+      end = Number(range[2]);
+      if (start > end) throw new Error(`Page range is reversed: ${token}`);
+    }
+
+    if (start < 1 || end > pageCount) {
+      throw new Error(`Pages must be between 1 and ${pageCount}.`);
+    }
+    for (let page = start; page <= end; page += 1) {
+      if (selected.has(page)) throw new Error(`Page ${page} is selected more than once.`);
+      selected.add(page);
+    }
+  }
+
+  return [...selected].sort((a, b) => a - b);
 }
 
 export const StudioV2Shell: React.FC = () => {
@@ -65,6 +104,7 @@ export const StudioV2Shell: React.FC = () => {
     createSessionFromUpload,
     enterStudio,
     executeCommand,
+    materialize,
   } = useStudioSession(sessionIdParam);
 
   // Local Ephemeral UI State
@@ -75,6 +115,11 @@ export const StudioV2Shell: React.FC = () => {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState<boolean>(false);
   const [mobileSheetOpen, setMobileSheetOpen] = useState<boolean>(false);
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [isMaterializing, setIsMaterializing] = useState(false);
+  const [materializationError, setMaterializationError] = useState<string | null>(null);
+  const [compressionLevel, setCompressionLevel] = useState<StudioCompressionLevel>("medium");
 
   const selectedPage = useMemo(
     () => vdm?.pages.find((page) => page.page_id === selectedPageId) ?? null,
@@ -225,6 +270,98 @@ export const StudioV2Shell: React.FC = () => {
       }
     },
     [activeVersion, executeCommand, newIdempotencyKey]
+  );
+
+  const handleExport = useCallback(async () => {
+    if (!session || !activeVersion || isSaving || isExporting) return;
+    setIsExporting(true);
+    setExportError(null);
+    try {
+      const result = await studioV2Api.finalizeExport(session.id);
+      const href = studioV2Api.exportDownloadURL(session.id, result.export.id);
+      const anchor = window.document.createElement("a");
+      anchor.href = href;
+      anchor.download = result.file_name;
+      anchor.style.display = "none";
+      window.document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Export failed");
+    } finally {
+      setIsExporting(false);
+    }
+  }, [session, activeVersion, isSaving, isExporting]);
+
+  const handleMaterialize = useCallback(
+    async (
+      operation: "compress" | "grayscale" | "repair" | "redact" | "merge" | "split",
+      options: { redactKeywords?: string[]; sourceAssetIds?: string[]; pageIds?: string[] } = {}
+    ) => {
+      if (!activeVersion || isSaving || isMaterializing) return;
+      const selectedIndexBeforeMaterialization = selectedPageIndex;
+      setIsMaterializing(true);
+      setMaterializationError(null);
+      try {
+        const request: StudioMaterializationRequest = operation === "compress"
+          ? {
+              base_version_id: activeVersion.id,
+              idempotency_key: newIdempotencyKey(`materialize-${operation}`),
+              operation,
+              parameters: { level: compressionLevel },
+            }
+          : operation === "redact"
+            ? {
+                base_version_id: activeVersion.id,
+                idempotency_key: newIdempotencyKey(`materialize-${operation}`),
+                operation,
+                parameters: { keywords: options.redactKeywords ?? [], boxes: "[]" },
+              }
+            : operation === "merge"
+              ? {
+                  base_version_id: activeVersion.id,
+                  idempotency_key: newIdempotencyKey(`materialize-${operation}`),
+                  operation,
+                  parameters: { source_asset_ids: options.sourceAssetIds ?? [] },
+                }
+              : operation === "split"
+                ? {
+                    base_version_id: activeVersion.id,
+                    idempotency_key: newIdempotencyKey(`materialize-${operation}`),
+                    operation,
+                    parameters: { page_ids: options.pageIds ?? [] },
+                  }
+                : {
+                    base_version_id: activeVersion.id,
+                    idempotency_key: newIdempotencyKey(`materialize-${operation}`),
+                    operation,
+                    parameters: {},
+                  };
+        const response = await materialize(request);
+        const replacementPage = response?.vdm.pages[
+          Math.min(Math.max(selectedIndexBeforeMaterialization, 0), response.vdm.pages.length - 1)
+        ];
+        setSelectedPageId(replacementPage?.page_id ?? null);
+      } catch (err) {
+        setMaterializationError(err instanceof Error ? err.message : "Materialization failed");
+      } finally {
+        setIsMaterializing(false);
+      }
+    },
+    [activeVersion, compressionLevel, isSaving, isMaterializing, materialize, newIdempotencyKey, selectedPageIndex]
+  );
+
+  const handleSplit = useCallback(
+    async (pageSelection: string) => {
+      if (!vdm) return;
+      const pageNumbers = parseStudioPageSelection(pageSelection, vdm.pages.length);
+      const pageIds = pageNumbers.map((pageNumber) => vdm.pages[pageNumber - 1]?.page_id);
+      if (pageIds.some((pageId) => !pageId)) {
+        throw new Error("The selected pages are no longer present in the current Studio document.");
+      }
+      await handleMaterialize("split", { pageIds });
+    },
+    [handleMaterialize, vdm]
   );
 
   useEffect(() => {
@@ -394,12 +531,29 @@ export const StudioV2Shell: React.FC = () => {
         onUndo={undo}
         onRedo={redo}
         onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-        onExport={() => {}}
+        onExport={handleExport}
+        onCompress={() => void handleMaterialize("compress")}
+        compressionLevel={compressionLevel}
+        onCompressionLevelChange={setCompressionLevel}
+        onGrayscale={() => void handleMaterialize("grayscale")}
+        onRepair={() => void handleMaterialize("repair")}
+        onRedact={(keywords) => void handleMaterialize("redact", { redactKeywords: keywords.split(",").map((keyword) => keyword.trim()).filter(Boolean) })}
+        onUploadMergeAsset={async (file) => {
+          if (!session) throw new Error("Studio session is not ready");
+          const response = await studioV2Api.uploadAsset(session.id, file);
+          return response.asset;
+        }}
+        onMerge={(assetId) => void handleMaterialize("merge", { sourceAssetIds: [assetId] })}
+        onSplit={handleSplit}
+        isMaterializing={isMaterializing}
+        materializeDisabled={!session || !activeVersion || isSaving}
+        isExporting={isExporting}
+        exportDisabled={!session || !activeVersion || isSaving || isMaterializing}
       />
 
-      {error && (
+      {(error || exportError || materializationError) && (
         <div role="alert" className="fixed left-1/2 top-[56px] z-50 -translate-x-1/2 rounded border border-red-800/80 bg-red-950/90 px-4 py-2 text-xs text-red-100 shadow-lg">
-          {error}
+          {materializationError || exportError || error}
         </div>
       )}
 
@@ -459,7 +613,7 @@ export const StudioV2Shell: React.FC = () => {
         onFitToScreen={handleFitToScreen}
         onRotatePage={() => handleRotate(90)}
         canRotatePage={Boolean(selectedPage) && !isSaving}
-        onExport={() => {}}
+        onExport={handleExport}
       />
     </div>
   );
