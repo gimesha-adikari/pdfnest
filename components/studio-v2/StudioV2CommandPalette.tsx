@@ -28,6 +28,7 @@ interface StudioV2CommandPaletteProps {
   onClose: () => void;
   onFitToScreen?: () => void;
   onRotatePage?: () => void;
+  canRotatePage?: boolean;
   onCropPage?: () => void;
   onAddWatermark?: () => void;
   onExport?: () => void;
@@ -39,6 +40,7 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
   onClose,
   onFitToScreen,
   onRotatePage,
+  canRotatePage = false,
   onCropPage,
   onAddWatermark,
   onExport,
@@ -63,11 +65,11 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
     {
       id: "rotate",
       label: "Rotate Page Clockwise (90°)",
-      badge: "Phase 3F",
+      badge: "Batch 2A",
       category: "PAGE MUTATIONS",
       icon: RotateCw,
       shortcut: "R",
-      disabled: true,
+      disabled: !canRotatePage,
       action: () => {
         onRotatePage?.();
         onClose();
@@ -209,6 +211,7 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
                   key={cmd.id}
                   onClick={cmd.action}
                   onMouseEnter={() => setSelectedIndex(index)}
+                  disabled={cmd.disabled}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded text-xs transition-colors ${
                     isSelected
                       ? "bg-[#181B21] text-white border border-[#7c3aed]"

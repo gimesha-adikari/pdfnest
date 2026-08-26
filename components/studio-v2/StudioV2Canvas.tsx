@@ -38,7 +38,9 @@ const PageTileRenderer: React.FC<PageTileRendererProps> = ({
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [hasError, setHasError] = useState<boolean>(false);
-  const [isVisible, setIsVisible] = useState<boolean>(false);
+  const [isVisible, setIsVisible] = useState<boolean>(
+    isSelected || page.is_blank || Boolean(page.parent_page_id)
+  );
 
   const containerRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -103,9 +105,14 @@ const PageTileRenderer: React.FC<PageTileRendererProps> = ({
     };
   }, [isVisible, loadTile]);
 
-  // Page dimensions (Authoritative VDM dimensions in PostScript points, defaulting to ISO A4)
-  const baseW = page.dimensions?.width || 595.28;
-  const baseH = page.dimensions?.height || 841.89;
+  // Real pages, including server-created blanks, must provide authoritative
+  // dimensions. The dimensionless fallback is only an empty-state placeholder.
+  const hasDimensions = Boolean(page.dimensions?.width && page.dimensions?.height);
+  const cropBox = page.crop_box?.length === 4 ? page.crop_box : null;
+  const cropW = cropBox && cropBox[2] > cropBox[0] ? cropBox[2] - cropBox[0] : null;
+  const cropH = cropBox && cropBox[3] > cropBox[1] ? cropBox[3] - cropBox[1] : null;
+  const baseW = cropW ?? page.dimensions?.width ?? 1;
+  const baseH = cropH ?? page.dimensions?.height ?? 1;
   const isRotated = page.rotation === 90 || page.rotation === 270;
   const pageWidth = isRotated ? baseH : baseW;
   const pageHeight = isRotated ? baseW : baseH;
@@ -113,10 +120,14 @@ const PageTileRenderer: React.FC<PageTileRendererProps> = ({
   return (
     <div
       ref={containerRef}
+      data-page-id={page.page_id}
+      data-page-blank={page.is_blank ? "true" : "false"}
+      data-page-visible-width-pt={hasDimensions ? String(baseW) : undefined}
+      data-page-visible-height-pt={hasDimensions ? String(baseH) : undefined}
       onClick={onSelect}
       style={{
-        width: `${pageWidth * zoomScale}px`,
-        height: `${pageHeight * zoomScale}px`,
+        width: hasDimensions ? `${pageWidth * zoomScale}px` : `min(70vw, 32rem)`,
+        height: hasDimensions ? `${pageHeight * zoomScale}px` : `min(70vh, 45rem)`,
       }}
       className={`relative bg-white shadow-2xl transition-all duration-150 select-none cursor-pointer flex flex-col rounded-[2px] ${
         isSelected

@@ -1,8 +1,9 @@
 "use client";
 
-import React from "react";
-import { FileText, Clock, RotateCcw, Info } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { FileText, Clock, RotateCcw, RotateCw, Trash2, Info, Loader2, ArrowUp, ArrowDown, Copy, Crop } from "lucide-react";
 import { DocumentInfo, HistoryItem, InspectorTab } from "./types";
+import { StudioMetadataParameters, VDMPageDescriptorDTO } from "@/lib/studio-v2/api";
 
 interface StudioV2InspectorProps {
   document: DocumentInfo;
@@ -10,6 +11,19 @@ interface StudioV2InspectorProps {
   history: HistoryItem[];
   onSelectTab: (tab: InspectorTab) => void;
   onCheckoutVersion?: (versionId: string) => void;
+  metadata?: Record<string, string> | null;
+  onUpdateMetadata?: (metadata: StudioMetadataParameters) => void | Promise<void>;
+  selectedPage?: VDMPageDescriptorDTO | null;
+  onRotateClockwise?: () => void;
+  onRotateCounterClockwise?: () => void;
+  onDeletePage?: () => void;
+  onMovePageEarlier?: () => void;
+  onMovePageLater?: () => void;
+  onDuplicatePage?: () => void;
+  onCropPage?: (cropBox: number[]) => void | Promise<void>;
+  canMovePageEarlier?: boolean;
+  canMovePageLater?: boolean;
+  isCommandLoading?: boolean;
 }
 
 export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
@@ -18,7 +32,78 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
   history,
   onSelectTab,
   onCheckoutVersion,
+  metadata,
+  onUpdateMetadata,
+  selectedPage,
+  onRotateClockwise,
+  onRotateCounterClockwise,
+  onDeletePage,
+  onMovePageEarlier,
+  onMovePageLater,
+  onDuplicatePage,
+  onCropPage,
+  canMovePageEarlier = false,
+  canMovePageLater = false,
+  isCommandLoading = false,
 }) => {
+  const cropDefaults = useMemo(() => {
+    const existing = selectedPage?.crop_box;
+    if (existing?.length === 4) return existing;
+    const width = selectedPage?.dimensions?.width ?? 0;
+    const height = selectedPage?.dimensions?.height ?? 0;
+    return [0, 0, width, height];
+  }, [selectedPage?.crop_box, selectedPage?.dimensions?.width, selectedPage?.dimensions?.height]);
+  const cropKey = cropDefaults.join(",");
+  const [cropValues, setCropValues] = useState<string[]>(cropDefaults.map((value) => String(value)));
+  const [cropError, setCropError] = useState<string | null>(null);
+
+  const metadataDefaults = useMemo<StudioMetadataParameters>(() => ({
+    title: metadata?.Title ?? metadata?.title ?? "",
+    author: metadata?.Author ?? metadata?.author ?? "",
+    subject: metadata?.Subject ?? metadata?.subject ?? "",
+    keywords: metadata?.Keywords ?? metadata?.keywords ?? "",
+  }), [metadata]);
+  const metadataKey = Object.values(metadataDefaults).join("\u0001");
+  const [metadataDraft, setMetadataDraft] = useState<StudioMetadataParameters>(metadataDefaults);
+
+  useEffect(() => {
+    setMetadataDraft(metadataDefaults);
+  }, [metadataKey]);
+
+  useEffect(() => {
+    setCropValues(cropDefaults.map((value) => String(value)));
+    setCropError(null);
+  }, [cropKey]);
+
+  const parsedCrop = cropValues.map((value) => Number(value));
+  const pageWidth = selectedPage?.dimensions?.width ?? 0;
+  const pageHeight = selectedPage?.dimensions?.height ?? 0;
+  const cropIsValid =
+    parsedCrop.length === 4 &&
+    parsedCrop.every((value) => Number.isFinite(value)) &&
+    pageWidth > 0 &&
+    pageHeight > 0 &&
+    parsedCrop[0] >= 0 &&
+    parsedCrop[1] >= 0 &&
+    parsedCrop[2] > parsedCrop[0] &&
+    parsedCrop[3] > parsedCrop[1] &&
+    parsedCrop[2] <= pageWidth &&
+    parsedCrop[3] <= pageHeight;
+
+  const handleCropSubmit = () => {
+    if (!cropIsValid || !onCropPage) {
+      setCropError("Enter a positive crop box inside the page bounds.");
+      return;
+    }
+    setCropError(null);
+    void onCropPage(parsedCrop);
+  };
+
+  const handleMetadataSubmit = () => {
+    if (!onUpdateMetadata) return;
+    void onUpdateMetadata(metadataDraft);
+  };
+
   return (
     <aside className="fixed right-0 top-[48px] bottom-0 w-[300px] bg-[#101216] border-l border-[#292D35] flex flex-col z-40">
       {/* Inspector Tabs */}
@@ -62,7 +147,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-mono text-[#9AA1AD] text-[11px]">PAGES</span>
                   <span className="font-medium text-[#F5F7FA]">
-                    {document.pageCount}
+                    <span data-testid="studio-page-count">{document.pageCount}</span>
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
@@ -74,9 +159,140 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-mono text-[#9AA1AD] text-[11px]">VERSION</span>
                   <span className="font-medium text-[#F5F7FA]">
-                    {document.version}
+                    <span data-testid="studio-version">{document.version}</span>
                   </span>
                 </div>
+              </div>
+            </div>
+
+            {/* Selected page controls */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <RotateCw className="w-4 h-4 text-[#d2bbff]" />
+                <h3 className="text-xs font-semibold text-[#F5F7FA]">Selected Page</h3>
+              </div>
+              {!selectedPage ? (
+                <p className="text-xs text-[#9AA1AD] bg-[#14171C] p-3 rounded border border-[#292D35]">
+                  Select a page in the canvas to edit or organize it.
+                </p>
+              ) : (
+                <div className="space-y-3 bg-[#14171C] p-3 rounded border border-[#292D35]">
+                  <div className="text-xs text-[#D8DCE3]">Page {selectedPage.source_page_number}</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={onRotateCounterClockwise}
+                      disabled={isCommandLoading}
+                      aria-label="Rotate counter-clockwise 90°"
+                      title="Rotate counter-clockwise 90°"
+                      className="flex items-center justify-center gap-1.5 rounded border border-[#3b3742] px-2 py-2 text-[11px] text-[#D8DCE3] hover:border-[#7c3aed] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isCommandLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                      CCW 90°
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onRotateClockwise}
+                      disabled={isCommandLoading}
+                      aria-label="Rotate clockwise 90°"
+                      title="Rotate clockwise 90°"
+                      className="flex items-center justify-center gap-1.5 rounded border border-[#3b3742] px-2 py-2 text-[11px] text-[#D8DCE3] hover:border-[#7c3aed] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isCommandLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCw className="w-3.5 h-3.5" />}
+                      CW 90°
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onDeletePage}
+                    disabled={isCommandLoading}
+                    aria-label="Delete selected page"
+                    title="Delete selected page"
+                    className="w-full flex items-center justify-center gap-2 rounded border border-red-900/70 px-2 py-2 text-[11px] text-red-300 hover:border-red-500 hover:bg-red-950/30 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isCommandLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                    Delete page
+                  </button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={onMovePageEarlier}
+                      disabled={isCommandLoading || !canMovePageEarlier}
+                      aria-label="Move page earlier"
+                      title="Move page earlier"
+                      className="flex items-center justify-center gap-1.5 rounded border border-[#3b3742] px-2 py-2 text-[11px] text-[#D8DCE3] hover:border-[#7c3aed] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <ArrowUp className="w-3.5 h-3.5" />
+                      Earlier
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onMovePageLater}
+                      disabled={isCommandLoading || !canMovePageLater}
+                      aria-label="Move page later"
+                      title="Move page later"
+                      className="flex items-center justify-center gap-1.5 rounded border border-[#3b3742] px-2 py-2 text-[11px] text-[#D8DCE3] hover:border-[#7c3aed] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <ArrowDown className="w-3.5 h-3.5" />
+                      Later
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onDuplicatePage}
+                    disabled={isCommandLoading}
+                    aria-label="Duplicate page"
+                    title="Duplicate page"
+                    className="w-full flex items-center justify-center gap-2 rounded border border-[#3b3742] px-2 py-2 text-[11px] text-[#D8DCE3] hover:border-[#7c3aed] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isCommandLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5" />}
+                    Duplicate page
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Document metadata controls */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <FileText className="w-4 h-4 text-[#d2bbff]" />
+                <h3 className="text-xs font-semibold text-[#F5F7FA]">Metadata</h3>
+              </div>
+              <div className="space-y-3 bg-[#14171C] p-3 rounded border border-[#292D35]">
+                <p className="text-[10px] leading-4 text-[#9AA1AD]">
+                  Saved as Studio state. PDF metadata is written during finalization.
+                </p>
+                {([
+                  ["title", "Title"],
+                  ["author", "Author"],
+                  ["subject", "Subject"],
+                  ["keywords", "Keywords"],
+                ] as const).map(([key, label]) => (
+                  <label key={key} className="block space-y-1 text-[10px] text-[#9AA1AD]">
+                    <span>{label}</span>
+                    <input
+                      aria-label={`Metadata ${label}`}
+                      data-testid={`studio-metadata-${key}`}
+                      type="text"
+                      value={metadataDraft[key]}
+                      onChange={(event) => {
+                        setMetadataDraft((current) => ({ ...current, [key]: event.target.value }));
+                      }}
+                      className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA] outline-none focus:border-[#7c3aed]"
+                    />
+                  </label>
+                ))}
+                <button
+                  type="button"
+                  onClick={handleMetadataSubmit}
+                  disabled={isCommandLoading || !onUpdateMetadata}
+                  aria-label="Apply metadata"
+                  data-testid="studio-apply-metadata"
+                  className="w-full flex items-center justify-center gap-2 rounded border border-[#7c3aed]/70 px-2 py-2 text-[11px] text-[#d2bbff] hover:bg-[#7c3aed]/15 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {isCommandLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
+                  Apply metadata
+                </button>
               </div>
             </div>
 
@@ -88,17 +304,75 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
               <div className="space-y-2.5 bg-[#14171C] p-3 rounded border border-[#292D35]">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-mono text-[#9AA1AD] text-[11px]">WIDTH</span>
-                  <span className="font-medium text-[#F5F7FA]">595.28 pt</span>
+                  <span className="font-medium text-[#F5F7FA]">{selectedPage?.dimensions?.width?.toFixed(2) ?? "—"} pt</span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-mono text-[#9AA1AD] text-[11px]">HEIGHT</span>
-                  <span className="font-medium text-[#F5F7FA]">841.89 pt</span>
+                  <span className="font-medium text-[#F5F7FA]">{selectedPage?.dimensions?.height?.toFixed(2) ?? "—"} pt</span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-mono text-[#9AA1AD] text-[11px]">ROTATION</span>
-                  <span className="font-medium text-[#F5F7FA]">0°</span>
+                  <span className="font-medium text-[#F5F7FA]">{selectedPage ? `${selectedPage.rotation}°` : "—"}</span>
                 </div>
               </div>
+            </div>
+
+            {/* Crop controls */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Crop className="w-4 h-4 text-[#d2bbff]" />
+                <h3 className="text-xs font-semibold text-[#F5F7FA]">Crop Page</h3>
+              </div>
+              {!selectedPage ? (
+                <p className="text-xs text-[#9AA1AD] bg-[#14171C] p-3 rounded border border-[#292D35]">
+                  Select a page to set its crop box.
+                </p>
+              ) : (
+                <div className="space-y-3 bg-[#14171C] p-3 rounded border border-[#292D35]">
+                  <p className="text-[10px] leading-4 text-[#9AA1AD]">
+                    PDF points, lower-left origin: [llx, lly, urx, ury].
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      ["llx", "Left"],
+                      ["lly", "Bottom"],
+                      ["urx", "Right"],
+                      ["ury", "Top"],
+                    ].map(([key, label], index) => (
+                      <label key={key} className="space-y-1 text-[10px] text-[#9AA1AD]">
+                        <span>{label} ({key})</span>
+                        <input
+                          aria-label={`Crop ${label.toLowerCase()}`}
+                          data-testid={`studio-crop-${key}`}
+                          type="number"
+                          step="0.01"
+                          value={cropValues[index] ?? ""}
+                          onChange={(event) => {
+                            const next = [...cropValues];
+                            next[index] = event.target.value;
+                            setCropValues(next);
+                            setCropError(null);
+                          }}
+                          aria-invalid={cropError ? "true" : "false"}
+                          className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA] outline-none focus:border-[#7c3aed]"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCropSubmit}
+                    disabled={isCommandLoading || !cropIsValid || !onCropPage}
+                    aria-label="Apply crop"
+                    data-testid="studio-apply-crop"
+                    className="w-full flex items-center justify-center gap-2 rounded border border-[#7c3aed]/70 px-2 py-2 text-[11px] text-[#d2bbff] hover:bg-[#7c3aed]/15 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {isCommandLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Crop className="w-3.5 h-3.5" />}
+                    Apply crop
+                  </button>
+                  {cropError && <p role="alert" className="text-[10px] text-red-300">{cropError}</p>}
+                </div>
+              )}
             </div>
           </div>
         ) : (

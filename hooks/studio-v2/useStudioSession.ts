@@ -8,11 +8,21 @@ import {
   StudioVersionDTO,
   StudioOperationDTO,
   StudioVDMDTO,
+  StudioCommand,
+  ApplyOperationResponse,
   CreateSessionRequest,
+  StudioApiError,
 } from "@/lib/studio-v2/api";
 
 export type SyncStatus = "loading" | "saved" | "saving" | "error";
 export type HistoryStatus = "idle" | "loading" | "ready" | "error";
+export type StudioSessionLifecycle =
+  | "entry"
+  | "creating"
+  | "loading"
+  | "ready"
+  | "not_found"
+  | "error";
 
 export interface UseStudioSessionState {
   session: StudioSessionDTO | null;
@@ -35,9 +45,14 @@ export function useStudioSession(initialSessionId?: string | null) {
   const [vdm, setVdm] = useState<StudioVDMDTO | null>(null);
   const [history, setHistory] = useState<StudioVersionDTO[]>([]);
   const [operations, setOperations] = useState<StudioOperationDTO[]>([]);
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>("loading");
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(
+    initialSessionId ? "loading" : "saved"
+  );
   const [historyStatus, setHistoryStatus] = useState<HistoryStatus>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [lifecycle, setLifecycle] = useState<StudioSessionLifecycle>(
+    initialSessionId ? "loading" : "entry"
+  );
 
   const isMountedRef = useRef<boolean>(true);
   const currentRequestIdRef = useRef<number>(0);
@@ -70,6 +85,7 @@ export function useStudioSession(initialSessionId?: string | null) {
     async (sessionId: string) => {
       const requestId = ++currentRequestIdRef.current;
       setSyncStatus("loading");
+      setLifecycle("loading");
       setError(null);
       try {
         const data = await studioV2Api.getSession(sessionId);
@@ -79,6 +95,7 @@ export function useStudioSession(initialSessionId?: string | null) {
           setActiveVersion(data.active_version);
           setVdm(data.vdm);
           setSyncStatus("saved");
+          setLifecycle("ready");
         }
         await refreshHistory(sessionId);
       } catch (err: unknown) {
@@ -87,6 +104,11 @@ export function useStudioSession(initialSessionId?: string | null) {
             err instanceof Error ? err.message : "Failed to load studio session";
           setError(msg);
           setSyncStatus("error");
+          setLifecycle(
+            err instanceof StudioApiError && err.status === 404
+              ? "not_found"
+              : "error"
+          );
         }
       }
     },
@@ -97,6 +119,7 @@ export function useStudioSession(initialSessionId?: string | null) {
     async (req: CreateSessionRequest) => {
       const requestId = ++currentRequestIdRef.current;
       setSyncStatus("loading");
+      setLifecycle("creating");
       setError(null);
       try {
         const data = await studioV2Api.createSession(req);
@@ -106,6 +129,7 @@ export function useStudioSession(initialSessionId?: string | null) {
           setActiveVersion(data.active_version);
           setVdm(data.vdm);
           setSyncStatus("saved");
+          setLifecycle("ready");
 
           // Sync session ID to URL without page reload to prevent duplicate sessions on refresh
           if (typeof window !== "undefined" && window.history?.replaceState) {
@@ -124,12 +148,71 @@ export function useStudioSession(initialSessionId?: string | null) {
               : "Failed to initialize studio session";
           setError(msg);
           setSyncStatus("error");
+          setLifecycle("error");
         }
         throw err;
       }
     },
     [refreshHistory]
   );
+
+  const createSessionFromUpload = useCallback(
+    async (file: File) => {
+      const requestId = ++currentRequestIdRef.current;
+      setSyncStatus("loading");
+      setLifecycle("creating");
+      setError(null);
+      try {
+        const data = await studioV2Api.createSessionFromUpload(file);
+        if (isMountedRef.current && requestId === currentRequestIdRef.current) {
+          setSession(data.session);
+          setDocument(data.document);
+          setActiveVersion(data.active_version);
+          setVdm(data.vdm);
+          setSyncStatus("saved");
+          setLifecycle("ready");
+          if (typeof window !== "undefined" && window.history?.replaceState) {
+            const url = new URL(window.location.href);
+            url.searchParams.set("session_id", data.session.id);
+            window.history.replaceState(null, "", url.toString());
+          }
+        }
+        await refreshHistory(data.session.id);
+        return data;
+      } catch (err: unknown) {
+        if (isMountedRef.current && requestId === currentRequestIdRef.current) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Failed to create Studio document from the uploaded PDF"
+          );
+          setSyncStatus("error");
+          setLifecycle("error");
+        }
+        throw err;
+      }
+    },
+    [refreshHistory]
+  );
+
+  const enterStudio = useCallback(() => {
+    currentRequestIdRef.current += 1;
+    setSession(null);
+    setDocument(null);
+    setActiveVersion(null);
+    setVdm(null);
+    setHistory([]);
+    setOperations([]);
+    setHistoryStatus("idle");
+    setSyncStatus("saved");
+    setError(null);
+    setLifecycle("entry");
+    if (typeof window !== "undefined" && window.history?.replaceState) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("session_id");
+      window.history.replaceState(null, "", url.toString());
+    }
+  }, []);
 
   const undo = useCallback(async () => {
     if (!session || !activeVersion?.parent_version_id || syncStatus === "saving") return;
@@ -194,19 +277,43 @@ export function useStudioSession(initialSessionId?: string | null) {
     [session, syncStatus, refreshHistory]
   );
 
+  const executeCommand = useCallback(
+    async (command: StudioCommand): Promise<ApplyOperationResponse | null> => {
+      if (!session || !activeVersion || syncStatus === "saving") return null;
+      setSyncStatus("saving");
+      setError(null);
+      try {
+        const res = await studioV2Api.executeCommand(session.id, command);
+        if (isMountedRef.current) {
+          setActiveVersion(res.version);
+          setVdm(res.vdm);
+          setSyncStatus("saved");
+        }
+        await refreshHistory(session.id);
+        return res;
+      } catch (err: unknown) {
+        if (isMountedRef.current) {
+          if (err instanceof StudioApiError && err.status === 409) {
+            await loadSession(session.id);
+            setError("Studio changed in another window. Refresh complete; please retry.");
+          } else {
+            setError(err instanceof Error ? err.message : "Studio command failed");
+          }
+          setSyncStatus("error");
+        }
+        throw err;
+      }
+    },
+    [session, activeVersion, syncStatus, refreshHistory, loadSession]
+  );
+
   useEffect(() => {
     if (initialSessionId) {
       loadSession(initialSessionId);
     } else {
-      initSession({
-        file_name: "untitled_document.pdf",
-        file_size: 0,
-        initial_page_count: 1,
-      }).catch(() => {
-        // Handled by state
-      });
+      enterStudio();
     }
-  }, [initialSessionId, loadSession, initSession]);
+  }, [initialSessionId, loadSession, enterStudio]);
 
   const canUndo = Boolean(
     activeVersion?.parent_version_id &&
@@ -225,17 +332,21 @@ export function useStudioSession(initialSessionId?: string | null) {
     history,
     operations,
     syncStatus,
+    lifecycle,
     historyStatus,
-    isLoading: syncStatus === "loading",
+    isLoading: lifecycle === "loading" || lifecycle === "creating",
     isSaving: syncStatus === "saving",
     error,
     canUndo,
     canRedo,
     loadSession,
     initSession,
+    createSessionFromUpload,
+    enterStudio,
     undo,
     redo,
     checkout,
+    executeCommand,
     refetch: () => session && loadSession(session.id),
   };
 }

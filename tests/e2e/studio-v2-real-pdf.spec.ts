@@ -1,11 +1,9 @@
 import { test, expect } from '@playwright/test';
-import fs from 'fs';
 import path from 'path';
 import { authenticateProUser } from '../helpers/auth';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
 const FIXTURE_PATH = path.resolve(__dirname, '../../../benchmarks/rendering/corpus/standard_a4_10p.pdf');
-const STORAGE_DIR = '/tmp/platen_storage/assets';
 
 test.describe('Studio V2 Whole-Stack Real PDF E2E Validation', () => {
   test('executes whole-stack Studio V2 user journey with real PDF rendering, mutations, and undo/redo', async ({ page }) => {
@@ -14,61 +12,27 @@ test.describe('Studio V2 Whole-Stack Real PDF E2E Validation', () => {
     const authSession = await authenticateProUser(page);
     console.log(`[E2E SETUP] Authenticated as ${authSession.authMode} (User ID: ${authSession.userId})`);
 
-    // 2. Ensure real PDF fixture exists in storage directory for Go backend resolver
-    if (!fs.existsSync(FIXTURE_PATH)) {
-      throw new Error(`Real PDF fixture not found at: ${FIXTURE_PATH}`);
-    }
-    fs.mkdirSync(STORAGE_DIR, { recursive: true });
-    const targetAssetPath = path.join(STORAGE_DIR, 'standard_a4_10p.pdf');
-    fs.copyFileSync(FIXTURE_PATH, targetAssetPath);
-
-    const pdfStats = fs.statSync(FIXTURE_PATH);
-    const assetId = 'asset-playwright-10p-' + Date.now();
-
-    // 3. Initialize Real Session via Go Studio API
-    const pages = [];
-    for (let i = 1; i <= 10; i++) {
-      pages.push({
-        page_id: `p${i}`,
-        source_asset_id: assetId,
-        source_page_number: i,
-        rotation: 0,
-        is_blank: false,
-        dimensions: { width: 595.28, height: 841.89 },
-        overlays: [],
-      });
-    }
-
-    const payload = {
-      file_name: 'standard_a4_10p.pdf',
-      file_size: pdfStats.size,
-      initial_page_count: 10,
-      source_asset_id: assetId,
-      source_r2_key: 'assets/standard_a4_10p.pdf',
-      initial_vdm: {
-        page_count: 10,
-        pages: pages,
-      },
-    };
-
+    // 2. Initialize a real session through the Batch 0 product upload flow.
     const cookies = await page.context().cookies('http://localhost:8080');
     const authToken = cookies.find((c) => c.name === 'auth_token')?.value || '';
-
-    console.log('[E2E SETUP] Creating Studio session via backend API...');
-    const sessionResp = await page.request.post(`${BACKEND_URL}/studio/v1/sessions`, {
-      headers: {
-        'Authorization': `Bearer ${authToken}`,
-        'Cookie': `auth_token=${authToken}`,
-      },
-      data: payload,
-    });
-
-    expect(sessionResp.ok()).toBe(true);
+    await page.goto('/studio-v2');
+    await expect(page.getByRole('heading', { name: 'Open a PDF in Studio' })).toBeVisible();
+    const sessionResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url().includes('/studio/v1/sessions/from-upload') &&
+        response.request().method() === 'POST',
+      { timeout: 30_000 }
+    );
+    await page.locator('input[type="file"]').setInputFiles(FIXTURE_PATH);
+    const sessionResp = await sessionResponsePromise;
+    expect(sessionResp.status()).toBe(201);
     const sessionData = await sessionResp.json();
     const sessionId = sessionData.session.id;
-    const documentId = sessionData.document.id;
     const initialVersionId = sessionData.active_version.id;
-    console.log(`[E2E SETUP] Created Studio V2 Session: ${sessionId} (Doc: ${documentId}, Ver: ${initialVersionId})`);
+    const firstPageId = sessionData.vdm.pages[0].page_id;
+    expect(sessionData.vdm.page_count).toBe(10);
+    expect(sessionData.vdm.pages).toHaveLength(10);
+    console.log(`[E2E SETUP] Created Studio V2 Session through UI upload: ${sessionId} (Ver: ${initialVersionId})`);
 
     const consoleErrors: string[] = [];
     page.on('console', (msg) => {
@@ -119,10 +83,12 @@ test.describe('Studio V2 Whole-Stack Real PDF E2E Validation', () => {
     await expect(renderedImages.first()).toBeVisible({ timeout: 15_000 });
 
     // Assert that the image has non-zero natural dimensions (real rendered graphic)
-    const isImageValid = await renderedImages.first().evaluate((img: HTMLImageElement) => {
-      return img.complete && img.naturalWidth > 0 && img.naturalHeight > 0;
+    const initialTileDimensions = await renderedImages.first().evaluate((img: HTMLImageElement) => {
+      return { complete: img.complete, width: img.naturalWidth, height: img.naturalHeight };
     });
-    expect(isImageValid).toBe(true);
+    expect(initialTileDimensions.complete).toBe(true);
+    expect(initialTileDimensions.width).toBeGreaterThan(0);
+    expect(initialTileDimensions.height).toBeGreaterThan(initialTileDimensions.width);
 
     // Verify tile network responses returned image/jpeg
     expect(tileRequests.length).toBeGreaterThan(0);
@@ -143,49 +109,27 @@ test.describe('Studio V2 Whole-Stack Real PDF E2E Validation', () => {
     // STEP D: Real Studio VDM Mutation (Rotate Page 1 by 90°)
     // -------------------------------------------------------------------------
     console.log('[E2E STEP D] Executing Real VDM Mutation: Rotate Page 1 by 90°...');
-    const opPayload = {
+    const commandPayload = {
       base_version_id: initialVersionId,
       idempotency_key: 'op-rotate-p1-' + Date.now(),
-      operation_name: 'rotate_page',
-      parameters: { page_id: 'p1', angle: 90 },
-      target_page_ids: ['p1'],
-      new_virtual_model: {
-        document_id: documentId,
-        page_count: 10,
-        pages: [
-          {
-            page_id: 'p1',
-            source_asset_id: assetId,
-            source_page_number: 1,
-            rotation: 90, // Rotated 90°
-            is_blank: false,
-            dimensions: { width: 595.28, height: 841.89 },
-            overlays: [],
-          },
-          ...Array.from({ length: 9 }, (_, idx) => ({
-            page_id: `p${idx + 2}`,
-            source_asset_id: assetId,
-            source_page_number: idx + 2,
-            rotation: 0,
-            is_blank: false,
-            dimensions: { width: 595.28, height: 841.89 },
-            overlays: [],
-          })),
-        ],
-      },
-      is_materialized: false,
+      operation: 'rotate_page',
+      parameters: { page_ids: [firstPageId], delta_degrees: 90 },
     };
 
-    const opResp = await page.request.post(`${BACKEND_URL}/studio/v1/sessions/${sessionId}/operations`, {
+    const opResp = await page.request.post(`${BACKEND_URL}/studio/v1/sessions/${sessionId}/commands`, {
       headers: {
         'Authorization': `Bearer ${authToken}`,
         'Cookie': `auth_token=${authToken}`,
       },
-      data: opPayload,
+      data: commandPayload,
     });
     expect(opResp.ok()).toBe(true);
     const opData = await opResp.json();
     const rotatedVersionId = opData.version.id;
+    expect(opData.vdm.page_count).toBe(10);
+    expect(opData.vdm.pages[0].page_id).toBe(firstPageId);
+    expect(opData.vdm.pages[0].rotation).toBe(90);
+    expect(opData.vdm.pages.slice(1).every((page: { rotation: number }) => page.rotation === 0)).toBe(true);
     console.log(`[E2E STEP D] Created Mutation Version: ${rotatedVersionId} (Version #${opData.version.version_number})`);
 
     // Reload or refresh session in UI
@@ -196,6 +140,15 @@ test.describe('Studio V2 Whole-Stack Real PDF E2E Validation', () => {
     // Verify Version 1 badge in Header
     await expect(page.getByText('Version 1', { exact: false }).first()).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('Status: Saved', { exact: false }).first()).toBeVisible();
+    const rotatedPageImage = page.locator('main img[alt="Page 1"]').first();
+    await expect(rotatedPageImage).toBeVisible({ timeout: 15_000 });
+    const rotatedTileDimensions = await rotatedPageImage.evaluate((img: HTMLImageElement) => ({
+      complete: img.complete,
+      width: img.naturalWidth,
+      height: img.naturalHeight,
+    }));
+    expect(rotatedTileDimensions.complete).toBe(true);
+    expect(rotatedTileDimensions.width).toBeGreaterThan(rotatedTileDimensions.height);
 
     // -------------------------------------------------------------------------
     // STEP E: Undo & Redo Workflow

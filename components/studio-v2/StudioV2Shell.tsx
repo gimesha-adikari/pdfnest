@@ -7,6 +7,7 @@ import { StudioV2Workspace } from "./StudioV2Workspace";
 import { StudioV2CommandPalette } from "./StudioV2CommandPalette";
 import { StudioV2MobileNav } from "./StudioV2MobileNav";
 import { StudioV2BottomSheet } from "./StudioV2BottomSheet";
+import { StudioV2Entry } from "./StudioV2Entry";
 import { useStudioSession } from "@/hooks/studio-v2/useStudioSession";
 import {
   DocumentInfo,
@@ -14,7 +15,8 @@ import {
   InspectorTab,
   ToolCategory,
 } from "./types";
-import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
+import { StudioCommand } from "@/lib/studio-v2/api";
+import { AlertTriangle, Loader2, RefreshCw, Upload } from "lucide-react";
 
 function formatBytes(bytes: number): string {
   if (!bytes || bytes === 0) return "0 KB";
@@ -50,6 +52,7 @@ export const StudioV2Shell: React.FC = () => {
     vdm,
     history: backendHistory,
     syncStatus,
+    lifecycle,
     isLoading,
     isSaving,
     error,
@@ -59,6 +62,9 @@ export const StudioV2Shell: React.FC = () => {
     redo,
     checkout,
     refetch,
+    createSessionFromUpload,
+    enterStudio,
+    executeCommand,
   } = useStudioSession(sessionIdParam);
 
   // Local Ephemeral UI State
@@ -69,6 +75,162 @@ export const StudioV2Shell: React.FC = () => {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState<boolean>(false);
   const [mobileSheetOpen, setMobileSheetOpen] = useState<boolean>(false);
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
+
+  const selectedPage = useMemo(
+    () => vdm?.pages.find((page) => page.page_id === selectedPageId) ?? null,
+    [vdm, selectedPageId]
+  );
+  const selectedPageIndex = useMemo(
+    () => (vdm && selectedPageId ? vdm.pages.findIndex((page) => page.page_id === selectedPageId) : -1),
+    [vdm, selectedPageId]
+  );
+
+  const newIdempotencyKey = useCallback((operation: string) => {
+    const suffix =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    return `studio-v2-${operation}-${suffix}`;
+  }, []);
+
+  const handleRotate = useCallback(
+    async (deltaDegrees: 90 | -90) => {
+      if (!selectedPage || !activeVersion) return;
+      const command: StudioCommand = {
+        base_version_id: activeVersion.id,
+        idempotency_key: newIdempotencyKey("rotate-page"),
+        operation: "rotate_page",
+        parameters: { page_ids: [selectedPage.page_id], delta_degrees: deltaDegrees },
+      };
+      try {
+        await executeCommand(command);
+      } catch {
+        // The hook exposes the authoritative error state to the shell.
+      }
+    },
+    [selectedPage, activeVersion, newIdempotencyKey, executeCommand]
+  );
+
+  const handleDeletePage = useCallback(async () => {
+    if (!selectedPage || !activeVersion || !vdm) return;
+    const selectedIndex = vdm.pages.findIndex((page) => page.page_id === selectedPage.page_id);
+    const plannedNextPage = vdm.pages[selectedIndex + 1] ?? vdm.pages[selectedIndex - 1] ?? null;
+    setSelectedPageId(plannedNextPage?.page_id ?? null);
+    try {
+      const response = await executeCommand({
+        base_version_id: activeVersion.id,
+        idempotency_key: newIdempotencyKey("delete-page"),
+        operation: "delete_pages",
+        parameters: { page_ids: [selectedPage.page_id] },
+      });
+      if (response) {
+        const nextPage = response.vdm.pages[selectedIndex] ?? response.vdm.pages[selectedIndex - 1] ?? null;
+        setSelectedPageId(nextPage?.page_id ?? null);
+      }
+    } catch {
+      // Keep the existing selection and authoritative VDM on failure.
+      setSelectedPageId(selectedPage.page_id);
+    }
+  }, [selectedPage, activeVersion, vdm, executeCommand, newIdempotencyKey]);
+
+  const handleReorderPage = useCallback(
+    async (direction: -1 | 1) => {
+      if (!vdm || !selectedPage || !activeVersion) return;
+      const targetIndex = selectedPageIndex + direction;
+      if (selectedPageIndex < 0 || targetIndex < 0 || targetIndex >= vdm.pages.length) return;
+      const pageIds = vdm.pages.map((page) => page.page_id);
+      [pageIds[selectedPageIndex], pageIds[targetIndex]] = [pageIds[targetIndex], pageIds[selectedPageIndex]];
+      try {
+        await executeCommand({
+          base_version_id: activeVersion.id,
+          idempotency_key: newIdempotencyKey("reorder-pages"),
+          operation: "reorder_pages",
+          parameters: { page_ids: pageIds },
+        });
+      } catch {
+        // Keep the authoritative order and selected page on failure.
+      }
+    },
+    [vdm, selectedPage, activeVersion, selectedPageIndex, executeCommand, newIdempotencyKey]
+  );
+
+  const handleDuplicatePage = useCallback(async () => {
+    if (!vdm || !selectedPage || !activeVersion) return;
+    const existingPageIds = new Set(vdm.pages.map((page) => page.page_id));
+    try {
+      const response = await executeCommand({
+        base_version_id: activeVersion.id,
+        idempotency_key: newIdempotencyKey("duplicate-page"),
+        operation: "duplicate_pages",
+        parameters: { page_ids: [selectedPage.page_id], copies: 1 },
+      });
+      const duplicate = response?.vdm.pages.find(
+        (page) => !existingPageIds.has(page.page_id) && page.parent_page_id === selectedPage.page_id
+      );
+      if (duplicate) setSelectedPageId(duplicate.page_id);
+    } catch {
+      // Keep the source page selected when duplication fails.
+    }
+  }, [vdm, selectedPage, activeVersion, executeCommand, newIdempotencyKey]);
+
+  const handleAddBlankPage = useCallback(async () => {
+    if (!vdm || !activeVersion) return;
+    const existingPageIds = new Set(vdm.pages.map((page) => page.page_id));
+    const position = selectedPageIndex >= 0 ? selectedPageIndex + 1 : vdm.pages.length;
+    try {
+      const response = await executeCommand({
+        base_version_id: activeVersion.id,
+        idempotency_key: newIdempotencyKey("insert-blank-page"),
+        operation: "insert_blank_pages",
+        parameters: { position, count: 1 },
+      });
+      const blank = response?.vdm.pages.find(
+        (page) => !existingPageIds.has(page.page_id) && page.is_blank
+      );
+      if (blank) setSelectedPageId(blank.page_id);
+    } catch {
+      // Keep the existing selection when blank-page insertion fails.
+    }
+  }, [vdm, activeVersion, selectedPageIndex, executeCommand, newIdempotencyKey]);
+
+  const handleCropPage = useCallback(
+    async (cropBox: number[]) => {
+      if (!selectedPage || !activeVersion) return;
+      try {
+        await executeCommand({
+          base_version_id: activeVersion.id,
+          idempotency_key: newIdempotencyKey("crop-page"),
+          operation: "crop_page",
+          parameters: { page_ids: [selectedPage.page_id], crop_box: cropBox },
+        });
+      } catch {
+        // Keep the authoritative VDM and let the hook expose the recoverable error.
+      }
+    },
+    [selectedPage, activeVersion, executeCommand, newIdempotencyKey]
+  );
+
+  const handleUpdateMetadata = useCallback(
+    async (metadata: { title: string; author: string; subject: string; keywords: string }) => {
+      if (!activeVersion) return;
+      try {
+        await executeCommand({
+          base_version_id: activeVersion.id,
+          idempotency_key: newIdempotencyKey("update-metadata"),
+          operation: "update_metadata",
+          parameters: metadata,
+        });
+      } catch {
+        // Keep the authoritative VDM and expose the recoverable error via the hook.
+      }
+    },
+    [activeVersion, executeCommand, newIdempotencyKey]
+  );
+
+  useEffect(() => {
+    if (!vdm || !selectedPageId || vdm.pages.some((page) => page.page_id === selectedPageId)) return;
+    setSelectedPageId(vdm.pages[0]?.page_id ?? null);
+  }, [vdm, selectedPageId]);
 
   // Transform Authoritative State for UI Components
   const docInfo: DocumentInfo = useMemo(() => {
@@ -158,7 +320,17 @@ export const StudioV2Shell: React.FC = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleFitToScreen]);
 
-  // Loading State
+  if (lifecycle === "entry" || lifecycle === "creating") {
+    return (
+      <StudioV2Entry
+        isCreating={lifecycle === "creating"}
+        error={error}
+        onUpload={createSessionFromUpload}
+      />
+    );
+  }
+
+  // Loading State for an explicit session only.
   if (isLoading && !session) {
     return (
       <div className="h-screen w-screen bg-[#0B0C0F] text-[#F5F7FA] flex flex-col items-center justify-center gap-3">
@@ -170,8 +342,28 @@ export const StudioV2Shell: React.FC = () => {
     );
   }
 
+  // Invalid IDs get their own recovery state and never create a replacement.
+  if (lifecycle === "not_found") {
+    return (
+      <div className="h-screen w-screen bg-[#0B0C0F] text-[#F5F7FA] flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-12 h-12 rounded-full bg-amber-900/30 border border-amber-700/60 flex items-center justify-center text-amber-300 mb-4">
+          <AlertTriangle className="w-6 h-6" />
+        </div>
+        <h2 className="text-base font-semibold text-white mb-1">Studio session not found</h2>
+        <p className="text-xs text-[#9AA1AD] max-w-sm mb-6 font-mono">{error || "This Studio session does not exist or is no longer available."}</p>
+        <div className="flex gap-2">
+          <button onClick={enterStudio} className="flex items-center gap-2 bg-[#7c3aed] text-white text-xs font-medium px-4 py-2 rounded hover:bg-[#6d28d9] transition-colors">
+            <Upload className="w-3.5 h-3.5" />
+            <span>Open another PDF</span>
+          </button>
+          <button onClick={enterStudio} className="text-xs text-[#D8DCE3] border border-white/15 px-4 py-2 rounded hover:bg-white/5 transition-colors">Return to Studio</button>
+        </div>
+      </div>
+    );
+  }
+
   // Error State (with retry)
-  if (error && !session) {
+  if (lifecycle === "error" && !session) {
     return (
       <div className="h-screen w-screen bg-[#0B0C0F] text-[#F5F7FA] flex flex-col items-center justify-center p-6 text-center">
         <div className="w-12 h-12 rounded-full bg-red-900/30 border border-red-800 flex items-center justify-center text-red-400 mb-4">
@@ -205,6 +397,12 @@ export const StudioV2Shell: React.FC = () => {
         onExport={() => {}}
       />
 
+      {error && (
+        <div role="alert" className="fixed left-1/2 top-[56px] z-50 -translate-x-1/2 rounded border border-red-800/80 bg-red-950/90 px-4 py-2 text-xs text-red-100 shadow-lg">
+          {error}
+        </div>
+      )}
+
       {/* Main Workspace (Sidebar + Canvas + Inspector) */}
       <StudioV2Workspace
         document={docInfo}
@@ -226,7 +424,19 @@ export const StudioV2Shell: React.FC = () => {
         onTogglePan={handleTogglePan}
         onOpenCommandPalette={() => setCommandPaletteOpen(true)}
         onCheckoutVersion={checkout}
-        onAddNewPage={() => {}}
+        metadata={vdm?.metadata}
+        onUpdateMetadata={handleUpdateMetadata}
+        onAddNewPage={handleAddBlankPage}
+        onRotateClockwise={() => handleRotate(90)}
+        onRotateCounterClockwise={() => handleRotate(-90)}
+        onDeletePage={handleDeletePage}
+        onMovePageEarlier={() => handleReorderPage(-1)}
+        onMovePageLater={() => handleReorderPage(1)}
+        onDuplicatePage={handleDuplicatePage}
+        onCropPage={handleCropPage}
+        canMovePageEarlier={selectedPageIndex > 0}
+        canMovePageLater={selectedPageIndex >= 0 && selectedPageIndex < (vdm?.pages.length ?? 0) - 1}
+        isCommandLoading={isSaving}
       />
 
       {/* Mobile Bottom Docked Navigation */}
@@ -247,6 +457,8 @@ export const StudioV2Shell: React.FC = () => {
         isOpen={commandPaletteOpen}
         onClose={() => setCommandPaletteOpen(false)}
         onFitToScreen={handleFitToScreen}
+        onRotatePage={() => handleRotate(90)}
+        canRotatePage={Boolean(selectedPage) && !isSaving}
         onExport={() => {}}
       />
     </div>

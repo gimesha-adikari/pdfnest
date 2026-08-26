@@ -5,7 +5,7 @@ import { StudioV2Sidebar } from "./StudioV2Sidebar";
 import { StudioV2Canvas } from "./StudioV2Canvas";
 import { StudioV2Inspector } from "./StudioV2Inspector";
 import { DocumentInfo, HistoryItem, InspectorTab, ToolCategory } from "./types";
-import { StudioVDMDTO } from "@/lib/studio-v2/api";
+import { StudioMetadataParameters, StudioVDMDTO } from "@/lib/studio-v2/api";
 
 interface StudioV2WorkspaceProps {
   document: DocumentInfo;
@@ -27,7 +27,19 @@ interface StudioV2WorkspaceProps {
   onTogglePan: () => void;
   onOpenCommandPalette: () => void;
   onCheckoutVersion?: (versionId: string) => void;
+  metadata?: Record<string, string> | null;
+  onUpdateMetadata?: (metadata: StudioMetadataParameters) => void | Promise<void>;
   onAddNewPage?: () => void;
+  onRotateClockwise?: () => void;
+  onRotateCounterClockwise?: () => void;
+  onDeletePage?: () => void;
+  onMovePageEarlier?: () => void;
+  onMovePageLater?: () => void;
+  onDuplicatePage?: () => void;
+  onCropPage?: (cropBox: number[]) => void | Promise<void>;
+  canMovePageEarlier?: boolean;
+  canMovePageLater?: boolean;
+  isCommandLoading?: boolean;
 }
 
 export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
@@ -50,7 +62,19 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
   onTogglePan,
   onOpenCommandPalette,
   onCheckoutVersion,
+  metadata,
+  onUpdateMetadata,
   onAddNewPage,
+  onRotateClockwise,
+  onRotateCounterClockwise,
+  onDeletePage,
+  onMovePageEarlier,
+  onMovePageLater,
+  onDuplicatePage,
+  onCropPage,
+  canMovePageEarlier,
+  canMovePageLater,
+  isCommandLoading,
 }) => {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#0B0C0F]">
@@ -91,6 +115,19 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
           history={history}
           onSelectTab={onSelectInspectorTab}
           onCheckoutVersion={onCheckoutVersion}
+          metadata={metadata}
+          onUpdateMetadata={onUpdateMetadata}
+          selectedPage={vdm?.pages.find((page) => page.page_id === selectedPageId) ?? null}
+          onRotateClockwise={onRotateClockwise}
+          onRotateCounterClockwise={onRotateCounterClockwise}
+          onDeletePage={onDeletePage}
+          onMovePageEarlier={onMovePageEarlier}
+          onMovePageLater={onMovePageLater}
+          onDuplicatePage={onDuplicatePage}
+          onCropPage={onCropPage}
+          canMovePageEarlier={canMovePageEarlier}
+          canMovePageLater={canMovePageLater}
+          isCommandLoading={isCommandLoading}
         />
       </div>
     </div>

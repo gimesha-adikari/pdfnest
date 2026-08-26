@@ -104,6 +104,13 @@ export interface StudioVDMDTO {
   metadata?: Record<string, string>;
 }
 
+export interface StudioMetadataParameters {
+  title: string;
+  author: string;
+  subject: string;
+  keywords: string;
+}
+
 export interface StudioSessionResponse {
   session: StudioSessionDTO;
   document: StudioDocumentDTO;
@@ -129,6 +136,43 @@ export interface ApplyOperationRequest {
   new_virtual_model: StudioVDMDTO;
   is_materialized?: boolean;
 }
+
+interface StudioCommandEnvelope {
+  base_version_id: string;
+  idempotency_key: string;
+}
+
+export type StudioCommand = StudioCommandEnvelope &
+  (
+    | {
+        operation: "rotate_page";
+        parameters: { page_ids: string[]; delta_degrees: number };
+      }
+    | {
+        operation: "delete_pages";
+        parameters: { page_ids: string[] };
+      }
+    | {
+        operation: "reorder_pages";
+        parameters: { page_ids: string[] };
+      }
+    | {
+        operation: "duplicate_pages";
+        parameters: { page_ids: string[]; copies: number };
+      }
+    | {
+        operation: "insert_blank_pages";
+        parameters: { position: number; count: number };
+      }
+    | {
+        operation: "crop_page";
+        parameters: { page_ids: string[]; crop_box: number[] };
+      }
+    | {
+        operation: "update_metadata";
+        parameters: StudioMetadataParameters;
+      }
+  );
 
 export interface ApplyOperationResponse {
   version: StudioVersionDTO;
@@ -189,6 +233,21 @@ export const studioV2Api = {
     }
   },
 
+  async createSessionFromUpload(file: File): Promise<StudioSessionResponse> {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    try {
+      const res = await studioV2Client.post<StudioSessionResponse>(
+        "/sessions/from-upload",
+        form,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
+      return res.data;
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
   async getSession(sessionId: string): Promise<StudioSessionResponse> {
     try {
       const res = await studioV2Client.get<StudioSessionResponse>(
@@ -200,6 +259,7 @@ export const studioV2Api = {
     }
   },
 
+  /** @deprecated Product commands must use executeCommand; retained for legacy fixtures. */
   async applyOperation(
     sessionId: string,
     req: ApplyOperationRequest
@@ -208,6 +268,21 @@ export const studioV2Api = {
       const res = await studioV2Client.post<ApplyOperationResponse>(
         `/sessions/${sessionId}/operations`,
         req
+      );
+      return res.data;
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  async executeCommand(
+    sessionId: string,
+    command: StudioCommand
+  ): Promise<ApplyOperationResponse> {
+    try {
+      const res = await studioV2Client.post<ApplyOperationResponse>(
+        `/sessions/${sessionId}/commands`,
+        command
       );
       return res.data;
     } catch (err) {

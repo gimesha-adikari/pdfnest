@@ -56,10 +56,10 @@ export const StudioV2Sidebar: React.FC<StudioV2SidebarProps> = ({
         <button
           onClick={onAddNewPage}
           className="w-full flex items-center justify-center gap-2 bg-[#181B21] border border-[#292D35] text-white text-xs font-medium py-1.5 rounded hover:bg-[#20242B] transition-colors"
-          aria-label="Add new blank page"
+          aria-label="Add blank page"
         >
           <Plus className="w-3.5 h-3.5" />
-          <span>New Page</span>
+          <span>Add Blank Page</span>
         </button>
       </div>
 
