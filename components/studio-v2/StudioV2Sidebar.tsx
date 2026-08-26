@@ -19,6 +19,7 @@ interface StudioV2SidebarProps {
   activeTool: ToolCategory;
   onSelectTool: (tool: ToolCategory) => void;
   onAddNewPage?: () => void;
+  onEnterEdit?: () => void;
 }
 
 export const StudioV2Sidebar: React.FC<StudioV2SidebarProps> = ({
@@ -26,6 +27,7 @@ export const StudioV2Sidebar: React.FC<StudioV2SidebarProps> = ({
   activeTool,
   onSelectTool,
   onAddNewPage,
+  onEnterEdit,
 }) => {
   const navItems: { id: ToolCategory; label: string; icon: React.ElementType }[] = [
     { id: "pages", label: "Pages", icon: LayoutGrid },
@@ -87,6 +89,13 @@ export const StudioV2Sidebar: React.FC<StudioV2SidebarProps> = ({
           );
         })}
       </nav>
+
+      <div className="border-t border-[#292D35] p-3">
+        <button type="button" onClick={onEnterEdit} aria-label="Edit PDF" data-testid="studio-enter-edit-pdf"
+          className="flex w-full items-center justify-center gap-2 rounded border border-violet-400/40 bg-violet-500/15 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-500/25">
+          <Edit3 className="h-3.5 w-3.5" /> Edit PDF
+        </button>
+      </div>
 
       {/* Footer Navigation */}
       <div className="mt-auto border-t border-[#292D35] py-2">

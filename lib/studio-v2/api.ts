@@ -196,7 +196,7 @@ export interface StudioEditorElementDTO {
   text: string;
   original_text?: string;
   x: number; y: number; width: number; height: number; size: number;
-  font: string; bg_color?: string; text_color?: string;
+  font: string; bg_color?: string; text_color?: string; transparent_bg?: boolean;
 }
 export interface StudioEditorPageDTO {
   page_num: number; width: number; height: number;
@@ -563,6 +563,13 @@ export const studioV2Api = {
     } catch (err) {
       return handleAxiosError(err);
     }
+  },
+
+  async getEditorState(sessionId: string, stateId: string): Promise<{ editor_state: StudioEditorStateDTO }> {
+    try {
+      const response = await studioV2Client.get(`/sessions/${sessionId}/editor/${stateId}`);
+      return response.data;
+    } catch (err) { return handleAxiosError(err); }
   },
 
   async cancelJob(sessionId: string, jobId: string): Promise<StudioJobResponse> {

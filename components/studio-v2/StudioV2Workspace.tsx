@@ -30,6 +30,7 @@ interface StudioV2WorkspaceProps {
   metadata?: Record<string, string> | null;
   onUpdateMetadata?: (metadata: StudioMetadataParameters) => void | Promise<void>;
   onAddNewPage?: () => void;
+  onEnterEdit?: () => void;
   onRotateClockwise?: () => void;
   onRotateCounterClockwise?: () => void;
   onDeletePage?: () => void;
@@ -84,6 +85,7 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
   metadata,
   onUpdateMetadata,
   onAddNewPage,
+  onEnterEdit,
   onRotateClockwise,
   onRotateCounterClockwise,
   onDeletePage,
@@ -123,6 +125,7 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
           activeTool={activeTool}
           onSelectTool={onSelectTool}
           onAddNewPage={onAddNewPage}
+          onEnterEdit={onEnterEdit}
         />
       </div>
 

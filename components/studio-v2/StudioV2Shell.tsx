@@ -8,6 +8,7 @@ import { StudioV2CommandPalette } from "./StudioV2CommandPalette";
 import { StudioV2MobileNav } from "./StudioV2MobileNav";
 import { StudioV2BottomSheet } from "./StudioV2BottomSheet";
 import { StudioV2Entry } from "./StudioV2Entry";
+import { StudioV2EditWorkspace } from "./StudioV2EditWorkspace";
 import { useStudioSession } from "@/hooks/studio-v2/useStudioSession";
 import {
   DocumentInfo,
@@ -133,6 +134,7 @@ export const StudioV2Shell: React.FC = () => {
   const [markupAction, setMarkupAction] = useState<StudioMarkupAction>("highlight");
   const [markupBoxes, setMarkupBoxes] = useState<StudioMarkupBox[]>([]);
   const [markupJob, setMarkupJob] = useState<StudioJobDTO | null>(null);
+  const [editMode, setEditMode] = useState(false);
   const [markupError, setMarkupError] = useState<string | null>(null);
   const markupSelectionIndexRef = useRef<number | null>(null);
 
@@ -683,6 +685,10 @@ export const StudioV2Shell: React.FC = () => {
     }
   }, []);
 
+  const enterEdit = useCallback(() => {
+    if (session && activeVersion) setEditMode(true);
+  }, [activeVersion, session]);
+
   // Global Keyboard Shortcuts (Cmd+K, 0)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -769,6 +775,14 @@ export const StudioV2Shell: React.FC = () => {
 
   return (
     <div className="h-screen w-screen bg-[#0B0C0F] text-[#F5F7FA] font-sans antialiased overflow-hidden flex flex-col select-none">
+      {editMode && session && activeVersion ? <StudioV2EditWorkspace
+        sessionId={session.id}
+        baseVersionId={activeVersion.id}
+        documentName={docInfo.name}
+        newIdempotencyKey={newIdempotencyKey}
+        onBack={() => setEditMode(false)}
+        onCompiled={async () => { await refetch(); setEditMode(false); }}
+      /> : <>
       {/* Top Fixed Header */}
       <StudioV2Header
         document={docInfo}
@@ -837,6 +851,7 @@ export const StudioV2Shell: React.FC = () => {
         metadata={vdm?.metadata}
         onUpdateMetadata={handleUpdateMetadata}
         onAddNewPage={handleAddBlankPage}
+        onEnterEdit={enterEdit}
         onRotateClockwise={() => handleRotate(90)}
         onRotateCounterClockwise={() => handleRotate(-90)}
         onDeletePage={handleDeletePage}
@@ -890,6 +905,7 @@ export const StudioV2Shell: React.FC = () => {
         canRotatePage={Boolean(selectedPage) && !isSaving}
         onExport={handleExport}
       />
+      </>}
     </div>
   );
 };
