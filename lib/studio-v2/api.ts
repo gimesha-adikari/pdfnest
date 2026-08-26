@@ -61,9 +61,11 @@ export interface VDMOverlayDTO {
   type: string;
   text?: string;
   font?: string;
+  color?: string;
   font_size?: number;
   opacity?: number;
   rotation?: number;
+  position?: string;
   asset_id?: string;
   asset_r2_key?: string;
   rect?: number[];
@@ -109,6 +111,26 @@ export interface StudioMetadataParameters {
   author: string;
   subject: string;
   keywords: string;
+}
+
+export interface StudioPageNumberingParameters {
+  enabled: boolean;
+  position: "bl" | "bc" | "br" | "tl" | "tc" | "tr";
+  font_size: number;
+  font_family: "Helvetica" | "Times-Roman" | "Courier";
+}
+
+export interface StudioTextOverlayParameters {
+  page_id: string;
+  text: string;
+  x: number;
+  y: number;
+  font_size: number;
+  color: string;
+}
+
+export interface StudioUpdateTextOverlayParameters extends StudioTextOverlayParameters {
+  overlay_id: string;
 }
 
 export interface StudioSessionResponse {
@@ -172,7 +194,43 @@ export type StudioCommand = StudioCommandEnvelope &
         operation: "update_metadata";
         parameters: StudioMetadataParameters;
       }
+    | {
+        operation: "update_page_numbering";
+        parameters: StudioPageNumberingParameters;
+      }
+    | {
+        operation: "add_watermark";
+        parameters: StudioWatermarkParameters;
+      }
+    | {
+        operation: "add_text_overlay";
+        parameters: StudioTextOverlayParameters;
+      }
+    | {
+        operation: "update_text_overlay";
+        parameters: StudioUpdateTextOverlayParameters;
+      }
+    | {
+        operation: "delete_overlay";
+        parameters: StudioDeleteOverlayParameters;
+      }
   );
+
+export interface StudioWatermarkParameters {
+  page_ids: string[];
+  kind: "text" | "image";
+  text?: string;
+  font: "Helvetica" | "Times-Roman" | "Courier";
+  font_size: number;
+  rotation: number;
+  opacity: number;
+  position: "tl" | "tc" | "tr" | "cl" | "cr" | "bl" | "bc" | "br" | "cc";
+  asset_id?: string;
+}
+
+export interface StudioDeleteOverlayParameters {
+  targets: Array<{ page_id: string; overlay_id: string }>;
+}
 
 export interface ApplyOperationResponse {
   version: StudioVersionDTO;
@@ -337,6 +395,22 @@ export const studioV2Api = {
   async uploadAsset(sessionId: string, file: File): Promise<StudioAssetUploadResponse> {
     const form = new FormData();
     form.append("file", file, file.name);
+    try {
+      const res = await studioV2Client.post<StudioAssetUploadResponse>(
+        `/sessions/${sessionId}/assets`,
+        form,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
+      return res.data;
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  async uploadWatermarkAsset(sessionId: string, file: File): Promise<StudioAssetUploadResponse> {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    form.append("asset_kind", "watermark_image");
     try {
       const res = await studioV2Client.post<StudioAssetUploadResponse>(
         `/sessions/${sessionId}/assets`,

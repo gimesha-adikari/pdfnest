@@ -20,6 +20,10 @@ import {
   StudioCommand,
   StudioCompressionLevel,
   StudioMaterializationRequest,
+  StudioPageNumberingParameters,
+  StudioTextOverlayParameters,
+  StudioUpdateTextOverlayParameters,
+  StudioWatermarkParameters,
 } from "@/lib/studio-v2/api";
 import { AlertTriangle, Loader2, RefreshCw, Upload } from "lucide-react";
 
@@ -115,6 +119,7 @@ export const StudioV2Shell: React.FC = () => {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState<boolean>(false);
   const [mobileSheetOpen, setMobileSheetOpen] = useState<boolean>(false);
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
+  const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [isMaterializing, setIsMaterializing] = useState(false);
@@ -129,6 +134,12 @@ export const StudioV2Shell: React.FC = () => {
     () => (vdm && selectedPageId ? vdm.pages.findIndex((page) => page.page_id === selectedPageId) : -1),
     [vdm, selectedPageId]
   );
+
+  useEffect(() => {
+    if (!selectedPage || !selectedOverlayId || !selectedPage.overlays.some((overlay) => overlay.id === selectedOverlayId)) {
+      setSelectedOverlayId(null);
+    }
+  }, [selectedPage, selectedOverlayId]);
 
   const newIdempotencyKey = useCallback((operation: string) => {
     const suffix =
@@ -268,6 +279,84 @@ export const StudioV2Shell: React.FC = () => {
       } catch {
         // Keep the authoritative VDM and expose the recoverable error via the hook.
       }
+    },
+    [activeVersion, executeCommand, newIdempotencyKey]
+  );
+
+  const handleWatermark = useCallback(
+    async (parameters: StudioWatermarkParameters) => {
+      if (!activeVersion || !vdm) return;
+      await executeCommand({
+        base_version_id: activeVersion.id,
+        idempotency_key: newIdempotencyKey("add-watermark"),
+        operation: "add_watermark",
+        parameters: { ...parameters, page_ids: vdm.pages.map((page) => page.page_id) },
+      });
+    },
+    [activeVersion, executeCommand, newIdempotencyKey, vdm]
+  );
+
+  const handlePageNumbering = useCallback(
+    async (parameters: StudioPageNumberingParameters) => {
+      if (!activeVersion) return;
+      await executeCommand({
+        base_version_id: activeVersion.id,
+        idempotency_key: newIdempotencyKey("update-page-numbering"),
+        operation: "update_page_numbering",
+        parameters,
+      });
+    },
+    [activeVersion, executeCommand, newIdempotencyKey]
+  );
+
+  const handleAddText = useCallback(async (parameters: StudioTextOverlayParameters) => {
+    if (!activeVersion || !vdm) return;
+    const existing = new Set(vdm.pages.find((page) => page.page_id === parameters.page_id)?.overlays.map((overlay) => overlay.id) ?? []);
+    const response = await executeCommand({
+      base_version_id: activeVersion.id,
+      idempotency_key: newIdempotencyKey("add-text-overlay"),
+      operation: "add_text_overlay",
+      parameters,
+    });
+    const created = response?.vdm.pages.find((page) => page.page_id === parameters.page_id)?.overlays.find((overlay) => overlay.type === "text" && !existing.has(overlay.id));
+    if (created) setSelectedOverlayId(created.id);
+  }, [activeVersion, vdm, executeCommand, newIdempotencyKey]);
+
+  const handleUpdateText = useCallback(async (parameters: StudioUpdateTextOverlayParameters) => {
+    if (!activeVersion) return;
+    await executeCommand({
+      base_version_id: activeVersion.id,
+      idempotency_key: newIdempotencyKey("update-text-overlay"),
+      operation: "update_text_overlay",
+      parameters,
+    });
+  }, [activeVersion, executeCommand, newIdempotencyKey]);
+
+  const handleRemoveText = useCallback(async (target: { page_id: string; overlay_id: string }) => {
+    if (!activeVersion) return;
+    await executeCommand({
+      base_version_id: activeVersion.id,
+      idempotency_key: newIdempotencyKey("delete-text-overlay"),
+      operation: "delete_overlay",
+      parameters: { targets: [target] },
+    });
+    setSelectedOverlayId(null);
+  }, [activeVersion, executeCommand, newIdempotencyKey]);
+
+  const watermarkTargets = useMemo(
+    () => (vdm?.pages ?? []).flatMap((page) => page.overlays.filter((overlay) => overlay.type === "watermark").map((overlay) => ({ page_id: page.page_id, overlay_id: overlay.id }))),
+    [vdm]
+  );
+
+  const handleRemoveWatermark = useCallback(
+    async (targets: Array<{ page_id: string; overlay_id: string }>) => {
+      if (!activeVersion || targets.length === 0) return;
+      await executeCommand({
+        base_version_id: activeVersion.id,
+        idempotency_key: newIdempotencyKey("delete-overlay"),
+        operation: "delete_overlay",
+        parameters: { targets },
+      });
     },
     [activeVersion, executeCommand, newIdempotencyKey]
   );
@@ -545,6 +634,16 @@ export const StudioV2Shell: React.FC = () => {
         }}
         onMerge={(assetId) => void handleMaterialize("merge", { sourceAssetIds: [assetId] })}
         onSplit={handleSplit}
+        onUploadWatermarkAsset={async (file) => {
+          if (!session) throw new Error("Studio session is not ready");
+          const response = await studioV2Api.uploadWatermarkAsset(session.id, file);
+          return response.asset;
+        }}
+        onWatermark={handleWatermark}
+        watermarkTargets={watermarkTargets}
+        onRemoveWatermark={handleRemoveWatermark}
+        pageNumbering={vdm?.page_numbering}
+        onPageNumbering={handlePageNumbering}
         isMaterializing={isMaterializing}
         materializeDisabled={!session || !activeVersion || isSaving}
         isExporting={isExporting}
@@ -588,6 +687,11 @@ export const StudioV2Shell: React.FC = () => {
         onMovePageLater={() => handleReorderPage(1)}
         onDuplicatePage={handleDuplicatePage}
         onCropPage={handleCropPage}
+        selectedOverlayId={selectedOverlayId}
+        onSelectOverlay={setSelectedOverlayId}
+        onAddText={handleAddText}
+        onUpdateText={handleUpdateText}
+        onRemoveText={handleRemoveText}
         canMovePageEarlier={selectedPageIndex > 0}
         canMovePageLater={selectedPageIndex >= 0 && selectedPageIndex < (vdm?.pages.length ?? 0) - 1}
         isCommandLoading={isSaving}

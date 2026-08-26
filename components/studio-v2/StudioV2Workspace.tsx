@@ -5,7 +5,7 @@ import { StudioV2Sidebar } from "./StudioV2Sidebar";
 import { StudioV2Canvas } from "./StudioV2Canvas";
 import { StudioV2Inspector } from "./StudioV2Inspector";
 import { DocumentInfo, HistoryItem, InspectorTab, ToolCategory } from "./types";
-import { StudioMetadataParameters, StudioVDMDTO } from "@/lib/studio-v2/api";
+import { StudioMetadataParameters, StudioTextOverlayParameters, StudioUpdateTextOverlayParameters, StudioVDMDTO } from "@/lib/studio-v2/api";
 
 interface StudioV2WorkspaceProps {
   document: DocumentInfo;
@@ -37,6 +37,11 @@ interface StudioV2WorkspaceProps {
   onMovePageLater?: () => void;
   onDuplicatePage?: () => void;
   onCropPage?: (cropBox: number[]) => void | Promise<void>;
+  selectedOverlayId?: string | null;
+  onSelectOverlay?: (overlayId: string | null) => void;
+  onAddText?: (parameters: StudioTextOverlayParameters) => void | Promise<void>;
+  onUpdateText?: (parameters: StudioUpdateTextOverlayParameters) => void | Promise<void>;
+  onRemoveText?: (target: { page_id: string; overlay_id: string }) => void | Promise<void>;
   canMovePageEarlier?: boolean;
   canMovePageLater?: boolean;
   isCommandLoading?: boolean;
@@ -72,6 +77,11 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
   onMovePageLater,
   onDuplicatePage,
   onCropPage,
+  selectedOverlayId,
+  onSelectOverlay,
+  onAddText,
+  onUpdateText,
+  onRemoveText,
   canMovePageEarlier,
   canMovePageLater,
   isCommandLoading,
@@ -125,6 +135,11 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
           onMovePageLater={onMovePageLater}
           onDuplicatePage={onDuplicatePage}
           onCropPage={onCropPage}
+          selectedOverlayId={selectedOverlayId}
+          onSelectOverlay={onSelectOverlay}
+          onAddText={onAddText}
+          onUpdateText={onUpdateText}
+          onRemoveText={onRemoveText}
           canMovePageEarlier={canMovePageEarlier}
           canMovePageLater={canMovePageLater}
           isCommandLoading={isCommandLoading}

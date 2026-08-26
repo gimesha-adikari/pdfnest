@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Undo2,
   Redo2,
@@ -14,7 +14,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { DocumentInfo } from "./types";
-import { StudioAssetDTO, StudioCompressionLevel } from "@/lib/studio-v2/api";
+import { StudioAssetDTO, StudioCompressionLevel, StudioPageNumberingParameters, StudioWatermarkParameters, VDMPageNumberingDTO } from "@/lib/studio-v2/api";
 
 interface StudioV2HeaderProps {
   document: DocumentInfo;
@@ -35,6 +35,12 @@ interface StudioV2HeaderProps {
   onUploadMergeAsset?: (file: File) => Promise<StudioAssetDTO>;
   onMerge?: (assetId: string) => void;
   onSplit?: (pageSelection: string) => Promise<void> | void;
+  onUploadWatermarkAsset?: (file: File) => Promise<StudioAssetDTO>;
+  onWatermark?: (parameters: StudioWatermarkParameters) => Promise<void> | void;
+  watermarkTargets?: Array<{ page_id: string; overlay_id: string }>;
+  onRemoveWatermark?: (targets: Array<{ page_id: string; overlay_id: string }>) => Promise<void> | void;
+  pageNumbering?: VDMPageNumberingDTO | null;
+  onPageNumbering?: (parameters: StudioPageNumberingParameters) => Promise<void> | void;
   isMaterializing?: boolean;
   materializeDisabled?: boolean;
 }
@@ -58,6 +64,12 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
   onUploadMergeAsset,
   onMerge,
   onSplit,
+  onUploadWatermarkAsset,
+  onWatermark,
+  watermarkTargets = [],
+  onRemoveWatermark,
+  pageNumbering,
+  onPageNumbering,
   isMaterializing = false,
   materializeDisabled = false,
 }) => {
@@ -71,6 +83,39 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
   const [isUploadingMergeAsset, setIsUploadingMergeAsset] = useState(false);
   const [splitPages, setSplitPages] = useState("");
   const [splitError, setSplitError] = useState<string | null>(null);
+  const [watermarkOpen, setWatermarkOpen] = useState(false);
+  const [watermarkKind, setWatermarkKind] = useState<"text" | "image">("text");
+  const [watermarkText, setWatermarkText] = useState("CONFIDENTIAL");
+  const [watermarkFont, setWatermarkFont] = useState<"Helvetica" | "Times-Roman" | "Courier">("Helvetica");
+  const [watermarkSize, setWatermarkSize] = useState(48);
+  const [watermarkRotation, setWatermarkRotation] = useState(45);
+  const [watermarkOpacity, setWatermarkOpacity] = useState(0.3);
+  const [watermarkPosition, setWatermarkPosition] = useState<StudioWatermarkParameters["position"]>("cc");
+  const [watermarkAsset, setWatermarkAsset] = useState<StudioAssetDTO | null>(null);
+  const [watermarkFilename, setWatermarkFilename] = useState("");
+  const [watermarkError, setWatermarkError] = useState<string | null>(null);
+  const [isUploadingWatermark, setIsUploadingWatermark] = useState(false);
+  const [pageNumbersOpen, setPageNumbersOpen] = useState(false);
+  const [pageNumbersEnabled, setPageNumbersEnabled] = useState(false);
+  const [pageNumbersFont, setPageNumbersFont] = useState<StudioPageNumberingParameters["font_family"]>("Helvetica");
+  const [pageNumbersSize, setPageNumbersSize] = useState(12);
+  const [pageNumbersPosition, setPageNumbersPosition] = useState<StudioPageNumberingParameters["position"]>("bc");
+  const [pageNumbersError, setPageNumbersError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!pageNumbering) {
+      setPageNumbersEnabled(false);
+      return;
+    }
+    setPageNumbersEnabled(pageNumbering.enabled);
+    if (pageNumbering.font_family === "Helvetica" || pageNumbering.font_family === "Times-Roman" || pageNumbering.font_family === "Courier") {
+      setPageNumbersFont(pageNumbering.font_family);
+    }
+    if (pageNumbering.font_size > 0) setPageNumbersSize(pageNumbering.font_size);
+    if (["bl", "bc", "br", "tl", "tc", "tr"].includes(pageNumbering.position)) {
+      setPageNumbersPosition(pageNumbering.position as StudioPageNumberingParameters["position"]);
+    }
+  }, [pageNumbering?.enabled, pageNumbering?.font_family, pageNumbering?.font_size, pageNumbering?.position]);
 
   const submitRedaction = () => {
     const keywords = redactKeywords.trim();
@@ -111,6 +156,62 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
       await onSplit?.(selection);
     } catch (err) {
       setSplitError(err instanceof Error ? err.message : "Invalid page selection");
+    }
+  };
+
+  const handleWatermarkFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !onUploadWatermarkAsset) return;
+    setWatermarkFilename(file.name);
+    setWatermarkAsset(null);
+    setWatermarkError(null);
+    setIsUploadingWatermark(true);
+    try {
+      setWatermarkAsset(await onUploadWatermarkAsset(file));
+    } catch (err) {
+      setWatermarkError(err instanceof Error ? err.message : "Watermark image upload failed");
+    } finally {
+      setIsUploadingWatermark(false);
+    }
+  };
+
+  const submitWatermark = async () => {
+    if (watermarkKind === "text" && !watermarkText.trim()) {
+      setWatermarkError("Enter watermark text.");
+      return;
+    }
+    if (watermarkKind === "image" && !watermarkAsset) {
+      setWatermarkError("Choose a PNG or JPEG watermark image.");
+      return;
+    }
+    setWatermarkError(null);
+    await onWatermark?.({
+      page_ids: [],
+      kind: watermarkKind,
+      text: watermarkKind === "text" ? watermarkText : undefined,
+      font: watermarkFont,
+      font_size: watermarkSize,
+      rotation: watermarkRotation,
+      opacity: watermarkOpacity,
+      position: watermarkPosition,
+      asset_id: watermarkKind === "image" ? watermarkAsset?.id : undefined,
+    });
+    setWatermarkOpen(false);
+  };
+
+  const submitPageNumbers = async (enabled: boolean) => {
+    setPageNumbersError(null);
+    try {
+      await onPageNumbering?.({
+        enabled,
+        font_family: pageNumbersFont,
+        font_size: pageNumbersSize,
+        position: pageNumbersPosition,
+      });
+      setPageNumbersEnabled(enabled);
+      setPageNumbersOpen(false);
+    } catch (err) {
+      setPageNumbersError(err instanceof Error ? err.message : "Page numbering update failed");
     }
   };
 
@@ -298,6 +399,31 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
           <span>Merge / Split</span>
         </button>
         <button
+          onClick={() => {
+            setWatermarkError(null);
+            setWatermarkOpen((open) => !open);
+          }}
+          disabled={materializeDisabled || isMaterializing}
+          className="hidden lg:flex items-center gap-1.5 text-xs text-[#c4b5fd] hover:text-white border border-[#4c1d95] px-2.5 py-1.5 rounded transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          aria-label="Watermark PDF"
+          title="Add a text or image watermark to all current pages"
+        >
+          <span>Watermark</span>
+        </button>
+        <button
+          onClick={() => {
+            setPageNumbersError(null);
+            setPageNumbersOpen((open) => !open);
+          }}
+          disabled={materializeDisabled || isMaterializing}
+          className="hidden lg:flex items-center gap-1.5 text-xs text-[#c4b5fd] hover:text-white border border-[#4c1d95] px-2.5 py-1.5 rounded transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          aria-label="Page Numbers"
+          title="Add or remove sequential page numbers"
+          data-testid="studio-page-numbers-button"
+        >
+          <span>Page Numbers</span>
+        </button>
+        <button
           onClick={onExport}
           disabled={exportDisabled || isExporting}
           className="bg-[#7c3aed] text-white text-xs font-medium px-3.5 py-1.5 rounded hover:bg-[#6d28d9] transition-colors flex items-center gap-1.5 shadow-sm opacity-90 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
@@ -436,6 +562,71 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
             >
               Apply Split
             </button>
+          </div>
+        </div>
+      )}
+      {watermarkOpen && (
+        <div role="dialog" aria-label="Watermark PDF" className="absolute right-16 top-[52px] w-80 rounded-lg border border-[#4c1d95] bg-[#14171C] p-3 shadow-2xl">
+          <div className="mb-1 text-xs font-semibold text-white">Watermark all current pages</div>
+          <p className="mb-3 text-[11px] leading-4 text-[#9AA1AD]">Placement is derived from authoritative PDF page dimensions. This follows V1's global-page behavior.</p>
+          <div className="mb-3 flex gap-1">
+            {(["text", "image"] as const).map((kind) => (
+              <button key={kind} type="button" onClick={() => { setWatermarkKind(kind); setWatermarkError(null); }} className={`flex-1 rounded border px-2 py-1.5 text-xs ${watermarkKind === kind ? "border-[#7c3aed] bg-[#4c1d95] text-white" : "border-[#292D35] text-[#9AA1AD]"}`} aria-label={`${kind === "text" ? "Text" : "Image"} watermark`}>
+                {kind === "text" ? "Text" : "Image"}
+              </button>
+            ))}
+          </div>
+          {watermarkKind === "text" ? (
+            <>
+              <label htmlFor="studio-watermark-text" className="sr-only">Watermark text</label>
+              <input key="studio-watermark-text-control" id="studio-watermark-text" aria-label="Watermark text" value={watermarkText} onChange={(event) => setWatermarkText(event.target.value)} className="mb-2 w-full rounded border border-[#292D35] bg-[#101216] px-2.5 py-2 text-xs text-white" />
+              <label htmlFor="studio-watermark-font" className="sr-only">Watermark font</label>
+              <select id="studio-watermark-font" aria-label="Watermark font" value={watermarkFont} onChange={(event) => setWatermarkFont(event.target.value as typeof watermarkFont)} className="mb-2 w-full rounded border border-[#292D35] bg-[#101216] px-2 py-2 text-xs text-white">
+                <option>Helvetica</option><option>Times-Roman</option><option>Courier</option>
+              </select>
+            </>
+          ) : (
+            <>
+              <label htmlFor="studio-watermark-image" className="sr-only">Watermark image</label>
+              <input key="studio-watermark-image-control" id="studio-watermark-image" aria-label="Watermark image" type="file" accept="image/png,image/jpeg,image/jpg,.png,.jpg,.jpeg" onChange={(event) => void handleWatermarkFileChange(event)} disabled={isUploadingWatermark || isMaterializing} className="mb-2 block w-full text-[11px] text-[#9AA1AD] file:mr-2 file:rounded file:border-0 file:bg-[#4c1d95] file:px-2 file:py-1 file:text-[11px] file:text-white" />
+              {watermarkFilename && <div className="mb-2 truncate text-[11px] text-[#D8DCE3]">{isUploadingWatermark ? "Uploading…" : watermarkFilename}</div>}
+            </>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-[11px] text-[#9AA1AD]">Scale {watermarkSize}<input aria-label="Watermark scale" type="range" min="10" max="300" value={watermarkSize} onChange={(event) => setWatermarkSize(Number(event.target.value))} className="w-full" /></label>
+            <label className="text-[11px] text-[#9AA1AD]">Rotation {watermarkRotation}°<input aria-label="Watermark rotation" type="range" min="-180" max="180" value={watermarkRotation} onChange={(event) => setWatermarkRotation(Number(event.target.value))} className="w-full" /></label>
+            <label className="text-[11px] text-[#9AA1AD]">Opacity {watermarkOpacity.toFixed(2)}<input aria-label="Watermark opacity" type="range" min="0.05" max="1" step="0.05" value={watermarkOpacity} onChange={(event) => setWatermarkOpacity(Number(event.target.value))} className="w-full" /></label>
+            <label className="text-[11px] text-[#9AA1AD]">Position<select aria-label="Watermark position" value={watermarkPosition} onChange={(event) => setWatermarkPosition(event.target.value as typeof watermarkPosition)} className="mt-1 w-full rounded border border-[#292D35] bg-[#101216] px-2 py-1 text-xs text-white"><option value="tl">Top left</option><option value="tc">Top center</option><option value="tr">Top right</option><option value="cl">Center left</option><option value="cc">Center</option><option value="cr">Center right</option><option value="bl">Bottom left</option><option value="bc">Bottom center</option><option value="br">Bottom right</option></select></label>
+          </div>
+          {watermarkError && <p className="mt-2 text-[11px] text-red-300">{watermarkError}</p>}
+          <div className="mt-3 flex justify-between gap-2">
+            <button type="button" onClick={() => void onRemoveWatermark?.(watermarkTargets)} disabled={!watermarkTargets.length || isMaterializing} className="rounded border border-red-900 px-2.5 py-1.5 text-xs text-red-300 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Remove Watermark">Remove</button>
+            <div className="flex gap-2"><button type="button" onClick={() => setWatermarkOpen(false)} className="rounded border border-[#292D35] px-2.5 py-1.5 text-xs text-[#9AA1AD]">Cancel</button><button type="button" onClick={() => void submitWatermark()} disabled={isUploadingWatermark || isMaterializing} className="rounded bg-[#4c1d95] px-2.5 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50" aria-label="Apply Watermark">Apply Watermark</button></div>
+          </div>
+        </div>
+      )}
+      {pageNumbersOpen && (
+        <div role="dialog" aria-label="Page Numbers" className="absolute right-16 top-[52px] w-80 rounded-lg border border-[#4c1d95] bg-[#14171C] p-3 shadow-2xl">
+          <div className="mb-1 text-xs font-semibold text-white">Page Numbers</div>
+          <p className="mb-3 text-[11px] leading-4 text-[#9AA1AD]">Numbers follow the current visible page order and update after page operations.</p>
+          <label htmlFor="studio-page-numbers-font" className="sr-only">Page number font</label>
+          <select id="studio-page-numbers-font" aria-label="Page number font" value={pageNumbersFont} onChange={(event) => setPageNumbersFont(event.target.value as typeof pageNumbersFont)} className="mb-2 w-full rounded border border-[#292D35] bg-[#101216] px-2 py-2 text-xs text-white" data-testid="studio-page-numbers-font">
+            <option>Helvetica</option><option>Times-Roman</option><option>Courier</option>
+          </select>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-[11px] text-[#9AA1AD]">Font size {pageNumbersSize}
+              <input aria-label="Page number font size" type="number" min="6" max="72" value={pageNumbersSize} onChange={(event) => setPageNumbersSize(Number(event.target.value))} className="mt-1 w-full rounded border border-[#292D35] bg-[#101216] px-2 py-1 text-xs text-white" data-testid="studio-page-numbers-size" />
+            </label>
+            <label className="text-[11px] text-[#9AA1AD]">Position
+              <select aria-label="Page number position" value={pageNumbersPosition} onChange={(event) => setPageNumbersPosition(event.target.value as typeof pageNumbersPosition)} className="mt-1 w-full rounded border border-[#292D35] bg-[#101216] px-2 py-1 text-xs text-white" data-testid="studio-page-numbers-position">
+                <option value="bl">Bottom left</option><option value="bc">Bottom center</option><option value="br">Bottom right</option><option value="tl">Top left</option><option value="tc">Top center</option><option value="tr">Top right</option>
+              </select>
+            </label>
+          </div>
+          {pageNumbersError && <p className="mt-2 text-[11px] text-red-300">{pageNumbersError}</p>}
+          <div className="mt-3 flex justify-between gap-2">
+            <button type="button" onClick={() => void submitPageNumbers(false)} disabled={!pageNumbersEnabled || isMaterializing} className="rounded border border-red-900 px-2.5 py-1.5 text-xs text-red-300 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Remove Page Numbers" data-testid="studio-remove-page-numbers">Remove</button>
+            <div className="flex gap-2"><button type="button" onClick={() => setPageNumbersOpen(false)} className="rounded border border-[#292D35] px-2.5 py-1.5 text-xs text-[#9AA1AD]">Cancel</button><button type="button" onClick={() => void submitPageNumbers(true)} disabled={isMaterializing || !Number.isFinite(pageNumbersSize)} className="rounded bg-[#4c1d95] px-2.5 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50" aria-label="Apply Page Numbers" data-testid="studio-apply-page-numbers">Apply</button></div>
           </div>
         </div>
       )}

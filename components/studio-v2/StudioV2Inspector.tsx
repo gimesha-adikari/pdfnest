@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { FileText, Clock, RotateCcw, RotateCw, Trash2, Info, Loader2, ArrowUp, ArrowDown, Copy, Crop } from "lucide-react";
+import { FileText, Clock, RotateCcw, RotateCw, Trash2, Info, Loader2, ArrowUp, ArrowDown, Copy, Crop, Type, Plus } from "lucide-react";
 import { DocumentInfo, HistoryItem, InspectorTab } from "./types";
-import { StudioMetadataParameters, VDMPageDescriptorDTO } from "@/lib/studio-v2/api";
+import { StudioMetadataParameters, StudioTextOverlayParameters, StudioUpdateTextOverlayParameters, VDMPageDescriptorDTO } from "@/lib/studio-v2/api";
 
 interface StudioV2InspectorProps {
   document: DocumentInfo;
@@ -21,6 +21,11 @@ interface StudioV2InspectorProps {
   onMovePageLater?: () => void;
   onDuplicatePage?: () => void;
   onCropPage?: (cropBox: number[]) => void | Promise<void>;
+  selectedOverlayId?: string | null;
+  onSelectOverlay?: (overlayId: string | null) => void;
+  onAddText?: (parameters: StudioTextOverlayParameters) => void | Promise<void>;
+  onUpdateText?: (parameters: StudioUpdateTextOverlayParameters) => void | Promise<void>;
+  onRemoveText?: (target: { page_id: string; overlay_id: string }) => void | Promise<void>;
   canMovePageEarlier?: boolean;
   canMovePageLater?: boolean;
   isCommandLoading?: boolean;
@@ -42,6 +47,11 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
   onMovePageLater,
   onDuplicatePage,
   onCropPage,
+  selectedOverlayId,
+  onSelectOverlay,
+  onAddText,
+  onUpdateText,
+  onRemoveText,
   canMovePageEarlier = false,
   canMovePageLater = false,
   isCommandLoading = false,
@@ -66,6 +76,18 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
   const metadataKey = Object.values(metadataDefaults).join("\u0001");
   const [metadataDraft, setMetadataDraft] = useState<StudioMetadataParameters>(metadataDefaults);
 
+  const textOverlays = useMemo(
+    () => selectedPage?.overlays.filter((overlay) => overlay.type === "text") ?? [],
+    [selectedPage?.overlays]
+  );
+  const selectedTextOverlay = textOverlays.find((overlay) => overlay.id === selectedOverlayId) ?? null;
+  const [textDraft, setTextDraft] = useState("Studio V2 Add Text");
+  const [textX, setTextX] = useState("72");
+  const [textY, setTextY] = useState("72");
+  const [textFontSize, setTextFontSize] = useState("24");
+  const [textColor, setTextColor] = useState("#000000");
+  const [textError, setTextError] = useState<string | null>(null);
+
   useEffect(() => {
     setMetadataDraft(metadataDefaults);
   }, [metadataKey]);
@@ -74,6 +96,23 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
     setCropValues(cropDefaults.map((value) => String(value)));
     setCropError(null);
   }, [cropKey]);
+
+  useEffect(() => {
+    if (selectedTextOverlay) {
+      setTextDraft(selectedTextOverlay.text ?? "");
+      setTextX(String(selectedTextOverlay.rect?.[0] ?? 72));
+      setTextY(String(selectedTextOverlay.rect?.[1] ?? 72));
+      setTextFontSize(String(selectedTextOverlay.font_size ?? 24));
+      setTextColor(selectedTextOverlay.color ?? "#000000");
+    } else {
+      setTextDraft("Studio V2 Add Text");
+      setTextX("72");
+      setTextY("72");
+      setTextFontSize("24");
+      setTextColor("#000000");
+    }
+    setTextError(null);
+  }, [selectedTextOverlay?.id, selectedPage?.page_id]);
 
   const parsedCrop = cropValues.map((value) => Number(value));
   const pageWidth = selectedPage?.dimensions?.width ?? 0;
@@ -102,6 +141,26 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
   const handleMetadataSubmit = () => {
     if (!onUpdateMetadata) return;
     void onUpdateMetadata(metadataDraft);
+  };
+
+  const handleTextSubmit = () => {
+    if (!selectedPage) return;
+    const x = Number(textX);
+    const y = Number(textY);
+    const fontSize = Number(textFontSize);
+    const width = selectedPage.dimensions?.width ?? 0;
+    const height = selectedPage.dimensions?.height ?? 0;
+    if (!textDraft.trim() || !Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(fontSize) || fontSize < 8 || fontSize > 144 || x < 0 || y < 0 || x + fontSize > width || y + fontSize > height || !/^#[0-9a-fA-F]{6}$/.test(textColor)) {
+      setTextError("Enter text and a valid position, size, and hex color inside the page bounds.");
+      return;
+    }
+    setTextError(null);
+    const base = { page_id: selectedPage.page_id, text: textDraft, x, y, font_size: fontSize, color: textColor };
+    if (selectedTextOverlay && onUpdateText) {
+      void onUpdateText({ ...base, overlay_id: selectedTextOverlay.id });
+    } else if (onAddText) {
+      void onAddText(base);
+    }
   };
 
   return (
@@ -252,6 +311,35 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
               )}
             </div>
 
+            {/* Add Text controls */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Type className="w-4 h-4 text-[#d2bbff]" />
+                <h3 className="text-xs font-semibold text-[#F5F7FA]">Add Text</h3>
+              </div>
+              {!selectedPage ? (
+                <p className="text-xs text-[#9AA1AD] bg-[#14171C] p-3 rounded border border-[#292D35]">Select a page to place text.</p>
+              ) : (
+                <div className="space-y-3 bg-[#14171C] p-3 rounded border border-[#292D35]">
+                  <p className="text-[10px] leading-4 text-[#9AA1AD]">Native PDF points, lower-left origin. V1 uses Helvetica, color, and 8–144 pt text.</p>
+                  <label className="block space-y-1 text-[10px] text-[#9AA1AD]"><span>Text</span><textarea aria-label="Add Text content" data-testid="studio-add-text-content" value={textDraft} onChange={(event) => setTextDraft(event.target.value)} rows={2} className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA] outline-none focus:border-[#7c3aed]" /></label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="space-y-1 text-[10px] text-[#9AA1AD]"><span>X (left)</span><input aria-label="Add Text X" data-testid="studio-add-text-x" type="number" step="1" value={textX} onChange={(event) => setTextX(event.target.value)} className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA]" /></label>
+                    <label className="space-y-1 text-[10px] text-[#9AA1AD]"><span>Y (bottom)</span><input aria-label="Add Text Y" data-testid="studio-add-text-y" type="number" step="1" value={textY} onChange={(event) => setTextY(event.target.value)} className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA]" /></label>
+                    <label className="space-y-1 text-[10px] text-[#9AA1AD]"><span>Size (pt)</span><input aria-label="Add Text font size" data-testid="studio-add-text-size" type="number" min="8" max="144" value={textFontSize} onChange={(event) => setTextFontSize(event.target.value)} className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA]" /></label>
+                    <label className="space-y-1 text-[10px] text-[#9AA1AD]"><span>Color</span><input aria-label="Add Text color" data-testid="studio-add-text-color" type="color" value={textColor} onChange={(event) => setTextColor(event.target.value)} className="h-7 w-full rounded border border-[#3b3742] bg-[#101216]" /></label>
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => { onSelectOverlay?.(null); setTextError(null); }} disabled={isCommandLoading} aria-label="New text" data-testid="studio-new-text" className="flex flex-1 items-center justify-center gap-1 rounded border border-[#3b3742] px-2 py-2 text-[11px] text-[#D8DCE3] hover:border-[#7c3aed] disabled:opacity-40"><Plus className="w-3.5 h-3.5" /> New</button>
+                    <button type="button" onClick={handleTextSubmit} disabled={isCommandLoading || !onAddText || (Boolean(selectedTextOverlay) && !onUpdateText)} aria-label={selectedTextOverlay ? "Update text" : "Apply text"} data-testid="studio-apply-text" className="flex flex-[2] items-center justify-center gap-2 rounded border border-[#7c3aed]/70 px-2 py-2 text-[11px] text-[#d2bbff] hover:bg-[#7c3aed]/15 hover:text-white disabled:opacity-40">{isCommandLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Type className="w-3.5 h-3.5" />}{selectedTextOverlay ? "Update text" : "Apply text"}</button>
+                  </div>
+                  {selectedTextOverlay && onRemoveText && <button type="button" onClick={() => void onRemoveText({ page_id: selectedPage.page_id, overlay_id: selectedTextOverlay.id })} disabled={isCommandLoading} aria-label="Remove selected text" data-testid="studio-remove-text" className="w-full rounded border border-red-900/70 px-2 py-2 text-[11px] text-red-300 hover:border-red-500 disabled:opacity-40">Remove selected text</button>}
+                  {textError && <p role="alert" className="text-[10px] text-red-300">{textError}</p>}
+                  {textOverlays.length > 0 && <div className="space-y-1 border-t border-[#292D35] pt-2"><span className="text-[10px] text-[#9AA1AD]">Text elements on this page</span>{textOverlays.map((overlay) => <button type="button" key={overlay.id} onClick={() => onSelectOverlay?.(overlay.id)} aria-label={`Select text ${overlay.text ?? ""}`} data-testid={`studio-text-overlay-${overlay.id}`} className={`block w-full truncate rounded border px-2 py-1.5 text-left text-[11px] ${selectedOverlayId === overlay.id ? "border-[#7c3aed] text-white" : "border-[#3b3742] text-[#D8DCE3]"}`}>{overlay.text}</button>)}</div>}
+                </div>
+              )}
+            </div>
+
             {/* Document metadata controls */}
             <div>
               <div className="flex items-center gap-2 mb-3">
@@ -274,7 +362,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                       aria-label={`Metadata ${label}`}
                       data-testid={`studio-metadata-${key}`}
                       type="text"
-                      value={metadataDraft[key]}
+                      value={metadataDraft[key] ?? ""}
                       onChange={(event) => {
                         setMetadataDraft((current) => ({ ...current, [key]: event.target.value }));
                       }}
