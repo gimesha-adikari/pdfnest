@@ -133,11 +133,95 @@ export interface StudioUpdateTextOverlayParameters extends StudioTextOverlayPara
   overlay_id: string;
 }
 
+export interface StudioSignatureOverlayParameters {
+  page_id: string;
+  asset_id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface StudioUpdateSignatureOverlayParameters extends StudioSignatureOverlayParameters {
+  overlay_id: string;
+}
+
 export interface StudioSessionResponse {
   session: StudioSessionDTO;
   document: StudioDocumentDTO;
   active_version: StudioVersionDTO;
   vdm: StudioVDMDTO;
+}
+
+export type StudioMarkupAction = "highlight" | "underline" | "strikeout";
+export type StudioMarkupOperation = `markup_${StudioMarkupAction}`;
+
+export interface StudioMarkupBox {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  page: number;
+  color: string;
+}
+
+export interface StudioMarkupJobParameters {
+  boxes: StudioMarkupBox[];
+  mode: "manual";
+}
+
+export interface StudioJobDTO {
+  id: string;
+  session_id: string;
+  base_version_id: string;
+  result_version_id?: string | null;
+  editor_state_id?: string | null;
+  job_type: StudioMarkupOperation | "editor_extract" | "editor_compile";
+  status: "queued" | "running" | "succeeded" | "failed" | "cancelled" | string;
+  progress: number;
+  message: string;
+  error?: string;
+  reconciled_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StudioJobResponse {
+  job: StudioJobDTO;
+}
+
+export interface StudioEditorElementDTO {
+  id: string;
+  text: string;
+  original_text?: string;
+  x: number; y: number; width: number; height: number; size: number;
+  font: string; bg_color?: string; text_color?: string;
+}
+export interface StudioEditorPageDTO {
+  page_num: number; width: number; height: number;
+  kind: "text" | "mixed" | "scanned" | "blank";
+  elements: StudioEditorElementDTO[];
+}
+export interface StudioEditorLayoutDTO {
+  pages: StudioEditorPageDTO[];
+  source_tracker?: string;
+  upright_tracker?: string;
+}
+export interface StudioEditorStateDTO {
+  id: string; document_id: string; session_id: string; base_version_id: string;
+  extract_job_id: string; layout: StudioEditorLayoutDTO; created_at: string;
+}
+export interface StudioEditorCompileParameters {
+  editor_state_id: string;
+  layout: StudioEditorLayoutDTO;
+}
+
+export interface StudioJobRequest {
+  base_version_id: string;
+  idempotency_key: string;
+  operation: StudioMarkupOperation | "editor_extract" | "editor_compile";
+  parameters: StudioMarkupJobParameters | Record<string, never> | StudioEditorCompileParameters;
 }
 
 export interface CreateSessionRequest {
@@ -209,6 +293,14 @@ export type StudioCommand = StudioCommandEnvelope &
     | {
         operation: "update_text_overlay";
         parameters: StudioUpdateTextOverlayParameters;
+      }
+    | {
+        operation: "add_signature_overlay";
+        parameters: StudioSignatureOverlayParameters;
+      }
+    | {
+        operation: "update_signature_overlay";
+        parameters: StudioUpdateSignatureOverlayParameters;
       }
     | {
         operation: "delete_overlay";
@@ -423,10 +515,60 @@ export const studioV2Api = {
     }
   },
 
+  async uploadSignatureAsset(sessionId: string, file: File): Promise<StudioAssetUploadResponse> {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    form.append("asset_kind", "signature_image");
+    try {
+      const res = await studioV2Client.post<StudioAssetUploadResponse>(
+        `/sessions/${sessionId}/assets`,
+        form,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
+      return res.data;
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
   async getSession(sessionId: string): Promise<StudioSessionResponse> {
     try {
       const res = await studioV2Client.get<StudioSessionResponse>(
         `/sessions/${sessionId}`
+      );
+      return res.data;
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  async submitJob(sessionId: string, request: StudioJobRequest): Promise<StudioJobResponse> {
+    try {
+      const res = await studioV2Client.post<StudioJobResponse>(
+        `/sessions/${sessionId}/jobs`,
+        request
+      );
+      return res.data;
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  async getJob(sessionId: string, jobId: string): Promise<StudioJobResponse> {
+    try {
+      const res = await studioV2Client.get<StudioJobResponse>(
+        `/sessions/${sessionId}/jobs/${jobId}`
+      );
+      return res.data;
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  async cancelJob(sessionId: string, jobId: string): Promise<StudioJobResponse> {
+    try {
+      const res = await studioV2Client.post<StudioJobResponse>(
+        `/sessions/${sessionId}/jobs/${jobId}/cancel`
       );
       return res.data;
     } catch (err) {

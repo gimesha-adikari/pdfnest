@@ -5,7 +5,7 @@ import { StudioV2Sidebar } from "./StudioV2Sidebar";
 import { StudioV2Canvas } from "./StudioV2Canvas";
 import { StudioV2Inspector } from "./StudioV2Inspector";
 import { DocumentInfo, HistoryItem, InspectorTab, ToolCategory } from "./types";
-import { StudioMetadataParameters, StudioTextOverlayParameters, StudioUpdateTextOverlayParameters, StudioVDMDTO } from "@/lib/studio-v2/api";
+import { StudioJobDTO, StudioMarkupAction, StudioMarkupBox, StudioMetadataParameters, StudioSignatureOverlayParameters, StudioTextOverlayParameters, StudioUpdateSignatureOverlayParameters, StudioUpdateTextOverlayParameters, StudioVDMDTO } from "@/lib/studio-v2/api";
 
 interface StudioV2WorkspaceProps {
   document: DocumentInfo;
@@ -42,9 +42,23 @@ interface StudioV2WorkspaceProps {
   onAddText?: (parameters: StudioTextOverlayParameters) => void | Promise<void>;
   onUpdateText?: (parameters: StudioUpdateTextOverlayParameters) => void | Promise<void>;
   onRemoveText?: (target: { page_id: string; overlay_id: string }) => void | Promise<void>;
+  onAddSignature?: (blob: Blob, parameters: StudioSignatureOverlayParameters) => void | Promise<void>;
+  onUpdateSignature?: (parameters: StudioUpdateSignatureOverlayParameters) => void | Promise<void>;
+  onRemoveSignature?: (target: { page_id: string; overlay_id: string }) => void | Promise<void>;
   canMovePageEarlier?: boolean;
   canMovePageLater?: boolean;
   isCommandLoading?: boolean;
+  markupAction?: StudioMarkupAction;
+  markupBoxes?: StudioMarkupBox[];
+  markupJob?: StudioJobDTO | null;
+  markupError?: string | null;
+  onMarkupActionChange?: (action: StudioMarkupAction) => void;
+  onMarkupBoxChange?: (box: StudioMarkupBox) => void;
+  onRemoveMarkupBox?: (boxId: string) => void;
+  onClearMarkup?: () => void;
+  onApplyMarkup?: () => void;
+  onCancelMarkup?: () => void;
+  onCancelMarkupJob?: () => void;
 }
 
 export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
@@ -82,9 +96,23 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
   onAddText,
   onUpdateText,
   onRemoveText,
+  onAddSignature,
+  onUpdateSignature,
+  onRemoveSignature,
   canMovePageEarlier,
   canMovePageLater,
   isCommandLoading,
+  markupAction,
+  markupBoxes,
+  markupJob,
+  markupError,
+  onMarkupActionChange,
+  onMarkupBoxChange,
+  onRemoveMarkupBox,
+  onClearMarkup,
+  onApplyMarkup,
+  onCancelMarkup,
+  onCancelMarkupJob,
 }) => {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#0B0C0F]">
@@ -114,6 +142,9 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
           onFitToScreen={onFitToScreen}
           onTogglePan={onTogglePan}
           onOpenCommandPalette={onOpenCommandPalette}
+          markupAction={activeTool === "annotate" ? markupAction : null}
+          markupBoxes={markupBoxes}
+          onMarkupBoxChange={onMarkupBoxChange}
         />
       </main>
 
@@ -140,9 +171,23 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
           onAddText={onAddText}
           onUpdateText={onUpdateText}
           onRemoveText={onRemoveText}
+          onAddSignature={onAddSignature}
+          onUpdateSignature={onUpdateSignature}
+          onRemoveSignature={onRemoveSignature}
           canMovePageEarlier={canMovePageEarlier}
           canMovePageLater={canMovePageLater}
           isCommandLoading={isCommandLoading}
+          activeTool={activeTool}
+          markupAction={markupAction}
+          markupBoxes={markupBoxes}
+          markupJob={markupJob}
+          markupError={markupError}
+          onMarkupActionChange={onMarkupActionChange}
+          onRemoveMarkupBox={onRemoveMarkupBox}
+          onClearMarkup={onClearMarkup}
+          onApplyMarkup={onApplyMarkup}
+          onCancelMarkup={onCancelMarkup}
+          onCancelMarkupJob={onCancelMarkupJob}
         />
       </div>
     </div>

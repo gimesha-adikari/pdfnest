@@ -14,6 +14,7 @@ import {
 
 interface SignaturePadProps {
     onSignatureChange: (blob: Blob | null) => void;
+    undoButtonLabel?: string;
 }
 
 type Mode = "draw" | "upload";
@@ -26,7 +27,7 @@ const DEFAULT_COLORS = [
     "#047857",
 ];
 
-export default function SignaturePad({ onSignatureChange }: SignaturePadProps) {
+export default function SignaturePad({ onSignatureChange, undoButtonLabel = "Undo" }: SignaturePadProps) {
     const sigRef = useRef<SignatureCanvas | null>(null);
     const wrapperRef = useRef<HTMLDivElement | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -317,6 +318,7 @@ export default function SignaturePad({ onSignatureChange }: SignaturePadProps) {
                             type="button"
                             onClick={handleUndo}
                             disabled={!canUseDrawnSignature}
+                            aria-label={undoButtonLabel}
                             className="inline-flex items-center gap-1.5 rounded-xl border border-[color:var(--border)] bg-[var(--card)] px-3 py-2 text-xs font-semibold text-[color:var(--foreground)] transition hover:bg-[color:var(--background)] disabled:cursor-not-allowed disabled:opacity-40"
                         >
                             <Undo2 size={14} />

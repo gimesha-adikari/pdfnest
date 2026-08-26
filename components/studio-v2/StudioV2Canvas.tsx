@@ -13,7 +13,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { DocumentInfo } from "./types";
-import { VDMPageDescriptorDTO, StudioVDMDTO } from "@/lib/studio-v2/api";
+import { VDMPageDescriptorDTO, StudioMarkupAction, StudioMarkupBox, StudioVDMDTO } from "@/lib/studio-v2/api";
 import { fetchTileBlobUrl } from "@/lib/studio-v2/tileClient";
 
 interface PageTileRendererProps {
@@ -24,6 +24,56 @@ interface PageTileRendererProps {
   zoomScale: number;
   isSelected: boolean;
   onSelect: () => void;
+  isPanning: boolean;
+  markupAction?: StudioMarkupAction | null;
+  markupBoxes?: StudioMarkupBox[];
+  onMarkupBoxChange?: (box: StudioMarkupBox) => void;
+}
+
+interface VisibleRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+function pageGeometry(page: VDMPageDescriptorDTO) {
+  const crop = page.crop_box?.length === 4 ? page.crop_box : null;
+  const width = crop && crop[2] > crop[0] ? crop[2] - crop[0] : page.dimensions?.width ?? 0;
+  const height = crop && crop[3] > crop[1] ? crop[3] - crop[1] : page.dimensions?.height ?? 0;
+  const rotated = page.rotation === 90 || page.rotation === 270;
+  return { width, height, visibleWidth: rotated ? height : width, visibleHeight: rotated ? width : height };
+}
+
+export function mapVisibleMarkupRectToWorker(
+  page: VDMPageDescriptorDTO,
+  pageNumber: number,
+  visible: VisibleRect,
+  color: string,
+  id: string,
+): StudioMarkupBox | null {
+  const geometry = pageGeometry(page);
+  if (!geometry.width || !geometry.height) return null;
+  const x = Math.max(0, Math.min(visible.x, geometry.visibleWidth));
+  const y = Math.max(0, Math.min(visible.y, geometry.visibleHeight));
+  const right = Math.max(x, Math.min(visible.x + visible.width, geometry.visibleWidth));
+  const bottom = Math.max(y, Math.min(visible.y + visible.height, geometry.visibleHeight));
+  // The worker receives the visible, crop-relative page coordinate system and
+  // applies the page's rotation-aware derotation at the PDF boundary. Keeping
+  // the payload in this same system avoids rotating the selection twice.
+  return {
+    id,
+    x: Number(x.toFixed(2)),
+    y: Number(y.toFixed(2)),
+    width: Number(Math.max(0, right - x).toFixed(2)),
+    height: Number(Math.max(0, bottom - y).toFixed(2)),
+    page: pageNumber,
+    color,
+  };
+}
+
+function mapWorkerMarkupBoxToVisible(page: VDMPageDescriptorDTO, box: StudioMarkupBox): VisibleRect {
+  return { x: box.x, y: box.y, width: box.width, height: box.height };
 }
 
 const PageTileRenderer: React.FC<PageTileRendererProps> = ({
@@ -34,6 +84,10 @@ const PageTileRenderer: React.FC<PageTileRendererProps> = ({
   zoomScale,
   isSelected,
   onSelect,
+  isPanning,
+  markupAction = null,
+  markupBoxes = [],
+  onMarkupBoxChange,
 }) => {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -44,6 +98,7 @@ const PageTileRenderer: React.FC<PageTileRendererProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const markupStartRef = useRef<{ x: number; y: number; id: string } | null>(null);
 
   // Viewport intersection observer for progressive on-demand tile loading
   useEffect(() => {
@@ -122,8 +177,8 @@ const PageTileRenderer: React.FC<PageTileRendererProps> = ({
       ref={containerRef}
       data-page-id={page.page_id}
       data-page-blank={page.is_blank ? "true" : "false"}
-      data-page-visible-width-pt={hasDimensions ? String(baseW) : undefined}
-      data-page-visible-height-pt={hasDimensions ? String(baseH) : undefined}
+      data-page-visible-width-pt={hasDimensions ? String(pageWidth) : undefined}
+      data-page-visible-height-pt={hasDimensions ? String(pageHeight) : undefined}
       onClick={onSelect}
       style={{
         width: hasDimensions ? `${pageWidth * zoomScale}px` : `min(70vw, 32rem)`,
@@ -134,6 +189,39 @@ const PageTileRenderer: React.FC<PageTileRendererProps> = ({
           ? "ring-2 ring-[#7c3aed] ring-offset-2 ring-offset-[#0B0C0F]"
           : "border border-[#292D35] hover:border-[#7c3aed]/50"
       }`}
+      onPointerDown={(event) => {
+        if (!markupAction || !onMarkupBoxChange || isPanning) return;
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const bounds = event.currentTarget.getBoundingClientRect();
+        const visibleX = Math.max(0, Math.min(pageWidth, (event.clientX - bounds.left) / zoomScale));
+        const visibleY = Math.max(0, Math.min(pageHeight, (event.clientY - bounds.top) / zoomScale));
+        const id = `markup-${page.page_id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        markupStartRef.current = { x: visibleX, y: visibleY, id };
+        const box = mapVisibleMarkupRectToWorker(page, pageIndex + 1, { x: visibleX, y: visibleY, width: 1, height: 1 }, markupAction === "highlight" ? "#FFFF00" : markupAction === "underline" ? "#FF4D4D" : "#FF0000", id);
+        if (box) onMarkupBoxChange(box);
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={(event) => {
+        const start = markupStartRef.current;
+        if (!start || !markupAction || !onMarkupBoxChange) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const bounds = event.currentTarget.getBoundingClientRect();
+        const currentX = Math.max(0, Math.min(pageWidth, (event.clientX - bounds.left) / zoomScale));
+        const currentY = Math.max(0, Math.min(pageHeight, (event.clientY - bounds.top) / zoomScale));
+        const visible = { x: Math.min(start.x, currentX), y: Math.min(start.y, currentY), width: Math.abs(currentX - start.x), height: Math.abs(currentY - start.y) };
+        const box = mapVisibleMarkupRectToWorker(page, pageIndex + 1, visible, markupAction === "highlight" ? "#FFFF00" : markupAction === "underline" ? "#FF4D4D" : "#FF0000", start.id);
+        if (box) onMarkupBoxChange(box);
+      }}
+      onPointerUp={(event) => {
+        if (markupStartRef.current) {
+          event.stopPropagation();
+          markupStartRef.current = null;
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+      }}
     >
       {/* Page Header Indicator */}
       <div className="absolute -top-6 left-0 right-0 flex items-center justify-between text-[11px] font-mono text-[#9AA1AD] px-1 pointer-events-none">
@@ -150,6 +238,18 @@ const PageTileRenderer: React.FC<PageTileRendererProps> = ({
           draggable={false}
         />
       )}
+
+      {markupBoxes.filter((box) => box.page === pageIndex + 1).map((box) => {
+        const visible = mapWorkerMarkupBoxToVisible(page, box);
+        return (
+          <div
+            key={box.id}
+            data-testid={`studio-markup-box-${box.id}`}
+            className="pointer-events-none absolute z-20 border-2 border-violet-500 bg-violet-300/25"
+            style={{ left: `${visible.x * zoomScale}px`, top: `${visible.y * zoomScale}px`, width: `${visible.width * zoomScale}px`, height: `${visible.height * zoomScale}px` }}
+          />
+        );
+      })}
 
       {/* Loading Skeleton */}
       {isLoading && (
@@ -196,6 +296,9 @@ interface StudioV2CanvasProps {
   onFitToScreen: () => void;
   onTogglePan: () => void;
   onOpenCommandPalette: () => void;
+  markupAction?: StudioMarkupAction | null;
+  markupBoxes?: StudioMarkupBox[];
+  onMarkupBoxChange?: (box: StudioMarkupBox) => void;
 }
 
 export const StudioV2Canvas: React.FC<StudioV2CanvasProps> = ({
@@ -212,6 +315,9 @@ export const StudioV2Canvas: React.FC<StudioV2CanvasProps> = ({
   onFitToScreen,
   onTogglePan,
   onOpenCommandPalette,
+  markupAction = null,
+  markupBoxes = [],
+  onMarkupBoxChange,
 }) => {
   const pages: VDMPageDescriptorDTO[] = vdm?.pages && vdm.pages.length > 0
     ? vdm.pages
@@ -303,6 +409,10 @@ export const StudioV2Canvas: React.FC<StudioV2CanvasProps> = ({
             zoomScale={zoomScale}
             isSelected={selectedPageId === page.page_id}
             onSelect={() => onSelectPage && onSelectPage(page.page_id)}
+            isPanning={isPanning}
+            markupAction={markupAction}
+            markupBoxes={markupBoxes}
+            onMarkupBoxChange={onMarkupBoxChange}
           />
         ))}
       </div>

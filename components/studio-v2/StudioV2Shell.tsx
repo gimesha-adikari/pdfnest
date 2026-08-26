@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { StudioV2Header } from "./StudioV2Header";
 import { StudioV2Workspace } from "./StudioV2Workspace";
@@ -21,9 +21,14 @@ import {
   StudioCompressionLevel,
   StudioMaterializationRequest,
   StudioPageNumberingParameters,
+  StudioSignatureOverlayParameters,
+  StudioUpdateSignatureOverlayParameters,
   StudioTextOverlayParameters,
   StudioUpdateTextOverlayParameters,
   StudioWatermarkParameters,
+  StudioJobDTO,
+  StudioMarkupAction,
+  StudioMarkupBox,
 } from "@/lib/studio-v2/api";
 import { AlertTriangle, Loader2, RefreshCw, Upload } from "lucide-react";
 
@@ -125,6 +130,21 @@ export const StudioV2Shell: React.FC = () => {
   const [isMaterializing, setIsMaterializing] = useState(false);
   const [materializationError, setMaterializationError] = useState<string | null>(null);
   const [compressionLevel, setCompressionLevel] = useState<StudioCompressionLevel>("medium");
+  const [markupAction, setMarkupAction] = useState<StudioMarkupAction>("highlight");
+  const [markupBoxes, setMarkupBoxes] = useState<StudioMarkupBox[]>([]);
+  const [markupJob, setMarkupJob] = useState<StudioJobDTO | null>(null);
+  const [markupError, setMarkupError] = useState<string | null>(null);
+  const markupSelectionIndexRef = useRef<number | null>(null);
+
+  const markupJobIsBusy = Boolean(markupJob && !["succeeded", "failed", "cancelled"].includes(markupJob.status));
+
+  const newIdempotencyKey = useCallback((operation: string) => {
+    const suffix =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    return `studio-v2-${operation}-${suffix}`;
+  }, []);
 
   const selectedPage = useMemo(
     () => vdm?.pages.find((page) => page.page_id === selectedPageId) ?? null,
@@ -136,18 +156,119 @@ export const StudioV2Shell: React.FC = () => {
   );
 
   useEffect(() => {
+    if (markupSelectionIndexRef.current === null || !vdm || vdm.pages.length === 0) return;
+    const index = Math.min(Math.max(markupSelectionIndexRef.current, 0), vdm.pages.length - 1);
+    setSelectedPageId(vdm.pages[index].page_id);
+    markupSelectionIndexRef.current = null;
+  }, [vdm]);
+
+  // Keep a single durable pointer to the in-flight job so a browser reload can
+  // resume polling without inventing a second submission or version.
+  useEffect(() => {
+    if (!session?.id || markupJob || typeof window === "undefined") return;
+    const storedJobId = window.localStorage.getItem(`studio-v2-markup-job:${session.id}`);
+    if (!storedJobId) return;
+    let cancelled = false;
+    void studioV2Api.getJob(session.id, storedJobId).then(({ job }) => {
+      if (cancelled) return;
+      if (["succeeded", "failed", "cancelled"].includes(job.status)) {
+        window.localStorage.removeItem(`studio-v2-markup-job:${session.id}`);
+        if (job.status === "succeeded") void refetch();
+      } else {
+        setMarkupJob(job);
+      }
+    }).catch(() => {
+      window.localStorage.removeItem(`studio-v2-markup-job:${session.id}`);
+    });
+    return () => { cancelled = true; };
+  }, [session?.id, markupJob, refetch]);
+
+  useEffect(() => {
+    if (!session?.id || !markupJob?.id || !markupJobIsBusy) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const { job } = await studioV2Api.getJob(session.id, markupJob.id);
+        if (cancelled) return;
+        setMarkupJob(job);
+        if (["succeeded", "failed", "cancelled"].includes(job.status)) {
+          if (typeof window !== "undefined") window.localStorage.removeItem(`studio-v2-markup-job:${session.id}`);
+          if (job.status === "succeeded") {
+            setMarkupBoxes([]);
+            setMarkupError(null);
+            void refetch();
+          } else if (job.status === "failed") {
+            setMarkupError(job.error || "The markup worker failed. You can adjust the selection and retry.");
+          }
+          return;
+        }
+        window.setTimeout(() => { void poll(); }, 1000);
+      } catch (err) {
+        if (!cancelled) setMarkupError(err instanceof Error ? err.message : "Unable to poll the markup job.");
+      }
+    };
+    void poll();
+    return () => { cancelled = true; };
+  }, [session?.id, markupJob?.id, markupJobIsBusy, refetch]);
+
+  const handleMarkupBoxChange = useCallback((box: StudioMarkupBox) => {
+    setMarkupBoxes((current) => {
+      const existing = current.findIndex((candidate) => candidate.id === box.id);
+      if (existing < 0) return [...current, box];
+      const next = [...current];
+      next[existing] = box;
+      return next;
+    });
+    setMarkupError(null);
+  }, []);
+
+  const handleApplyMarkup = useCallback(async () => {
+    if (!session || !activeVersion || markupBoxes.length === 0 || markupJobIsBusy) return;
+    const boxes = markupBoxes.filter((box) => box.width > 2 && box.height > 2);
+    if (boxes.length === 0) {
+      setMarkupError("Drag a region larger than 2 points before applying markup.");
+      return;
+    }
+    setMarkupError(null);
+    markupSelectionIndexRef.current = selectedPageIndex;
+    try {
+      const operation = `markup_${markupAction}` as const;
+      const { job } = await studioV2Api.submitJob(session.id, {
+        base_version_id: activeVersion.id,
+        idempotency_key: newIdempotencyKey(operation),
+        operation,
+        parameters: { boxes, mode: "manual" },
+      });
+      setMarkupJob(job);
+      if (typeof window !== "undefined") window.localStorage.setItem(`studio-v2-markup-job:${session.id}`, job.id);
+    } catch (err) {
+      setMarkupError(err instanceof Error ? err.message : "Unable to submit markup.");
+    }
+  }, [session, activeVersion, markupBoxes, markupJobIsBusy, selectedPageIndex, markupAction, newIdempotencyKey]);
+
+  const handleCancelMarkupJob = useCallback(async () => {
+    if (!session || !markupJob || !markupJobIsBusy) return;
+    try {
+      const { job } = await studioV2Api.cancelJob(session.id, markupJob.id);
+      setMarkupJob(job);
+      if (["cancelled", "failed", "succeeded"].includes(job.status) && typeof window !== "undefined") window.localStorage.removeItem(`studio-v2-markup-job:${session.id}`);
+    } catch (err) {
+      setMarkupError(err instanceof Error ? err.message : "Unable to cancel the markup job.");
+    }
+  }, [session, markupJob, markupJobIsBusy]);
+
+  const handleCancelMarkup = useCallback(() => {
+    if (!markupJobIsBusy) {
+      setMarkupBoxes([]);
+      setMarkupError(null);
+    }
+  }, [markupJobIsBusy]);
+
+  useEffect(() => {
     if (!selectedPage || !selectedOverlayId || !selectedPage.overlays.some((overlay) => overlay.id === selectedOverlayId)) {
       setSelectedOverlayId(null);
     }
   }, [selectedPage, selectedOverlayId]);
-
-  const newIdempotencyKey = useCallback((operation: string) => {
-    const suffix =
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    return `studio-v2-${operation}-${suffix}`;
-  }, []);
 
   const handleRotate = useCallback(
     async (deltaDegrees: 90 | -90) => {
@@ -337,6 +458,42 @@ export const StudioV2Shell: React.FC = () => {
     await executeCommand({
       base_version_id: activeVersion.id,
       idempotency_key: newIdempotencyKey("delete-text-overlay"),
+      operation: "delete_overlay",
+      parameters: { targets: [target] },
+    });
+    setSelectedOverlayId(null);
+  }, [activeVersion, executeCommand, newIdempotencyKey]);
+
+  const handleAddSignature = useCallback(async (blob: Blob, parameters: StudioSignatureOverlayParameters) => {
+    if (!session || !activeVersion || !vdm) return;
+    const file = new File([blob], "signature.png", { type: blob.type || "image/png" });
+    const uploaded = await studioV2Api.uploadSignatureAsset(session.id, file);
+    const response = await executeCommand({
+      base_version_id: activeVersion.id,
+      idempotency_key: newIdempotencyKey("add-signature-overlay"),
+      operation: "add_signature_overlay",
+      parameters: { ...parameters, asset_id: uploaded.asset.id },
+    });
+    const existing = new Set(vdm.pages.find((page) => page.page_id === parameters.page_id)?.overlays.map((overlay) => overlay.id) ?? []);
+    const created = response?.vdm.pages.find((page) => page.page_id === parameters.page_id)?.overlays.find((overlay) => overlay.type === "signature" && !existing.has(overlay.id));
+    if (created) setSelectedOverlayId(created.id);
+  }, [session, activeVersion, vdm, executeCommand, newIdempotencyKey]);
+
+  const handleUpdateSignature = useCallback(async (parameters: StudioUpdateSignatureOverlayParameters) => {
+    if (!activeVersion) return;
+    await executeCommand({
+      base_version_id: activeVersion.id,
+      idempotency_key: newIdempotencyKey("update-signature-overlay"),
+      operation: "update_signature_overlay",
+      parameters,
+    });
+  }, [activeVersion, executeCommand, newIdempotencyKey]);
+
+  const handleRemoveSignature = useCallback(async (target: { page_id: string; overlay_id: string }) => {
+    if (!activeVersion) return;
+    await executeCommand({
+      base_version_id: activeVersion.id,
+      idempotency_key: newIdempotencyKey("delete-signature-overlay"),
       operation: "delete_overlay",
       parameters: { targets: [target] },
     });
@@ -645,9 +802,9 @@ export const StudioV2Shell: React.FC = () => {
         pageNumbering={vdm?.page_numbering}
         onPageNumbering={handlePageNumbering}
         isMaterializing={isMaterializing}
-        materializeDisabled={!session || !activeVersion || isSaving}
+        materializeDisabled={!session || !activeVersion || isSaving || markupJobIsBusy}
         isExporting={isExporting}
-        exportDisabled={!session || !activeVersion || isSaving || isMaterializing}
+        exportDisabled={!session || !activeVersion || isSaving || isMaterializing || markupJobIsBusy}
       />
 
       {(error || exportError || materializationError) && (
@@ -692,9 +849,23 @@ export const StudioV2Shell: React.FC = () => {
         onAddText={handleAddText}
         onUpdateText={handleUpdateText}
         onRemoveText={handleRemoveText}
+        onAddSignature={handleAddSignature}
+        onUpdateSignature={handleUpdateSignature}
+        onRemoveSignature={handleRemoveSignature}
         canMovePageEarlier={selectedPageIndex > 0}
         canMovePageLater={selectedPageIndex >= 0 && selectedPageIndex < (vdm?.pages.length ?? 0) - 1}
-        isCommandLoading={isSaving}
+        isCommandLoading={isSaving || markupJobIsBusy}
+        markupAction={markupAction}
+        markupBoxes={markupBoxes}
+        markupJob={markupJob}
+        markupError={markupError}
+        onMarkupActionChange={setMarkupAction}
+        onMarkupBoxChange={handleMarkupBoxChange}
+        onRemoveMarkupBox={(boxId) => setMarkupBoxes((boxes) => boxes.filter((box) => box.id !== boxId))}
+        onClearMarkup={() => setMarkupBoxes([])}
+        onApplyMarkup={() => void handleApplyMarkup()}
+        onCancelMarkup={handleCancelMarkup}
+        onCancelMarkupJob={() => void handleCancelMarkupJob()}
       />
 
       {/* Mobile Bottom Docked Navigation */}

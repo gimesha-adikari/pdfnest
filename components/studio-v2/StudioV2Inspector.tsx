@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { FileText, Clock, RotateCcw, RotateCw, Trash2, Info, Loader2, ArrowUp, ArrowDown, Copy, Crop, Type, Plus } from "lucide-react";
+import { FileText, Clock, RotateCcw, RotateCw, Trash2, Info, Loader2, ArrowUp, ArrowDown, Copy, Crop, Type, Plus, PenTool } from "lucide-react";
+import SignaturePad from "@/components/pdf/SignaturePad";
+import { StudioV2MarkupPanel } from "./StudioV2MarkupPanel";
 import { DocumentInfo, HistoryItem, InspectorTab } from "./types";
-import { StudioMetadataParameters, StudioTextOverlayParameters, StudioUpdateTextOverlayParameters, VDMPageDescriptorDTO } from "@/lib/studio-v2/api";
+import { StudioJobDTO, StudioMarkupAction, StudioMarkupBox, StudioMetadataParameters, StudioSignatureOverlayParameters, StudioTextOverlayParameters, StudioUpdateSignatureOverlayParameters, StudioUpdateTextOverlayParameters, VDMPageDescriptorDTO } from "@/lib/studio-v2/api";
 
 interface StudioV2InspectorProps {
   document: DocumentInfo;
@@ -26,9 +28,23 @@ interface StudioV2InspectorProps {
   onAddText?: (parameters: StudioTextOverlayParameters) => void | Promise<void>;
   onUpdateText?: (parameters: StudioUpdateTextOverlayParameters) => void | Promise<void>;
   onRemoveText?: (target: { page_id: string; overlay_id: string }) => void | Promise<void>;
+  onAddSignature?: (blob: Blob, parameters: StudioSignatureOverlayParameters) => void | Promise<void>;
+  onUpdateSignature?: (parameters: StudioUpdateSignatureOverlayParameters) => void | Promise<void>;
+  onRemoveSignature?: (target: { page_id: string; overlay_id: string }) => void | Promise<void>;
   canMovePageEarlier?: boolean;
   canMovePageLater?: boolean;
   isCommandLoading?: boolean;
+  activeTool?: string;
+  markupAction?: StudioMarkupAction;
+  markupBoxes?: StudioMarkupBox[];
+  markupJob?: StudioJobDTO | null;
+  markupError?: string | null;
+  onMarkupActionChange?: (action: StudioMarkupAction) => void;
+  onRemoveMarkupBox?: (boxId: string) => void;
+  onClearMarkup?: () => void;
+  onApplyMarkup?: () => void;
+  onCancelMarkup?: () => void;
+  onCancelMarkupJob?: () => void;
 }
 
 export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
@@ -52,9 +68,23 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
   onAddText,
   onUpdateText,
   onRemoveText,
+  onAddSignature,
+  onUpdateSignature,
+  onRemoveSignature,
   canMovePageEarlier = false,
   canMovePageLater = false,
   isCommandLoading = false,
+  activeTool = "edit",
+  markupAction = "highlight",
+  markupBoxes = [],
+  markupJob = null,
+  markupError = null,
+  onMarkupActionChange,
+  onRemoveMarkupBox,
+  onClearMarkup,
+  onApplyMarkup,
+  onCancelMarkup,
+  onCancelMarkupJob,
 }) => {
   const cropDefaults = useMemo(() => {
     const existing = selectedPage?.crop_box;
@@ -87,6 +117,17 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
   const [textFontSize, setTextFontSize] = useState("24");
   const [textColor, setTextColor] = useState("#000000");
   const [textError, setTextError] = useState<string | null>(null);
+  const signatureOverlays = useMemo(
+    () => selectedPage?.overlays.filter((overlay) => overlay.type === "signature") ?? [],
+    [selectedPage?.overlays]
+  );
+  const selectedSignatureOverlay = signatureOverlays.find((overlay) => overlay.id === selectedOverlayId) ?? null;
+  const [signatureBlob, setSignatureBlob] = useState<Blob | null>(null);
+  const [signatureX, setSignatureX] = useState("72");
+  const [signatureY, setSignatureY] = useState("72");
+  const [signatureWidth, setSignatureWidth] = useState("180");
+  const [signatureHeight, setSignatureHeight] = useState("60");
+  const [signatureError, setSignatureError] = useState<string | null>(null);
 
   useEffect(() => {
     setMetadataDraft(metadataDefaults);
@@ -113,6 +154,21 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
     }
     setTextError(null);
   }, [selectedTextOverlay?.id, selectedPage?.page_id]);
+
+  useEffect(() => {
+    if (selectedSignatureOverlay) {
+      setSignatureX(String(selectedSignatureOverlay.rect?.[0] ?? 72));
+      setSignatureY(String(selectedSignatureOverlay.rect?.[1] ?? 72));
+      setSignatureWidth(String(selectedSignatureOverlay.rect?.[2] ?? 180));
+      setSignatureHeight(String(selectedSignatureOverlay.rect?.[3] ?? 60));
+    } else {
+      setSignatureX("72");
+      setSignatureY("72");
+      setSignatureWidth("180");
+      setSignatureHeight("60");
+    }
+    setSignatureError(null);
+  }, [selectedSignatureOverlay?.id, selectedPage?.page_id]);
 
   const parsedCrop = cropValues.map((value) => Number(value));
   const pageWidth = selectedPage?.dimensions?.width ?? 0;
@@ -163,6 +219,29 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
     }
   };
 
+  const handleSignatureSubmit = () => {
+    if (!selectedPage) return;
+    const x = Number(signatureX);
+    const y = Number(signatureY);
+    const width = Number(signatureWidth);
+    const height = Number(signatureHeight);
+    const pageWidth = selectedPage.dimensions?.width ?? 0;
+    const pageHeight = selectedPage.dimensions?.height ?? 0;
+    if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0 || x < 0 || y < 0 || x + width > pageWidth || y + height > pageHeight) {
+      setSignatureError("Enter a positive signature rectangle inside the page bounds.");
+      return;
+    }
+    setSignatureError(null);
+    const base = { page_id: selectedPage.page_id, asset_id: selectedSignatureOverlay?.asset_id ?? "", x, y, width, height };
+    if (selectedSignatureOverlay && onUpdateSignature) {
+      void onUpdateSignature({ ...base, overlay_id: selectedSignatureOverlay.id });
+    } else if (signatureBlob && onAddSignature) {
+      void onAddSignature(signatureBlob, base);
+    } else {
+      setSignatureError("Create or upload a signature first.");
+    }
+  };
+
   return (
     <aside className="fixed right-0 top-[48px] bottom-0 w-[300px] bg-[#101216] border-l border-[#292D35] flex flex-col z-40">
       {/* Inspector Tabs */}
@@ -193,6 +272,21 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
       <div className="flex-1 overflow-y-auto">
         {activeTab === "properties" ? (
           <div className="p-4 space-y-6">
+            {activeTool === "annotate" && onMarkupActionChange && onRemoveMarkupBox && onClearMarkup && onApplyMarkup && onCancelMarkup && onCancelMarkupJob && (
+              <StudioV2MarkupPanel
+                action={markupAction}
+                boxes={markupBoxes}
+                job={markupJob}
+                error={markupError}
+                disabled={isCommandLoading}
+                onActionChange={onMarkupActionChange}
+                onClear={onClearMarkup}
+                onRemoveBox={onRemoveMarkupBox}
+                onApply={onApplyMarkup}
+                onCancel={onCancelMarkup}
+                onCancelJob={onCancelMarkupJob}
+              />
+            )}
             {/* Document Properties */}
             <div>
               <div className="flex items-center gap-2 mb-3">
@@ -243,6 +337,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                       onClick={onRotateCounterClockwise}
                       disabled={isCommandLoading}
                       aria-label="Rotate counter-clockwise 90°"
+                      data-testid="studio-rotate-counter-clockwise"
                       title="Rotate counter-clockwise 90°"
                       className="flex items-center justify-center gap-1.5 rounded border border-[#3b3742] px-2 py-2 text-[11px] text-[#D8DCE3] hover:border-[#7c3aed] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                     >
@@ -254,6 +349,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                       onClick={onRotateClockwise}
                       disabled={isCommandLoading}
                       aria-label="Rotate clockwise 90°"
+                      data-testid="studio-rotate-clockwise"
                       title="Rotate clockwise 90°"
                       className="flex items-center justify-center gap-1.5 rounded border border-[#3b3742] px-2 py-2 text-[11px] text-[#D8DCE3] hover:border-[#7c3aed] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                     >
@@ -336,6 +432,35 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                   {selectedTextOverlay && onRemoveText && <button type="button" onClick={() => void onRemoveText({ page_id: selectedPage.page_id, overlay_id: selectedTextOverlay.id })} disabled={isCommandLoading} aria-label="Remove selected text" data-testid="studio-remove-text" className="w-full rounded border border-red-900/70 px-2 py-2 text-[11px] text-red-300 hover:border-red-500 disabled:opacity-40">Remove selected text</button>}
                   {textError && <p role="alert" className="text-[10px] text-red-300">{textError}</p>}
                   {textOverlays.length > 0 && <div className="space-y-1 border-t border-[#292D35] pt-2"><span className="text-[10px] text-[#9AA1AD]">Text elements on this page</span>{textOverlays.map((overlay) => <button type="button" key={overlay.id} onClick={() => onSelectOverlay?.(overlay.id)} aria-label={`Select text ${overlay.text ?? ""}`} data-testid={`studio-text-overlay-${overlay.id}`} className={`block w-full truncate rounded border px-2 py-1.5 text-left text-[11px] ${selectedOverlayId === overlay.id ? "border-[#7c3aed] text-white" : "border-[#3b3742] text-[#D8DCE3]"}`}>{overlay.text}</button>)}</div>}
+                </div>
+              )}
+            </div>
+
+            {/* Sign controls */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <PenTool className="w-4 h-4 text-[#d2bbff]" />
+                <h3 className="text-xs font-semibold text-[#F5F7FA]">Sign</h3>
+              </div>
+              {!selectedPage ? (
+                <p className="text-xs text-[#9AA1AD] bg-[#14171C] p-3 rounded border border-[#292D35]">Select a page to place a signature.</p>
+              ) : (
+                <div className="space-y-3 bg-[#14171C] p-3 rounded border border-[#292D35]">
+                  <p className="text-[10px] leading-4 text-[#9AA1AD]">Draw or upload a PNG/JPEG signature, then place it in native PDF points from the lower-left origin. Width and height are editable.</p>
+                  {!selectedSignatureOverlay && <SignaturePad onSignatureChange={setSignatureBlob} undoButtonLabel="Revert signature stroke" />}
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="space-y-1 text-[10px] text-[#9AA1AD]"><span>X (left)</span><input aria-label="Signature X" data-testid="studio-signature-x" type="number" step="1" value={signatureX} onChange={(event) => setSignatureX(event.target.value)} className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA]" /></label>
+                    <label className="space-y-1 text-[10px] text-[#9AA1AD]"><span>Y (bottom)</span><input aria-label="Signature Y" data-testid="studio-signature-y" type="number" step="1" value={signatureY} onChange={(event) => setSignatureY(event.target.value)} className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA]" /></label>
+                    <label className="space-y-1 text-[10px] text-[#9AA1AD]"><span>Width</span><input aria-label="Signature width" data-testid="studio-signature-width" type="number" min="1" value={signatureWidth} onChange={(event) => { const width = Number(event.target.value); setSignatureWidth(event.target.value); if (Number.isFinite(width) && width > 0) setSignatureHeight(String(Math.max(1, Math.round(width / 3)))); }} className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA]" /></label>
+                    <label className="space-y-1 text-[10px] text-[#9AA1AD]"><span>Height</span><input aria-label="Signature height" data-testid="studio-signature-height" type="number" min="1" value={signatureHeight} onChange={(event) => { const height = Number(event.target.value); setSignatureHeight(event.target.value); if (Number.isFinite(height) && height > 0) setSignatureWidth(String(Math.max(1, Math.round(height * 3)))); }} className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA]" /></label>
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => { onSelectOverlay?.(null); setSignatureBlob(null); setSignatureError(null); }} disabled={isCommandLoading} aria-label="New signature" data-testid="studio-new-signature" className="flex-1 rounded border border-[#3b3742] px-2 py-2 text-[11px] text-[#D8DCE3] hover:border-[#7c3aed] disabled:opacity-40">New</button>
+                    <button type="button" onClick={handleSignatureSubmit} disabled={isCommandLoading || (!selectedSignatureOverlay && !signatureBlob) || (Boolean(selectedSignatureOverlay) && !onUpdateSignature)} aria-label={selectedSignatureOverlay ? "Update signature" : "Apply signature"} data-testid="studio-apply-signature" className="flex-[2] rounded border border-[#7c3aed]/70 px-2 py-2 text-[11px] text-[#d2bbff] hover:bg-[#7c3aed]/15 disabled:opacity-40">{isCommandLoading ? "Applying…" : selectedSignatureOverlay ? "Update signature" : "Apply signature"}</button>
+                  </div>
+                  {selectedSignatureOverlay && onRemoveSignature && <button type="button" onClick={() => void onRemoveSignature({ page_id: selectedPage.page_id, overlay_id: selectedSignatureOverlay.id })} disabled={isCommandLoading} aria-label="Remove selected signature" data-testid="studio-remove-signature" className="w-full rounded border border-red-900/70 px-2 py-2 text-[11px] text-red-300 hover:border-red-500 disabled:opacity-40">Remove selected signature</button>}
+                  {signatureError && <p role="alert" className="text-[10px] text-red-300">{signatureError}</p>}
+                  {signatureOverlays.length > 0 && <div className="space-y-1 border-t border-[#292D35] pt-2"><span className="text-[10px] text-[#9AA1AD]">Signatures on this page</span>{signatureOverlays.map((overlay) => <button type="button" key={overlay.id} onClick={() => onSelectOverlay?.(overlay.id)} aria-label="Select signature" data-testid={`studio-signature-overlay-${overlay.id}`} className={`block w-full truncate rounded border px-2 py-1.5 text-left text-[11px] ${selectedOverlayId === overlay.id ? "border-[#7c3aed] text-white" : "border-[#3b3742] text-[#D8DCE3]"}`}>Signature</button>)}</div>}
                 </div>
               )}
             </div>
