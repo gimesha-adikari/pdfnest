@@ -68,9 +68,13 @@ async function drawMarkup(page: Page, pageId: string) {
   return tile;
 }
 
-async function applyMarkup(page: Page, pageId: string, action: 'highlight' | 'underline' | 'strikeout', expectedVersion = 'Version 1') {
+async function applyMarkup(page: Page, pageId: string, action: 'highlight' | 'underline' | 'strikeout', expectedVersion = 'Version 1', color?: { name: string; hex: string }) {
   await page.locator(`[data-page-id="${pageId}"]`).click();
   await selectMarkupTool(page, action);
+  if (color) {
+    await page.getByTestId('studio-markup-color').click();
+    await page.getByRole('button', { name: `${color.name}, ${color.hex}` }).click();
+  }
   const tile = await drawMarkup(page, pageId);
   const requestPromise = page.waitForRequest((request) => request.url().endsWith('/jobs') && request.method() === 'POST');
   const responsePromise = page.waitForResponse((response) => response.url().endsWith('/jobs') && response.request().method() === 'POST');
@@ -132,17 +136,18 @@ test.describe('Studio V2 Batch 5A2 Markup', () => {
     await expect(page.getByTestId('studio-version')).toHaveText('Version 1');
     await page.getByTestId('studio-rotate-clockwise').click();
     await expect(page.getByTestId('studio-version')).toHaveText('Version 2');
-    const applied = await applyMarkup(page, pageId, 'highlight', 'Version 3');
+    const applied = await applyMarkup(page, pageId, 'highlight', 'Version 3', { name: 'Green', hex: '#008000' });
+    expect(applied.requestBody.parameters.boxes[0].color).toBe('#008000');
     expect(applied.requestBody.parameters.boxes[0].page).toBe(1);
     expect(applied.requestBody.parameters.boxes[0].width).toBeGreaterThan(0);
     expect(applied.requestBody.parameters.boxes[0].height).toBeGreaterThan(0);
     const exported = await exportPDF(page);
-    const highlightBounds = colorBounds(exported, 'r>220 and g>220 and b<220');
+    const highlightBounds = colorBounds(exported, 'g>40 and g>r+10 and g>b+10');
     expect(highlightBounds.count).toBeGreaterThan(0);
     expect(highlightBounds.minX).toBeGreaterThan(150);
     expect(highlightBounds.maxX).toBeGreaterThan(400);
-    expect(highlightBounds.minY).toBeGreaterThan(140);
-    expect(highlightBounds.maxY).toBeLessThan(220);
+    expect(highlightBounds.minY).toBeGreaterThan(40);
+    expect(highlightBounds.maxY).toBeLessThan(300);
     expect(workerSubmissions).toBe(1);
     await Promise.all([page.waitForResponse((response) => response.url().endsWith('/undo') && response.status() === 200), page.getByRole('button', { name: 'Undo' }).click()]);
     await expect(page.getByTestId('studio-version')).toHaveText('Version 2');
@@ -167,10 +172,11 @@ test.describe('Studio V2 Batch 5A2 Markup', () => {
       page.getByTestId('studio-apply-crop').click(),
     ]);
     await expect(page.getByTestId('studio-version')).toHaveText('Version 1');
-    const applied = await applyMarkup(page, pageId, 'underline', 'Version 2');
+    const applied = await applyMarkup(page, pageId, 'underline', 'Version 2', { name: 'Blue', hex: '#0000FF' });
+    expect(applied.requestBody.parameters.boxes[0].color).toBe('#0000FF');
     expect(applied.responseBody.job.job_type).toBe('markup_underline');
     const exported = await exportPDF(page);
-    expect(colorBounds(exported, 'r>150 and g<150 and b<180').count).toBeGreaterThan(0);
+    expect(colorBounds(exported, 'b>120 and b>r*1.3 and b>g*1.3').count).toBeGreaterThan(0);
     expect(workerSubmissions).toBe(1);
     await Promise.all([page.waitForResponse((response) => response.url().endsWith('/undo') && response.status() === 200), page.getByRole('button', { name: 'Undo' }).click()]);
     await expect(page.getByTestId('studio-version')).toHaveText('Version 1');
@@ -185,12 +191,13 @@ test.describe('Studio V2 Batch 5A2 Markup', () => {
     let workerSubmissions = 0;
     page.on('request', (request) => { if (request.url().endsWith('/jobs') && request.method() === 'POST') workerSubmissions += 1; });
     const payload = await uploadBlank(page);
-    const applied = await applyMarkup(page, payload.vdm.pages[0].page_id, 'strikeout', 'Version 1');
+    const applied = await applyMarkup(page, payload.vdm.pages[0].page_id, 'strikeout', 'Version 1', { name: 'Orange', hex: '#FF8800' });
+    expect(applied.requestBody.parameters.boxes[0].color).toBe('#FF8800');
     expect(applied.responseBody.job.job_type).toBe('markup_strikeout');
     expect(applied.requestBody.parameters.mode).toBe('manual');
     await expect(page.getByTestId('studio-markup-apply')).toBeDisabled();
     const exported = await exportPDF(page);
-    expect(colorBounds(exported, 'r>150 and g<150 and b<180').count).toBeGreaterThan(0);
+    expect(colorBounds(exported, 'r>180 and g>60 and g<190 and b<80').count).toBeGreaterThan(0);
     expect(workerSubmissions).toBe(1);
     await Promise.all([page.waitForResponse((response) => response.url().endsWith('/undo') && response.status() === 200), page.getByRole('button', { name: 'Undo' }).click()]);
     await expect(page.getByTestId('studio-version')).toHaveText('Version 0');

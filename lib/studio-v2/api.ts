@@ -155,6 +155,25 @@ export interface StudioSessionResponse {
 
 export type StudioMarkupAction = "highlight" | "underline" | "strikeout";
 export type StudioMarkupOperation = `markup_${StudioMarkupAction}`;
+export type StudioMarkupMode = "manual" | "smart" | "ocr";
+
+export type StudioMarkupPageKind = "text" | "scanned" | "mixed" | "blank" | "unknown";
+
+export interface StudioMarkupPageAnalysis {
+  page: number;
+  kind: StudioMarkupPageKind;
+  hasSelectableText: boolean;
+  wordCount: number;
+  textBlockCount: number;
+  imageBlockCount: number;
+  textAreaRatio: number;
+  imageAreaRatio: number;
+}
+
+export interface StudioMarkupAnalysis {
+  pageCount: number;
+  pages: StudioMarkupPageAnalysis[];
+}
 
 export interface StudioMarkupBox {
   id: string;
@@ -168,7 +187,7 @@ export interface StudioMarkupBox {
 
 export interface StudioMarkupJobParameters {
   boxes: StudioMarkupBox[];
-  mode: "manual";
+  mode: StudioMarkupMode;
 }
 
 export interface StudioJobDTO {
@@ -361,13 +380,32 @@ export interface FinalizeExportResponse {
 export type StudioCompressionLevel = "low" | "medium" | "high";
 export type StudioMaterializationOperation = "compress" | "grayscale" | "repair" | "redact" | "merge" | "split";
 
+export interface StudioCompressionMetrics {
+  input_bytes: number;
+  output_bytes: number;
+  saved_bytes: number;
+  reduction_percent: number;
+}
+
 export interface StudioRedactParameters {
   keywords: string[];
-  boxes: string;
+  boxes: StudioRedactionBoxPayload[];
+}
+
+/** Normalized visible-page coordinates sent to the trusted Go boundary. */
+export interface StudioRedactionBoxPayload {
+  id: string;
+  page_id: string;
+  page: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 export interface StudioMergeParameters {
   source_asset_ids: string[];
+  current_document_position: number;
 }
 
 export interface StudioSplitParameters {
@@ -424,6 +462,7 @@ export interface StudioMaterializationResponse {
     mime_type: string;
   };
   vdm: StudioVDMDTO;
+  metrics?: StudioCompressionMetrics;
   is_idempotent_replay: boolean;
 }
 
@@ -535,6 +574,17 @@ export const studioV2Api = {
     try {
       const res = await studioV2Client.get<StudioSessionResponse>(
         `/sessions/${sessionId}`
+      );
+      return res.data;
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  async getMarkupAnalysis(sessionId: string): Promise<StudioMarkupAnalysis> {
+    try {
+      const res = await studioV2Client.get<StudioMarkupAnalysis>(
+        `/sessions/${sessionId}/markup-analysis`
       );
       return res.data;
     } catch (err) {

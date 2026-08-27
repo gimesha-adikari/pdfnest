@@ -40,7 +40,7 @@ export default defineConfig({
     timeout: 30_000, // 30s timeout for individual assertions
   },
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: process.env.E2E_BASE_URL || 'http://localhost:3000',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -55,7 +55,7 @@ export default defineConfig({
 
   webServer: {
     command: 'npm run dev',
-    url: 'http://localhost:3000',
+    url: process.env.E2E_BASE_URL || 'http://localhost:3000',
     reuseExistingServer: true,
     timeout: 60_000,
   },

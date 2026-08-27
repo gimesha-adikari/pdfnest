@@ -100,6 +100,7 @@ test.describe('Studio V2 Batch 3B materialization', () => {
       { timeout: 120_000 }
     );
     await page.getByRole('button', { name: 'Compress PDF' }).click();
+    await page.getByRole('button', { name: 'Apply Compress' }).click();
     const response = await materializeResponse;
     expect(response.status()).toBe(200);
     const result = await response.json();

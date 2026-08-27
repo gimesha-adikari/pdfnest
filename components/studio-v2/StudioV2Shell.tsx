@@ -30,8 +30,29 @@ import {
   StudioJobDTO,
   StudioMarkupAction,
   StudioMarkupBox,
+  StudioMarkupMode,
+  StudioMarkupAnalysis,
+  StudioRedactionBoxPayload,
 } from "@/lib/studio-v2/api";
+import { StudioV2CanonicalCropBox, getStudioV2TextOverlaySize } from "./StudioV2Geometry";
+import { StudioV2OverlayDraft, StudioV2RedactionDraftBox } from "./types";
+import { studioV2RedactionBoxToPayload } from "./StudioV2Redaction";
+import {
+  commitStudioV2MarkupEdit,
+  createStudioV2MarkupHistory,
+  getMarkupShortcutAction,
+  isMarkupShortcutEditableTarget,
+  markupBoxesEqual,
+  redoStudioV2Markup,
+  undoStudioV2Markup,
+} from "./StudioV2MarkupHistory";
 import { AlertTriangle, Loader2, RefreshCw, Upload } from "lucide-react";
+import { parseStudioPageSelection } from "./studioV2PageSelection";
+import {
+  createStudioCompressState,
+  studioCompressionMetricsFromResponse,
+  type StudioCompressState,
+} from "./studioV2Compress";
 
 function formatBytes(bytes: number): string {
   if (!bytes || bytes === 0) return "0 KB";
@@ -53,40 +74,6 @@ function formatRelativeTime(dateStr: string): string {
   } catch {
     return dateStr;
   }
-}
-
-export function parseStudioPageSelection(input: string, pageCount: number): number[] {
-  const trimmed = input.trim();
-  if (!trimmed) throw new Error("Enter at least one page or range to keep.");
-
-  const selected = new Set<number>();
-  for (const rawToken of trimmed.split(",")) {
-    const token = rawToken.trim();
-    if (!token) throw new Error("Page selection contains an empty token.");
-
-    let start: number;
-    let end: number;
-    if (/^\d+$/.test(token)) {
-      start = Number(token);
-      end = start;
-    } else {
-      const range = /^(\d+)-(\d+)$/.exec(token);
-      if (!range) throw new Error(`Invalid page selection token: ${token}`);
-      start = Number(range[1]);
-      end = Number(range[2]);
-      if (start > end) throw new Error(`Page range is reversed: ${token}`);
-    }
-
-    if (start < 1 || end > pageCount) {
-      throw new Error(`Pages must be between 1 and ${pageCount}.`);
-    }
-    for (let page = start; page <= end; page += 1) {
-      if (selected.has(page)) throw new Error(`Page ${page} is selected more than once.`);
-      selected.add(page);
-    }
-  }
-
-  return [...selected].sort((a, b) => a - b);
 }
 
 export const StudioV2Shell: React.FC = () => {
@@ -131,14 +118,67 @@ export const StudioV2Shell: React.FC = () => {
   const [isMaterializing, setIsMaterializing] = useState(false);
   const [materializationError, setMaterializationError] = useState<string | null>(null);
   const [compressionLevel, setCompressionLevel] = useState<StudioCompressionLevel>("medium");
+  const [compressState, setCompressState] = useState<StudioCompressState>(() => createStudioCompressState());
   const [markupAction, setMarkupAction] = useState<StudioMarkupAction>("highlight");
+  // Preserve the established Studio rectangle behavior until a user opts into
+  // text-aware Smart or explicit OCR mode.
+  const [markupMode, setMarkupMode] = useState<StudioMarkupMode>("manual");
+  const [markupColor, setMarkupColor] = useState("#FFFF00");
   const [markupBoxes, setMarkupBoxes] = useState<StudioMarkupBox[]>([]);
+  const [markupHistory, setMarkupHistory] = useState(() => createStudioV2MarkupHistory());
+  const markupBoxesRef = useRef<StudioMarkupBox[]>([]);
+  const markupInteractionStartRef = useRef<StudioMarkupBox[] | null>(null);
   const [markupJob, setMarkupJob] = useState<StudioJobDTO | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [markupError, setMarkupError] = useState<string | null>(null);
+  const [markupAnalysis, setMarkupAnalysis] = useState<StudioMarkupAnalysis | null>(null);
+  const [markupAnalysisLoading, setMarkupAnalysisLoading] = useState(false);
+  const [markupAnalysisError, setMarkupAnalysisError] = useState<string | null>(null);
+  const [redactionMode, setRedactionMode] = useState<"text" | "area">("text");
+  const [redactionBoxes, setRedactionBoxes] = useState<StudioV2RedactionDraftBox[]>([]);
+  const [cropDraft, setCropDraft] = useState<StudioV2CanonicalCropBox | null>(null);
+  const [cropTargetMode, setCropTargetMode] = useState<"current" | "all" | "custom">("current");
+  const [cropCustomPages, setCropCustomPages] = useState("");
+  const [overlayDraft, setOverlayDraft] = useState<StudioV2OverlayDraft | null>(null);
   const markupSelectionIndexRef = useRef<number | null>(null);
 
   const markupJobIsBusy = Boolean(markupJob && !["succeeded", "failed", "cancelled"].includes(markupJob.status));
+
+  const resetMarkupDraft = useCallback((next: StudioMarkupBox[] = []) => {
+    markupInteractionStartRef.current = null;
+    markupBoxesRef.current = next;
+    setMarkupBoxes(next);
+    setMarkupHistory(createStudioV2MarkupHistory(next));
+  }, []);
+
+  const commitMarkupEdit = useCallback((next: StudioMarkupBox[], previous = markupBoxesRef.current) => {
+    setMarkupHistory((history) => {
+      if (markupBoxesEqual(previous, next)) return history;
+      markupBoxesRef.current = next;
+      setMarkupBoxes(next);
+      return commitStudioV2MarkupEdit({ ...history, present: previous }, next);
+    });
+  }, []);
+
+  const undoMarkupDraft = useCallback(() => {
+    setMarkupHistory((history) => {
+      const next = undoStudioV2Markup(history);
+      if (next === history) return history;
+      markupBoxesRef.current = next.present;
+      setMarkupBoxes(next.present);
+      return next;
+    });
+  }, []);
+
+  const redoMarkupDraft = useCallback(() => {
+    setMarkupHistory((history) => {
+      const next = redoStudioV2Markup(history);
+      if (next === history) return history;
+      markupBoxesRef.current = next.present;
+      setMarkupBoxes(next.present);
+      return next;
+    });
+  }, []);
 
   const newIdempotencyKey = useCallback((operation: string) => {
     const suffix =
@@ -156,6 +196,46 @@ export const StudioV2Shell: React.FC = () => {
     () => (vdm && selectedPageId ? vdm.pages.findIndex((page) => page.page_id === selectedPageId) : -1),
     [vdm, selectedPageId]
   );
+
+  const committedCrop = useMemo<StudioV2CanonicalCropBox | null>(() => {
+    if (!selectedPage?.dimensions) return null;
+    const existing = selectedPage.crop_box;
+    return existing?.length === 4
+      ? [existing[0], existing[1], existing[2], existing[3]]
+      : [0, 0, selectedPage.dimensions.width, selectedPage.dimensions.height];
+  }, [selectedPage]);
+
+  const committedCropKey = committedCrop?.join(",") ?? "";
+  useEffect(() => {
+    setCropDraft(committedCrop);
+  }, [selectedPageId, committedCropKey]);
+
+  useEffect(() => {
+    const overlay = selectedPage?.overlays.find((candidate) => candidate.id === selectedOverlayId) ?? null;
+    if (!selectedPage || !overlay || (overlay.type !== "text" && overlay.type !== "signature")) {
+      setOverlayDraft(null);
+      return;
+    }
+    const x = overlay.rect?.[0] ?? 0;
+    const y = overlay.rect?.[1] ?? 0;
+    const fontSize = overlay.font_size ?? 24;
+    const textSize = getStudioV2TextOverlaySize(overlay.text ?? "", fontSize);
+    setOverlayDraft({
+      pageId: selectedPage.page_id,
+      overlayId: overlay.id,
+      type: overlay.type,
+      rect: {
+        x,
+        y,
+        width: overlay.type === "signature" ? (overlay.rect?.[2] ?? 0) : textSize.width,
+        height: overlay.type === "signature" ? (overlay.rect?.[3] ?? 0) : textSize.height,
+      },
+      text: overlay.text,
+      fontSize,
+      color: overlay.color,
+      assetId: overlay.asset_id,
+    });
+  }, [selectedPage?.page_id, selectedOverlayId, activeVersion?.id]);
 
   useEffect(() => {
     if (markupSelectionIndexRef.current === null || !vdm || vdm.pages.length === 0) return;
@@ -196,7 +276,7 @@ export const StudioV2Shell: React.FC = () => {
         if (["succeeded", "failed", "cancelled"].includes(job.status)) {
           if (typeof window !== "undefined") window.localStorage.removeItem(`studio-v2-markup-job:${session.id}`);
           if (job.status === "succeeded") {
-            setMarkupBoxes([]);
+            resetMarkupDraft();
             setMarkupError(null);
             void refetch();
           } else if (job.status === "failed") {
@@ -213,15 +293,97 @@ export const StudioV2Shell: React.FC = () => {
     return () => { cancelled = true; };
   }, [session?.id, markupJob?.id, markupJobIsBusy, refetch]);
 
-  const handleMarkupBoxChange = useCallback((box: StudioMarkupBox) => {
-    setMarkupBoxes((current) => {
-      const existing = current.findIndex((candidate) => candidate.id === box.id);
-      if (existing < 0) return [...current, box];
-      const next = [...current];
-      next[existing] = box;
-      return next;
+  // Read-only, session-owned analysis. The browser never submits the PDF to a
+  // standalone structure route and this request is made once per Studio session.
+  useEffect(() => {
+    if (!session?.id) return;
+    let cancelled = false;
+    setMarkupAnalysisLoading(true);
+    setMarkupAnalysisError(null);
+    void studioV2Api.getMarkupAnalysis(session.id).then((analysis) => {
+      if (!cancelled) setMarkupAnalysis(analysis);
+    }).catch((err) => {
+      if (!cancelled) {
+        setMarkupAnalysis(null);
+        setMarkupAnalysisError(err instanceof Error ? err.message : "Unable to analyze the Studio document.");
+      }
+    }).finally(() => {
+      if (!cancelled) setMarkupAnalysisLoading(false);
     });
+    return () => { cancelled = true; };
+  }, [session?.id]);
+
+  useEffect(() => {
+    const handleMarkupKeyboard = (event: KeyboardEvent) => {
+      if (activeTool !== "annotate" || (!event.metaKey && !event.ctrlKey)) return;
+      const target = event.target as HTMLElement | null;
+      if (target && isMarkupShortcutEditableTarget(target.tagName, target.isContentEditable)) return;
+      const action = getMarkupShortcutAction(event.key, event.shiftKey);
+      if (action === "redo") {
+        if (!markupHistory.future.length) return;
+        event.preventDefault();
+        redoMarkupDraft();
+      } else if (action === "undo") {
+        if (!markupHistory.past.length) return;
+        event.preventDefault();
+        undoMarkupDraft();
+      }
+    };
+    window.addEventListener("keydown", handleMarkupKeyboard);
+    return () => window.removeEventListener("keydown", handleMarkupKeyboard);
+  }, [activeTool, markupHistory.future.length, markupHistory.past.length, redoMarkupDraft, undoMarkupDraft]);
+
+  const handleMarkupBoxChange = useCallback((box: StudioMarkupBox) => {
+    const current = markupBoxesRef.current;
+    const existing = current.findIndex((candidate) => candidate.id === box.id);
+    const next = existing < 0
+      ? [...current, box]
+      : current.map((candidate, index) => index === existing ? box : candidate);
+    markupBoxesRef.current = next;
+    setMarkupBoxes(next);
     setMarkupError(null);
+  }, []);
+
+  const handleMarkupInteractionStart = useCallback(() => {
+    markupInteractionStartRef.current = markupBoxesRef.current.map((box) => ({ ...box }));
+  }, []);
+
+  const handleMarkupInteractionEnd = useCallback(() => {
+    const previous = markupInteractionStartRef.current;
+    if (!previous) return;
+    markupInteractionStartRef.current = null;
+    commitMarkupEdit(markupBoxesRef.current, previous);
+  }, [commitMarkupEdit]);
+
+  const handleMarkupActionChange = useCallback((action: StudioMarkupAction) => {
+    setMarkupAction(action);
+    setMarkupColor(action === "highlight" ? "#FFFF00" : action === "underline" ? "#FF4D4D" : "#FF0000");
+  }, []);
+
+  const handleMarkupModeChange = useCallback((mode: StudioMarkupMode) => {
+    if (markupBoxesRef.current.length > 0) {
+      setMarkupError("Clear or apply pending regions before changing markup mode.");
+      return;
+    }
+    setMarkupMode(mode);
+    setMarkupError(null);
+  }, []);
+
+  const handleRemoveMarkupBox = useCallback((boxId: string) => {
+    commitMarkupEdit(markupBoxesRef.current.filter((box) => box.id !== boxId));
+  }, [commitMarkupEdit]);
+
+  const handleClearMarkup = useCallback(() => {
+    if (markupBoxesRef.current.length > 0) commitMarkupEdit([]);
+  }, [commitMarkupEdit]);
+
+  const handleRedactionBoxAdd = useCallback((box: StudioV2RedactionDraftBox) => {
+    setRedactionBoxes((current) => [...current, box]);
+    setMaterializationError(null);
+  }, []);
+
+  const handleRemoveRedactionBox = useCallback((boxId: string) => {
+    setRedactionBoxes((current) => current.filter((box) => box.id !== boxId));
   }, []);
 
   const handleApplyMarkup = useCallback(async () => {
@@ -239,14 +401,14 @@ export const StudioV2Shell: React.FC = () => {
         base_version_id: activeVersion.id,
         idempotency_key: newIdempotencyKey(operation),
         operation,
-        parameters: { boxes, mode: "manual" },
+        parameters: { boxes, mode: markupMode },
       });
       setMarkupJob(job);
       if (typeof window !== "undefined") window.localStorage.setItem(`studio-v2-markup-job:${session.id}`, job.id);
     } catch (err) {
       setMarkupError(err instanceof Error ? err.message : "Unable to submit markup.");
     }
-  }, [session, activeVersion, markupBoxes, markupJobIsBusy, selectedPageIndex, markupAction, newIdempotencyKey]);
+  }, [session, activeVersion, markupBoxes, markupJobIsBusy, selectedPageIndex, markupAction, markupMode, newIdempotencyKey]);
 
   const handleCancelMarkupJob = useCallback(async () => {
     if (!session || !markupJob || !markupJobIsBusy) return;
@@ -261,10 +423,10 @@ export const StudioV2Shell: React.FC = () => {
 
   const handleCancelMarkup = useCallback(() => {
     if (!markupJobIsBusy) {
-      setMarkupBoxes([]);
+      resetMarkupDraft();
       setMarkupError(null);
     }
-  }, [markupJobIsBusy]);
+  }, [markupJobIsBusy, resetMarkupDraft]);
 
   useEffect(() => {
     if (!selectedPage || !selectedOverlayId || !selectedPage.overlays.some((overlay) => overlay.id === selectedOverlayId)) {
@@ -373,20 +535,37 @@ export const StudioV2Shell: React.FC = () => {
   }, [vdm, activeVersion, selectedPageIndex, executeCommand, newIdempotencyKey]);
 
   const handleCropPage = useCallback(
-    async (cropBox: number[]) => {
-      if (!selectedPage || !activeVersion) return;
+    async (cropBox: number[], requestedPageIds?: string[]) => {
+      if (!selectedPage || !activeVersion || !vdm) return;
+      let pageIds = requestedPageIds;
+      if (!pageIds) {
+        if (cropTargetMode === "all") pageIds = vdm.pages.map((page) => page.page_id);
+        else if (cropTargetMode === "custom") {
+          const pageNumbers = parseStudioPageSelection(cropCustomPages, vdm.pages.length);
+          pageIds = pageNumbers.map((pageNumber) => vdm.pages[pageNumber - 1].page_id);
+        } else pageIds = [selectedPage.page_id];
+      }
+      if (pageIds.length === 0) return;
+      for (const pageId of pageIds) {
+        const page = vdm.pages.find((candidate) => candidate.page_id === pageId);
+        const width = page?.dimensions?.width ?? 0;
+        const height = page?.dimensions?.height ?? 0;
+        if (!page || cropBox.length !== 4 || cropBox[0] < 0 || cropBox[1] < 0 || cropBox[2] <= cropBox[0] || cropBox[3] <= cropBox[1] || cropBox[2] > width || cropBox[3] > height) {
+          throw new Error(`Crop box does not fit target page ${page ? vdm.pages.indexOf(page) + 1 : ""}. Choose a smaller box or compatible pages.`);
+        }
+      }
       try {
         await executeCommand({
           base_version_id: activeVersion.id,
           idempotency_key: newIdempotencyKey("crop-page"),
           operation: "crop_page",
-          parameters: { page_ids: [selectedPage.page_id], crop_box: cropBox },
+          parameters: { page_ids: pageIds, crop_box: cropBox },
         });
       } catch {
         // Keep the authoritative VDM and let the hook expose the recoverable error.
       }
     },
-    [selectedPage, activeVersion, executeCommand, newIdempotencyKey]
+    [selectedPage, activeVersion, vdm, cropTargetMode, cropCustomPages, executeCommand, newIdempotencyKey]
   );
 
   const handleUpdateMetadata = useCallback(
@@ -502,6 +681,36 @@ export const StudioV2Shell: React.FC = () => {
     setSelectedOverlayId(null);
   }, [activeVersion, executeCommand, newIdempotencyKey]);
 
+  const handleOverlayCommit = useCallback(async (draft: StudioV2OverlayDraft) => {
+    if (!activeVersion) return;
+    try {
+      if (draft.type === "text") {
+        await handleUpdateText({
+          page_id: draft.pageId,
+          overlay_id: draft.overlayId,
+          text: draft.text ?? "",
+          x: draft.rect.x,
+          y: draft.rect.y,
+          font_size: draft.fontSize ?? 24,
+          color: draft.color ?? "#000000",
+        });
+      } else {
+        await handleUpdateSignature({
+          page_id: draft.pageId,
+          overlay_id: draft.overlayId,
+          asset_id: draft.assetId ?? "",
+          x: draft.rect.x,
+          y: draft.rect.y,
+          width: draft.rect.width,
+          height: draft.rect.height,
+        });
+      }
+    } catch {
+      // Preserve the draft and let the existing shell error surface explain
+      // stale-base or validation failures without reporting false success.
+    }
+  }, [activeVersion, handleUpdateSignature, handleUpdateText]);
+
   const watermarkTargets = useMemo(
     () => (vdm?.pages ?? []).flatMap((page) => page.overlays.filter((overlay) => overlay.type === "watermark").map((overlay) => ({ page_id: page.page_id, overlay_id: overlay.id }))),
     [vdm]
@@ -544,9 +753,9 @@ export const StudioV2Shell: React.FC = () => {
   const handleMaterialize = useCallback(
     async (
       operation: "compress" | "grayscale" | "repair" | "redact" | "merge" | "split",
-      options: { redactKeywords?: string[]; sourceAssetIds?: string[]; pageIds?: string[] } = {}
+      options: { redactKeywords?: string[]; redactBoxes?: StudioRedactionBoxPayload[]; mergeParameters?: import("@/lib/studio-v2/api").StudioMergeParameters; pageIds?: string[] } = {}
     ) => {
-      if (!activeVersion || isSaving || isMaterializing) return;
+      if (!activeVersion || isSaving || isMaterializing) return false;
       const selectedIndexBeforeMaterialization = selectedPageIndex;
       setIsMaterializing(true);
       setMaterializationError(null);
@@ -563,14 +772,14 @@ export const StudioV2Shell: React.FC = () => {
                 base_version_id: activeVersion.id,
                 idempotency_key: newIdempotencyKey(`materialize-${operation}`),
                 operation,
-                parameters: { keywords: options.redactKeywords ?? [], boxes: "[]" },
+                parameters: { keywords: options.redactKeywords ?? [], boxes: options.redactBoxes ?? [] },
               }
-            : operation === "merge"
+              : operation === "merge"
               ? {
                   base_version_id: activeVersion.id,
                   idempotency_key: newIdempotencyKey(`materialize-${operation}`),
                   operation,
-                  parameters: { source_asset_ids: options.sourceAssetIds ?? [] },
+                  parameters: options.mergeParameters ?? { source_asset_ids: [], current_document_position: 0 },
                 }
               : operation === "split"
                 ? {
@@ -590,8 +799,10 @@ export const StudioV2Shell: React.FC = () => {
           Math.min(Math.max(selectedIndexBeforeMaterialization, 0), response.vdm.pages.length - 1)
         ];
         setSelectedPageId(replacementPage?.page_id ?? null);
+        return true;
       } catch (err) {
         setMaterializationError(err instanceof Error ? err.message : "Materialization failed");
+        return false;
       } finally {
         setIsMaterializing(false);
       }
@@ -599,15 +810,90 @@ export const StudioV2Shell: React.FC = () => {
     [activeVersion, compressionLevel, isSaving, isMaterializing, materialize, newIdempotencyKey, selectedPageIndex]
   );
 
+  const handleCompressionLevelChange = useCallback((level: StudioCompressionLevel) => {
+    setCompressionLevel(level);
+    setCompressState((current) => ({ ...current, level }));
+  }, []);
+
+  const handleCompress = useCallback(async (): Promise<boolean> => {
+    if (!activeVersion || isSaving || isMaterializing) return false;
+    const selectedIndexBeforeMaterialization = selectedPageIndex;
+    setIsMaterializing(true);
+    setMaterializationError(null);
+    setCompressState({
+      status: "starting",
+      level: compressionLevel,
+      message: "Preparing current document",
+      error: null,
+      metrics: null,
+    });
+    try {
+      setCompressState((current) => ({ ...current, status: "running", message: "Compressing current document", error: null }));
+      const response = await materialize({
+        base_version_id: activeVersion.id,
+        idempotency_key: newIdempotencyKey("materialize-compress"),
+        operation: "compress",
+        parameters: { level: compressionLevel },
+      });
+      if (!response) throw new Error("Compression did not return a materialized Studio version");
+      const metrics = studioCompressionMetricsFromResponse(response.metrics);
+      if (!metrics) throw new Error("Compression did not return exact result metrics");
+      const replacementPage = response.vdm.pages[
+        Math.min(Math.max(selectedIndexBeforeMaterialization, 0), response.vdm.pages.length - 1)
+      ];
+      setSelectedPageId(replacementPage?.page_id ?? null);
+      setCompressState({
+        status: "succeeded",
+        level: compressionLevel,
+        message: "Compression complete",
+        error: null,
+        metrics,
+      });
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Compression failed";
+      setMaterializationError(message);
+      setCompressState((current) => ({ ...current, status: "failed", message: "Compression failed", error: message, metrics: null }));
+      return false;
+    } finally {
+      setIsMaterializing(false);
+    }
+  }, [activeVersion, compressionLevel, isMaterializing, isSaving, materialize, newIdempotencyKey, selectedPageIndex]);
+
+  const handleApplyRedaction = useCallback(async (keywordInput: string): Promise<boolean> => {
+    const keywords = keywordInput.split(",").map((keyword) => keyword.trim()).filter(Boolean);
+    if (!keywords.length && !redactionBoxes.length) {
+      setMaterializationError("Enter a keyword or draw at least one area to redact.");
+      return false;
+    }
+    if (!vdm) return false;
+    let boxes: StudioRedactionBoxPayload[] = [];
+    try {
+      boxes = redactionBoxes.map((box) => {
+        const page = vdm.pages.find((candidate) => candidate.page_id === box.pageId);
+        if (!page || page.source_page_number !== box.page) throw new Error("A pending redaction page is no longer present in the current Studio version.");
+        return studioV2RedactionBoxToPayload(box, page);
+      });
+    } catch (err) {
+      setMaterializationError(err instanceof Error ? err.message : "Invalid redaction region.");
+      return false;
+    }
+    const succeeded = await handleMaterialize("redact", { redactKeywords: keywords, redactBoxes: boxes });
+    if (succeeded) {
+      setRedactionBoxes([]);
+      setRedactionMode("text");
+    }
+    return succeeded;
+  }, [handleMaterialize, redactionBoxes, vdm]);
+
   const handleSplit = useCallback(
-    async (pageSelection: string) => {
-      if (!vdm) return;
-      const pageNumbers = parseStudioPageSelection(pageSelection, vdm.pages.length);
-      const pageIds = pageNumbers.map((pageNumber) => vdm.pages[pageNumber - 1]?.page_id);
-      if (pageIds.some((pageId) => !pageId)) {
+    async (pageIds: string[]) => {
+      if (!vdm) return false;
+      const validPageIds = new Set(vdm.pages.map((page) => page.page_id));
+      if (!pageIds.length || pageIds.some((pageId) => !validPageIds.has(pageId))) {
         throw new Error("The selected pages are no longer present in the current Studio document.");
       }
-      await handleMaterialize("split", { pageIds });
+      return handleMaterialize("split", { pageIds });
     },
     [handleMaterialize, vdm]
   );
@@ -792,18 +1078,30 @@ export const StudioV2Shell: React.FC = () => {
         onRedo={redo}
         onOpenCommandPalette={() => setCommandPaletteOpen(true)}
         onExport={handleExport}
-        onCompress={() => void handleMaterialize("compress")}
+        onCompress={() => void handleCompress()}
         compressionLevel={compressionLevel}
-        onCompressionLevelChange={setCompressionLevel}
+        onCompressionLevelChange={handleCompressionLevelChange}
+        compressStatus={compressState.status}
+        compressStatusMessage={compressState.message}
+        compressMetrics={compressState.metrics}
+        compressError={compressState.error}
         onGrayscale={() => void handleMaterialize("grayscale")}
         onRepair={() => void handleMaterialize("repair")}
-        onRedact={(keywords) => void handleMaterialize("redact", { redactKeywords: keywords.split(",").map((keyword) => keyword.trim()).filter(Boolean) })}
+        onApplyRedaction={handleApplyRedaction}
+        redactionMode={redactionMode}
+        onRedactionModeChange={setRedactionMode}
+        redactionBoxes={redactionBoxes}
+        onRemoveRedactionBox={handleRemoveRedactionBox}
+        onClearRedactions={() => setRedactionBoxes([])}
         onUploadMergeAsset={async (file) => {
           if (!session) throw new Error("Studio session is not ready");
           const response = await studioV2Api.uploadAsset(session.id, file);
           return response.asset;
         }}
-        onMerge={(assetId) => void handleMaterialize("merge", { sourceAssetIds: [assetId] })}
+        onMerge={(mergeParameters) => handleMaterialize("merge", { mergeParameters })}
+        sessionId={session?.id}
+        versionId={activeVersion?.id}
+        pages={vdm?.pages ?? []}
         onSplit={handleSplit}
         onUploadWatermarkAsset={async (file) => {
           if (!session) throw new Error("Studio session is not ready");
@@ -859,8 +1157,17 @@ export const StudioV2Shell: React.FC = () => {
         onMovePageLater={() => handleReorderPage(1)}
         onDuplicatePage={handleDuplicatePage}
         onCropPage={handleCropPage}
+        cropDraft={cropDraft}
+        onCropDraftChange={(next) => setCropDraft(next as StudioV2CanonicalCropBox)}
+        cropTargetMode={cropTargetMode}
+        cropCustomPages={cropCustomPages}
+        onCropTargetModeChange={setCropTargetMode}
+        onCropCustomPagesChange={setCropCustomPages}
         selectedOverlayId={selectedOverlayId}
         onSelectOverlay={setSelectedOverlayId}
+        overlayDraft={overlayDraft}
+        onOverlayDraftChange={setOverlayDraft}
+        onOverlayCommit={handleOverlayCommit}
         onAddText={handleAddText}
         onUpdateText={handleUpdateText}
         onRemoveText={handleRemoveText}
@@ -871,16 +1178,32 @@ export const StudioV2Shell: React.FC = () => {
         canMovePageLater={selectedPageIndex >= 0 && selectedPageIndex < (vdm?.pages.length ?? 0) - 1}
         isCommandLoading={isSaving || markupJobIsBusy}
         markupAction={markupAction}
+        markupMode={markupMode}
+        markupAnalysis={markupAnalysis}
+        markupAnalysisLoading={markupAnalysisLoading}
+        markupAnalysisError={markupAnalysisError}
+        markupColor={markupColor}
         markupBoxes={markupBoxes}
         markupJob={markupJob}
         markupError={markupError}
-        onMarkupActionChange={setMarkupAction}
+        onMarkupActionChange={handleMarkupActionChange}
+        onMarkupModeChange={handleMarkupModeChange}
+        onMarkupColorChange={setMarkupColor}
         onMarkupBoxChange={handleMarkupBoxChange}
-        onRemoveMarkupBox={(boxId) => setMarkupBoxes((boxes) => boxes.filter((box) => box.id !== boxId))}
-        onClearMarkup={() => setMarkupBoxes([])}
+        onMarkupInteractionStart={handleMarkupInteractionStart}
+        onMarkupInteractionEnd={handleMarkupInteractionEnd}
+        redactActive={redactionMode === "area"}
+        redactionBoxes={redactionBoxes}
+        onRedactionBoxAdd={handleRedactionBoxAdd}
+        onRemoveMarkupBox={handleRemoveMarkupBox}
+        onClearMarkup={handleClearMarkup}
         onApplyMarkup={() => void handleApplyMarkup()}
         onCancelMarkup={handleCancelMarkup}
         onCancelMarkupJob={() => void handleCancelMarkupJob()}
+        markupCanUndo={markupHistory.past.length > 0}
+        markupCanRedo={markupHistory.future.length > 0}
+        onMarkupUndo={undoMarkupDraft}
+        onMarkupRedo={redoMarkupDraft}
       />
 
       {/* Mobile Bottom Docked Navigation */}

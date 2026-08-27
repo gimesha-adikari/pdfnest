@@ -125,6 +125,7 @@ test.describe('Studio V2 Batch 4A3 Page Numbers', () => {
 
     const materializeResponse = page.waitForResponse((response) => response.url().endsWith('/materializations') && response.request().method() === 'POST', { timeout: 120_000 });
     await page.getByRole('button', { name: 'Compress PDF' }).click();
+    await page.getByRole('button', { name: 'Apply Compress' }).click();
     const compressed = await (await materializeResponse).json();
     expect(compressed.operation.operation_name).toBe('compress');
     expect(compressed.version.is_materialized).toBe(true);

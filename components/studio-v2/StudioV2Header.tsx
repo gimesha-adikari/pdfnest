@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Undo2,
   Redo2,
@@ -12,9 +12,19 @@ import {
   Download,
   Loader2,
   AlertCircle,
+  ChevronDown,
+  MoreHorizontal,
 } from "lucide-react";
-import { DocumentInfo } from "./types";
-import { StudioAssetDTO, StudioCompressionLevel, StudioPageNumberingParameters, StudioWatermarkParameters, VDMPageNumberingDTO } from "@/lib/studio-v2/api";
+import { DocumentInfo, StudioV2RedactionDraftBox } from "./types";
+import { StudioAssetDTO, StudioCompressionLevel, StudioMergeParameters, StudioPageNumberingParameters, StudioWatermarkParameters, VDMPageNumberingDTO, VDMPageDescriptorDTO } from "@/lib/studio-v2/api";
+import { StudioV2Popover } from "./StudioV2Popover";
+import { toggleToolbarPopover } from "./studioV2ToolbarState";
+import type { ActiveToolbarPopover } from "./studioV2ToolbarState";
+import { createMergeQueue, moveMergeQueueItem, removeMergeQueueItem, serializeMergeQueue, StudioMergeQueueItem } from "./studioV2MergeQueue";
+import { StudioV2SplitSelector } from "./StudioV2SplitSelector";
+import { StudioV2CompressPanel } from "./StudioV2CompressPanel";
+import type { StudioCompressMetrics, StudioCompressStatus } from "./studioV2Compress";
+import { pageIdsForSelection, parseStudioPageSelection, pruneStudioPageSelection, serializeStudioPageSelection, toggleStudioPageSelection } from "./studioV2PageSelection";
 
 interface StudioV2HeaderProps {
   document: DocumentInfo;
@@ -29,12 +39,25 @@ interface StudioV2HeaderProps {
   onCompress?: () => void;
   compressionLevel?: StudioCompressionLevel;
   onCompressionLevelChange?: (level: StudioCompressionLevel) => void;
+  compressStatus?: StudioCompressStatus;
+  compressStatusMessage?: string | null;
+  compressMetrics?: StudioCompressMetrics | null;
+  compressError?: string | null;
   onGrayscale?: () => void;
   onRepair?: () => void;
   onRedact?: (keywords: string) => void;
+  onApplyRedaction?: (keywords: string) => Promise<boolean> | boolean;
+  redactionMode?: "text" | "area";
+  onRedactionModeChange?: (mode: "text" | "area") => void;
+  redactionBoxes?: StudioV2RedactionDraftBox[];
+  onRemoveRedactionBox?: (boxId: string) => void;
+  onClearRedactions?: () => void;
   onUploadMergeAsset?: (file: File) => Promise<StudioAssetDTO>;
-  onMerge?: (assetId: string) => void;
-  onSplit?: (pageSelection: string) => Promise<void> | void;
+  onMerge?: (parameters: StudioMergeParameters) => Promise<boolean> | boolean;
+  sessionId?: string | null;
+  versionId?: string | null;
+  pages?: VDMPageDescriptorDTO[];
+  onSplit?: (pageIds: string[]) => Promise<boolean> | boolean;
   onUploadWatermarkAsset?: (file: File) => Promise<StudioAssetDTO>;
   onWatermark?: (parameters: StudioWatermarkParameters) => Promise<void> | void;
   watermarkTargets?: Array<{ page_id: string; overlay_id: string }>;
@@ -58,11 +81,24 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
   onCompress,
   compressionLevel = "medium",
   onCompressionLevelChange,
+  compressStatus = "idle",
+  compressStatusMessage = null,
+  compressMetrics = null,
+  compressError = null,
   onGrayscale,
   onRepair,
   onRedact,
+  onApplyRedaction,
+  redactionMode = "text",
+  onRedactionModeChange,
+  redactionBoxes = [],
+  onRemoveRedactionBox,
+  onClearRedactions,
   onUploadMergeAsset,
   onMerge,
+  sessionId,
+  versionId,
+  pages = [],
   onSplit,
   onUploadWatermarkAsset,
   onWatermark,
@@ -73,17 +109,23 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
   isMaterializing = false,
   materializeDisabled = false,
 }) => {
-  const [redactOpen, setRedactOpen] = useState(false);
+  const [activeToolbarPopover, setActiveToolbarPopover] = useState<ActiveToolbarPopover>(null);
+  const compressTriggerRef = useRef<HTMLButtonElement>(null);
+  const redactTriggerRef = useRef<HTMLButtonElement>(null);
+  const mergeSplitTriggerRef = useRef<HTMLButtonElement>(null);
+  const watermarkTriggerRef = useRef<HTMLButtonElement>(null);
+  const pageNumbersTriggerRef = useRef<HTMLButtonElement>(null);
+  const moreTriggerRef = useRef<HTMLButtonElement>(null);
   const [redactKeywords, setRedactKeywords] = useState("");
   const [redactError, setRedactError] = useState<string | null>(null);
-  const [mergeSplitOpen, setMergeSplitOpen] = useState(false);
-  const [mergeAsset, setMergeAsset] = useState<StudioAssetDTO | null>(null);
-  const [mergeFilename, setMergeFilename] = useState("");
+  const [mergeQueue, setMergeQueue] = useState<StudioMergeQueueItem[]>(createMergeQueue);
   const [mergeUploadError, setMergeUploadError] = useState<string | null>(null);
   const [isUploadingMergeAsset, setIsUploadingMergeAsset] = useState(false);
+  const mergeInputRef = useRef<HTMLInputElement>(null);
   const [splitPages, setSplitPages] = useState("");
   const [splitError, setSplitError] = useState<string | null>(null);
-  const [watermarkOpen, setWatermarkOpen] = useState(false);
+  const [splitSelectedPageIds, setSplitSelectedPageIds] = useState<Set<string>>(new Set());
+  const [splitAnchorId, setSplitAnchorId] = useState<string | null>(null);
   const [watermarkKind, setWatermarkKind] = useState<"text" | "image">("text");
   const [watermarkText, setWatermarkText] = useState("CONFIDENTIAL");
   const [watermarkFont, setWatermarkFont] = useState<"Helvetica" | "Times-Roman" | "Courier">("Helvetica");
@@ -95,12 +137,24 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
   const [watermarkFilename, setWatermarkFilename] = useState("");
   const [watermarkError, setWatermarkError] = useState<string | null>(null);
   const [isUploadingWatermark, setIsUploadingWatermark] = useState(false);
-  const [pageNumbersOpen, setPageNumbersOpen] = useState(false);
   const [pageNumbersEnabled, setPageNumbersEnabled] = useState(false);
   const [pageNumbersFont, setPageNumbersFont] = useState<StudioPageNumberingParameters["font_family"]>("Helvetica");
   const [pageNumbersSize, setPageNumbersSize] = useState(12);
   const [pageNumbersPosition, setPageNumbersPosition] = useState<StudioPageNumberingParameters["position"]>("bc");
   const [pageNumbersError, setPageNumbersError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSplitSelectedPageIds((current) => {
+      const pruned = pruneStudioPageSelection(current, pages);
+      setSplitPages(serializeStudioPageSelection(pruned, pages));
+      return pruned;
+    });
+    setSplitAnchorId((current) => current && pages.some((page) => page.page_id === current) ? current : null);
+  }, [pages]);
+
+  const togglePopover = (popover: Exclude<ActiveToolbarPopover, null>) => {
+    setActiveToolbarPopover((current) => toggleToolbarPopover(current, popover));
+  };
 
   useEffect(() => {
     if (!pageNumbering) {
@@ -117,46 +171,92 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
     }
   }, [pageNumbering?.enabled, pageNumbering?.font_family, pageNumbering?.font_size, pageNumbering?.position]);
 
-  const submitRedaction = () => {
+  const submitRedaction = async () => {
     const keywords = redactKeywords.trim();
-    if (!keywords) {
-      setRedactError("Enter at least one keyword to redact.");
+    if (!keywords && redactionBoxes.length === 0) {
+      setRedactError("Enter a keyword or draw at least one area to redact.");
       return;
     }
     setRedactError(null);
-    setRedactOpen(false);
+    const succeeded = onApplyRedaction
+      ? await onApplyRedaction(keywords)
+      : (onRedact?.(keywords), true);
+    if (succeeded === false) return;
+    setActiveToolbarPopover(null);
     setRedactKeywords("");
-    onRedact?.(keywords);
+    onRedactionModeChange?.("text");
   };
 
   const handleMergeFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || !onUploadMergeAsset) return;
-    setMergeFilename(file.name);
-    setMergeAsset(null);
+    const files = Array.from(event.target.files ?? []);
+    if (files.length === 0 || !onUploadMergeAsset) return;
     setMergeUploadError(null);
     setIsUploadingMergeAsset(true);
-    try {
-      setMergeAsset(await onUploadMergeAsset(file));
-    } catch (err) {
-      setMergeUploadError(err instanceof Error ? err.message : "Secondary PDF upload failed");
-    } finally {
-      setIsUploadingMergeAsset(false);
+    for (const file of files) {
+      const localID = `pending-${crypto.randomUUID()}`;
+      setMergeQueue((current) => [...current, { id: localID, kind: "uploaded_asset", name: file.name, status: "uploading" }]);
+      try {
+        const asset = await onUploadMergeAsset(file);
+        setMergeQueue((current) => current.map((item) => item.id === localID ? { ...item, id: asset.id, asset, status: "ready" } : item));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Secondary PDF upload failed";
+        setMergeQueue((current) => current.map((item) => item.id === localID ? { ...item, status: "error", error: message } : item));
+        setMergeUploadError(message);
+      }
+    }
+    setIsUploadingMergeAsset(false);
+  };
+
+  const submitMerge = async () => {
+    const parameters = serializeMergeQueue(mergeQueue);
+    if (!parameters) {
+      setMergeUploadError("Upload at least one PDF and resolve any failed upload before merging.");
+      return;
+    }
+    const succeeded = await onMerge?.(parameters);
+    if (succeeded) {
+      setMergeQueue(createMergeQueue());
+      setMergeUploadError(null);
+      if (mergeInputRef.current) mergeInputRef.current.value = "";
+      setActiveToolbarPopover(null);
     }
   };
 
   const submitSplit = async () => {
-    const selection = splitPages.trim();
-    if (!selection) {
+    let selected = splitSelectedPageIds;
+    if (splitPages.trim()) {
+      try {
+        selected = pageIdsForSelection(parseStudioPageSelection(splitPages, pages.length), pages);
+        setSplitSelectedPageIds(selected);
+      } catch (err) {
+        setSplitError(err instanceof Error ? err.message : "Invalid page selection");
+        return;
+      }
+    }
+    if (!selected.size) {
       setSplitError("Enter at least one page or range to keep.");
       return;
     }
     setSplitError(null);
     try {
-      await onSplit?.(selection);
+      const succeeded = await onSplit?.([...selected]);
+      if (succeeded) {
+        setSplitSelectedPageIds(new Set());
+        setSplitAnchorId(null);
+        setSplitPages("");
+        setActiveToolbarPopover(null);
+      }
     } catch (err) {
       setSplitError(err instanceof Error ? err.message : "Invalid page selection");
     }
+  };
+
+  const toggleSplitPage = (pageId: string, shift: boolean) => {
+    const result = toggleStudioPageSelection(pages, splitSelectedPageIds, pageId, shift, splitAnchorId);
+    setSplitSelectedPageIds(result.selected);
+    setSplitAnchorId(result.anchorId);
+    setSplitPages(serializeStudioPageSelection(result.selected, pages));
+    setSplitError(null);
   };
 
   const handleWatermarkFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -196,7 +296,7 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
       position: watermarkPosition,
       asset_id: watermarkKind === "image" ? watermarkAsset?.id : undefined,
     });
-    setWatermarkOpen(false);
+    setActiveToolbarPopover(null);
   };
 
   const submitPageNumbers = async (enabled: boolean) => {
@@ -209,7 +309,7 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
         position: pageNumbersPosition,
       });
       setPageNumbersEnabled(enabled);
-      setPageNumbersOpen(false);
+      setActiveToolbarPopover(null);
     } catch (err) {
       setPageNumbersError(err instanceof Error ? err.message : "Page numbering update failed");
     }
@@ -219,8 +319,8 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
     switch (document.syncStatus) {
       case "saving":
         return (
-          <div className="h-[48px] flex items-center gap-1.5 px-3 text-[#d2bbff] text-xs">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-[#d2bbff]" />
+          <div className="h-[48px] flex items-center gap-1.5 px-3 text-[var(--studio-accent)] text-xs">
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--studio-accent)]" />
             <span>Syncing...</span>
           </div>
         );
@@ -250,7 +350,7 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-[48px] bg-[#101216] border-b border-[#292D35] flex items-center justify-between px-4 z-50 transition-colors duration-200">
+    <header className="fixed top-0 left-0 right-0 h-[48px] bg-[#101216] border-b border-[var(--studio-border)] flex items-center justify-between gap-3 px-4 z-50 transition-colors duration-200">
       {/* Brand & Left Navigation */}
       <div className="flex items-center gap-6">
         <div className="flex items-baseline gap-2">
@@ -264,7 +364,7 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
 
         {/* Desktop Navigation Links */}
         <nav className="hidden md:flex items-center h-[48px] space-x-1">
-          <div className="h-[48px] flex items-center px-3 text-[#d2bbff] font-medium border-b-2 border-[#7c3aed] text-sm">
+          <div className="h-[48px] flex items-center px-3 text-[var(--studio-accent)] font-medium border-b-2 border-[var(--studio-border-active)] text-sm">
             Document
           </div>
           {renderStatusBadge()}
@@ -292,11 +392,11 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
       </div>
 
       {/* Right Action Group */}
-      <div className="flex items-center space-x-1.5">
+      <div className="flex min-w-0 items-center gap-2">
         {/* Search / Command Palette Trigger */}
         <button
           onClick={onOpenCommandPalette}
-          className="hidden 2xl:flex items-center gap-2 bg-[#181B21] border border-[#292D35] text-[#9AA1AD] hover:text-white px-3 py-1 rounded text-xs transition-colors cursor-pointer"
+          className="studio-v2-focus hidden 2xl:flex items-center gap-2 bg-[var(--studio-surface-raised)] border border-[var(--studio-border)] text-[var(--studio-muted)] hover:text-[var(--studio-text)] px-3 py-1 rounded text-xs transition-colors cursor-pointer"
           aria-label="Search commands"
         >
           <Search className="w-3.5 h-3.5 text-[#9AA1AD]" />
@@ -308,125 +408,54 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
 
         {/* Action Icons */}
         <button
-          className="hidden 2xl:block p-1.5 text-[#9AA1AD] hover:text-white hover:bg-[#181B21] rounded transition-colors"
+          className="studio-v2-focus hidden 2xl:block p-1.5 text-[var(--studio-muted)] hover:text-[var(--studio-text)] hover:bg-[var(--studio-surface-raised)] rounded transition-colors"
           aria-label="Settings"
         >
           <Settings className="w-4 h-4" />
         </button>
         <button
-          className="hidden 2xl:block p-1.5 text-[#9AA1AD] hover:text-white hover:bg-[#181B21] rounded transition-colors"
+          className="studio-v2-focus hidden 2xl:block p-1.5 text-[var(--studio-muted)] hover:text-[var(--studio-text)] hover:bg-[var(--studio-surface-raised)] rounded transition-colors"
           aria-label="Help"
         >
           <HelpCircle className="w-4 h-4" />
         </button>
 
-        <div className="w-px h-4 bg-[#292D35] mx-1" />
+        <div className="w-px h-4 bg-[var(--studio-border)] mx-1" />
 
         {/* Auth / Export Button */}
-        <button className="hidden 2xl:inline text-xs text-[#9AA1AD] hover:text-white transition-colors">
+        <button className="studio-v2-focus hidden 2xl:inline text-xs text-[var(--studio-muted)] hover:text-[var(--studio-text)] transition-colors">
           Sign In
         </button>
-        <div className="hidden lg:flex items-center gap-1.5">
-          <label htmlFor="studio-compression-level" className="sr-only">
-            Compression level
-          </label>
-          <select
-            id="studio-compression-level"
-            aria-label="Compression level"
-            value={compressionLevel}
-            onChange={(event) => onCompressionLevelChange?.(event.target.value as StudioCompressionLevel)}
-            disabled={materializeDisabled || isMaterializing}
-            className="bg-[#181B21] border border-[#4c1d95] rounded px-2 py-1.5 text-xs text-[#D8DCE3] disabled:cursor-not-allowed disabled:opacity-50"
-            data-testid="studio-compression-level"
-          >
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-          </select>
+        <div className="hidden lg:flex items-center gap-1 rounded-md border border-[var(--studio-border)] bg-[var(--studio-surface)] p-1" aria-label="Optimization actions">
           <button
-            onClick={onCompress}
+            ref={compressTriggerRef}
+            type="button"
+            onClick={() => togglePopover("compress")}
             disabled={materializeDisabled || isMaterializing}
-            className="flex items-center gap-1.5 text-xs text-[#c4b5fd] hover:text-white border border-[#4c1d95] px-2.5 py-1.5 rounded transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            className="studio-v2-focus studio-v2-toolbar-control flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Compress PDF"
+            aria-expanded={activeToolbarPopover === "compress"}
+            aria-haspopup="dialog"
             title="Create a compressed Studio version"
           >
             {isMaterializing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
             <span>Compress</span>
+            <ChevronDown className="w-3 h-3" />
           </button>
+          <button type="button" onClick={onGrayscale} disabled={materializeDisabled || isMaterializing} className="studio-v2-focus studio-v2-toolbar-control rounded px-2 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50" aria-label="Convert to Grayscale" title="Convert the current Studio version to grayscale">Grayscale</button>
+          <button type="button" onClick={onRepair} disabled={materializeDisabled || isMaterializing} className="studio-v2-focus studio-v2-toolbar-control rounded px-2 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50" aria-label="Repair PDF" title="Create a repaired Studio version">Repair</button>
         </div>
-        <button
-          onClick={onGrayscale}
-          disabled={materializeDisabled || isMaterializing}
-          className="hidden lg:flex items-center gap-1.5 text-xs text-[#c4b5fd] hover:text-white border border-[#4c1d95] px-2.5 py-1.5 rounded transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-          aria-label="Convert to Grayscale"
-          title="Convert the current Studio version to grayscale"
-        >
-          {isMaterializing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-          <span>Grayscale</span>
-        </button>
-        <button
-          onClick={onRepair}
-          disabled={materializeDisabled || isMaterializing}
-          className="hidden lg:flex items-center gap-1.5 text-xs text-[#c4b5fd] hover:text-white border border-[#4c1d95] px-2.5 py-1.5 rounded transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-          aria-label="Repair PDF"
-          title="Create a repaired Studio version"
-        >
-          <span>Repair</span>
-        </button>
-        <button
-          onClick={() => {
-            setRedactError(null);
-            setRedactOpen((open) => !open);
-          }}
-          disabled={materializeDisabled || isMaterializing}
-          className="hidden lg:flex items-center gap-1.5 text-xs text-[#fca5a5] hover:text-white border border-[#7f1d1d] px-2.5 py-1.5 rounded transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-          aria-label="Redact PDF"
-          title="Permanently remove matching text in a new Studio version"
-        >
-          <span>Redact</span>
-        </button>
-        <button
-          onClick={() => {
-            setMergeUploadError(null);
-            setSplitError(null);
-            setMergeSplitOpen((open) => !open);
-          }}
-          disabled={materializeDisabled || isMaterializing}
-          className="hidden lg:flex items-center gap-1.5 text-xs text-[#c4b5fd] hover:text-white border border-[#4c1d95] px-2.5 py-1.5 rounded transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-          aria-label="Merge and Split PDF"
-          title="Merge a secondary PDF or trim the current pages"
-        >
-          <span>Merge / Split</span>
-        </button>
-        <button
-          onClick={() => {
-            setWatermarkError(null);
-            setWatermarkOpen((open) => !open);
-          }}
-          disabled={materializeDisabled || isMaterializing}
-          className="hidden lg:flex items-center gap-1.5 text-xs text-[#c4b5fd] hover:text-white border border-[#4c1d95] px-2.5 py-1.5 rounded transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-          aria-label="Watermark PDF"
-          title="Add a text or image watermark to all current pages"
-        >
-          <span>Watermark</span>
-        </button>
-        <button
-          onClick={() => {
-            setPageNumbersError(null);
-            setPageNumbersOpen((open) => !open);
-          }}
-          disabled={materializeDisabled || isMaterializing}
-          className="hidden lg:flex items-center gap-1.5 text-xs text-[#c4b5fd] hover:text-white border border-[#4c1d95] px-2.5 py-1.5 rounded transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-          aria-label="Page Numbers"
-          title="Add or remove sequential page numbers"
-          data-testid="studio-page-numbers-button"
-        >
-          <span>Page Numbers</span>
-        </button>
+        <div className="hidden lg:flex items-center gap-1 rounded-md border border-[var(--studio-border)] bg-[var(--studio-surface)] p-1" aria-label="Document tools">
+          <button ref={redactTriggerRef} type="button" onClick={() => { setRedactError(null); togglePopover("redact"); }} disabled={materializeDisabled || isMaterializing} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-1.5 text-xs text-red-300/90 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Redact PDF" aria-expanded={activeToolbarPopover === "redact"} aria-haspopup="dialog" title="Permanently remove matching text in a new Studio version">Redact</button>
+          <button ref={mergeSplitTriggerRef} type="button" onClick={() => { setMergeUploadError(null); setSplitError(null); togglePopover("mergeSplit"); }} disabled={materializeDisabled || isMaterializing} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50" aria-label="Merge and Split PDF" aria-expanded={activeToolbarPopover === "mergeSplit"} aria-haspopup="dialog" title="Merge a secondary PDF or trim the current pages">Merge / Split</button>
+          <button ref={watermarkTriggerRef} type="button" onClick={() => { setWatermarkError(null); togglePopover("watermark"); }} disabled={materializeDisabled || isMaterializing} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50" aria-label="Watermark PDF" aria-expanded={activeToolbarPopover === "watermark"} aria-haspopup="dialog" title="Add a text or image watermark to all current pages">Watermark</button>
+          <button ref={pageNumbersTriggerRef} type="button" onClick={() => { setPageNumbersError(null); togglePopover("pageNumbers"); }} disabled={materializeDisabled || isMaterializing} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50" aria-label="Page Numbers" aria-expanded={activeToolbarPopover === "pageNumbers"} aria-haspopup="dialog" title="Add or remove sequential page numbers" data-testid="studio-page-numbers-button">Page Numbers</button>
+        </div>
+        <button ref={moreTriggerRef} type="button" onClick={() => togglePopover("more")} className="studio-v2-focus studio-v2-toolbar-control flex items-center gap-1 rounded border px-2.5 py-1.5 text-xs lg:hidden" aria-label="More document tools" aria-expanded={activeToolbarPopover === "more"} aria-haspopup="dialog"><MoreHorizontal className="w-3.5 h-3.5" /> More</button>
         <button
           onClick={onExport}
           disabled={exportDisabled || isExporting}
-          className="bg-[#7c3aed] text-white text-xs font-medium px-3.5 py-1.5 rounded hover:bg-[#6d28d9] transition-colors flex items-center gap-1.5 shadow-sm opacity-90 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
+          className="studio-v2-focus studio-v2-primary text-white text-xs font-medium px-3.5 py-1.5 rounded transition-colors flex items-center gap-1.5 shadow-sm opacity-95 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Export PDF"
           title={isExporting ? "Preparing final PDF" : "Export final PDF"}
         >
@@ -434,20 +463,49 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
           <span>{isExporting ? "Exporting..." : "Export"}</span>
         </button>
 
-        <div className="w-7 h-7 rounded-full bg-[#181B21] border border-[#292D35] flex items-center justify-center text-[#9AA1AD]">
+        <div className="w-7 h-7 rounded-full bg-[var(--studio-surface-raised)] border border-[var(--studio-border)] flex items-center justify-center text-[var(--studio-muted)]">
           <User className="w-4 h-4" />
         </div>
       </div>
-      {redactOpen && (
-        <div
-          role="dialog"
-          aria-label="Redact PDF"
-          className="absolute right-16 top-[52px] w-80 rounded-lg border border-[#7f1d1d] bg-[#14171C] p-3 shadow-2xl"
-        >
+      <StudioV2Popover open={activeToolbarPopover === "compress"} onClose={() => setActiveToolbarPopover(null)} triggerRef={compressTriggerRef} label="Compress PDF" width={300}>
+        <StudioV2CompressPanel
+          level={compressionLevel}
+          onLevelChange={onCompressionLevelChange}
+          status={compressStatus}
+          statusMessage={compressStatusMessage}
+          metrics={compressMetrics}
+          error={compressError}
+          disabled={materializeDisabled || isMaterializing}
+          onCompress={onCompress}
+          onClose={() => setActiveToolbarPopover(null)}
+        />
+      </StudioV2Popover>
+      <StudioV2Popover open={activeToolbarPopover === "more"} onClose={() => setActiveToolbarPopover(null)} triggerRef={moreTriggerRef} label="More document tools" width={240}>
+        <div className="mb-2 text-xs font-semibold">Document tools</div>
+        <div className="grid gap-1">
+          <button type="button" onClick={() => { setActiveToolbarPopover("redact"); setRedactError(null); }} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs">Redact</button>
+          <button type="button" onClick={() => { setActiveToolbarPopover("mergeSplit"); setMergeUploadError(null); setSplitError(null); }} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs">Merge / Split</button>
+          <button type="button" onClick={() => { setActiveToolbarPopover("watermark"); setWatermarkError(null); }} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs">Watermark</button>
+          <button type="button" onClick={() => { setActiveToolbarPopover("pageNumbers"); setPageNumbersError(null); }} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs">Page Numbers</button>
+          <button type="button" onClick={() => { onGrayscale?.(); setActiveToolbarPopover(null); }} disabled={materializeDisabled || isMaterializing} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs disabled:opacity-50">Grayscale</button>
+          <button type="button" onClick={() => { onRepair?.(); setActiveToolbarPopover(null); }} disabled={materializeDisabled || isMaterializing} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs disabled:opacity-50">Repair</button>
+        </div>
+      </StudioV2Popover>
+      <StudioV2Popover open={activeToolbarPopover === "redact"} onClose={() => setActiveToolbarPopover(null)} triggerRef={redactTriggerRef} label="Redact PDF" width={320} className="border-red-900/70" closeOnOutsidePointerDown={redactionMode !== "area"}>
+        <div>
           <div className="mb-2 text-xs font-semibold text-white">Apply permanent redaction?</div>
           <p className="mb-3 text-[11px] leading-4 text-[#9AA1AD]">
-            Matching text is removed from the new immutable PDF version. Separate multiple keywords with commas.
+            Selected content is removed from the new immutable PDF version. Pending regions are not permanent until Apply.
           </p>
+          <div className="mb-3 grid grid-cols-2 gap-1 rounded border border-[#292D35] bg-[#101216] p-1" role="tablist" aria-label="Redaction mode">
+            <button type="button" role="tab" aria-selected={redactionMode === "text"} data-testid="studio-redaction-text-mode" onClick={() => onRedactionModeChange?.("text")} className={`rounded px-2 py-1.5 text-xs ${redactionMode === "text" ? "bg-red-900/70 text-white" : "text-[#9AA1AD] hover:text-white"}`}>Text</button>
+            <button type="button" role="tab" aria-selected={redactionMode === "area"} data-testid="studio-redaction-area-mode" onClick={() => onRedactionModeChange?.("area")} className={`rounded px-2 py-1.5 text-xs ${redactionMode === "area" ? "bg-red-900/70 text-white" : "text-[#9AA1AD] hover:text-white"}`}>Area</button>
+          </div>
+          {redactionMode === "area" && (
+            <div className="mb-3 rounded border border-red-900/60 bg-red-950/25 p-2 text-[11px] leading-4 text-red-100" data-testid="studio-redaction-area-guidance">
+              Drag over visible page content to add a pending permanent region. You can draw on multiple pages before applying.
+            </div>
+          )}
           <label htmlFor="studio-redaction-keywords" className="sr-only">
             Redaction keywords
           </label>
@@ -459,17 +517,33 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
             onKeyDown={(event) => {
               if (event.key === "Enter") submitRedaction();
             }}
-            placeholder="e.g. Page 1 of 5, confidential"
+            placeholder="Optional keywords, separated by commas"
             disabled={isMaterializing}
             className="w-full rounded border border-[#292D35] bg-[#101216] px-2.5 py-2 text-xs text-white outline-none focus:border-[#ef4444] disabled:opacity-50"
             data-testid="studio-redaction-keywords"
           />
+          {redactionBoxes.length > 0 && (
+            <div className="mt-3 rounded border border-[#292D35] bg-[#101216] p-2" data-testid="studio-redaction-region-list">
+              <div className="mb-1 flex items-center justify-between text-[11px] text-[#D8DCE3]">
+                <span>{redactionBoxes.length} pending area{redactionBoxes.length === 1 ? "" : "s"}</span>
+                <button type="button" onClick={onClearRedactions} className="text-red-300 hover:text-white" aria-label="Clear all pending redaction areas">Clear all</button>
+              </div>
+              <ul className="space-y-1 text-[10px] text-[#9AA1AD]">
+                {redactionBoxes.map((box, index) => (
+                  <li key={box.id} className="flex items-center justify-between gap-2">
+                    <span>Page {box.page} · Area {index + 1}</span>
+                    <button type="button" onClick={() => onRemoveRedactionBox?.(box.id)} className="text-red-300 hover:text-white" aria-label={`Remove pending redaction area ${index + 1}`}>Remove</button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {redactError && <p className="mt-2 text-[11px] text-red-300">{redactError}</p>}
           <div className="mt-3 flex justify-end gap-2">
             <button
               type="button"
               onClick={() => {
-                setRedactOpen(false);
+                setActiveToolbarPopover(null);
                 setRedactError(null);
               }}
               className="rounded border border-[#292D35] px-2.5 py-1.5 text-xs text-[#9AA1AD] hover:text-white"
@@ -479,7 +553,7 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
             </button>
             <button
               type="button"
-              onClick={submitRedaction}
+              onClick={() => void submitRedaction()}
               disabled={isMaterializing}
               className="rounded bg-[#991b1b] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#b91c1c] disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Apply permanent redaction"
@@ -488,52 +562,65 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
             </button>
           </div>
         </div>
-      )}
-      {mergeSplitOpen && (
-        <div
-          role="dialog"
-          aria-label="Merge and Split PDF"
-          className="absolute right-16 top-[52px] w-96 rounded-lg border border-[#4c1d95] bg-[#14171C] p-3 shadow-2xl"
-        >
+      </StudioV2Popover>
+      <StudioV2Popover open={activeToolbarPopover === "mergeSplit"} onClose={() => setActiveToolbarPopover(null)} triggerRef={mergeSplitTriggerRef} label="Merge and Split PDF" width={384}>
+        <div>
           <div className="mb-3 text-xs font-semibold text-white">Document pages</div>
           <div className="rounded border border-[#292D35] bg-[#101216] p-3">
             <div className="mb-1 text-xs font-semibold text-[#D8DCE3]">Merge PDF</div>
             <p className="mb-2 text-[11px] leading-4 text-[#9AA1AD]">
-              The current document stays first; the uploaded PDF is appended.
+              Queue whole PDF blocks, including the current document, then apply the ordered merge.
             </p>
             <label htmlFor="studio-secondary-pdf" className="sr-only">
               Secondary PDF
             </label>
             <input
+              ref={mergeInputRef}
               id="studio-secondary-pdf"
               aria-label="Secondary PDF"
               type="file"
+              multiple
               accept="application/pdf,.pdf"
               onChange={(event) => void handleMergeFileChange(event)}
               disabled={isUploadingMergeAsset || isMaterializing}
-              className="block w-full text-[11px] text-[#9AA1AD] file:mr-2 file:rounded file:border-0 file:bg-[#4c1d95] file:px-2 file:py-1 file:text-[11px] file:text-white"
+              className="block w-full text-[11px] text-[var(--studio-muted)] file:mr-2 file:rounded file:border-0 file:bg-[var(--studio-cta)] file:px-2 file:py-1 file:text-[11px] file:text-white"
             />
-            {mergeFilename && (
-              <div className="mt-2 truncate text-[11px] text-[#D8DCE3]" data-testid="studio-merge-filename">
-                {isUploadingMergeAsset ? "Uploading…" : mergeFilename}
-              </div>
-            )}
+            <ol className="mt-3 max-h-48 space-y-1 overflow-y-auto" aria-label="Merge document order" data-testid="studio-merge-queue">
+              {mergeQueue.map((item, index) => (
+                <li key={item.id} className="flex items-center gap-1 rounded border border-[#292D35] px-2 py-1.5 text-[11px] text-[#D8DCE3]" data-testid={`studio-merge-queue-item-${item.id}`}>
+                  <span className="min-w-0 flex-1 truncate">{index + 1}. {item.name}{item.kind === "current_document" ? ` — ${document.pageCount} pages` : ""}</span>
+                  {item.status === "uploading" && <Loader2 className="animate-spin" size={12} aria-label={`Uploading ${item.name}`} />}
+                  {item.status === "error" && <span className="text-red-300">Upload failed</span>}
+                  <button type="button" onClick={() => setMergeQueue((current) => moveMergeQueueItem(current, item.id, -1))} disabled={index === 0 || isUploadingMergeAsset || isMaterializing} aria-label={`Move ${item.name} up`} className="px-1 disabled:opacity-40">↑</button>
+                  <button type="button" onClick={() => setMergeQueue((current) => moveMergeQueueItem(current, item.id, 1))} disabled={index === mergeQueue.length - 1 || isUploadingMergeAsset || isMaterializing} aria-label={`Move ${item.name} down`} className="px-1 disabled:opacity-40">↓</button>
+                  {item.kind === "uploaded_asset" && <button type="button" onClick={() => setMergeQueue((current) => removeMergeQueueItem(current, item.id))} disabled={isUploadingMergeAsset || isMaterializing} aria-label={`Remove ${item.name}`} className="px-1 text-red-300 disabled:opacity-40">Remove</button>}
+                </li>
+              ))}
+            </ol>
+            <div className="mt-2 flex justify-end">
+              <button type="button" onClick={() => { setMergeQueue(createMergeQueue()); setMergeUploadError(null); if (mergeInputRef.current) mergeInputRef.current.value = ""; }} disabled={mergeQueue.length === 1 || isUploadingMergeAsset || isMaterializing} className="text-[11px] text-[#9AA1AD] disabled:opacity-40">Clear uploads</button>
+            </div>
             {mergeUploadError && <p className="mt-2 text-[11px] text-red-300">{mergeUploadError}</p>}
             <button
               type="button"
-              onClick={() => mergeAsset && onMerge?.(mergeAsset.id)}
-              disabled={!mergeAsset || isUploadingMergeAsset || isMaterializing}
-              className="mt-3 rounded bg-[#4c1d95] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#5b21b6] disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => void submitMerge()}
+              disabled={!serializeMergeQueue(mergeQueue) || isUploadingMergeAsset || isMaterializing}
+              className="studio-v2-focus studio-v2-primary mt-3 rounded px-2.5 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Merge PDF"
             >
-              Merge
+              Apply Merge
             </button>
           </div>
           <div className="mt-3 rounded border border-[#292D35] bg-[#101216] p-3">
             <div className="mb-1 text-xs font-semibold text-[#D8DCE3]">Split current PDF</div>
             <p className="mb-2 text-[11px] leading-4 text-[#9AA1AD]">
-              Keep pages by visible number, for example 1,3,5-7.
+              Select pages visually or enter a range such as 1,3,5-7.
             </p>
+            <div className="mb-2 flex items-center justify-between text-[11px] text-[#D8DCE3]">
+              <span data-testid="studio-split-selected-count">{splitSelectedPageIds.size} pages selected</span>
+              <span className="flex gap-2"><button type="button" onClick={() => { const all = new Set(pages.map((page) => page.page_id)); setSplitSelectedPageIds(all); setSplitPages(serializeStudioPageSelection(all, pages)); }} disabled={!pages.length || isMaterializing} className="text-[var(--studio-accent)] disabled:opacity-40">Select All</button><button type="button" onClick={() => { setSplitSelectedPageIds(new Set()); setSplitAnchorId(null); setSplitPages(""); }} disabled={!splitSelectedPageIds.size || isMaterializing} className="text-[var(--studio-muted)] disabled:opacity-40">Clear All</button></span>
+            </div>
+            <StudioV2SplitSelector sessionId={sessionId} versionId={versionId} pages={pages} selectedPageIds={splitSelectedPageIds} onToggle={toggleSplitPage} />
             <label htmlFor="studio-split-pages" className="sr-only">
               Pages to keep
             </label>
@@ -542,36 +629,49 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
               aria-label="Pages to keep"
               value={splitPages}
               onChange={(event) => {
-                setSplitPages(event.target.value);
+                const value = event.target.value;
+                setSplitPages(value);
                 setSplitError(null);
+                if (!value.trim()) {
+                  setSplitSelectedPageIds(new Set());
+                  setSplitAnchorId(null);
+                  return;
+                }
+                try {
+                  const next = pageIdsForSelection(parseStudioPageSelection(value, pages.length), pages);
+                  setSplitSelectedPageIds(next);
+                  setSplitAnchorId(null);
+                } catch {
+                  // Keep the last valid visual selection while the user types.
+                }
               }}
               onKeyDown={(event) => {
                 if (event.key === "Enter") void submitSplit();
               }}
               placeholder="1,3,5-7"
               disabled={isMaterializing}
-              className="w-full rounded border border-[#292D35] bg-[#0B0C0F] px-2.5 py-2 text-xs text-white outline-none focus:border-[#7c3aed] disabled:opacity-50"
+              className="studio-v2-focus w-full rounded border border-[var(--studio-border)] bg-[#0B0C0F] px-2.5 py-2 text-xs text-white outline-none focus:border-[var(--studio-focus)] disabled:opacity-50"
             />
             {splitError && <p className="mt-2 text-[11px] text-red-300">{splitError}</p>}
             <button
               type="button"
               onClick={() => void submitSplit()}
-              disabled={!splitPages.trim() || isMaterializing}
-              className="mt-3 rounded border border-[#4c1d95] px-2.5 py-1.5 text-xs font-medium text-[#c4b5fd] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={(!splitPages.trim() && !splitSelectedPageIds.size) || isMaterializing}
+              className="studio-v2-focus mt-3 rounded border border-[var(--studio-border)] px-2.5 py-1.5 text-xs font-medium text-[var(--studio-accent)] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Apply Split"
             >
               Apply Split
             </button>
           </div>
         </div>
-      )}
-      {watermarkOpen && (
-        <div role="dialog" aria-label="Watermark PDF" className="absolute right-16 top-[52px] w-80 rounded-lg border border-[#4c1d95] bg-[#14171C] p-3 shadow-2xl">
+      </StudioV2Popover>
+      <StudioV2Popover open={activeToolbarPopover === "watermark"} onClose={() => setActiveToolbarPopover(null)} triggerRef={watermarkTriggerRef} label="Watermark PDF" width={320}>
+        <div>
           <div className="mb-1 text-xs font-semibold text-white">Watermark all current pages</div>
-          <p className="mb-3 text-[11px] leading-4 text-[#9AA1AD]">Placement is derived from authoritative PDF page dimensions. This follows V1's global-page behavior.</p>
+          <p className="mb-3 text-[11px] leading-4 text-[#9AA1AD]">Placement is derived from authoritative PDF page dimensions. This follows V1&apos;s global-page behavior.</p>
           <div className="mb-3 flex gap-1">
             {(["text", "image"] as const).map((kind) => (
-              <button key={kind} type="button" onClick={() => { setWatermarkKind(kind); setWatermarkError(null); }} className={`flex-1 rounded border px-2 py-1.5 text-xs ${watermarkKind === kind ? "border-[#7c3aed] bg-[#4c1d95] text-white" : "border-[#292D35] text-[#9AA1AD]"}`} aria-label={`${kind === "text" ? "Text" : "Image"} watermark`}>
+              <button key={kind} type="button" onClick={() => { setWatermarkKind(kind); setWatermarkError(null); }} className={`studio-v2-focus flex-1 rounded border px-2 py-1.5 text-xs ${watermarkKind === kind ? "border-[var(--studio-border-active)] bg-[var(--studio-cta)] text-white" : "border-[var(--studio-border)] text-[var(--studio-muted)]"}`} aria-label={`${kind === "text" ? "Text" : "Image"} watermark`}>
                 {kind === "text" ? "Text" : "Image"}
               </button>
             ))}
@@ -588,7 +688,7 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
           ) : (
             <>
               <label htmlFor="studio-watermark-image" className="sr-only">Watermark image</label>
-              <input key="studio-watermark-image-control" id="studio-watermark-image" aria-label="Watermark image" type="file" accept="image/png,image/jpeg,image/jpg,.png,.jpg,.jpeg" onChange={(event) => void handleWatermarkFileChange(event)} disabled={isUploadingWatermark || isMaterializing} className="mb-2 block w-full text-[11px] text-[#9AA1AD] file:mr-2 file:rounded file:border-0 file:bg-[#4c1d95] file:px-2 file:py-1 file:text-[11px] file:text-white" />
+              <input key="studio-watermark-image-control" id="studio-watermark-image" aria-label="Watermark image" type="file" accept="image/png,image/jpeg,image/jpg,.png,.jpg,.jpeg" onChange={(event) => void handleWatermarkFileChange(event)} disabled={isUploadingWatermark || isMaterializing} className="mb-2 block w-full text-[11px] text-[var(--studio-muted)] file:mr-2 file:rounded file:border-0 file:bg-[var(--studio-cta)] file:px-2 file:py-1 file:text-[11px] file:text-white" />
               {watermarkFilename && <div className="mb-2 truncate text-[11px] text-[#D8DCE3]">{isUploadingWatermark ? "Uploading…" : watermarkFilename}</div>}
             </>
           )}
@@ -601,12 +701,12 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
           {watermarkError && <p className="mt-2 text-[11px] text-red-300">{watermarkError}</p>}
           <div className="mt-3 flex justify-between gap-2">
             <button type="button" onClick={() => void onRemoveWatermark?.(watermarkTargets)} disabled={!watermarkTargets.length || isMaterializing} className="rounded border border-red-900 px-2.5 py-1.5 text-xs text-red-300 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Remove Watermark">Remove</button>
-            <div className="flex gap-2"><button type="button" onClick={() => setWatermarkOpen(false)} className="rounded border border-[#292D35] px-2.5 py-1.5 text-xs text-[#9AA1AD]">Cancel</button><button type="button" onClick={() => void submitWatermark()} disabled={isUploadingWatermark || isMaterializing} className="rounded bg-[#4c1d95] px-2.5 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50" aria-label="Apply Watermark">Apply Watermark</button></div>
+            <div className="flex gap-2"><button type="button" onClick={() => setActiveToolbarPopover(null)} className="studio-v2-focus rounded border border-[var(--studio-border)] px-2.5 py-1.5 text-xs text-[var(--studio-muted)]">Cancel</button><button type="button" onClick={() => void submitWatermark()} disabled={isUploadingWatermark || isMaterializing} className="studio-v2-focus studio-v2-primary rounded px-2.5 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50" aria-label="Apply Watermark">Apply Watermark</button></div>
           </div>
         </div>
-      )}
-      {pageNumbersOpen && (
-        <div role="dialog" aria-label="Page Numbers" className="absolute right-16 top-[52px] w-80 rounded-lg border border-[#4c1d95] bg-[#14171C] p-3 shadow-2xl">
+      </StudioV2Popover>
+      <StudioV2Popover open={activeToolbarPopover === "pageNumbers"} onClose={() => setActiveToolbarPopover(null)} triggerRef={pageNumbersTriggerRef} label="Page Numbers" width={320}>
+        <div>
           <div className="mb-1 text-xs font-semibold text-white">Page Numbers</div>
           <p className="mb-3 text-[11px] leading-4 text-[#9AA1AD]">Numbers follow the current visible page order and update after page operations.</p>
           <label htmlFor="studio-page-numbers-font" className="sr-only">Page number font</label>
@@ -626,10 +726,10 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
           {pageNumbersError && <p className="mt-2 text-[11px] text-red-300">{pageNumbersError}</p>}
           <div className="mt-3 flex justify-between gap-2">
             <button type="button" onClick={() => void submitPageNumbers(false)} disabled={!pageNumbersEnabled || isMaterializing} className="rounded border border-red-900 px-2.5 py-1.5 text-xs text-red-300 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Remove Page Numbers" data-testid="studio-remove-page-numbers">Remove</button>
-            <div className="flex gap-2"><button type="button" onClick={() => setPageNumbersOpen(false)} className="rounded border border-[#292D35] px-2.5 py-1.5 text-xs text-[#9AA1AD]">Cancel</button><button type="button" onClick={() => void submitPageNumbers(true)} disabled={isMaterializing || !Number.isFinite(pageNumbersSize)} className="rounded bg-[#4c1d95] px-2.5 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50" aria-label="Apply Page Numbers" data-testid="studio-apply-page-numbers">Apply</button></div>
+            <div className="flex gap-2"><button type="button" onClick={() => setActiveToolbarPopover(null)} className="studio-v2-focus rounded border border-[var(--studio-border)] px-2.5 py-1.5 text-xs text-[var(--studio-muted)]">Cancel</button><button type="button" onClick={() => void submitPageNumbers(true)} disabled={isMaterializing || !Number.isFinite(pageNumbersSize)} className="studio-v2-focus studio-v2-primary rounded px-2.5 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50" aria-label="Apply Page Numbers" data-testid="studio-apply-page-numbers">Apply</button></div>
           </div>
         </div>
-      )}
+      </StudioV2Popover>
     </header>
   );
 };

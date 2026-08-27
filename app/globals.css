@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "../components/studio-v2/studioV2Tokens.css";
 
 /* =========================
    Theme tokens

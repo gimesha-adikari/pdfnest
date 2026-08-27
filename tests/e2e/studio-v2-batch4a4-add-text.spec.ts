@@ -47,7 +47,9 @@ async function applyText(page: Page, text: string) {
   await page.getByTestId('studio-add-text-x').fill('72');
   await page.getByTestId('studio-add-text-y').fill('72');
   await page.getByTestId('studio-add-text-size').fill('24');
-  await page.getByTestId('studio-add-text-color').fill('#1e3a8a');
+  await page.getByTestId('studio-add-text-color').click();
+  await page.getByLabel('Add Text color custom hex').fill('#1E3A8A');
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
   const requestPromise = page.waitForRequest((request) => request.url().endsWith('/commands') && request.method() === 'POST');
   const responsePromise = page.waitForResponse((response) => response.url().endsWith('/commands') && response.request().method() === 'POST');
   await page.getByTestId('studio-apply-text').click();
@@ -77,7 +79,7 @@ test.describe('Studio V2 Batch 4A4 Add Text', () => {
 
     const added = await applyText(page, 'Studio V2 Add Text');
     expect(added.body.operation).toBe('add_text_overlay');
-    expect(added.body.parameters).toEqual({ page_id: payload.vdm.pages[0].page_id, text: 'Studio V2 Add Text', x: 72, y: 72, font_size: 24, color: '#1e3a8a' });
+    expect(added.body.parameters).toEqual({ page_id: payload.vdm.pages[0].page_id, text: 'Studio V2 Add Text', x: 72, y: 72, font_size: 24, color: '#1E3A8A' });
     expect(added.body).not.toHaveProperty('new_virtual_model');
     const addedOverlay = added.result.vdm.pages[0].overlays.find((overlay: { type: string; text: string }) => overlay.type === 'text' && overlay.text === 'Studio V2 Add Text');
     expect(addedOverlay.id).toBeTruthy();
@@ -120,6 +122,7 @@ test.describe('Studio V2 Batch 4A4 Add Text', () => {
     await applyText(page, 'Blank Page Add Text');
     const materializeResponse = page.waitForResponse((response) => response.url().endsWith('/materializations') && response.request().method() === 'POST');
     await page.getByRole('button', { name: 'Compress PDF' }).click();
+    await page.getByRole('button', { name: 'Apply Compress' }).click();
     const compressed = await (await materializeResponse).json();
     expect(compressed.version.is_materialized).toBe(true);
     expect(compressed.vdm.pages.every((page: { overlays: unknown[] }) => page.overlays.length === 0)).toBe(true);

@@ -4,8 +4,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { FileText, Clock, RotateCcw, RotateCw, Trash2, Info, Loader2, ArrowUp, ArrowDown, Copy, Crop, Type, Plus, PenTool } from "lucide-react";
 import SignaturePad from "@/components/pdf/SignaturePad";
 import { StudioV2MarkupPanel } from "./StudioV2MarkupPanel";
-import { DocumentInfo, HistoryItem, InspectorTab } from "./types";
-import { StudioJobDTO, StudioMarkupAction, StudioMarkupBox, StudioMetadataParameters, StudioSignatureOverlayParameters, StudioTextOverlayParameters, StudioUpdateSignatureOverlayParameters, StudioUpdateTextOverlayParameters, VDMPageDescriptorDTO } from "@/lib/studio-v2/api";
+import { StudioV2ColorPicker, normalizeStudioV2Hex } from "./StudioV2ColorPicker";
+import { studioMetadataDefaults } from "./metadata";
+import { DocumentInfo, HistoryItem, InspectorTab, StudioV2OverlayDraft } from "./types";
+import { StudioJobDTO, StudioMarkupAction, StudioMarkupAnalysis, StudioMarkupBox, StudioMarkupMode, StudioMetadataParameters, StudioSignatureOverlayParameters, StudioTextOverlayParameters, StudioUpdateSignatureOverlayParameters, StudioUpdateTextOverlayParameters, VDMPageDescriptorDTO } from "@/lib/studio-v2/api";
 
 interface StudioV2InspectorProps {
   document: DocumentInfo;
@@ -22,7 +24,14 @@ interface StudioV2InspectorProps {
   onMovePageEarlier?: () => void;
   onMovePageLater?: () => void;
   onDuplicatePage?: () => void;
-  onCropPage?: (cropBox: number[]) => void | Promise<void>;
+  onCropPage?: (cropBox: number[], pageIds?: string[]) => void | Promise<void>;
+  pages?: VDMPageDescriptorDTO[];
+  cropDraft?: number[] | null;
+  onCropDraftChange?: (cropBox: number[]) => void;
+  cropTargetMode?: "current" | "all" | "custom";
+  cropCustomPages?: string;
+  onCropTargetModeChange?: (mode: "current" | "all" | "custom") => void;
+  onCropCustomPagesChange?: (value: string) => void;
   selectedOverlayId?: string | null;
   onSelectOverlay?: (overlayId: string | null) => void;
   onAddText?: (parameters: StudioTextOverlayParameters) => void | Promise<void>;
@@ -31,20 +40,33 @@ interface StudioV2InspectorProps {
   onAddSignature?: (blob: Blob, parameters: StudioSignatureOverlayParameters) => void | Promise<void>;
   onUpdateSignature?: (parameters: StudioUpdateSignatureOverlayParameters) => void | Promise<void>;
   onRemoveSignature?: (target: { page_id: string; overlay_id: string }) => void | Promise<void>;
+  overlayDraft?: StudioV2OverlayDraft | null;
+  onOverlayDraftChange?: (draft: StudioV2OverlayDraft) => void;
   canMovePageEarlier?: boolean;
   canMovePageLater?: boolean;
   isCommandLoading?: boolean;
   activeTool?: string;
   markupAction?: StudioMarkupAction;
+  markupMode?: StudioMarkupMode;
+  markupAnalysis?: StudioMarkupAnalysis | null;
+  markupAnalysisLoading?: boolean;
+  markupAnalysisError?: string | null;
+  markupColor?: string;
   markupBoxes?: StudioMarkupBox[];
   markupJob?: StudioJobDTO | null;
   markupError?: string | null;
   onMarkupActionChange?: (action: StudioMarkupAction) => void;
+  onMarkupModeChange?: (mode: StudioMarkupMode) => void;
+  onMarkupColorChange?: (color: string) => void;
   onRemoveMarkupBox?: (boxId: string) => void;
   onClearMarkup?: () => void;
   onApplyMarkup?: () => void;
   onCancelMarkup?: () => void;
   onCancelMarkupJob?: () => void;
+  markupCanUndo?: boolean;
+  markupCanRedo?: boolean;
+  onMarkupUndo?: () => void;
+  onMarkupRedo?: () => void;
 }
 
 export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
@@ -63,6 +85,13 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
   onMovePageLater,
   onDuplicatePage,
   onCropPage,
+  pages = [],
+  cropDraft = null,
+  onCropDraftChange,
+  cropTargetMode = "current",
+  cropCustomPages = "",
+  onCropTargetModeChange,
+  onCropCustomPagesChange,
   selectedOverlayId,
   onSelectOverlay,
   onAddText,
@@ -71,38 +100,38 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
   onAddSignature,
   onUpdateSignature,
   onRemoveSignature,
+  overlayDraft,
+  onOverlayDraftChange,
   canMovePageEarlier = false,
   canMovePageLater = false,
   isCommandLoading = false,
   activeTool = "edit",
   markupAction = "highlight",
+  markupMode = "smart",
+  markupAnalysis = null,
+  markupAnalysisLoading = false,
+  markupAnalysisError = null,
+  markupColor = "#FFFF00",
   markupBoxes = [],
   markupJob = null,
   markupError = null,
   onMarkupActionChange,
+  onMarkupModeChange,
+  onMarkupColorChange,
   onRemoveMarkupBox,
   onClearMarkup,
   onApplyMarkup,
   onCancelMarkup,
   onCancelMarkupJob,
+  markupCanUndo = false,
+  markupCanRedo = false,
+  onMarkupUndo,
+  onMarkupRedo,
 }) => {
-  const cropDefaults = useMemo(() => {
-    const existing = selectedPage?.crop_box;
-    if (existing?.length === 4) return existing;
-    const width = selectedPage?.dimensions?.width ?? 0;
-    const height = selectedPage?.dimensions?.height ?? 0;
-    return [0, 0, width, height];
-  }, [selectedPage?.crop_box, selectedPage?.dimensions?.width, selectedPage?.dimensions?.height]);
-  const cropKey = cropDefaults.join(",");
-  const [cropValues, setCropValues] = useState<string[]>(cropDefaults.map((value) => String(value)));
   const [cropError, setCropError] = useState<string | null>(null);
+  const [cropInputValues, setCropInputValues] = useState<string[]>([]);
 
-  const metadataDefaults = useMemo<StudioMetadataParameters>(() => ({
-    title: metadata?.Title ?? metadata?.title ?? "",
-    author: metadata?.Author ?? metadata?.author ?? "",
-    subject: metadata?.Subject ?? metadata?.subject ?? "",
-    keywords: metadata?.Keywords ?? metadata?.keywords ?? "",
-  }), [metadata]);
+  const metadataDefaults = useMemo(() => studioMetadataDefaults(metadata), [metadata]);
   const metadataKey = Object.values(metadataDefaults).join("\u0001");
   const [metadataDraft, setMetadataDraft] = useState<StudioMetadataParameters>(metadataDefaults);
 
@@ -129,14 +158,36 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
   const [signatureHeight, setSignatureHeight] = useState("60");
   const [signatureError, setSignatureError] = useState<string | null>(null);
 
+  const selectedTextDraft = selectedTextOverlay && overlayDraft?.type === "text" && overlayDraft.overlayId === selectedTextOverlay.id ? overlayDraft : null;
+  const selectedSignatureDraft = selectedSignatureOverlay && overlayDraft?.type === "signature" && overlayDraft.overlayId === selectedSignatureOverlay.id ? overlayDraft : null;
+  const effectiveText = selectedTextDraft?.text ?? textDraft;
+  const effectiveTextX = selectedTextDraft ? String(selectedTextDraft.rect.x) : textX;
+  const effectiveTextY = selectedTextDraft ? String(selectedTextDraft.rect.y) : textY;
+  const effectiveTextFontSize = selectedTextDraft?.fontSize !== undefined ? String(selectedTextDraft.fontSize) : textFontSize;
+  const effectiveTextColor = selectedTextDraft?.color ?? textColor;
+  const effectiveSignatureX = selectedSignatureDraft ? String(selectedSignatureDraft.rect.x) : signatureX;
+  const effectiveSignatureY = selectedSignatureDraft ? String(selectedSignatureDraft.rect.y) : signatureY;
+  const effectiveSignatureWidth = selectedSignatureDraft ? String(selectedSignatureDraft.rect.width) : signatureWidth;
+  const effectiveSignatureHeight = selectedSignatureDraft ? String(selectedSignatureDraft.rect.height) : signatureHeight;
+
+  const updateSelectedDraft = (updates: Partial<StudioV2OverlayDraft>) => {
+    if (overlayDraft && onOverlayDraftChange) onOverlayDraftChange({ ...overlayDraft, ...updates });
+  };
+
+  const updateSelectedDraftRect = (field: "x" | "y" | "width" | "height", value: string) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || !overlayDraft) return;
+    updateSelectedDraft({ rect: { ...overlayDraft.rect, [field]: numeric } });
+  };
+
   useEffect(() => {
     setMetadataDraft(metadataDefaults);
   }, [metadataKey]);
 
   useEffect(() => {
-    setCropValues(cropDefaults.map((value) => String(value)));
+    setCropInputValues((cropDraft ?? []).map((value) => String(value)));
     setCropError(null);
-  }, [cropKey]);
+  }, [cropDraft?.join(",")]);
 
   useEffect(() => {
     if (selectedTextOverlay) {
@@ -144,7 +195,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
       setTextX(String(selectedTextOverlay.rect?.[0] ?? 72));
       setTextY(String(selectedTextOverlay.rect?.[1] ?? 72));
       setTextFontSize(String(selectedTextOverlay.font_size ?? 24));
-      setTextColor(selectedTextOverlay.color ?? "#000000");
+      setTextColor(normalizeStudioV2Hex(selectedTextOverlay.color ?? "") ?? "#000000");
     } else {
       setTextDraft("Studio V2 Add Text");
       setTextX("72");
@@ -170,9 +221,31 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
     setSignatureError(null);
   }, [selectedSignatureOverlay?.id, selectedPage?.page_id]);
 
-  const parsedCrop = cropValues.map((value) => Number(value));
+  const parsedCrop = cropInputValues.map((value) => Number(value));
   const pageWidth = selectedPage?.dimensions?.width ?? 0;
   const pageHeight = selectedPage?.dimensions?.height ?? 0;
+  const targetPageIds = (() => {
+    if (cropTargetMode === "current") return selectedPage ? [selectedPage.page_id] : [];
+    if (cropTargetMode === "all") return pages.map((page) => page.page_id);
+    const selected = new Set<number>();
+    for (const rawToken of cropCustomPages.split(",")) {
+      const token = rawToken.trim();
+      if (!token) continue;
+      const range = /^(\d+)(?:-(\d+))?$/.exec(token);
+      if (!range) return [];
+      const start = Number(range[1]);
+      const end = Number(range[2] ?? range[1]);
+      if (start < 1 || end < start || end > pages.length) return [];
+      for (let page = start; page <= end; page += 1) selected.add(page);
+    }
+    return [...selected].sort((a, b) => a - b).map((page) => pages[page - 1].page_id);
+  })();
+  const targetPagesFit = targetPageIds.length > 0 && targetPageIds.every((pageId) => {
+    const page = pages.find((candidate) => candidate.page_id === pageId);
+    const width = page?.dimensions?.width ?? 0;
+    const height = page?.dimensions?.height ?? 0;
+    return parsedCrop.length === 4 && parsedCrop[0] >= 0 && parsedCrop[1] >= 0 && parsedCrop[2] <= width && parsedCrop[3] <= height;
+  });
   const cropIsValid =
     parsedCrop.length === 4 &&
     parsedCrop.every((value) => Number.isFinite(value)) &&
@@ -183,7 +256,8 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
     parsedCrop[2] > parsedCrop[0] &&
     parsedCrop[3] > parsedCrop[1] &&
     parsedCrop[2] <= pageWidth &&
-    parsedCrop[3] <= pageHeight;
+    parsedCrop[3] <= pageHeight &&
+    targetPagesFit;
 
   const handleCropSubmit = () => {
     if (!cropIsValid || !onCropPage) {
@@ -191,7 +265,9 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
       return;
     }
     setCropError(null);
-    void onCropPage(parsedCrop);
+    void Promise.resolve(onCropPage(parsedCrop, targetPageIds)).catch((error: unknown) => {
+      setCropError(error instanceof Error ? error.message : "Unable to apply crop.");
+    });
   };
 
   const handleMetadataSubmit = () => {
@@ -201,17 +277,17 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
 
   const handleTextSubmit = () => {
     if (!selectedPage) return;
-    const x = Number(textX);
-    const y = Number(textY);
-    const fontSize = Number(textFontSize);
+    const x = Number(effectiveTextX);
+    const y = Number(effectiveTextY);
+    const fontSize = Number(effectiveTextFontSize);
     const width = selectedPage.dimensions?.width ?? 0;
     const height = selectedPage.dimensions?.height ?? 0;
-    if (!textDraft.trim() || !Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(fontSize) || fontSize < 8 || fontSize > 144 || x < 0 || y < 0 || x + fontSize > width || y + fontSize > height || !/^#[0-9a-fA-F]{6}$/.test(textColor)) {
+    if (!effectiveText.trim() || !Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(fontSize) || fontSize < 8 || fontSize > 144 || x < 0 || y < 0 || x + fontSize > width || y + fontSize > height || !/^#[0-9a-fA-F]{6}$/.test(effectiveTextColor)) {
       setTextError("Enter text and a valid position, size, and hex color inside the page bounds.");
       return;
     }
     setTextError(null);
-    const base = { page_id: selectedPage.page_id, text: textDraft, x, y, font_size: fontSize, color: textColor };
+    const base = { page_id: selectedPage.page_id, text: effectiveText, x, y, font_size: fontSize, color: effectiveTextColor };
     if (selectedTextOverlay && onUpdateText) {
       void onUpdateText({ ...base, overlay_id: selectedTextOverlay.id });
     } else if (onAddText) {
@@ -221,10 +297,10 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
 
   const handleSignatureSubmit = () => {
     if (!selectedPage) return;
-    const x = Number(signatureX);
-    const y = Number(signatureY);
-    const width = Number(signatureWidth);
-    const height = Number(signatureHeight);
+    const x = Number(effectiveSignatureX);
+    const y = Number(effectiveSignatureY);
+    const width = Number(effectiveSignatureWidth);
+    const height = Number(effectiveSignatureHeight);
     const pageWidth = selectedPage.dimensions?.width ?? 0;
     const pageHeight = selectedPage.dimensions?.height ?? 0;
     if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0 || x < 0 || y < 0 || x + width > pageWidth || y + height > pageHeight) {
@@ -250,7 +326,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
           onClick={() => onSelectTab("properties")}
           className={`flex-1 py-2.5 text-xs font-mono tracking-wider transition-colors ${
             activeTab === "properties"
-              ? "border-b-2 border-[#7c3aed] text-[#d2bbff] bg-[#14171C] font-semibold"
+              ? "border-b-2 border-[var(--studio-border-active)] text-[var(--studio-accent)] bg-[#14171C] font-semibold"
               : "text-[#9AA1AD] hover:text-white border-b-2 border-transparent"
           }`}
         >
@@ -260,7 +336,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
           onClick={() => onSelectTab("history")}
           className={`flex-1 py-2.5 text-xs font-mono tracking-wider transition-colors ${
             activeTab === "history"
-              ? "border-b-2 border-[#7c3aed] text-[#d2bbff] bg-[#14171C] font-semibold"
+              ? "border-b-2 border-[var(--studio-border-active)] text-[var(--studio-accent)] bg-[#14171C] font-semibold"
               : "text-[#9AA1AD] hover:text-white border-b-2 border-transparent"
           }`}
         >
@@ -275,22 +351,33 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
             {activeTool === "annotate" && onMarkupActionChange && onRemoveMarkupBox && onClearMarkup && onApplyMarkup && onCancelMarkup && onCancelMarkupJob && (
               <StudioV2MarkupPanel
                 action={markupAction}
+                mode={markupMode}
                 boxes={markupBoxes}
+                analysis={markupAnalysis}
+                analysisLoading={markupAnalysisLoading}
+                analysisError={markupAnalysisError}
                 job={markupJob}
                 error={markupError}
                 disabled={isCommandLoading}
                 onActionChange={onMarkupActionChange}
+                onModeChange={onMarkupModeChange ?? (() => undefined)}
+                color={markupColor}
+                onColorChange={onMarkupColorChange ?? (() => undefined)}
                 onClear={onClearMarkup}
                 onRemoveBox={onRemoveMarkupBox}
                 onApply={onApplyMarkup}
                 onCancel={onCancelMarkup}
                 onCancelJob={onCancelMarkupJob}
+                canUndo={markupCanUndo}
+                canRedo={markupCanRedo}
+                onUndo={onMarkupUndo}
+                onRedo={onMarkupRedo}
               />
             )}
             {/* Document Properties */}
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <FileText className="w-4 h-4 text-[#d2bbff]" />
+                <FileText className="w-4 h-4 text-[var(--studio-accent)]" />
                 <h3 className="text-xs font-semibold text-[#F5F7FA]">
                   Document Properties
                 </h3>
@@ -321,7 +408,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
             {/* Selected page controls */}
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <RotateCw className="w-4 h-4 text-[#d2bbff]" />
+                <RotateCw className="w-4 h-4 text-[var(--studio-accent)]" />
                 <h3 className="text-xs font-semibold text-[#F5F7FA]">Selected Page</h3>
               </div>
               {!selectedPage ? (
@@ -339,7 +426,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                       aria-label="Rotate counter-clockwise 90°"
                       data-testid="studio-rotate-counter-clockwise"
                       title="Rotate counter-clockwise 90°"
-                      className="flex items-center justify-center gap-1.5 rounded border border-[#3b3742] px-2 py-2 text-[11px] text-[#D8DCE3] hover:border-[#7c3aed] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      className="studio-v2-focus flex items-center justify-center gap-1.5 rounded border border-[var(--studio-border)] px-2 py-2 text-[11px] text-[#D8DCE3] hover:border-[var(--studio-border-hover)] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isCommandLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
                       CCW 90°
@@ -351,7 +438,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                       aria-label="Rotate clockwise 90°"
                       data-testid="studio-rotate-clockwise"
                       title="Rotate clockwise 90°"
-                      className="flex items-center justify-center gap-1.5 rounded border border-[#3b3742] px-2 py-2 text-[11px] text-[#D8DCE3] hover:border-[#7c3aed] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      className="studio-v2-focus flex items-center justify-center gap-1.5 rounded border border-[var(--studio-border)] px-2 py-2 text-[11px] text-[#D8DCE3] hover:border-[var(--studio-border-hover)] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isCommandLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCw className="w-3.5 h-3.5" />}
                       CW 90°
@@ -375,7 +462,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                       disabled={isCommandLoading || !canMovePageEarlier}
                       aria-label="Move page earlier"
                       title="Move page earlier"
-                      className="flex items-center justify-center gap-1.5 rounded border border-[#3b3742] px-2 py-2 text-[11px] text-[#D8DCE3] hover:border-[#7c3aed] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                      className="studio-v2-focus flex items-center justify-center gap-1.5 rounded border border-[var(--studio-border)] px-2 py-2 text-[11px] text-[#D8DCE3] hover:border-[var(--studio-border-hover)] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <ArrowUp className="w-3.5 h-3.5" />
                       Earlier
@@ -386,7 +473,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                       disabled={isCommandLoading || !canMovePageLater}
                       aria-label="Move page later"
                       title="Move page later"
-                      className="flex items-center justify-center gap-1.5 rounded border border-[#3b3742] px-2 py-2 text-[11px] text-[#D8DCE3] hover:border-[#7c3aed] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                      className="studio-v2-focus flex items-center justify-center gap-1.5 rounded border border-[var(--studio-border)] px-2 py-2 text-[11px] text-[#D8DCE3] hover:border-[var(--studio-border-hover)] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <ArrowDown className="w-3.5 h-3.5" />
                       Later
@@ -398,7 +485,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                     disabled={isCommandLoading}
                     aria-label="Duplicate page"
                     title="Duplicate page"
-                    className="w-full flex items-center justify-center gap-2 rounded border border-[#3b3742] px-2 py-2 text-[11px] text-[#D8DCE3] hover:border-[#7c3aed] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    className="studio-v2-focus w-full flex items-center justify-center gap-2 rounded border border-[var(--studio-border)] px-2 py-2 text-[11px] text-[#D8DCE3] hover:border-[var(--studio-border-hover)] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isCommandLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5" />}
                     Duplicate page
@@ -410,7 +497,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
             {/* Add Text controls */}
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <Type className="w-4 h-4 text-[#d2bbff]" />
+                <Type className="w-4 h-4 text-[var(--studio-accent)]" />
                 <h3 className="text-xs font-semibold text-[#F5F7FA]">Add Text</h3>
               </div>
               {!selectedPage ? (
@@ -418,20 +505,20 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
               ) : (
                 <div className="space-y-3 bg-[#14171C] p-3 rounded border border-[#292D35]">
                   <p className="text-[10px] leading-4 text-[#9AA1AD]">Native PDF points, lower-left origin. V1 uses Helvetica, color, and 8–144 pt text.</p>
-                  <label className="block space-y-1 text-[10px] text-[#9AA1AD]"><span>Text</span><textarea aria-label="Add Text content" data-testid="studio-add-text-content" value={textDraft} onChange={(event) => setTextDraft(event.target.value)} rows={2} className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA] outline-none focus:border-[#7c3aed]" /></label>
+                  <label className="block space-y-1 text-[10px] text-[#9AA1AD]"><span>Text</span><textarea aria-label="Add Text content" data-testid="studio-add-text-content" value={effectiveText} onChange={(event) => { setTextDraft(event.target.value); updateSelectedDraft({ text: event.target.value }); }} rows={2} className="studio-v2-focus w-full rounded border border-[var(--studio-border)] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA] outline-none focus:border-[var(--studio-focus)]" /></label>
                   <div className="grid grid-cols-2 gap-2">
-                    <label className="space-y-1 text-[10px] text-[#9AA1AD]"><span>X (left)</span><input aria-label="Add Text X" data-testid="studio-add-text-x" type="number" step="1" value={textX} onChange={(event) => setTextX(event.target.value)} className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA]" /></label>
-                    <label className="space-y-1 text-[10px] text-[#9AA1AD]"><span>Y (bottom)</span><input aria-label="Add Text Y" data-testid="studio-add-text-y" type="number" step="1" value={textY} onChange={(event) => setTextY(event.target.value)} className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA]" /></label>
-                    <label className="space-y-1 text-[10px] text-[#9AA1AD]"><span>Size (pt)</span><input aria-label="Add Text font size" data-testid="studio-add-text-size" type="number" min="8" max="144" value={textFontSize} onChange={(event) => setTextFontSize(event.target.value)} className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA]" /></label>
-                    <label className="space-y-1 text-[10px] text-[#9AA1AD]"><span>Color</span><input aria-label="Add Text color" data-testid="studio-add-text-color" type="color" value={textColor} onChange={(event) => setTextColor(event.target.value)} className="h-7 w-full rounded border border-[#3b3742] bg-[#101216]" /></label>
+                    <label className="space-y-1 text-[10px] text-[#9AA1AD]"><span>X (left)</span><input aria-label="Add Text X" data-testid="studio-add-text-x" type="number" step="1" value={effectiveTextX} onChange={(event) => { setTextX(event.target.value); updateSelectedDraftRect("x", event.target.value); }} className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA]" /></label>
+                    <label className="space-y-1 text-[10px] text-[#9AA1AD]"><span>Y (bottom)</span><input aria-label="Add Text Y" data-testid="studio-add-text-y" type="number" step="1" value={effectiveTextY} onChange={(event) => { setTextY(event.target.value); updateSelectedDraftRect("y", event.target.value); }} className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA]" /></label>
+                    <label className="space-y-1 text-[10px] text-[#9AA1AD]"><span>Size (pt)</span><input aria-label="Add Text font size" data-testid="studio-add-text-size" type="number" min="8" max="144" value={effectiveTextFontSize} onChange={(event) => { setTextFontSize(event.target.value); const fontSize = Number(event.target.value); if (Number.isFinite(fontSize)) updateSelectedDraft({ fontSize }); }} className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA]" /></label>
+                    <StudioV2ColorPicker value={effectiveTextColor} onChange={(color) => { setTextColor(color); updateSelectedDraft({ color }); }} label="Add Text color" testId="studio-add-text-color" />
                   </div>
                   <div className="flex gap-2">
-                    <button type="button" onClick={() => { onSelectOverlay?.(null); setTextError(null); }} disabled={isCommandLoading} aria-label="New text" data-testid="studio-new-text" className="flex flex-1 items-center justify-center gap-1 rounded border border-[#3b3742] px-2 py-2 text-[11px] text-[#D8DCE3] hover:border-[#7c3aed] disabled:opacity-40"><Plus className="w-3.5 h-3.5" /> New</button>
-                    <button type="button" onClick={handleTextSubmit} disabled={isCommandLoading || !onAddText || (Boolean(selectedTextOverlay) && !onUpdateText)} aria-label={selectedTextOverlay ? "Update text" : "Apply text"} data-testid="studio-apply-text" className="flex flex-[2] items-center justify-center gap-2 rounded border border-[#7c3aed]/70 px-2 py-2 text-[11px] text-[#d2bbff] hover:bg-[#7c3aed]/15 hover:text-white disabled:opacity-40">{isCommandLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Type className="w-3.5 h-3.5" />}{selectedTextOverlay ? "Update text" : "Apply text"}</button>
+                    <button type="button" onClick={() => { onSelectOverlay?.(null); setTextError(null); }} disabled={isCommandLoading} aria-label="New text" data-testid="studio-new-text" className="studio-v2-focus flex flex-1 items-center justify-center gap-1 rounded border border-[var(--studio-border)] px-2 py-2 text-[11px] text-[#D8DCE3] hover:border-[var(--studio-border-hover)] disabled:opacity-40"><Plus className="w-3.5 h-3.5" /> New</button>
+                    <button type="button" onClick={handleTextSubmit} disabled={isCommandLoading || !onAddText || (Boolean(selectedTextOverlay) && !onUpdateText)} aria-label={selectedTextOverlay ? "Update text" : "Apply text"} data-testid="studio-apply-text" className="studio-v2-focus studio-v2-primary flex flex-[2] items-center justify-center gap-2 rounded px-2 py-2 text-[11px] text-white disabled:opacity-40">{isCommandLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Type className="w-3.5 h-3.5" />}{selectedTextOverlay ? "Update text" : "Apply text"}</button>
                   </div>
                   {selectedTextOverlay && onRemoveText && <button type="button" onClick={() => void onRemoveText({ page_id: selectedPage.page_id, overlay_id: selectedTextOverlay.id })} disabled={isCommandLoading} aria-label="Remove selected text" data-testid="studio-remove-text" className="w-full rounded border border-red-900/70 px-2 py-2 text-[11px] text-red-300 hover:border-red-500 disabled:opacity-40">Remove selected text</button>}
                   {textError && <p role="alert" className="text-[10px] text-red-300">{textError}</p>}
-                  {textOverlays.length > 0 && <div className="space-y-1 border-t border-[#292D35] pt-2"><span className="text-[10px] text-[#9AA1AD]">Text elements on this page</span>{textOverlays.map((overlay) => <button type="button" key={overlay.id} onClick={() => onSelectOverlay?.(overlay.id)} aria-label={`Select text ${overlay.text ?? ""}`} data-testid={`studio-text-overlay-${overlay.id}`} className={`block w-full truncate rounded border px-2 py-1.5 text-left text-[11px] ${selectedOverlayId === overlay.id ? "border-[#7c3aed] text-white" : "border-[#3b3742] text-[#D8DCE3]"}`}>{overlay.text}</button>)}</div>}
+                  {textOverlays.length > 0 && <div className="space-y-1 border-t border-[var(--studio-border)] pt-2"><span className="text-[10px] text-[var(--studio-muted)]">Text elements on this page</span>{textOverlays.map((overlay) => <button type="button" key={overlay.id} onClick={() => onSelectOverlay?.(overlay.id)} aria-label={`Select text ${overlay.text ?? ""}`} data-testid={`studio-text-overlay-${overlay.id}`} className={`block w-full truncate rounded border px-2 py-1.5 text-left text-[11px] ${selectedOverlayId === overlay.id ? "border-[var(--studio-border-active)] text-white" : "border-[var(--studio-border)] text-[#D8DCE3]"}`}>{overlay.text}</button>)}</div>}
                 </div>
               )}
             </div>
@@ -439,7 +526,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
             {/* Sign controls */}
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <PenTool className="w-4 h-4 text-[#d2bbff]" />
+                <PenTool className="w-4 h-4 text-[var(--studio-accent)]" />
                 <h3 className="text-xs font-semibold text-[#F5F7FA]">Sign</h3>
               </div>
               {!selectedPage ? (
@@ -447,20 +534,20 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
               ) : (
                 <div className="space-y-3 bg-[#14171C] p-3 rounded border border-[#292D35]">
                   <p className="text-[10px] leading-4 text-[#9AA1AD]">Draw or upload a PNG/JPEG signature, then place it in native PDF points from the lower-left origin. Width and height are editable.</p>
-                  {!selectedSignatureOverlay && <SignaturePad onSignatureChange={setSignatureBlob} undoButtonLabel="Revert signature stroke" />}
+                  {!selectedSignatureOverlay && <SignaturePad onSignatureChange={setSignatureBlob} undoButtonLabel="Revert signature stroke" useStudioColorPicker />}
                   <div className="grid grid-cols-2 gap-2">
-                    <label className="space-y-1 text-[10px] text-[#9AA1AD]"><span>X (left)</span><input aria-label="Signature X" data-testid="studio-signature-x" type="number" step="1" value={signatureX} onChange={(event) => setSignatureX(event.target.value)} className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA]" /></label>
-                    <label className="space-y-1 text-[10px] text-[#9AA1AD]"><span>Y (bottom)</span><input aria-label="Signature Y" data-testid="studio-signature-y" type="number" step="1" value={signatureY} onChange={(event) => setSignatureY(event.target.value)} className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA]" /></label>
-                    <label className="space-y-1 text-[10px] text-[#9AA1AD]"><span>Width</span><input aria-label="Signature width" data-testid="studio-signature-width" type="number" min="1" value={signatureWidth} onChange={(event) => { const width = Number(event.target.value); setSignatureWidth(event.target.value); if (Number.isFinite(width) && width > 0) setSignatureHeight(String(Math.max(1, Math.round(width / 3)))); }} className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA]" /></label>
-                    <label className="space-y-1 text-[10px] text-[#9AA1AD]"><span>Height</span><input aria-label="Signature height" data-testid="studio-signature-height" type="number" min="1" value={signatureHeight} onChange={(event) => { const height = Number(event.target.value); setSignatureHeight(event.target.value); if (Number.isFinite(height) && height > 0) setSignatureWidth(String(Math.max(1, Math.round(height * 3)))); }} className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA]" /></label>
+                    <label className="space-y-1 text-[10px] text-[#9AA1AD]"><span>X (left)</span><input aria-label="Signature X" data-testid="studio-signature-x" type="number" step="1" value={effectiveSignatureX} onChange={(event) => { setSignatureX(event.target.value); updateSelectedDraftRect("x", event.target.value); }} className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA]" /></label>
+                    <label className="space-y-1 text-[10px] text-[#9AA1AD]"><span>Y (bottom)</span><input aria-label="Signature Y" data-testid="studio-signature-y" type="number" step="1" value={effectiveSignatureY} onChange={(event) => { setSignatureY(event.target.value); updateSelectedDraftRect("y", event.target.value); }} className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA]" /></label>
+                    <label className="space-y-1 text-[10px] text-[#9AA1AD]"><span>Width</span><input aria-label="Signature width" data-testid="studio-signature-width" type="number" min="1" value={effectiveSignatureWidth} onChange={(event) => { const width = Number(event.target.value); setSignatureWidth(event.target.value); if (Number.isFinite(width) && width > 0) { const height = Math.max(1, Math.round(width / 3)); setSignatureHeight(String(height)); updateSelectedDraft({ rect: { ...(overlayDraft?.rect ?? { x: 0, y: 0, width, height }), width, height } }); } }} className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA]" /></label>
+                    <label className="space-y-1 text-[10px] text-[#9AA1AD]"><span>Height</span><input aria-label="Signature height" data-testid="studio-signature-height" type="number" min="1" value={effectiveSignatureHeight} onChange={(event) => { const height = Number(event.target.value); setSignatureHeight(event.target.value); if (Number.isFinite(height) && height > 0) { const width = Math.max(1, Math.round(height * 3)); setSignatureWidth(String(width)); updateSelectedDraft({ rect: { ...(overlayDraft?.rect ?? { x: 0, y: 0, width, height }), width, height } }); } }} className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA]" /></label>
                   </div>
                   <div className="flex gap-2">
-                    <button type="button" onClick={() => { onSelectOverlay?.(null); setSignatureBlob(null); setSignatureError(null); }} disabled={isCommandLoading} aria-label="New signature" data-testid="studio-new-signature" className="flex-1 rounded border border-[#3b3742] px-2 py-2 text-[11px] text-[#D8DCE3] hover:border-[#7c3aed] disabled:opacity-40">New</button>
-                    <button type="button" onClick={handleSignatureSubmit} disabled={isCommandLoading || (!selectedSignatureOverlay && !signatureBlob) || (Boolean(selectedSignatureOverlay) && !onUpdateSignature)} aria-label={selectedSignatureOverlay ? "Update signature" : "Apply signature"} data-testid="studio-apply-signature" className="flex-[2] rounded border border-[#7c3aed]/70 px-2 py-2 text-[11px] text-[#d2bbff] hover:bg-[#7c3aed]/15 disabled:opacity-40">{isCommandLoading ? "Applying…" : selectedSignatureOverlay ? "Update signature" : "Apply signature"}</button>
+                    <button type="button" onClick={() => { onSelectOverlay?.(null); setSignatureBlob(null); setSignatureError(null); }} disabled={isCommandLoading} aria-label="New signature" data-testid="studio-new-signature" className="studio-v2-focus flex-1 rounded border border-[var(--studio-border)] px-2 py-2 text-[11px] text-[#D8DCE3] hover:border-[var(--studio-border-hover)] disabled:opacity-40">New</button>
+                    <button type="button" onClick={handleSignatureSubmit} disabled={isCommandLoading || (!selectedSignatureOverlay && !signatureBlob) || (Boolean(selectedSignatureOverlay) && !onUpdateSignature)} aria-label={selectedSignatureOverlay ? "Update signature" : "Apply signature"} data-testid="studio-apply-signature" className="studio-v2-focus studio-v2-primary flex-[2] rounded px-2 py-2 text-[11px] text-white disabled:opacity-40">{isCommandLoading ? "Applying…" : selectedSignatureOverlay ? "Update signature" : "Apply signature"}</button>
                   </div>
                   {selectedSignatureOverlay && onRemoveSignature && <button type="button" onClick={() => void onRemoveSignature({ page_id: selectedPage.page_id, overlay_id: selectedSignatureOverlay.id })} disabled={isCommandLoading} aria-label="Remove selected signature" data-testid="studio-remove-signature" className="w-full rounded border border-red-900/70 px-2 py-2 text-[11px] text-red-300 hover:border-red-500 disabled:opacity-40">Remove selected signature</button>}
                   {signatureError && <p role="alert" className="text-[10px] text-red-300">{signatureError}</p>}
-                  {signatureOverlays.length > 0 && <div className="space-y-1 border-t border-[#292D35] pt-2"><span className="text-[10px] text-[#9AA1AD]">Signatures on this page</span>{signatureOverlays.map((overlay) => <button type="button" key={overlay.id} onClick={() => onSelectOverlay?.(overlay.id)} aria-label="Select signature" data-testid={`studio-signature-overlay-${overlay.id}`} className={`block w-full truncate rounded border px-2 py-1.5 text-left text-[11px] ${selectedOverlayId === overlay.id ? "border-[#7c3aed] text-white" : "border-[#3b3742] text-[#D8DCE3]"}`}>Signature</button>)}</div>}
+                  {signatureOverlays.length > 0 && <div className="space-y-1 border-t border-[var(--studio-border)] pt-2"><span className="text-[10px] text-[var(--studio-muted)]">Signatures on this page</span>{signatureOverlays.map((overlay) => <button type="button" key={overlay.id} onClick={() => onSelectOverlay?.(overlay.id)} aria-label="Select signature" data-testid={`studio-signature-overlay-${overlay.id}`} className={`block w-full truncate rounded border px-2 py-1.5 text-left text-[11px] ${selectedOverlayId === overlay.id ? "border-[var(--studio-border-active)] text-white" : "border-[var(--studio-border)] text-[#D8DCE3]"}`}>Signature</button>)}</div>}
                 </div>
               )}
             </div>
@@ -468,7 +555,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
             {/* Document metadata controls */}
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <FileText className="w-4 h-4 text-[#d2bbff]" />
+                <FileText className="w-4 h-4 text-[var(--studio-accent)]" />
                 <h3 className="text-xs font-semibold text-[#F5F7FA]">Metadata</h3>
               </div>
               <div className="space-y-3 bg-[#14171C] p-3 rounded border border-[#292D35]">
@@ -491,7 +578,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                       onChange={(event) => {
                         setMetadataDraft((current) => ({ ...current, [key]: event.target.value }));
                       }}
-                      className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA] outline-none focus:border-[#7c3aed]"
+                      className="studio-v2-focus w-full rounded border border-[var(--studio-border)] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA] outline-none focus:border-[var(--studio-focus)]"
                     />
                   </label>
                 ))}
@@ -501,7 +588,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                   disabled={isCommandLoading || !onUpdateMetadata}
                   aria-label="Apply metadata"
                   data-testid="studio-apply-metadata"
-                  className="w-full flex items-center justify-center gap-2 rounded border border-[#7c3aed]/70 px-2 py-2 text-[11px] text-[#d2bbff] hover:bg-[#7c3aed]/15 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  className="studio-v2-focus studio-v2-primary w-full flex items-center justify-center gap-2 rounded px-2 py-2 text-[11px] text-white disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {isCommandLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
                   Apply metadata
@@ -533,7 +620,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
             {/* Crop controls */}
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <Crop className="w-4 h-4 text-[#d2bbff]" />
+                <Crop className="w-4 h-4 text-[var(--studio-accent)]" />
                 <h3 className="text-xs font-semibold text-[#F5F7FA]">Crop Page</h3>
               </div>
               {!selectedPage ? (
@@ -545,6 +632,37 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                   <p className="text-[10px] leading-4 text-[#9AA1AD]">
                     PDF points, lower-left origin: [llx, lly, urx, ury].
                   </p>
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] text-[#9AA1AD]">Page target</span>
+                    <div className="grid grid-cols-3 gap-1">
+                      {(["current", "all", "custom"] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => { onCropTargetModeChange?.(mode); setCropError(null); }}
+                          aria-pressed={cropTargetMode === mode}
+                          data-testid={`studio-crop-target-${mode}`}
+                          className={`rounded border px-1.5 py-1.5 text-[10px] ${cropTargetMode === mode ? "border-[var(--studio-border-active)] bg-[var(--studio-cta)]/15 text-white" : "border-[var(--studio-border)] text-[#9AA1AD] hover:border-[var(--studio-border-hover)]"}`}
+                        >
+                          {mode === "current" ? "Current page" : mode === "all" ? "All pages" : "Custom"}
+                        </button>
+                      ))}
+                    </div>
+                    {cropTargetMode === "custom" && (
+                      <input
+                        type="text"
+                        value={cropCustomPages}
+                        onChange={(event) => { onCropCustomPagesChange?.(event.target.value); setCropError(null); }}
+                        placeholder="Pages, e.g. 1, 3-5"
+                        aria-label="Custom crop pages"
+                        data-testid="studio-crop-custom-pages"
+                        className="studio-v2-focus w-full rounded border border-[var(--studio-border)] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA] outline-none focus:border-[var(--studio-focus)]"
+                      />
+                    )}
+                    <p className="text-[10px] text-[#717784]">
+                      {cropTargetMode === "current" ? "Selected page only." : cropTargetMode === "all" ? `All ${pages.length} pages; the same absolute PDF box must fit each page.` : "Use page numbers and ranges. The same absolute PDF box must fit each selected page."}
+                    </p>
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     {[
                       ["llx", "Left"],
@@ -559,15 +677,24 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                           data-testid={`studio-crop-${key}`}
                           type="number"
                           step="0.01"
-                          value={cropValues[index] ?? ""}
+                          value={cropInputValues[index] ?? ""}
                           onChange={(event) => {
-                            const next = [...cropValues];
-                            next[index] = event.target.value;
-                            setCropValues(next);
+                            const rawValue = event.target.value;
+                            setCropInputValues((current) => {
+                              const next = [...current];
+                              next[index] = rawValue;
+                              return next;
+                            });
+                            const value = Number(rawValue);
+                            if (rawValue.trim() !== "" && Number.isFinite(value)) {
+                              const next = [...parsedCrop];
+                              next[index] = value;
+                              onCropDraftChange?.(next);
+                            }
                             setCropError(null);
                           }}
                           aria-invalid={cropError ? "true" : "false"}
-                          className="w-full rounded border border-[#3b3742] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA] outline-none focus:border-[#7c3aed]"
+                          className="studio-v2-focus w-full rounded border border-[var(--studio-border)] bg-[#101216] px-2 py-1.5 text-xs text-[#F5F7FA] outline-none focus:border-[var(--studio-focus)]"
                         />
                       </label>
                     ))}
@@ -575,10 +702,10 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                   <button
                     type="button"
                     onClick={handleCropSubmit}
-                    disabled={isCommandLoading || !cropIsValid || !onCropPage}
+                    disabled={isCommandLoading || !cropIsValid || !onCropPage || !onCropDraftChange}
                     aria-label="Apply crop"
                     data-testid="studio-apply-crop"
-                    className="w-full flex items-center justify-center gap-2 rounded border border-[#7c3aed]/70 px-2 py-2 text-[11px] text-[#d2bbff] hover:bg-[#7c3aed]/15 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                    className="studio-v2-focus w-full flex items-center justify-center gap-2 rounded border border-[var(--studio-border-active)] px-2 py-2 text-[11px] text-[var(--studio-accent)] hover:bg-[var(--studio-cta)]/15 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {isCommandLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Crop className="w-3.5 h-3.5" />}
                     Apply crop
@@ -592,7 +719,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
           <div className="p-4">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-[#d2bbff]" />
+                <Clock className="w-4 h-4 text-[var(--studio-accent)]" />
                 <h3 className="text-xs font-semibold text-[#F5F7FA]">
                   Editing History
                 </h3>
@@ -604,7 +731,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
 
             {/* Explicit Notice of Shell Placeholder */}
             <div className="mb-4 p-2 bg-[#14171C] rounded border border-[#292D35] flex items-start gap-2 text-[10px] text-[#9AA1AD]">
-              <Info className="w-3.5 h-3.5 text-[#d2bbff] shrink-0 mt-0.5" />
+              <Info className="w-3.5 h-3.5 text-[var(--studio-accent)] shrink-0 mt-0.5" />
               <span>
                 Visual shell timeline. Live backend lineage & checkout connect in Phase 3B.
               </span>
@@ -618,19 +745,19 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                   <div
                     className={`absolute -left-6 top-1 w-4 h-4 rounded-full border flex items-center justify-center bg-[#101216] transition-colors ${
                       item.isActive
-                        ? "border-[#7c3aed]"
+                          ? "border-[var(--studio-border-active)]"
                         : "border-[#292D35] group-hover:border-[#9AA1AD]"
                     }`}
                   >
                     {item.isActive && (
-                      <div className="w-2 h-2 rounded-full bg-[#7c3aed]" />
+                      <div className="w-2 h-2 rounded-full bg-[var(--studio-border-active)]" />
                     )}
                   </div>
 
                   <div
                     className={`p-2.5 rounded text-xs transition-colors border ${
                       item.isActive
-                        ? "bg-[#181B21] border-[#7c3aed] text-white"
+                        ? "bg-[#181B21] border-[var(--studio-border-active)] text-white"
                         : "bg-[#14171C] border-[#292D35] text-[#9AA1AD] hover:text-[#F5F7FA] hover:border-[#3b3742]"
                     }`}
                   >
@@ -639,7 +766,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                       {onCheckoutVersion && !item.isActive && (
                         <button
                           onClick={() => onCheckoutVersion(item.id)}
-                          className="opacity-0 group-hover:opacity-100 p-1 hover:text-[#d2bbff] transition-opacity"
+                          className="studio-v2-focus opacity-0 group-hover:opacity-100 p-1 hover:text-[var(--studio-accent)] transition-opacity"
                           title="Restore this version (Phase 3B)"
                           aria-label={`Restore version ${item.versionNumber}`}
                         >

@@ -11,10 +11,12 @@ import {
     Image as ImageIcon,
     X,
 } from "lucide-react";
+import { StudioV2ColorPicker } from "@/components/studio-v2/StudioV2ColorPicker";
 
 interface SignaturePadProps {
     onSignatureChange: (blob: Blob | null) => void;
     undoButtonLabel?: string;
+    useStudioColorPicker?: boolean;
 }
 
 type Mode = "draw" | "upload";
@@ -27,7 +29,7 @@ const DEFAULT_COLORS = [
     "#047857",
 ];
 
-export default function SignaturePad({ onSignatureChange, undoButtonLabel = "Undo" }: SignaturePadProps) {
+export default function SignaturePad({ onSignatureChange, undoButtonLabel = "Undo", useStudioColorPicker = false }: SignaturePadProps) {
     const sigRef = useRef<SignatureCanvas | null>(null);
     const wrapperRef = useRef<HTMLDivElement | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -245,7 +247,11 @@ export default function SignaturePad({ onSignatureChange, undoButtonLabel = "Und
                                 Pen Color
                             </div>
 
-                            <div className="flex items-center gap-1.5">
+                            {useStudioColorPicker ? (
+                                <div className="w-44">
+                                    <StudioV2ColorPicker value={penColor} onChange={setPenColor} label="Pen Color" testId="studio-sign-pen-color" />
+                                </div>
+                            ) : <div className="flex items-center gap-1.5">
                                 {DEFAULT_COLORS.map((color) => (
                                     <button
                                         key={color}
@@ -269,7 +275,7 @@ export default function SignaturePad({ onSignatureChange, undoButtonLabel = "Und
                                     />
                                     <Palette size={12} />
                                 </label>
-                            </div>
+                            </div>}
                         </div>
 
                         <div className="space-y-2">

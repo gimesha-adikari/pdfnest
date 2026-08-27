@@ -43,7 +43,7 @@ export const StudioV2Sidebar: React.FC<StudioV2SidebarProps> = ({
       <div className="p-4 border-b border-[#292D35] flex flex-col gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-[#181B21] rounded flex items-center justify-center text-[#9AA1AD] border border-[#292D35]">
-            <FileText className="w-5 h-5 text-[#d2bbff]" />
+            <FileText className="w-5 h-5 text-[var(--studio-accent)]" />
           </div>
           <div className="min-w-0 flex-1">
             <h2 className="text-sm font-semibold text-[#F5F7FA] truncate leading-tight">
@@ -79,11 +79,11 @@ export const StudioV2Sidebar: React.FC<StudioV2SidebarProps> = ({
               onClick={() => onSelectTool(item.id)}
               className={`w-full flex items-center gap-3 px-4 py-2.5 text-xs font-mono tracking-wider transition-colors ${
                 isActive
-                  ? "border-l-2 border-[#7c3aed] bg-[#181B21] text-[#d2bbff] font-semibold"
+                  ? "border-l-2 border-[var(--studio-border-active)] bg-[var(--studio-surface-raised)] text-[var(--studio-accent)] font-semibold"
                   : "text-[#9AA1AD] hover:bg-[#181B21] hover:text-[#F5F7FA] border-l-2 border-transparent"
               }`}
             >
-              <Icon className={`w-4 h-4 ${isActive ? "text-[#d2bbff]" : "text-[#9AA1AD]"}`} />
+              <Icon className={`w-4 h-4 ${isActive ? "text-[var(--studio-accent)]" : "text-[var(--studio-muted)]"}`} />
               <span>{item.label}</span>
             </button>
           );

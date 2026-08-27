@@ -4,8 +4,8 @@ import React from "react";
 import { StudioV2Sidebar } from "./StudioV2Sidebar";
 import { StudioV2Canvas } from "./StudioV2Canvas";
 import { StudioV2Inspector } from "./StudioV2Inspector";
-import { DocumentInfo, HistoryItem, InspectorTab, ToolCategory } from "./types";
-import { StudioJobDTO, StudioMarkupAction, StudioMarkupBox, StudioMetadataParameters, StudioSignatureOverlayParameters, StudioTextOverlayParameters, StudioUpdateSignatureOverlayParameters, StudioUpdateTextOverlayParameters, StudioVDMDTO } from "@/lib/studio-v2/api";
+import { DocumentInfo, HistoryItem, InspectorTab, StudioV2OverlayDraft, StudioV2RedactionDraftBox, ToolCategory } from "./types";
+import { StudioJobDTO, StudioMarkupAction, StudioMarkupAnalysis, StudioMarkupBox, StudioMarkupMode, StudioMetadataParameters, StudioSignatureOverlayParameters, StudioTextOverlayParameters, StudioUpdateSignatureOverlayParameters, StudioUpdateTextOverlayParameters, StudioVDMDTO } from "@/lib/studio-v2/api";
 
 interface StudioV2WorkspaceProps {
   document: DocumentInfo;
@@ -37,7 +37,13 @@ interface StudioV2WorkspaceProps {
   onMovePageEarlier?: () => void;
   onMovePageLater?: () => void;
   onDuplicatePage?: () => void;
-  onCropPage?: (cropBox: number[]) => void | Promise<void>;
+  onCropPage?: (cropBox: number[], pageIds?: string[]) => void | Promise<void>;
+  cropDraft?: number[] | null;
+  onCropDraftChange?: (cropBox: number[]) => void;
+  cropTargetMode?: "current" | "all" | "custom";
+  cropCustomPages?: string;
+  onCropTargetModeChange?: (mode: "current" | "all" | "custom") => void;
+  onCropCustomPagesChange?: (value: string) => void;
   selectedOverlayId?: string | null;
   onSelectOverlay?: (overlayId: string | null) => void;
   onAddText?: (parameters: StudioTextOverlayParameters) => void | Promise<void>;
@@ -46,20 +52,39 @@ interface StudioV2WorkspaceProps {
   onAddSignature?: (blob: Blob, parameters: StudioSignatureOverlayParameters) => void | Promise<void>;
   onUpdateSignature?: (parameters: StudioUpdateSignatureOverlayParameters) => void | Promise<void>;
   onRemoveSignature?: (target: { page_id: string; overlay_id: string }) => void | Promise<void>;
+  overlayDraft?: StudioV2OverlayDraft | null;
+  onOverlayDraftChange?: (draft: StudioV2OverlayDraft) => void;
+  onOverlayCommit?: (draft: StudioV2OverlayDraft) => void | Promise<void>;
   canMovePageEarlier?: boolean;
   canMovePageLater?: boolean;
   isCommandLoading?: boolean;
   markupAction?: StudioMarkupAction;
+  markupMode?: StudioMarkupMode;
+  markupAnalysis?: StudioMarkupAnalysis | null;
+  markupAnalysisLoading?: boolean;
+  markupAnalysisError?: string | null;
+  markupColor?: string;
   markupBoxes?: StudioMarkupBox[];
   markupJob?: StudioJobDTO | null;
   markupError?: string | null;
   onMarkupActionChange?: (action: StudioMarkupAction) => void;
+  onMarkupModeChange?: (mode: StudioMarkupMode) => void;
+  onMarkupColorChange?: (color: string) => void;
   onMarkupBoxChange?: (box: StudioMarkupBox) => void;
+  onMarkupInteractionStart?: () => void;
+  onMarkupInteractionEnd?: () => void;
+  redactActive?: boolean;
+  redactionBoxes?: StudioV2RedactionDraftBox[];
+  onRedactionBoxAdd?: (box: StudioV2RedactionDraftBox) => void;
   onRemoveMarkupBox?: (boxId: string) => void;
   onClearMarkup?: () => void;
   onApplyMarkup?: () => void;
   onCancelMarkup?: () => void;
   onCancelMarkupJob?: () => void;
+  markupCanUndo?: boolean;
+  markupCanRedo?: boolean;
+  onMarkupUndo?: () => void;
+  onMarkupRedo?: () => void;
 }
 
 export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
@@ -93,6 +118,12 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
   onMovePageLater,
   onDuplicatePage,
   onCropPage,
+  cropDraft,
+  onCropDraftChange,
+  cropTargetMode,
+  cropCustomPages,
+  onCropTargetModeChange,
+  onCropCustomPagesChange,
   selectedOverlayId,
   onSelectOverlay,
   onAddText,
@@ -101,23 +132,42 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
   onAddSignature,
   onUpdateSignature,
   onRemoveSignature,
+  overlayDraft,
+  onOverlayDraftChange,
+  onOverlayCommit,
   canMovePageEarlier,
   canMovePageLater,
   isCommandLoading,
   markupAction,
+  markupMode,
+  markupAnalysis,
+  markupAnalysisLoading,
+  markupAnalysisError,
+  markupColor,
   markupBoxes,
   markupJob,
   markupError,
   onMarkupActionChange,
+  onMarkupModeChange,
+  onMarkupColorChange,
   onMarkupBoxChange,
+  onMarkupInteractionStart,
+  onMarkupInteractionEnd,
+  redactActive,
+  redactionBoxes,
+  onRedactionBoxAdd,
   onRemoveMarkupBox,
   onClearMarkup,
   onApplyMarkup,
   onCancelMarkup,
   onCancelMarkupJob,
+  markupCanUndo,
+  markupCanRedo,
+  onMarkupUndo,
+  onMarkupRedo,
 }) => {
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#0B0C0F]">
+    <div className="studio-v2-theme flex h-screen w-screen overflow-hidden bg-[#0B0C0F]">
       {/* Desktop Left Sidebar */}
       <div className="hidden md:block">
         <StudioV2Sidebar
@@ -146,8 +196,22 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
           onTogglePan={onTogglePan}
           onOpenCommandPalette={onOpenCommandPalette}
           markupAction={activeTool === "annotate" ? markupAction : null}
+          markupColor={activeTool === "annotate" ? markupColor : undefined}
           markupBoxes={markupBoxes}
           onMarkupBoxChange={onMarkupBoxChange}
+          onMarkupInteractionStart={onMarkupInteractionStart}
+          onMarkupInteractionEnd={onMarkupInteractionEnd}
+          redactActive={redactActive}
+          redactionBoxes={redactionBoxes}
+          onRedactionBoxAdd={onRedactionBoxAdd}
+          cropActive={activeTool === "edit" && !selectedOverlayId}
+          cropDraft={cropDraft}
+          onCropDraftChange={onCropDraftChange}
+          selectedOverlayId={selectedOverlayId}
+          overlayDraft={overlayDraft}
+          onSelectOverlay={onSelectOverlay}
+          onOverlayDraftChange={onOverlayDraftChange}
+          onOverlayCommit={onOverlayCommit}
         />
       </main>
 
@@ -169,6 +233,13 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
           onMovePageLater={onMovePageLater}
           onDuplicatePage={onDuplicatePage}
           onCropPage={onCropPage}
+          pages={vdm?.pages ?? []}
+          cropDraft={cropDraft}
+          onCropDraftChange={onCropDraftChange}
+          cropTargetMode={cropTargetMode}
+          cropCustomPages={cropCustomPages}
+          onCropTargetModeChange={onCropTargetModeChange}
+          onCropCustomPagesChange={onCropCustomPagesChange}
           selectedOverlayId={selectedOverlayId}
           onSelectOverlay={onSelectOverlay}
           onAddText={onAddText}
@@ -177,20 +248,33 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
           onAddSignature={onAddSignature}
           onUpdateSignature={onUpdateSignature}
           onRemoveSignature={onRemoveSignature}
+          overlayDraft={overlayDraft}
+          onOverlayDraftChange={onOverlayDraftChange}
           canMovePageEarlier={canMovePageEarlier}
           canMovePageLater={canMovePageLater}
           isCommandLoading={isCommandLoading}
           activeTool={activeTool}
           markupAction={markupAction}
+          markupMode={markupMode}
+          markupAnalysis={markupAnalysis}
+          markupAnalysisLoading={markupAnalysisLoading}
+          markupAnalysisError={markupAnalysisError}
+          markupColor={markupColor}
           markupBoxes={markupBoxes}
           markupJob={markupJob}
           markupError={markupError}
           onMarkupActionChange={onMarkupActionChange}
+          onMarkupModeChange={onMarkupModeChange}
+          onMarkupColorChange={onMarkupColorChange}
           onRemoveMarkupBox={onRemoveMarkupBox}
           onClearMarkup={onClearMarkup}
           onApplyMarkup={onApplyMarkup}
           onCancelMarkup={onCancelMarkup}
           onCancelMarkupJob={onCancelMarkupJob}
+          markupCanUndo={markupCanUndo}
+          markupCanRedo={markupCanRedo}
+          onMarkupUndo={onMarkupUndo}
+          onMarkupRedo={onMarkupRedo}
         />
       </div>
     </div>

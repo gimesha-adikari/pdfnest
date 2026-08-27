@@ -20,6 +20,25 @@ export interface HistoryItem {
   isActive: boolean;
 }
 
+export interface StudioV2OverlayDraft {
+  pageId: string;
+  overlayId: string;
+  type: "signature" | "text";
+  rect: { x: number; y: number; width: number; height: number };
+  text?: string;
+  fontSize?: number;
+  color?: string;
+  assetId?: string;
+}
+
+/** Temporary visible-page PDF-point selection; never persisted into the VDM. */
+export interface StudioV2RedactionDraftBox {
+  id: string;
+  pageId: string;
+  page: number;
+  rect: { x: number; y: number; width: number; height: number };
+}
+
 export interface StudioShellState {
   document: DocumentInfo;
   activeTool: ToolCategory;

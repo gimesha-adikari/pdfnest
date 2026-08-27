@@ -84,6 +84,7 @@ test.describe('Studio V2 Batch 4A2 Watermark', () => {
     const materializeRequest = page.waitForRequest((request) => request.url().endsWith('/materializations') && request.method() === 'POST');
     const materializeResponse = page.waitForResponse((response) => response.url().endsWith('/materializations') && response.request().method() === 'POST');
     await page.getByRole('button', { name: 'Compress PDF' }).click();
+    await page.getByRole('button', { name: 'Apply Compress' }).click();
     const [compressRequest, compressResponse] = await Promise.all([materializeRequest, materializeResponse]);
     expect(compressResponse.status()).toBe(200);
     expect(compressRequest.postDataJSON().operation).toBe('compress');

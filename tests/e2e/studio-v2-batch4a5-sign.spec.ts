@@ -132,6 +132,7 @@ test.describe('Studio V2 Batch 4A5 Sign', () => {
     await expect(page.locator('main img[alt="Page 3"]')).toBeVisible({ timeout: 60_000 });
     const materializeResponse = page.waitForResponse((response) => response.url().endsWith('/materializations') && response.request().method() === 'POST', { timeout: 120_000 });
     await page.getByRole('button', { name: 'Compress PDF' }).click();
+    await page.getByRole('button', { name: 'Apply Compress' }).click();
     const compressed = await (await materializeResponse).json();
     expect(compressed.version.is_materialized).toBe(true);
     expect(compressed.vdm.pages.every((item: { overlays: unknown[] }) => item.overlays.length === 0)).toBe(true);

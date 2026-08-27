@@ -37,12 +37,12 @@ export const StudioV2MobileNav: React.FC<StudioV2MobileNavProps> = ({
             key={item.id}
             onClick={() => onSelectTool(item.id)}
             className={`flex-1 min-h-[44px] flex flex-col items-center justify-center relative py-1 rounded transition-colors ${
-              isActive ? "text-[#d2bbff]" : "text-[#9AA1AD] hover:text-white"
+              isActive ? "text-[var(--studio-accent)]" : "text-[var(--studio-muted)] hover:text-[var(--studio-text)]"
             }`}
             aria-label={item.label}
           >
             {isActive && (
-              <div className="absolute top-0 w-8 h-[2px] bg-[#7c3aed] rounded-b" />
+              <div className="absolute top-0 w-8 h-[2px] bg-[var(--studio-border-active)] rounded-b" />
             )}
             <Icon className="w-5 h-5 mb-0.5" />
             <span className="font-mono text-[9px] tracking-wider uppercase font-medium">

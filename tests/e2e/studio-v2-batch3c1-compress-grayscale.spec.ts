@@ -89,7 +89,13 @@ async function materializeFromUI(
     (response) => response.url().endsWith('/materializations') && response.request().method() === 'POST',
     { timeout: 120_000 }
   );
-  await page.getByRole('button', { name: buttonName }).click();
+  if (expectedOperation === 'compress') {
+    const applyButton = page.getByRole('button', { name: 'Apply Compress' });
+    if (await applyButton.count() === 0) await page.getByRole('button', { name: buttonName }).click();
+    await applyButton.click();
+  } else {
+    await page.getByRole('button', { name: buttonName }).click();
+  }
   const [request, response] = await Promise.all([requestPromise, responsePromise]);
   expect(response.status()).toBe(200);
   const requestBody = request.postDataJSON() as Record<string, unknown>;
@@ -153,6 +159,7 @@ test.describe('Studio V2 Batch 3C1 Compress and Grayscale', () => {
     await waitForCommand(page, () => page.getByRole('button', { name: 'Rotate clockwise 90°' }).click());
     await expect(page.getByTestId('studio-version')).toHaveText('Version 1');
 
+    await page.getByRole('button', { name: 'Compress PDF' }).click();
     await page.getByLabel('Compression level').selectOption('medium');
     const result = await materializeFromUI(page, 'Compress PDF', 'compress');
     expect(result.operation.operation_name).toBe('compress');

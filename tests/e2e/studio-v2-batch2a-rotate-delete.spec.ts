@@ -105,8 +105,10 @@ test.describe('Studio V2 Batch 2A user-facing page controls', () => {
 
     const afterMetrics = await page.request.get(`${BACKEND_URL}/studio/v1/metrics`).then((response) => response.json());
     expect(afterMetrics.underlying_renders).toBeGreaterThan(beforeMetrics.underlying_renders);
-    expect(afterMetrics.render_errors).toBe(0);
-    expect(afterMetrics.worker_timeouts).toBe(0);
+    // Metrics are renderer/session-global and may include an earlier unrelated
+    // request. The Rotate operation itself must not add render failures.
+    expect(afterMetrics.render_errors - beforeMetrics.render_errors).toBe(0);
+    expect(afterMetrics.worker_timeouts - beforeMetrics.worker_timeouts).toBe(0);
     assertNoErrors();
   });
 
