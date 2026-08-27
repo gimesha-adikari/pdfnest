@@ -6,7 +6,8 @@ import SignaturePad from "@/components/pdf/SignaturePad";
 import { StudioV2MarkupPanel } from "./StudioV2MarkupPanel";
 import { StudioV2ColorPicker, normalizeStudioV2Hex } from "./StudioV2ColorPicker";
 import { studioMetadataDefaults } from "./metadata";
-import { DocumentInfo, HistoryItem, InspectorTab, StudioV2OverlayDraft } from "./types";
+import { DocumentInfo, HistoryItem, InspectorTab, StudioV2OverlayDraft, ToolCategory } from "./types";
+import { studioV2CategoryHasSection } from "./studioV2ToolTaxonomy";
 import { StudioJobDTO, StudioMarkupAction, StudioMarkupAnalysis, StudioMarkupBox, StudioMarkupMode, StudioMetadataParameters, StudioSignatureOverlayParameters, StudioTextOverlayParameters, StudioUpdateSignatureOverlayParameters, StudioUpdateTextOverlayParameters, VDMPageDescriptorDTO } from "@/lib/studio-v2/api";
 
 interface StudioV2InspectorProps {
@@ -45,7 +46,7 @@ interface StudioV2InspectorProps {
   canMovePageEarlier?: boolean;
   canMovePageLater?: boolean;
   isCommandLoading?: boolean;
-  activeTool?: string;
+  activeTool?: ToolCategory;
   markupAction?: StudioMarkupAction;
   markupMode?: StudioMarkupMode;
   markupAnalysis?: StudioMarkupAnalysis | null;
@@ -130,6 +131,9 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
 }) => {
   const [cropError, setCropError] = useState<string | null>(null);
   const [cropInputValues, setCropInputValues] = useState<string[]>([]);
+  const category: ToolCategory = activeTool ?? "edit";
+  const hasSection = (section: Parameters<typeof studioV2CategoryHasSection>[1]) =>
+    studioV2CategoryHasSection(category, section);
 
   const metadataDefaults = useMemo(() => studioMetadataDefaults(metadata), [metadata]);
   const metadataKey = Object.values(metadataDefaults).join("\u0001");
@@ -348,34 +352,36 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
       <div className="flex-1 overflow-y-auto">
         {activeTab === "properties" ? (
           <div className="p-4 space-y-6">
-            {activeTool === "annotate" && onMarkupActionChange && onRemoveMarkupBox && onClearMarkup && onApplyMarkup && onCancelMarkup && onCancelMarkupJob && (
-              <StudioV2MarkupPanel
-                action={markupAction}
-                mode={markupMode}
-                boxes={markupBoxes}
-                analysis={markupAnalysis}
-                analysisLoading={markupAnalysisLoading}
-                analysisError={markupAnalysisError}
-                job={markupJob}
-                error={markupError}
-                disabled={isCommandLoading}
-                onActionChange={onMarkupActionChange}
-                onModeChange={onMarkupModeChange ?? (() => undefined)}
-                color={markupColor}
-                onColorChange={onMarkupColorChange ?? (() => undefined)}
-                onClear={onClearMarkup}
-                onRemoveBox={onRemoveMarkupBox}
-                onApply={onApplyMarkup}
-                onCancel={onCancelMarkup}
-                onCancelJob={onCancelMarkupJob}
-                canUndo={markupCanUndo}
-                canRedo={markupCanRedo}
-                onUndo={onMarkupUndo}
-                onRedo={onMarkupRedo}
-              />
+            {hasSection("markup") && onMarkupActionChange && onRemoveMarkupBox && onClearMarkup && onApplyMarkup && onCancelMarkup && onCancelMarkupJob && (
+              <div data-testid="studio-inspector-section-markup">
+                <StudioV2MarkupPanel
+                  action={markupAction}
+                  mode={markupMode}
+                  boxes={markupBoxes}
+                  analysis={markupAnalysis}
+                  analysisLoading={markupAnalysisLoading}
+                  analysisError={markupAnalysisError}
+                  job={markupJob}
+                  error={markupError}
+                  disabled={isCommandLoading}
+                  onActionChange={onMarkupActionChange}
+                  onModeChange={onMarkupModeChange ?? (() => undefined)}
+                  color={markupColor}
+                  onColorChange={onMarkupColorChange ?? (() => undefined)}
+                  onClear={onClearMarkup}
+                  onRemoveBox={onRemoveMarkupBox}
+                  onApply={onApplyMarkup}
+                  onCancel={onCancelMarkup}
+                  onCancelJob={onCancelMarkupJob}
+                  canUndo={markupCanUndo}
+                  canRedo={markupCanRedo}
+                  onUndo={onMarkupUndo}
+                  onRedo={onMarkupRedo}
+                />
+              </div>
             )}
             {/* Document Properties */}
-            <div>
+            {hasSection("document") && <div data-testid="studio-inspector-section-document">
               <div className="flex items-center gap-2 mb-3">
                 <FileText className="w-4 h-4 text-[var(--studio-accent)]" />
                 <h3 className="text-xs font-semibold text-[#F5F7FA]">
@@ -403,13 +409,13 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                   </span>
                 </div>
               </div>
-            </div>
+            </div>}
 
             {/* Selected page controls */}
-            <div>
+            {hasSection("page") && <div data-testid="studio-inspector-section-page">
               <div className="flex items-center gap-2 mb-3">
                 <RotateCw className="w-4 h-4 text-[var(--studio-accent)]" />
-                <h3 className="text-xs font-semibold text-[#F5F7FA]">Selected Page</h3>
+                <h3 className="text-xs font-semibold text-[#F5F7FA]">{category === "organize" ? "Page Organization" : "Selected Page"}</h3>
               </div>
               {!selectedPage ? (
                 <p className="text-xs text-[#9AA1AD] bg-[#14171C] p-3 rounded border border-[#292D35]">
@@ -492,10 +498,10 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                   </button>
                 </div>
               )}
-            </div>
+            </div>}
 
             {/* Add Text controls */}
-            <div>
+            {hasSection("text") && <div data-testid="studio-inspector-section-text">
               <div className="flex items-center gap-2 mb-3">
                 <Type className="w-4 h-4 text-[var(--studio-accent)]" />
                 <h3 className="text-xs font-semibold text-[#F5F7FA]">Add Text</h3>
@@ -521,10 +527,10 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                   {textOverlays.length > 0 && <div className="space-y-1 border-t border-[var(--studio-border)] pt-2"><span className="text-[10px] text-[var(--studio-muted)]">Text elements on this page</span>{textOverlays.map((overlay) => <button type="button" key={overlay.id} onClick={() => onSelectOverlay?.(overlay.id)} aria-label={`Select text ${overlay.text ?? ""}`} data-testid={`studio-text-overlay-${overlay.id}`} className={`block w-full truncate rounded border px-2 py-1.5 text-left text-[11px] ${selectedOverlayId === overlay.id ? "border-[var(--studio-border-active)] text-white" : "border-[var(--studio-border)] text-[#D8DCE3]"}`}>{overlay.text}</button>)}</div>}
                 </div>
               )}
-            </div>
+            </div>}
 
             {/* Sign controls */}
-            <div>
+            {hasSection("signature") && <div data-testid="studio-inspector-section-signature">
               <div className="flex items-center gap-2 mb-3">
                 <PenTool className="w-4 h-4 text-[var(--studio-accent)]" />
                 <h3 className="text-xs font-semibold text-[#F5F7FA]">Sign</h3>
@@ -550,10 +556,10 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                   {signatureOverlays.length > 0 && <div className="space-y-1 border-t border-[var(--studio-border)] pt-2"><span className="text-[10px] text-[var(--studio-muted)]">Signatures on this page</span>{signatureOverlays.map((overlay) => <button type="button" key={overlay.id} onClick={() => onSelectOverlay?.(overlay.id)} aria-label="Select signature" data-testid={`studio-signature-overlay-${overlay.id}`} className={`block w-full truncate rounded border px-2 py-1.5 text-left text-[11px] ${selectedOverlayId === overlay.id ? "border-[var(--studio-border-active)] text-white" : "border-[var(--studio-border)] text-[#D8DCE3]"}`}>Signature</button>)}</div>}
                 </div>
               )}
-            </div>
+            </div>}
 
             {/* Document metadata controls */}
-            <div>
+            {hasSection("metadata") && <div data-testid="studio-inspector-section-metadata">
               <div className="flex items-center gap-2 mb-3">
                 <FileText className="w-4 h-4 text-[var(--studio-accent)]" />
                 <h3 className="text-xs font-semibold text-[#F5F7FA]">Metadata</h3>
@@ -594,10 +600,10 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                   Apply metadata
                 </button>
               </div>
-            </div>
+            </div>}
 
             {/* Page Geometry */}
-            <div>
+            {hasSection("geometry") && <div data-testid="studio-inspector-section-geometry">
               <h3 className="text-xs font-semibold text-[#F5F7FA] mb-3">
                 Page Dimensions
               </h3>
@@ -615,10 +621,10 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                   <span className="font-medium text-[#F5F7FA]">{selectedPage ? `${selectedPage.rotation}°` : "—"}</span>
                 </div>
               </div>
-            </div>
+            </div>}
 
             {/* Crop controls */}
-            <div>
+            {hasSection("crop") && <div data-testid="studio-inspector-section-crop">
               <div className="flex items-center gap-2 mb-3">
                 <Crop className="w-4 h-4 text-[var(--studio-accent)]" />
                 <h3 className="text-xs font-semibold text-[#F5F7FA]">Crop Page</h3>
@@ -713,7 +719,26 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                   {cropError && <p role="alert" className="text-[10px] text-red-300">{cropError}</p>}
                 </div>
               )}
-            </div>
+            </div>}
+
+            {hasSection("layers") && <div data-testid="studio-inspector-section-layers">
+              <div className="mb-3 flex items-center gap-2">
+                <PenTool className="h-4 w-4 text-[var(--studio-accent)]" />
+                <h3 className="text-xs font-semibold text-[#F5F7FA]">Overlay Layers</h3>
+              </div>
+              {!selectedPage || selectedPage.overlays.length === 0 ? (
+                <p className="rounded border border-[#292D35] bg-[#14171C] p-3 text-xs text-[#9AA1AD]">This page has no text, signature, or watermark overlays.</p>
+              ) : (
+                <div className="space-y-2 rounded border border-[#292D35] bg-[#14171C] p-3">
+                  <p className="text-[10px] leading-4 text-[#9AA1AD]">Select an overlay to inspect it on the canvas.</p>
+                  {selectedPage.overlays.map((overlay) => (
+                    <button type="button" key={overlay.id} onClick={() => onSelectOverlay?.(overlay.id)} aria-pressed={selectedOverlayId === overlay.id} className={`block w-full truncate rounded border px-2 py-2 text-left text-[11px] ${selectedOverlayId === overlay.id ? "border-[var(--studio-border-active)] text-white" : "border-[var(--studio-border)] text-[#D8DCE3]"}`}>
+                      {overlay.type === "text" ? `Text: ${overlay.text ?? "Untitled"}` : overlay.type === "signature" ? "Signature" : "Watermark"}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>}
           </div>
         ) : (
           <div className="p-4">

@@ -3,12 +3,11 @@
 import React from "react";
 import {
   X,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
   RotateCw,
-  Crop,
   Trash2,
+  Copy,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { ToolCategory } from "./types";
 
@@ -17,8 +16,10 @@ interface StudioV2BottomSheetProps {
   activeTool: ToolCategory;
   onClose: () => void;
   onRotatePage?: () => void;
-  onCropPage?: () => void;
   onDeletePage?: () => void;
+  onMovePageEarlier?: () => void;
+  onMovePageLater?: () => void;
+  onDuplicatePage?: () => void;
 }
 
 export const StudioV2BottomSheet: React.FC<StudioV2BottomSheetProps> = ({
@@ -26,8 +27,10 @@ export const StudioV2BottomSheet: React.FC<StudioV2BottomSheetProps> = ({
   activeTool,
   onClose,
   onRotatePage,
-  onCropPage,
   onDeletePage,
+  onMovePageEarlier,
+  onMovePageLater,
+  onDuplicatePage,
 }) => {
   if (!isOpen) return null;
 
@@ -52,69 +55,21 @@ export const StudioV2BottomSheet: React.FC<StudioV2BottomSheetProps> = ({
         </button>
       </div>
 
-      {/* Sheet Content Body */}
-      <div className="p-4 overflow-y-auto space-y-4 text-xs">
-        {activeTool === "edit" ? (
-          <>
-            <div className="space-y-1.5">
-              <label className="font-mono text-[10px] text-[#9AA1AD] uppercase tracking-wider block">
-                Text Size
-              </label>
-              <div className="flex bg-[#101216] border border-[#292D35] rounded overflow-hidden">
-                <button className="flex-1 py-2 text-center text-[#F5F7FA] hover:bg-[#181B21] border-r border-[#292D35]">
-                  S
-                </button>
-                <button className="flex-1 py-2 text-center bg-[#181B21] text-[#d2bbff] font-semibold border-r border-[#292D35]">
-                  M
-                </button>
-                <button className="flex-1 py-2 text-center text-[#F5F7FA] hover:bg-[#181B21]">
-                  L
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="font-mono text-[10px] text-[#9AA1AD] uppercase tracking-wider block">
-                Alignment
-              </label>
-              <div className="flex bg-[#101216] border border-[#292D35] rounded overflow-hidden">
-                <button className="flex-1 py-2 flex items-center justify-center text-[#d2bbff] bg-[#181B21] border-r border-[#292D35]">
-                  <AlignLeft className="w-4 h-4" />
-                </button>
-                <button className="flex-1 py-2 flex items-center justify-center text-[#9AA1AD] hover:bg-[#181B21] border-r border-[#292D35]">
-                  <AlignCenter className="w-4 h-4" />
-                </button>
-                <button className="flex-1 py-2 flex items-center justify-center text-[#9AA1AD] hover:bg-[#181B21]">
-                  <AlignRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              onClick={onRotatePage}
-              className="flex flex-col items-center justify-center p-3 rounded bg-[#101216] border border-[#292D35] text-[#F5F7FA] hover:border-[#7c3aed]"
-            >
-              <RotateCw className="w-5 h-5 text-[#d2bbff] mb-1.5" />
-              <span className="font-mono text-[10px]">Rotate</span>
-            </button>
-            <button
-              onClick={onCropPage}
-              className="flex flex-col items-center justify-center p-3 rounded bg-[#101216] border border-[#292D35] text-[#F5F7FA] hover:border-[#7c3aed]"
-            >
-              <Crop className="w-5 h-5 text-[#d2bbff] mb-1.5" />
-              <span className="font-mono text-[10px]">Crop</span>
-            </button>
-            <button
-              onClick={onDeletePage}
-              className="flex flex-col items-center justify-center p-3 rounded bg-[#101216] border border-[#292D35] text-red-400 hover:border-red-500"
-            >
-              <Trash2 className="w-5 h-5 mb-1.5" />
-              <span className="font-mono text-[10px]">Delete</span>
-            </button>
-          </div>
-        )}
+      {/* Category-scoped mobile content. Full editors remain in the desktop inspector. */}
+      <div className="p-4 overflow-y-auto space-y-4 text-xs" data-testid="studio-mobile-category-panel">
+        {activeTool === "pages" && <div className="grid grid-cols-3 gap-2">
+          <button type="button" onClick={onRotatePage} className="flex flex-col items-center justify-center rounded border border-[#292D35] bg-[#101216] p-3 text-[#F5F7FA] hover:border-[var(--studio-border-active)]"><RotateCw className="mb-1.5 h-5 w-5 text-[var(--studio-accent)]" /><span>Rotate</span></button>
+          <button type="button" onClick={onDuplicatePage} className="flex flex-col items-center justify-center rounded border border-[#292D35] bg-[#101216] p-3 text-[#F5F7FA] hover:border-[var(--studio-border-active)]"><Copy className="mb-1.5 h-5 w-5 text-[var(--studio-accent)]" /><span>Duplicate</span></button>
+          <button type="button" onClick={onDeletePage} className="flex flex-col items-center justify-center rounded border border-red-900/70 bg-[#101216] p-3 text-red-300 hover:border-red-500"><Trash2 className="mb-1.5 h-5 w-5" /><span>Delete</span></button>
+        </div>}
+        {activeTool === "organize" && <div className="grid grid-cols-3 gap-2">
+          <button type="button" onClick={onMovePageEarlier} className="flex flex-col items-center justify-center rounded border border-[#292D35] bg-[#101216] p-3 text-[#F5F7FA] hover:border-[var(--studio-border-active)]"><ArrowUp className="mb-1.5 h-5 w-5 text-[var(--studio-accent)]" /><span>Earlier</span></button>
+          <button type="button" onClick={onMovePageLater} className="flex flex-col items-center justify-center rounded border border-[#292D35] bg-[#101216] p-3 text-[#F5F7FA] hover:border-[var(--studio-border-active)]"><ArrowDown className="mb-1.5 h-5 w-5 text-[var(--studio-accent)]" /><span>Later</span></button>
+          <button type="button" onClick={onDuplicatePage} className="flex flex-col items-center justify-center rounded border border-[#292D35] bg-[#101216] p-3 text-[#F5F7FA] hover:border-[var(--studio-border-active)]"><Copy className="mb-1.5 h-5 w-5 text-[var(--studio-accent)]" /><span>Duplicate</span></button>
+        </div>}
+        {activeTool === "edit" && <p className="rounded border border-[#292D35] bg-[#101216] p-3 leading-5 text-[#B7BDC8]">Edit tools: Add Text, Sign, Metadata, and Crop. Open the desktop inspector for their full controls.</p>}
+        {activeTool === "annotate" && <p className="rounded border border-[#292D35] bg-[#101216] p-3 leading-5 text-[#B7BDC8]">Annotate tools: Smart, Manual, OCR, Highlight, Underline, and Strikeout with shared color controls.</p>}
+        {activeTool === "layers" && <p className="rounded border border-[#292D35] bg-[#101216] p-3 leading-5 text-[#B7BDC8]">Layers shows the text, signature, and watermark overlays for the selected page.</p>}
       </div>
     </div>
   );

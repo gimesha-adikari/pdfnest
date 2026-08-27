@@ -32,7 +32,11 @@ export const StudioV2EditWorkspace: React.FC<Props> = ({ sessionId, baseVersionI
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [compileJob, setCompileJob] = useState<StudioJobDTO | null>(null);
+  const [compileSubmitting, setCompileSubmitting] = useState(false);
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
   const extractStartedRef = useRef(false);
+  const compileInFlightRef = useRef(false);
+  const cancelInFlightRef = useRef(false);
 
   const loadState = useCallback(async (stateId: string) => {
     const response = await studioV2Api.getEditorState(sessionId, stateId);
@@ -45,14 +49,19 @@ export const StudioV2EditWorkspace: React.FC<Props> = ({ sessionId, baseVersionI
   const submitExtract = useCallback(async () => {
     if (extractStartedRef.current) return;
     extractStartedRef.current = true;
-    const response = await studioV2Api.submitJob(sessionId, {
-      base_version_id: baseVersionId,
-      idempotency_key: newIdempotencyKey("editor-extract"),
-      operation: "editor_extract",
-      parameters: {},
-    });
-    setJob(response.job);
-    window.localStorage.setItem(extractKey(sessionId), response.job.id);
+    try {
+      const response = await studioV2Api.submitJob(sessionId, {
+        base_version_id: baseVersionId,
+        idempotency_key: newIdempotencyKey("editor-extract"),
+        operation: "editor_extract",
+        parameters: {},
+      });
+      setJob(response.job);
+      window.localStorage.setItem(extractKey(sessionId), response.job.id);
+    } catch (error) {
+      extractStartedRef.current = false;
+      throw error;
+    }
   }, [baseVersionId, newIdempotencyKey, sessionId]);
 
   useEffect(() => {
@@ -104,7 +113,9 @@ export const StudioV2EditWorkspace: React.FC<Props> = ({ sessionId, baseVersionI
   const compileBusy = Boolean(compileJob && !terminal(compileJob));
 
   const compile = async () => {
-    if (!state || !layout || compileBusy) return;
+    if (!state || !layout || compileBusy || compileInFlightRef.current) return;
+    compileInFlightRef.current = true;
+    setCompileSubmitting(true);
     setError(null);
     try {
       const response = await studioV2Api.submitJob(sessionId, {
@@ -116,6 +127,10 @@ export const StudioV2EditWorkspace: React.FC<Props> = ({ sessionId, baseVersionI
       setCompileJob(response.job);
       window.localStorage.setItem(compileKey(sessionId, state.id), response.job.id);
     } catch (err) { setError(err instanceof Error ? err.message : "Unable to compile editor changes."); }
+    finally {
+      compileInFlightRef.current = false;
+      setCompileSubmitting(false);
+    }
   };
 
   useEffect(() => {
@@ -153,16 +168,23 @@ export const StudioV2EditWorkspace: React.FC<Props> = ({ sessionId, baseVersionI
   }, [compileJob, onCompiled, sessionId, state]);
 
   const cancelJob = async (target: StudioJobDTO | null) => {
-    if (!target || terminal(target)) return;
-    const response = await studioV2Api.cancelJob(sessionId, target.id);
-    if (target.id === job?.id) setJob(response.job); else setCompileJob(response.job);
+    if (!target || terminal(target) || cancelInFlightRef.current) return;
+    cancelInFlightRef.current = true;
+    setCancelSubmitting(true);
+    try {
+      const response = await studioV2Api.cancelJob(sessionId, target.id);
+      if (target.id === job?.id) setJob(response.job); else setCompileJob(response.job);
+    } finally {
+      cancelInFlightRef.current = false;
+      setCancelSubmitting(false);
+    }
   };
 
   if (busy && !job) return <div className="flex h-screen items-center justify-center bg-[#0B0C0F] text-white"><Loader2 className="mr-2 animate-spin" /> Extracting editor layout…</div>;
   return <main className="flex h-screen w-screen flex-col overflow-hidden bg-[#0B0C0F] text-[#F5F7FA]" data-testid="studio-edit-workspace">
     <header className="flex min-h-14 items-center justify-between border-b border-[#292D35] bg-[#101216] px-4">
       <div className="flex items-center gap-3"><button type="button" aria-label="Back to Studio" onClick={onBack} className="rounded p-2 hover:bg-white/10"><ArrowLeft className="h-4 w-4" /></button><div><h1 className="text-sm font-semibold">Edit PDF</h1><p className="text-[10px] text-[#9AA1AD]">{documentName} · text layout editor</p></div></div>
-      <div className="flex items-center gap-2"><span role="status" aria-live="polite" className="text-xs text-[#9AA1AD]">{compileJob?.message || (state ? "Ready to edit" : job?.message || "Extracting…")} {job && !terminal(job) ? `${job.progress}%` : ""}</span>{state && !compileBusy && <button type="button" onClick={compile} disabled={!dirty} className="flex items-center gap-2 rounded bg-violet-600 px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40"><Save className="h-3.5 w-3.5" /> Compile</button>}{(job && !terminal(job) || compileBusy) && <button type="button" aria-label="Cancel editor job" onClick={() => void cancelJob(compileBusy ? compileJob : job)} className="rounded border border-red-400/40 px-3 py-2 text-xs text-red-200"><X className="mr-1 inline h-3.5 w-3.5" />Cancel</button>}</div>
+      <div className="flex items-center gap-2"><span role="status" aria-live="polite" className="text-xs text-[#9AA1AD]">{compileJob?.message || (state ? "Ready to edit" : job?.message || "Extracting…")} {job && !terminal(job) ? `${job.progress}%` : ""}</span>{state && !compileBusy && <button type="button" onClick={compile} disabled={!dirty || compileSubmitting} className="flex items-center gap-2 rounded bg-violet-600 px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40">{compileSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} {compileSubmitting ? "Compiling…" : "Compile"}</button>}{(job && !terminal(job) || compileBusy) && <button type="button" aria-label="Cancel editor job" onClick={() => void cancelJob(compileBusy ? compileJob : job)} disabled={cancelSubmitting} className="rounded border border-red-400/40 px-3 py-2 text-xs text-red-200 disabled:opacity-40"><X className="mr-1 inline h-3.5 w-3.5" />{cancelSubmitting ? "Cancelling…" : "Cancel"}</button>}</div>
     </header>
     {error && <div role="alert" className="border-b border-red-400/30 bg-red-950/40 px-4 py-2 text-xs text-red-200">{error}</div>}
     {!state ? <section className="flex flex-1 flex-col items-center justify-center gap-3"><Loader2 className="animate-spin text-violet-300" /><p className="text-sm">Waiting for the editor layout…</p></section> : <section className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden p-4 lg:grid-cols-[220px_minmax(0,1fr)_300px]">

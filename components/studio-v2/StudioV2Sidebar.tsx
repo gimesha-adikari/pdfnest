@@ -20,6 +20,9 @@ interface StudioV2SidebarProps {
   onSelectTool: (tool: ToolCategory) => void;
   onAddNewPage?: () => void;
   onEnterEdit?: () => void;
+  onTrash?: () => void;
+  onHelp?: () => void;
+  isSessionActionDisabled?: boolean;
 }
 
 export const StudioV2Sidebar: React.FC<StudioV2SidebarProps> = ({
@@ -28,6 +31,9 @@ export const StudioV2Sidebar: React.FC<StudioV2SidebarProps> = ({
   onSelectTool,
   onAddNewPage,
   onEnterEdit,
+  onTrash,
+  onHelp,
+  isSessionActionDisabled = false,
 }) => {
   const navItems: { id: ToolCategory; label: string; icon: React.ElementType }[] = [
     { id: "pages", label: "Pages", icon: LayoutGrid },
@@ -76,7 +82,10 @@ export const StudioV2Sidebar: React.FC<StudioV2SidebarProps> = ({
           return (
             <button
               key={item.id}
+              type="button"
               onClick={() => onSelectTool(item.id)}
+              aria-current={isActive ? "page" : undefined}
+              data-testid={`studio-category-${item.id}`}
               className={`w-full flex items-center gap-3 px-4 py-2.5 text-xs font-mono tracking-wider transition-colors ${
                 isActive
                   ? "border-l-2 border-[var(--studio-border-active)] bg-[var(--studio-surface-raised)] text-[var(--studio-accent)] font-semibold"
@@ -99,11 +108,11 @@ export const StudioV2Sidebar: React.FC<StudioV2SidebarProps> = ({
 
       {/* Footer Navigation */}
       <div className="mt-auto border-t border-[#292D35] py-2">
-        <button className="w-full flex items-center gap-3 px-4 py-2 text-xs font-mono text-[#9AA1AD] hover:bg-[#181B21] hover:text-white transition-colors">
+        <button type="button" onClick={onTrash} disabled={isSessionActionDisabled} data-testid="studio-trash" title={isSessionActionDisabled ? "Finish the active Studio operation before discarding this session" : "Discard this Studio session"} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-mono text-[#9AA1AD] hover:bg-[#181B21] hover:text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50">
           <Trash2 className="w-4 h-4" />
           <span>Trash</span>
         </button>
-        <button className="w-full flex items-center gap-3 px-4 py-2 text-xs font-mono text-[#9AA1AD] hover:bg-[#181B21] hover:text-white transition-colors">
+        <button type="button" onClick={onHelp} data-testid="studio-help" className="w-full flex items-center gap-3 px-4 py-2 text-xs font-mono text-[#9AA1AD] hover:bg-[#181B21] hover:text-white transition-colors">
           <HelpCircle className="w-4 h-4" />
           <span>Help</span>
         </button>

@@ -63,6 +63,7 @@ export const StudioV2ColorPicker: React.FC<StudioV2ColorPickerProps> = ({
     setCustomValue(normalized);
     setCustomError(null);
     onChange(normalized);
+    setOpen(false);
   };
 
   const applyCustom = () => {
@@ -74,6 +75,7 @@ export const StudioV2ColorPicker: React.FC<StudioV2ColorPickerProps> = ({
     setCustomValue(normalized);
     setCustomError(null);
     onChange(normalized);
+    setOpen(false);
   };
 
   return (

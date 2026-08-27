@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { StudioV2Header } from "./StudioV2Header";
 import { StudioV2Workspace } from "./StudioV2Workspace";
 import { StudioV2CommandPalette } from "./StudioV2CommandPalette";
@@ -53,6 +53,8 @@ import {
   studioCompressionMetricsFromResponse,
   type StudioCompressState,
 } from "./studioV2Compress";
+import { useStudioV2SubmissionGuard } from "./studioV2SubmissionGuard";
+import { StudioV2ConfirmDialog, StudioV2Dialog } from "./StudioV2Dialog";
 
 function formatBytes(bytes: number): string {
   if (!bytes || bytes === 0) return "0 KB";
@@ -78,6 +80,7 @@ function formatRelativeTime(dateStr: string): string {
 
 export const StudioV2Shell: React.FC = () => {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const sessionIdParam = searchParams ? searchParams.get("session_id") : null;
 
   // Authoritative Backend Session Hook
@@ -102,6 +105,7 @@ export const StudioV2Shell: React.FC = () => {
     enterStudio,
     executeCommand,
     materialize,
+    discardSession,
   } = useStudioSession(sessionIdParam);
 
   // Local Ephemeral UI State
@@ -141,8 +145,19 @@ export const StudioV2Shell: React.FC = () => {
   const [cropCustomPages, setCropCustomPages] = useState("");
   const [overlayDraft, setOverlayDraft] = useState<StudioV2OverlayDraft | null>(null);
   const markupSelectionIndexRef = useRef<number | null>(null);
+  const submissionGuard = useStudioV2SubmissionGuard();
+  const [leaveDestination, setLeaveDestination] = useState<"/" | "/dashboard/settings" | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [trashDialogOpen, setTrashDialogOpen] = useState(false);
+  const [isDeletingSession, setIsDeletingSession] = useState(false);
+  const [sessionDeleteError, setSessionDeleteError] = useState<string | null>(null);
+
+  const guardedExecuteCommand = useCallback(async (command: StudioCommand) => {
+    return (await submissionGuard.run(`command:${command.operation}`, () => executeCommand(command))) ?? null;
+  }, [executeCommand, submissionGuard]);
 
   const markupJobIsBusy = Boolean(markupJob && !["succeeded", "failed", "cancelled"].includes(markupJob.status));
+  const hasActiveOperation = isSaving || isMaterializing || markupJobIsBusy || submissionGuard.pending;
 
   const resetMarkupDraft = useCallback((next: StudioMarkupBox[] = []) => {
     markupInteractionStartRef.current = null;
@@ -388,38 +403,42 @@ export const StudioV2Shell: React.FC = () => {
 
   const handleApplyMarkup = useCallback(async () => {
     if (!session || !activeVersion || markupBoxes.length === 0 || markupJobIsBusy) return;
-    const boxes = markupBoxes.filter((box) => box.width > 2 && box.height > 2);
-    if (boxes.length === 0) {
-      setMarkupError("Drag a region larger than 2 points before applying markup.");
-      return;
-    }
-    setMarkupError(null);
-    markupSelectionIndexRef.current = selectedPageIndex;
-    try {
-      const operation = `markup_${markupAction}` as const;
-      const { job } = await studioV2Api.submitJob(session.id, {
-        base_version_id: activeVersion.id,
-        idempotency_key: newIdempotencyKey(operation),
-        operation,
-        parameters: { boxes, mode: markupMode },
-      });
-      setMarkupJob(job);
-      if (typeof window !== "undefined") window.localStorage.setItem(`studio-v2-markup-job:${session.id}`, job.id);
-    } catch (err) {
-      setMarkupError(err instanceof Error ? err.message : "Unable to submit markup.");
-    }
-  }, [session, activeVersion, markupBoxes, markupJobIsBusy, selectedPageIndex, markupAction, markupMode, newIdempotencyKey]);
+    await submissionGuard.run("job:markup-apply", async () => {
+      const boxes = markupBoxes.filter((box) => box.width > 2 && box.height > 2);
+      if (boxes.length === 0) {
+        setMarkupError("Drag a region larger than 2 points before applying markup.");
+        return;
+      }
+      setMarkupError(null);
+      markupSelectionIndexRef.current = selectedPageIndex;
+      try {
+        const operation = `markup_${markupAction}` as const;
+        const { job } = await studioV2Api.submitJob(session.id, {
+          base_version_id: activeVersion.id,
+          idempotency_key: newIdempotencyKey(operation),
+          operation,
+          parameters: { boxes, mode: markupMode },
+        });
+        setMarkupJob(job);
+        if (typeof window !== "undefined") window.localStorage.setItem(`studio-v2-markup-job:${session.id}`, job.id);
+      } catch (err) {
+        setMarkupError(err instanceof Error ? err.message : "Unable to submit markup.");
+      }
+    });
+  }, [session, activeVersion, markupBoxes, markupJobIsBusy, selectedPageIndex, markupAction, markupMode, newIdempotencyKey, submissionGuard]);
 
   const handleCancelMarkupJob = useCallback(async () => {
     if (!session || !markupJob || !markupJobIsBusy) return;
-    try {
-      const { job } = await studioV2Api.cancelJob(session.id, markupJob.id);
-      setMarkupJob(job);
-      if (["cancelled", "failed", "succeeded"].includes(job.status) && typeof window !== "undefined") window.localStorage.removeItem(`studio-v2-markup-job:${session.id}`);
-    } catch (err) {
-      setMarkupError(err instanceof Error ? err.message : "Unable to cancel the markup job.");
-    }
-  }, [session, markupJob, markupJobIsBusy]);
+    await submissionGuard.run(`job:markup-cancel:${markupJob.id}`, async () => {
+      try {
+        const { job } = await studioV2Api.cancelJob(session.id, markupJob.id);
+        setMarkupJob(job);
+        if (["cancelled", "failed", "succeeded"].includes(job.status) && typeof window !== "undefined") window.localStorage.removeItem(`studio-v2-markup-job:${session.id}`);
+      } catch (err) {
+        setMarkupError(err instanceof Error ? err.message : "Unable to cancel the markup job.");
+      }
+    });
+  }, [session, markupJob, markupJobIsBusy, submissionGuard]);
 
   const handleCancelMarkup = useCallback(() => {
     if (!markupJobIsBusy) {
@@ -444,12 +463,12 @@ export const StudioV2Shell: React.FC = () => {
         parameters: { page_ids: [selectedPage.page_id], delta_degrees: deltaDegrees },
       };
       try {
-        await executeCommand(command);
+        await guardedExecuteCommand(command);
       } catch {
         // The hook exposes the authoritative error state to the shell.
       }
     },
-    [selectedPage, activeVersion, newIdempotencyKey, executeCommand]
+    [selectedPage, activeVersion, newIdempotencyKey, guardedExecuteCommand]
   );
 
   const handleDeletePage = useCallback(async () => {
@@ -458,7 +477,7 @@ export const StudioV2Shell: React.FC = () => {
     const plannedNextPage = vdm.pages[selectedIndex + 1] ?? vdm.pages[selectedIndex - 1] ?? null;
     setSelectedPageId(plannedNextPage?.page_id ?? null);
     try {
-      const response = await executeCommand({
+      const response = await guardedExecuteCommand({
         base_version_id: activeVersion.id,
         idempotency_key: newIdempotencyKey("delete-page"),
         operation: "delete_pages",
@@ -472,7 +491,7 @@ export const StudioV2Shell: React.FC = () => {
       // Keep the existing selection and authoritative VDM on failure.
       setSelectedPageId(selectedPage.page_id);
     }
-  }, [selectedPage, activeVersion, vdm, executeCommand, newIdempotencyKey]);
+  }, [selectedPage, activeVersion, vdm, guardedExecuteCommand, newIdempotencyKey]);
 
   const handleReorderPage = useCallback(
     async (direction: -1 | 1) => {
@@ -482,7 +501,7 @@ export const StudioV2Shell: React.FC = () => {
       const pageIds = vdm.pages.map((page) => page.page_id);
       [pageIds[selectedPageIndex], pageIds[targetIndex]] = [pageIds[targetIndex], pageIds[selectedPageIndex]];
       try {
-        await executeCommand({
+        await guardedExecuteCommand({
           base_version_id: activeVersion.id,
           idempotency_key: newIdempotencyKey("reorder-pages"),
           operation: "reorder_pages",
@@ -492,14 +511,14 @@ export const StudioV2Shell: React.FC = () => {
         // Keep the authoritative order and selected page on failure.
       }
     },
-    [vdm, selectedPage, activeVersion, selectedPageIndex, executeCommand, newIdempotencyKey]
+    [vdm, selectedPage, activeVersion, selectedPageIndex, guardedExecuteCommand, newIdempotencyKey]
   );
 
   const handleDuplicatePage = useCallback(async () => {
     if (!vdm || !selectedPage || !activeVersion) return;
     const existingPageIds = new Set(vdm.pages.map((page) => page.page_id));
     try {
-      const response = await executeCommand({
+      const response = await guardedExecuteCommand({
         base_version_id: activeVersion.id,
         idempotency_key: newIdempotencyKey("duplicate-page"),
         operation: "duplicate_pages",
@@ -512,14 +531,14 @@ export const StudioV2Shell: React.FC = () => {
     } catch {
       // Keep the source page selected when duplication fails.
     }
-  }, [vdm, selectedPage, activeVersion, executeCommand, newIdempotencyKey]);
+  }, [vdm, selectedPage, activeVersion, guardedExecuteCommand, newIdempotencyKey]);
 
   const handleAddBlankPage = useCallback(async () => {
     if (!vdm || !activeVersion) return;
     const existingPageIds = new Set(vdm.pages.map((page) => page.page_id));
     const position = selectedPageIndex >= 0 ? selectedPageIndex + 1 : vdm.pages.length;
     try {
-      const response = await executeCommand({
+      const response = await guardedExecuteCommand({
         base_version_id: activeVersion.id,
         idempotency_key: newIdempotencyKey("insert-blank-page"),
         operation: "insert_blank_pages",
@@ -532,7 +551,7 @@ export const StudioV2Shell: React.FC = () => {
     } catch {
       // Keep the existing selection when blank-page insertion fails.
     }
-  }, [vdm, activeVersion, selectedPageIndex, executeCommand, newIdempotencyKey]);
+  }, [vdm, activeVersion, selectedPageIndex, guardedExecuteCommand, newIdempotencyKey]);
 
   const handleCropPage = useCallback(
     async (cropBox: number[], requestedPageIds?: string[]) => {
@@ -555,7 +574,7 @@ export const StudioV2Shell: React.FC = () => {
         }
       }
       try {
-        await executeCommand({
+        await guardedExecuteCommand({
           base_version_id: activeVersion.id,
           idempotency_key: newIdempotencyKey("crop-page"),
           operation: "crop_page",
@@ -565,14 +584,14 @@ export const StudioV2Shell: React.FC = () => {
         // Keep the authoritative VDM and let the hook expose the recoverable error.
       }
     },
-    [selectedPage, activeVersion, vdm, cropTargetMode, cropCustomPages, executeCommand, newIdempotencyKey]
+    [selectedPage, activeVersion, vdm, cropTargetMode, cropCustomPages, guardedExecuteCommand, newIdempotencyKey]
   );
 
   const handleUpdateMetadata = useCallback(
     async (metadata: { title: string; author: string; subject: string; keywords: string }) => {
       if (!activeVersion) return;
       try {
-        await executeCommand({
+        await guardedExecuteCommand({
           base_version_id: activeVersion.id,
           idempotency_key: newIdempotencyKey("update-metadata"),
           operation: "update_metadata",
@@ -582,39 +601,39 @@ export const StudioV2Shell: React.FC = () => {
         // Keep the authoritative VDM and expose the recoverable error via the hook.
       }
     },
-    [activeVersion, executeCommand, newIdempotencyKey]
+    [activeVersion, guardedExecuteCommand, newIdempotencyKey]
   );
 
   const handleWatermark = useCallback(
     async (parameters: StudioWatermarkParameters) => {
       if (!activeVersion || !vdm) return;
-      await executeCommand({
+      await guardedExecuteCommand({
         base_version_id: activeVersion.id,
         idempotency_key: newIdempotencyKey("add-watermark"),
         operation: "add_watermark",
         parameters: { ...parameters, page_ids: vdm.pages.map((page) => page.page_id) },
       });
     },
-    [activeVersion, executeCommand, newIdempotencyKey, vdm]
+    [activeVersion, guardedExecuteCommand, newIdempotencyKey, vdm]
   );
 
   const handlePageNumbering = useCallback(
     async (parameters: StudioPageNumberingParameters) => {
       if (!activeVersion) return;
-      await executeCommand({
+      await guardedExecuteCommand({
         base_version_id: activeVersion.id,
         idempotency_key: newIdempotencyKey("update-page-numbering"),
         operation: "update_page_numbering",
         parameters,
       });
     },
-    [activeVersion, executeCommand, newIdempotencyKey]
+    [activeVersion, guardedExecuteCommand, newIdempotencyKey]
   );
 
   const handleAddText = useCallback(async (parameters: StudioTextOverlayParameters) => {
     if (!activeVersion || !vdm) return;
     const existing = new Set(vdm.pages.find((page) => page.page_id === parameters.page_id)?.overlays.map((overlay) => overlay.id) ?? []);
-    const response = await executeCommand({
+    const response = await guardedExecuteCommand({
       base_version_id: activeVersion.id,
       idempotency_key: newIdempotencyKey("add-text-overlay"),
       operation: "add_text_overlay",
@@ -622,64 +641,66 @@ export const StudioV2Shell: React.FC = () => {
     });
     const created = response?.vdm.pages.find((page) => page.page_id === parameters.page_id)?.overlays.find((overlay) => overlay.type === "text" && !existing.has(overlay.id));
     if (created) setSelectedOverlayId(created.id);
-  }, [activeVersion, vdm, executeCommand, newIdempotencyKey]);
+  }, [activeVersion, vdm, guardedExecuteCommand, newIdempotencyKey]);
 
   const handleUpdateText = useCallback(async (parameters: StudioUpdateTextOverlayParameters) => {
     if (!activeVersion) return;
-    await executeCommand({
+    await guardedExecuteCommand({
       base_version_id: activeVersion.id,
       idempotency_key: newIdempotencyKey("update-text-overlay"),
       operation: "update_text_overlay",
       parameters,
     });
-  }, [activeVersion, executeCommand, newIdempotencyKey]);
+  }, [activeVersion, guardedExecuteCommand, newIdempotencyKey]);
 
   const handleRemoveText = useCallback(async (target: { page_id: string; overlay_id: string }) => {
     if (!activeVersion) return;
-    await executeCommand({
+    await guardedExecuteCommand({
       base_version_id: activeVersion.id,
       idempotency_key: newIdempotencyKey("delete-text-overlay"),
       operation: "delete_overlay",
       parameters: { targets: [target] },
     });
     setSelectedOverlayId(null);
-  }, [activeVersion, executeCommand, newIdempotencyKey]);
+  }, [activeVersion, guardedExecuteCommand, newIdempotencyKey]);
 
   const handleAddSignature = useCallback(async (blob: Blob, parameters: StudioSignatureOverlayParameters) => {
     if (!session || !activeVersion || !vdm) return;
-    const file = new File([blob], "signature.png", { type: blob.type || "image/png" });
-    const uploaded = await studioV2Api.uploadSignatureAsset(session.id, file);
-    const response = await executeCommand({
-      base_version_id: activeVersion.id,
-      idempotency_key: newIdempotencyKey("add-signature-overlay"),
-      operation: "add_signature_overlay",
-      parameters: { ...parameters, asset_id: uploaded.asset.id },
+    await submissionGuard.run(`overlay:add-signature:${parameters.page_id}`, async () => {
+      const file = new File([blob], "signature.png", { type: blob.type || "image/png" });
+      const uploaded = await studioV2Api.uploadSignatureAsset(session.id, file);
+      const response = await guardedExecuteCommand({
+        base_version_id: activeVersion.id,
+        idempotency_key: newIdempotencyKey("add-signature-overlay"),
+        operation: "add_signature_overlay",
+        parameters: { ...parameters, asset_id: uploaded.asset.id },
+      });
+      const existing = new Set(vdm.pages.find((page) => page.page_id === parameters.page_id)?.overlays.map((overlay) => overlay.id) ?? []);
+      const created = response?.vdm.pages.find((page) => page.page_id === parameters.page_id)?.overlays.find((overlay) => overlay.type === "signature" && !existing.has(overlay.id));
+      if (created) setSelectedOverlayId(created.id);
     });
-    const existing = new Set(vdm.pages.find((page) => page.page_id === parameters.page_id)?.overlays.map((overlay) => overlay.id) ?? []);
-    const created = response?.vdm.pages.find((page) => page.page_id === parameters.page_id)?.overlays.find((overlay) => overlay.type === "signature" && !existing.has(overlay.id));
-    if (created) setSelectedOverlayId(created.id);
-  }, [session, activeVersion, vdm, executeCommand, newIdempotencyKey]);
+  }, [session, activeVersion, vdm, guardedExecuteCommand, newIdempotencyKey, submissionGuard]);
 
   const handleUpdateSignature = useCallback(async (parameters: StudioUpdateSignatureOverlayParameters) => {
     if (!activeVersion) return;
-    await executeCommand({
+    await guardedExecuteCommand({
       base_version_id: activeVersion.id,
       idempotency_key: newIdempotencyKey("update-signature-overlay"),
       operation: "update_signature_overlay",
       parameters,
     });
-  }, [activeVersion, executeCommand, newIdempotencyKey]);
+  }, [activeVersion, guardedExecuteCommand, newIdempotencyKey]);
 
   const handleRemoveSignature = useCallback(async (target: { page_id: string; overlay_id: string }) => {
     if (!activeVersion) return;
-    await executeCommand({
+    await guardedExecuteCommand({
       base_version_id: activeVersion.id,
       idempotency_key: newIdempotencyKey("delete-signature-overlay"),
       operation: "delete_overlay",
       parameters: { targets: [target] },
     });
     setSelectedOverlayId(null);
-  }, [activeVersion, executeCommand, newIdempotencyKey]);
+  }, [activeVersion, guardedExecuteCommand, newIdempotencyKey]);
 
   const handleOverlayCommit = useCallback(async (draft: StudioV2OverlayDraft) => {
     if (!activeVersion) return;
@@ -719,36 +740,38 @@ export const StudioV2Shell: React.FC = () => {
   const handleRemoveWatermark = useCallback(
     async (targets: Array<{ page_id: string; overlay_id: string }>) => {
       if (!activeVersion || targets.length === 0) return;
-      await executeCommand({
+      await guardedExecuteCommand({
         base_version_id: activeVersion.id,
         idempotency_key: newIdempotencyKey("delete-overlay"),
         operation: "delete_overlay",
         parameters: { targets },
       });
     },
-    [activeVersion, executeCommand, newIdempotencyKey]
+    [activeVersion, guardedExecuteCommand, newIdempotencyKey]
   );
 
   const handleExport = useCallback(async () => {
     if (!session || !activeVersion || isSaving || isExporting) return;
-    setIsExporting(true);
-    setExportError(null);
-    try {
-      const result = await studioV2Api.finalizeExport(session.id);
-      const href = studioV2Api.exportDownloadURL(session.id, result.export.id);
-      const anchor = window.document.createElement("a");
-      anchor.href = href;
-      anchor.download = result.file_name;
-      anchor.style.display = "none";
-      window.document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-    } catch (err) {
-      setExportError(err instanceof Error ? err.message : "Export failed");
-    } finally {
-      setIsExporting(false);
-    }
-  }, [session, activeVersion, isSaving, isExporting]);
+    await submissionGuard.run("export", async () => {
+      setIsExporting(true);
+      setExportError(null);
+      try {
+        const result = await studioV2Api.finalizeExport(session.id);
+        const href = studioV2Api.exportDownloadURL(session.id, result.export.id);
+        const anchor = window.document.createElement("a");
+        anchor.href = href;
+        anchor.download = result.file_name;
+        anchor.style.display = "none";
+        window.document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+      } catch (err) {
+        setExportError(err instanceof Error ? err.message : "Export failed");
+      } finally {
+        setIsExporting(false);
+      }
+    });
+  }, [session, activeVersion, isSaving, isExporting, submissionGuard]);
 
   const handleMaterialize = useCallback(
     async (
@@ -795,6 +818,7 @@ export const StudioV2Shell: React.FC = () => {
                     parameters: {},
                   };
         const response = await materialize(request);
+        if (!response) return false;
         const replacementPage = response?.vdm.pages[
           Math.min(Math.max(selectedIndexBeforeMaterialization, 0), response.vdm.pages.length - 1)
         ];
@@ -975,6 +999,44 @@ export const StudioV2Shell: React.FC = () => {
     if (session && activeVersion) setEditMode(true);
   }, [activeVersion, session]);
 
+  const openLeaveConfirmation = useCallback((destination: "/" | "/dashboard/settings") => {
+    setLeaveDestination(destination);
+  }, []);
+
+  const confirmLeave = useCallback(() => {
+    if (!leaveDestination || hasActiveOperation) return;
+    const destination = leaveDestination;
+    setLeaveDestination(null);
+    router.push(destination);
+  }, [hasActiveOperation, leaveDestination, router]);
+
+  const openTrashConfirmation = useCallback(() => {
+    if (!session || hasActiveOperation) return;
+    setSessionDeleteError(null);
+    setTrashDialogOpen(true);
+  }, [hasActiveOperation, session]);
+
+  const confirmTrash = useCallback(() => {
+    if (!session || hasActiveOperation || isDeletingSession) return;
+    void submissionGuard.run("session:delete", async () => {
+      setIsDeletingSession(true);
+      setSessionDeleteError(null);
+      try {
+        const deleted = await discardSession();
+        if (!deleted) throw new Error("Studio session is no longer available.");
+        setTrashDialogOpen(false);
+        // Discard is a terminal workspace transition. A full replace ensures
+        // the cleared entry state cannot be retained by the Studio route's
+        // client router cache or restored by the browser back button.
+        window.location.replace("/");
+      } catch (err) {
+        setSessionDeleteError(err instanceof Error ? err.message : "Unable to discard this Studio session. You can retry.");
+      } finally {
+        setIsDeletingSession(false);
+      }
+    });
+  }, [discardSession, hasActiveOperation, isDeletingSession, router, session, submissionGuard]);
+
   // Global Keyboard Shortcuts (Cmd+K, 0)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1077,16 +1139,19 @@ export const StudioV2Shell: React.FC = () => {
         onUndo={undo}
         onRedo={redo}
         onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+        onOpenSettings={() => openLeaveConfirmation("/dashboard/settings")}
+        onOpenHelp={() => setHelpOpen(true)}
+        onNavigateHome={() => openLeaveConfirmation("/")}
         onExport={handleExport}
-        onCompress={() => void handleCompress()}
+        onCompress={handleCompress}
         compressionLevel={compressionLevel}
         onCompressionLevelChange={handleCompressionLevelChange}
         compressStatus={compressState.status}
         compressStatusMessage={compressState.message}
         compressMetrics={compressState.metrics}
         compressError={compressState.error}
-        onGrayscale={() => void handleMaterialize("grayscale")}
-        onRepair={() => void handleMaterialize("repair")}
+        onGrayscale={() => handleMaterialize("grayscale")}
+        onRepair={() => handleMaterialize("repair")}
         onApplyRedaction={handleApplyRedaction}
         redactionMode={redactionMode}
         onRedactionModeChange={setRedactionMode}
@@ -1144,12 +1209,14 @@ export const StudioV2Shell: React.FC = () => {
         onZoomOut={handleZoomOut}
         onFitToScreen={handleFitToScreen}
         onTogglePan={handleTogglePan}
-        onOpenCommandPalette={() => setCommandPaletteOpen(true)}
         onCheckoutVersion={checkout}
         metadata={vdm?.metadata}
         onUpdateMetadata={handleUpdateMetadata}
         onAddNewPage={handleAddBlankPage}
         onEnterEdit={enterEdit}
+        onTrash={openTrashConfirmation}
+        onHelp={() => setHelpOpen(true)}
+        isSessionActionDisabled={hasActiveOperation || isDeletingSession}
         onRotateClockwise={() => handleRotate(90)}
         onRotateCounterClockwise={() => handleRotate(-90)}
         onDeletePage={handleDeletePage}
@@ -1176,7 +1243,7 @@ export const StudioV2Shell: React.FC = () => {
         onRemoveSignature={handleRemoveSignature}
         canMovePageEarlier={selectedPageIndex > 0}
         canMovePageLater={selectedPageIndex >= 0 && selectedPageIndex < (vdm?.pages.length ?? 0) - 1}
-        isCommandLoading={isSaving || markupJobIsBusy}
+        isCommandLoading={isSaving || markupJobIsBusy || submissionGuard.pending}
         markupAction={markupAction}
         markupMode={markupMode}
         markupAnalysis={markupAnalysis}
@@ -1217,6 +1284,11 @@ export const StudioV2Shell: React.FC = () => {
         isOpen={mobileSheetOpen}
         activeTool={activeTool}
         onClose={() => setMobileSheetOpen(false)}
+        onRotatePage={() => void handleRotate(90)}
+        onDeletePage={() => void handleDeletePage()}
+        onMovePageEarlier={() => void handleReorderPage(-1)}
+        onMovePageLater={() => void handleReorderPage(1)}
+        onDuplicatePage={() => void handleDuplicatePage()}
       />
 
       {/* Command Palette Modal (Cmd+K) */}
@@ -1228,6 +1300,40 @@ export const StudioV2Shell: React.FC = () => {
         canRotatePage={Boolean(selectedPage) && !isSaving}
         onExport={handleExport}
       />
+
+      <StudioV2ConfirmDialog
+        open={leaveDestination !== null}
+        title={leaveDestination === "/dashboard/settings" ? "Open Settings?" : "Leave Studio?"}
+        description={hasActiveOperation ? "A Studio operation is still running. Wait for it to finish before leaving this workspace." : "Your Studio session is saved, but you are leaving the editor."}
+        cancelLabel="Stay"
+        confirmLabel={leaveDestination === "/dashboard/settings" ? "Open Settings" : "Go to home"}
+        onCancel={() => setLeaveDestination(null)}
+        onConfirm={confirmLeave}
+        confirmDisabled={hasActiveOperation}
+      />
+
+      <StudioV2ConfirmDialog
+        open={trashDialogOpen}
+        title="Discard this Studio session?"
+        description={hasActiveOperation ? "A Studio operation is still running. Wait for it to finish before discarding this workspace." : "This will remove the current Studio workspace, its saved session data, and associated owned resources. This action cannot be undone."}
+        cancelLabel="Cancel"
+        confirmLabel={isDeletingSession ? "Discarding…" : "Discard session"}
+        onCancel={() => { if (!isDeletingSession) setTrashDialogOpen(false); }}
+        onConfirm={confirmTrash}
+        confirmDisabled={hasActiveOperation || isDeletingSession}
+        cancelDisabled={isDeletingSession}
+        destructive
+        error={sessionDeleteError}
+      />
+
+      <StudioV2Dialog open={helpOpen} title="Studio Help" onClose={() => setHelpOpen(false)}>
+        <div className="mt-4 space-y-3 text-xs leading-5 text-[#B7BDC8]">
+          <p>Choose a workspace category on the left to focus the inspector on pages, organization, editing, annotations, or overlays.</p>
+          <p><span className="font-semibold text-white">Shortcuts:</span> Cmd/Ctrl+K opens Search, 0 fits the canvas, and Cmd/Ctrl+Z and Shift+Cmd/Ctrl+Z undo or redo markup drafts while Annotate is active.</p>
+          <p>Use Export to create the final PDF. Changes are saved as Studio versions.</p>
+        </div>
+        <div className="mt-5 flex justify-end"><button type="button" onClick={() => setHelpOpen(false)} className="rounded border border-[var(--studio-border)] px-3 py-2 text-xs text-[#D8DCE3] hover:bg-[#20242B]">Close</button></div>
+      </StudioV2Dialog>
       </>}
     </div>
   );

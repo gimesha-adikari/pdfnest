@@ -2,17 +2,15 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
-  Search,
   Hand,
   Minus,
   Plus,
   Maximize2,
-  FileText,
   Loader2,
   RefreshCw,
   AlertTriangle,
 } from "lucide-react";
-import { DocumentInfo, StudioV2OverlayDraft, StudioV2RedactionDraftBox } from "./types";
+import { StudioV2OverlayDraft, StudioV2RedactionDraftBox } from "./types";
 import { StudioV2InteractiveOverlay } from "./StudioV2InteractiveOverlay";
 import { VDMPageDescriptorDTO, StudioMarkupAction, StudioMarkupBox, StudioVDMDTO } from "@/lib/studio-v2/api";
 import { fetchTileBlobUrl } from "@/lib/studio-v2/tileClient";
@@ -613,7 +611,6 @@ const PageTileRenderer: React.FC<PageTileRendererProps> = ({
 };
 
 interface StudioV2CanvasProps {
-  document: DocumentInfo;
   sessionId?: string | null;
   versionId?: string | null;
   vdm?: StudioVDMDTO | null;
@@ -625,7 +622,6 @@ interface StudioV2CanvasProps {
   onZoomOut: () => void;
   onFitToScreen: () => void;
   onTogglePan: () => void;
-  onOpenCommandPalette: () => void;
   markupAction?: StudioMarkupAction | null;
   markupColor?: string;
   markupBoxes?: StudioMarkupBox[];
@@ -646,7 +642,6 @@ interface StudioV2CanvasProps {
 }
 
 export const StudioV2Canvas: React.FC<StudioV2CanvasProps> = ({
-  document,
   sessionId,
   versionId,
   vdm,
@@ -658,7 +653,6 @@ export const StudioV2Canvas: React.FC<StudioV2CanvasProps> = ({
   onZoomOut,
   onFitToScreen,
   onTogglePan,
-  onOpenCommandPalette,
   markupAction = null,
   markupColor = "#FFFF00",
   markupBoxes = [],
@@ -728,25 +722,6 @@ export const StudioV2Canvas: React.FC<StudioV2CanvasProps> = ({
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
     >
-      {/* Floating Command Palette Trigger Pill (Top Center) */}
-      <div className="absolute top-4 left-1/2 transform -translate-x-1/2 w-[380px] max-w-[90%] bg-[var(--studio-surface)] rounded-md border border-[var(--studio-border)] z-30 shadow-lg flex items-center px-3 py-1.5 transition-all hover:border-[var(--studio-border-hover)]">
-        <Search className="w-4 h-4 text-[#9AA1AD] mr-2 shrink-0" />
-        <button
-          onClick={onOpenCommandPalette}
-          className="bg-transparent border-none w-full text-left text-[#9AA1AD] hover:text-white text-xs truncate focus:outline-none p-0 cursor-pointer"
-        >
-          Type a command or search...
-        </button>
-        <div className="flex items-center gap-1 ml-2 opacity-60 shrink-0">
-          <kbd className="font-mono text-[10px] border border-[#292D35] rounded px-1 text-[#9AA1AD]">
-            ⌘
-          </kbd>
-          <kbd className="font-mono text-[10px] border border-[#292D35] rounded px-1 text-[#9AA1AD]">
-            K
-          </kbd>
-        </div>
-      </div>
-
       {/* Center Multi-Page Canvas Viewport */}
       <div
         ref={viewportRef}

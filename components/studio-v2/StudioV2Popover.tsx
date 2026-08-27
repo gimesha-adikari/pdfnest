@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { getStudioV2PopoverPosition, StudioV2PopoverPosition } from "./studioV2PopoverPosition";
 
 export interface StudioV2PopoverProps {
   open: boolean;
@@ -12,29 +13,6 @@ export interface StudioV2PopoverProps {
   children: React.ReactNode;
   className?: string;
   closeOnOutsidePointerDown?: boolean;
-}
-
-interface Position {
-  top: number;
-  left: number;
-}
-
-function getPosition(trigger: HTMLElement, width: number): Position {
-  const rect = trigger.getBoundingClientRect();
-  const gap = 8;
-  const margin = 12;
-  const viewportWidth = typeof window === "undefined" ? 1280 : window.innerWidth;
-  const viewportHeight = typeof window === "undefined" ? 900 : window.innerHeight;
-  const estimatedHeight = 440;
-  const left = Math.min(
-    Math.max(margin, rect.right - width),
-    Math.max(margin, viewportWidth - width - margin),
-  );
-  const below = rect.bottom + gap;
-  const top = below + estimatedHeight <= viewportHeight - margin
-    ? below
-    : Math.max(margin, rect.top - estimatedHeight - gap);
-  return { top, left };
 }
 
 export function StudioV2Popover({
@@ -48,15 +26,27 @@ export function StudioV2Popover({
   closeOnOutsidePointerDown = true,
 }: StudioV2PopoverProps) {
   const popoverRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState<Position>({ top: 56, left: 12 });
+  const [position, setPosition] = useState<StudioV2PopoverPosition | null>(null);
 
   const updatePosition = useCallback(() => {
     const trigger = triggerRef.current;
-    if (trigger) setPosition(getPosition(trigger, width));
+    if (!trigger || typeof window === "undefined") return;
+    const rect = trigger.getBoundingClientRect();
+    const panelHeight = popoverRef.current?.getBoundingClientRect().height ?? 0;
+    setPosition(getStudioV2PopoverPosition({
+      triggerRect: rect,
+      popoverWidth: width,
+      popoverHeight: panelHeight,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+    }));
   }, [triggerRef, width]);
 
   useLayoutEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setPosition(null);
+      return;
+    }
     updatePosition();
   }, [open, updatePosition]);
 
@@ -67,6 +57,7 @@ export function StudioV2Popover({
       const target = event.target as Node;
       if (closeOnOutsidePointerDown && !popoverRef.current?.contains(target) && !triggerRef.current?.contains(target)) {
         onClose();
+        triggerRef.current?.focus();
       }
     };
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -81,6 +72,10 @@ export function StudioV2Popover({
     document.addEventListener("keydown", handleKeyDown);
     window.addEventListener("resize", updatePosition);
     window.addEventListener("scroll", updatePosition, true);
+    const resizeObserver = typeof ResizeObserver === "undefined" || !popoverRef.current
+      ? null
+      : new ResizeObserver(updatePosition);
+    resizeObserver?.observe(popoverRef.current as HTMLDivElement);
 
     const focusTarget = popoverRef.current?.querySelector<HTMLElement>(
       "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
@@ -92,6 +87,7 @@ export function StudioV2Popover({
       document.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
+      resizeObserver?.disconnect();
     };
   }, [open, onClose, triggerRef, updatePosition, closeOnOutsidePointerDown]);
 
@@ -102,7 +98,13 @@ export function StudioV2Popover({
       ref={popoverRef}
       role="dialog"
       aria-label={label}
-      style={{ top: position.top, left: position.left, width }}
+      style={{
+        position: "fixed",
+        top: position?.top ?? 0,
+        left: position?.left ?? 0,
+        width: position?.width ?? width,
+        visibility: position ? "visible" : "hidden",
+      }}
       className={`fixed z-[70] max-h-[calc(100vh-24px)] overflow-y-auto rounded-lg border border-[var(--studio-border-active)] bg-[var(--studio-surface)] p-3 text-[var(--studio-text)] shadow-2xl outline-none ${className}`}
     >
       {children}

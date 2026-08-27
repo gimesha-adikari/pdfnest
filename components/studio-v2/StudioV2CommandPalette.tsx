@@ -49,6 +49,7 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   const commands: CommandItem[] = [
     {
@@ -132,9 +133,19 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      setQuery("");
-      setSelectedIndex(0);
-      setTimeout(() => inputRef.current?.focus(), 50);
+      previousFocusRef.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      const openTimer = window.setTimeout(() => {
+        setQuery("");
+        setSelectedIndex(0);
+        inputRef.current?.focus();
+      }, 0);
+
+      return () => {
+        window.clearTimeout(openTimer);
+        previousFocusRef.current?.focus();
+        previousFocusRef.current = null;
+      };
     }
   }, [isOpen]);
 

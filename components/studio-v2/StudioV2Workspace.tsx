@@ -25,7 +25,6 @@ interface StudioV2WorkspaceProps {
   onZoomOut: () => void;
   onFitToScreen: () => void;
   onTogglePan: () => void;
-  onOpenCommandPalette: () => void;
   onCheckoutVersion?: (versionId: string) => void;
   metadata?: Record<string, string> | null;
   onUpdateMetadata?: (metadata: StudioMetadataParameters) => void | Promise<void>;
@@ -85,6 +84,9 @@ interface StudioV2WorkspaceProps {
   markupCanRedo?: boolean;
   onMarkupUndo?: () => void;
   onMarkupRedo?: () => void;
+  onTrash?: () => void;
+  onHelp?: () => void;
+  isSessionActionDisabled?: boolean;
 }
 
 export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
@@ -105,7 +107,6 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
   onZoomOut,
   onFitToScreen,
   onTogglePan,
-  onOpenCommandPalette,
   onCheckoutVersion,
   metadata,
   onUpdateMetadata,
@@ -165,6 +166,9 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
   markupCanRedo,
   onMarkupUndo,
   onMarkupRedo,
+  onTrash,
+  onHelp,
+  isSessionActionDisabled,
 }) => {
   return (
     <div className="studio-v2-theme flex h-screen w-screen overflow-hidden bg-[#0B0C0F]">
@@ -176,13 +180,15 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
           onSelectTool={onSelectTool}
           onAddNewPage={onAddNewPage}
           onEnterEdit={onEnterEdit}
+          onTrash={onTrash}
+          onHelp={onHelp}
+          isSessionActionDisabled={isSessionActionDisabled}
         />
       </div>
 
       {/* Central Fluid Canvas Workspace */}
       <main className="flex-1 md:ml-[260px] md:mr-[300px] mt-[48px] mb-[56px] md:mb-0 h-[calc(100vh-48px-56px)] md:h-[calc(100vh-48px)] relative flex bg-[#0B0C0F] overflow-hidden">
         <StudioV2Canvas
-          document={document}
           sessionId={sessionId}
           versionId={versionId}
           vdm={vdm}
@@ -194,7 +200,6 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
           onZoomOut={onZoomOut}
           onFitToScreen={onFitToScreen}
           onTogglePan={onTogglePan}
-          onOpenCommandPalette={onOpenCommandPalette}
           markupAction={activeTool === "annotate" ? markupAction : null}
           markupColor={activeTool === "annotate" ? markupColor : undefined}
           markupBoxes={markupBoxes}
@@ -208,10 +213,10 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
           cropDraft={cropDraft}
           onCropDraftChange={onCropDraftChange}
           selectedOverlayId={selectedOverlayId}
-          overlayDraft={overlayDraft}
-          onSelectOverlay={onSelectOverlay}
-          onOverlayDraftChange={onOverlayDraftChange}
-          onOverlayCommit={onOverlayCommit}
+          overlayDraft={activeTool === "edit" || activeTool === "layers" ? overlayDraft : null}
+          onSelectOverlay={activeTool === "edit" || activeTool === "layers" ? onSelectOverlay : undefined}
+          onOverlayDraftChange={activeTool === "edit" || activeTool === "layers" ? onOverlayDraftChange : undefined}
+          onOverlayCommit={activeTool === "edit" || activeTool === "layers" ? onOverlayCommit : undefined}
         />
       </main>
 

@@ -153,6 +153,10 @@ export interface StudioSessionResponse {
   vdm: StudioVDMDTO;
 }
 
+export interface DeleteStudioSessionResponse {
+  deleted: boolean;
+}
+
 export type StudioMarkupAction = "highlight" | "underline" | "strikeout";
 export type StudioMarkupOperation = `markup_${StudioMarkupAction}`;
 export type StudioMarkupMode = "manual" | "smart" | "ocr";
@@ -575,6 +579,15 @@ export const studioV2Api = {
       const res = await studioV2Client.get<StudioSessionResponse>(
         `/sessions/${sessionId}`
       );
+      return res.data;
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  async deleteSession(sessionId: string): Promise<DeleteStudioSessionResponse> {
+    try {
+      const res = await studioV2Client.delete<DeleteStudioSessionResponse>(`/sessions/${sessionId}`);
       return res.data;
     } catch (err) {
       return handleAxiosError(err);

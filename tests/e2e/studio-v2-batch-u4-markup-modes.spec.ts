@@ -138,6 +138,8 @@ test.describe('Studio V2 Batch U4 markup modes', () => {
     await expect(page.getByTestId('studio-markup-region-1')).toHaveCount(0);
     await page.getByTestId('studio-markup-undo').click();
     await expect(page.getByTestId('studio-markup-region-1')).toBeVisible();
+    await page.getByTestId('studio-markup-redo').click();
+    await expect(page.getByTestId('studio-markup-region-1')).toHaveCount(0);
     assertNoLegacyNetwork();
   });
 

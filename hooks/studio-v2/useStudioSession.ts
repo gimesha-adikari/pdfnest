@@ -15,6 +15,7 @@ import {
   StudioMaterializationRequest,
   StudioMaterializationResponse,
 } from "@/lib/studio-v2/api";
+import { StudioV2SubmissionGuard } from "@/components/studio-v2/studioV2SubmissionGuard";
 
 export type SyncStatus = "loading" | "saved" | "saving" | "error";
 export type HistoryStatus = "idle" | "loading" | "ready" | "error";
@@ -58,6 +59,9 @@ export function useStudioSession(initialSessionId?: string | null) {
 
   const isMountedRef = useRef<boolean>(true);
   const currentRequestIdRef = useRef<number>(0);
+  // Version mutations share one authoritative base version. This synchronous
+  // boundary closes the same-tick race before syncStatus can rerender.
+  const versionMutationGuardRef = useRef(new StudioV2SubmissionGuard());
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -216,8 +220,35 @@ export function useStudioSession(initialSessionId?: string | null) {
     }
   }, []);
 
+  const discardSession = useCallback(async () => {
+    if (!session) return false;
+    const sessionId = session.id;
+    await studioV2Api.deleteSession(sessionId);
+    if (isMountedRef.current) {
+      currentRequestIdRef.current += 1;
+      setSession(null);
+      setDocument(null);
+      setActiveVersion(null);
+      setVdm(null);
+      setHistory([]);
+      setOperations([]);
+      setHistoryStatus("idle");
+      setSyncStatus("saved");
+      setError(null);
+      setLifecycle("entry");
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(`studio-v2-markup-job:${sessionId}`);
+        const url = new URL(window.location.href);
+        url.searchParams.delete("session_id");
+        window.history.replaceState(null, "", url.toString());
+      }
+    }
+    return true;
+  }, [session]);
+
   const undo = useCallback(async () => {
     if (!session || !activeVersion?.parent_version_id || syncStatus === "saving") return;
+    if (!versionMutationGuardRef.current.acquire("version-mutation")) return;
     setSyncStatus("saving");
     setError(null);
     try {
@@ -233,11 +264,14 @@ export function useStudioSession(initialSessionId?: string | null) {
         setError(err instanceof Error ? err.message : "Undo failed");
         setSyncStatus("error");
       }
+    } finally {
+      versionMutationGuardRef.current.release("version-mutation");
     }
   }, [session, activeVersion, syncStatus, refreshHistory]);
 
   const redo = useCallback(async () => {
     if (!session || !activeVersion?.preferred_child_id || syncStatus === "saving") return;
+    if (!versionMutationGuardRef.current.acquire("version-mutation")) return;
     setSyncStatus("saving");
     setError(null);
     try {
@@ -253,12 +287,15 @@ export function useStudioSession(initialSessionId?: string | null) {
         setError(err instanceof Error ? err.message : "Redo failed");
         setSyncStatus("error");
       }
+    } finally {
+      versionMutationGuardRef.current.release("version-mutation");
     }
   }, [session, activeVersion, syncStatus, refreshHistory]);
 
   const checkout = useCallback(
     async (versionId: string) => {
       if (!session || syncStatus === "saving") return;
+      if (!versionMutationGuardRef.current.acquire("version-mutation")) return;
       setSyncStatus("saving");
       setError(null);
       try {
@@ -274,6 +311,8 @@ export function useStudioSession(initialSessionId?: string | null) {
           setError(err instanceof Error ? err.message : "Version checkout failed");
           setSyncStatus("error");
         }
+      } finally {
+        versionMutationGuardRef.current.release("version-mutation");
       }
     },
     [session, syncStatus, refreshHistory]
@@ -282,6 +321,7 @@ export function useStudioSession(initialSessionId?: string | null) {
   const executeCommand = useCallback(
     async (command: StudioCommand): Promise<ApplyOperationResponse | null> => {
       if (!session || !activeVersion || syncStatus === "saving") return null;
+      if (!versionMutationGuardRef.current.acquire("version-mutation")) return null;
       setSyncStatus("saving");
       setError(null);
       try {
@@ -304,6 +344,8 @@ export function useStudioSession(initialSessionId?: string | null) {
           setSyncStatus("error");
         }
         throw err;
+      } finally {
+        versionMutationGuardRef.current.release("version-mutation");
       }
     },
     [session, activeVersion, syncStatus, refreshHistory, loadSession]
@@ -312,6 +354,7 @@ export function useStudioSession(initialSessionId?: string | null) {
   const materialize = useCallback(
     async (request: StudioMaterializationRequest): Promise<StudioMaterializationResponse | null> => {
       if (!session || !activeVersion || syncStatus === "saving") return null;
+      if (!versionMutationGuardRef.current.acquire("version-mutation")) return null;
       setSyncStatus("saving");
       setError(null);
       try {
@@ -329,6 +372,8 @@ export function useStudioSession(initialSessionId?: string | null) {
           setSyncStatus("error");
         }
         throw err;
+      } finally {
+        versionMutationGuardRef.current.release("version-mutation");
       }
     },
     [session, activeVersion, syncStatus, refreshHistory]
@@ -370,6 +415,7 @@ export function useStudioSession(initialSessionId?: string | null) {
     initSession,
     createSessionFromUpload,
     enterStudio,
+    discardSession,
     undo,
     redo,
     checkout,
