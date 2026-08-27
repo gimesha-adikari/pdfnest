@@ -1,5 +1,6 @@
 import { test, expect, Page } from '@playwright/test';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { authenticateProUser } from '../helpers/auth';
 
 async function nativeTextPdf() {
   const pdf = await PDFDocument.create();
@@ -11,6 +12,7 @@ async function nativeTextPdf() {
 }
 
 async function upload(page: Page, buffer: Buffer, name: string) {
+  await authenticateProUser(page);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/studio-v2');
   await expect(page.getByRole('heading', { name: 'Open a PDF in Studio' })).toBeVisible();

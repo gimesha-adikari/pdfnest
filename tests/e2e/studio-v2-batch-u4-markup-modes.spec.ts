@@ -4,6 +4,7 @@ import { execFileSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { authenticateProUser } from '../helpers/auth';
 
 type Action = 'highlight' | 'underline' | 'strikeout';
 
@@ -44,6 +45,7 @@ async function scannedPdf() {
 }
 
 async function upload(page: Page, buffer: Buffer, name: string) {
+  await authenticateProUser(page);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/studio-v2');
   await expect(page.getByRole('heading', { name: 'Open a PDF in Studio' })).toBeVisible();

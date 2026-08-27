@@ -3,6 +3,7 @@ import { PDFDocument } from 'pdf-lib';
 import { execFileSync } from 'child_process';
 import { readFileSync } from 'fs';
 import path from 'path';
+import { authenticateProUser } from '../helpers/auth';
 
 const REPAIR_FIXTURE_PATH = path.resolve(
   __dirname,
@@ -51,6 +52,7 @@ function monitorBrowser(page: Page) {
 }
 
 async function uploadRealPdf(page: Page, fixturePath: string) {
+  await authenticateProUser(page);
   await page.goto('/studio-v2');
   await expect(page.getByRole('heading', { name: 'Open a PDF in Studio' })).toBeVisible();
   const uploadResponse = page.waitForResponse(
@@ -136,7 +138,7 @@ test.describe('Studio V2 Batch 3C2 Repair and Redact', () => {
 
     await page.locator(`[data-page-id="${firstPageID}"]`).click();
     await waitForCommand(page, () => page.getByRole('button', { name: 'Rotate clockwise 90°' }).click());
-    await expect(page.getByTestId('studio-version')).toHaveText('Version 1');
+    await expect(page.getByText('Version 1', { exact: true })).toBeVisible();
 
     const result = await materializeFromUI(page, 'Repair PDF', 'repair');
     expect(result.operation.operation_name).toBe('repair');
@@ -148,19 +150,19 @@ test.describe('Studio V2 Batch 3C2 Repair and Redact', () => {
     expect(result.vdm.pages.every((item: { source_asset_id: string }) => item.source_asset_id === result.asset.id)).toBe(true);
     expect(result.vdm.pages[0].rotation).toBe(0);
     expect(result.vdm.pages[0].dimensions.width).toBeGreaterThan(result.vdm.pages[0].dimensions.height);
-    await expect(page.getByTestId('studio-version')).toHaveText('Version 2');
+    await expect(page.getByText('Version 2', { exact: true })).toBeVisible();
     await expect(page.locator(`[data-page-id="${result.vdm.pages[0].page_id}"]`)).toHaveClass(/ring-2/);
     await expect(page.locator('main img[alt="Page 1"]')).toBeVisible({ timeout: 60_000 });
 
     await undoOrRedo(page, 'undo');
-    await expect(page.getByTestId('studio-version')).toHaveText('Version 1');
+    await expect(page.getByText('Version 1', { exact: true })).toBeVisible();
     const undoPDF = await exportPDF(page);
     const undoDocument = await PDFDocument.load(readFileSync(undoPDF));
     expect(undoDocument.getPageCount()).toBe(10);
     expect(undoDocument.getPages()[0].getRotation().angle).toBe(90);
 
     await undoOrRedo(page, 'redo');
-    await expect(page.getByTestId('studio-version')).toHaveText('Version 2');
+    await expect(page.getByText('Version 2', { exact: true })).toBeVisible();
     const redoPDF = await exportPDF(page);
     const redoDocument = await PDFDocument.load(readFileSync(redoPDF));
     expect(redoDocument.getPageCount()).toBe(10);
@@ -187,13 +189,13 @@ test.describe('Studio V2 Batch 3C2 Repair and Redact', () => {
 
     const result = await materializeFromUI(page, 'Apply permanent redaction', 'redact');
     expect(result.operation.operation_name).toBe('redact');
-    expect(result.operation.parameters).toEqual({ keywords: [REDACT_TARGET], boxes: '[]' });
+    expect(result.operation.parameters).toEqual({ keywords: [REDACT_TARGET], boxes: [] });
     expect(result.version.version_number).toBe(1);
     expect(result.version.is_materialized).toBe(true);
     expect(result.asset.asset_type).toBe('materialized');
     expect(result.vdm.page_count).toBe(payload.vdm.page_count);
     expect(result.vdm.pages.every((item: { source_asset_id: string }) => item.source_asset_id === result.asset.id)).toBe(true);
-    await expect(page.getByTestId('studio-version')).toHaveText('Version 1');
+    await expect(page.getByText('Version 1', { exact: true })).toBeVisible();
     await expect(page.locator(`[data-page-id="${result.vdm.pages[0].page_id}"]`)).toHaveClass(/ring-2/);
     await expect(page.locator('main img[alt="Page 1"]')).toBeVisible({ timeout: 60_000 });
 
@@ -201,12 +203,12 @@ test.describe('Studio V2 Batch 3C2 Repair and Redact', () => {
     expect(extractText(redactedPDF)).not.toContain(REDACT_TARGET);
 
     await undoOrRedo(page, 'undo');
-    await expect(page.getByTestId('studio-version')).toHaveText('Version 0');
+    await expect(page.getByText('Version 0', { exact: true })).toBeVisible();
     const undoPDF = await exportPDF(page);
     expect(extractText(undoPDF)).toContain(REDACT_TARGET);
 
     await undoOrRedo(page, 'redo');
-    await expect(page.getByTestId('studio-version')).toHaveText('Version 1');
+    await expect(page.getByText('Version 1', { exact: true })).toBeVisible();
     const redoPDF = await exportPDF(page);
     expect(extractText(redoPDF)).not.toContain(REDACT_TARGET);
     expect(materializationRequests).toBe(1);

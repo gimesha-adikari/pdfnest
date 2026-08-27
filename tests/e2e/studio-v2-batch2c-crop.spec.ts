@@ -1,5 +1,6 @@
 import { test, expect, Page } from '@playwright/test';
 import path from 'path';
+import { authenticateProUser } from '../helpers/auth';
 
 const FIXTURE_PATH = path.resolve(
   __dirname,
@@ -35,6 +36,7 @@ function monitorBrowser(page: Page) {
 }
 
 async function uploadRealPdf(page: Page) {
+  await authenticateProUser(page);
   await page.goto('/studio-v2');
   await expect(page.getByRole('heading', { name: 'Open a PDF in Studio' })).toBeVisible();
   const uploadResponse = page.waitForResponse(
@@ -99,7 +101,7 @@ test.describe('Studio V2 Batch 2C crop', () => {
     const result = await waitForCommand(page, () => page.getByTestId('studio-apply-crop').click());
     expect(result.operation.operation_name).toBe('crop_page');
     expect(result.vdm.pages[0].crop_box).toEqual([100, 100, 450, 700]);
-    await expect(page.getByTestId('studio-version')).toHaveText('Version 1');
+    await expect(page.getByText('Version 1', { exact: true })).toBeVisible();
     await expect(tile).toHaveClass(/ring-2/);
     await expect(tile).toHaveAttribute('data-page-visible-width-pt', '350');
     await expect(tile).toHaveAttribute('data-page-visible-height-pt', '600');
@@ -114,13 +116,13 @@ test.describe('Studio V2 Batch 2C crop', () => {
     }), { timeout: 30_000 }).toBe(true);
 
     await waitForUndoRedo(page, 'undo');
-    await expect(page.getByTestId('studio-version')).toHaveText('Version 0');
+    await expect(page.getByText('Version 0', { exact: true })).toBeVisible();
     await expect(tile).toHaveAttribute('data-page-visible-width-pt', '595.28');
     await expect(tile).toHaveAttribute('data-page-visible-height-pt', '841.89');
     await expect(page.locator(`main [data-page-id="${pageId}"] img`)).toBeVisible({ timeout: 30_000 });
 
     await waitForUndoRedo(page, 'redo');
-    await expect(page.getByTestId('studio-version')).toHaveText('Version 1');
+    await expect(page.getByText('Version 1', { exact: true })).toBeVisible();
     await expect(tile).toHaveAttribute('data-page-visible-width-pt', '350');
     await expect(tile).toHaveAttribute('data-page-visible-height-pt', '600');
     await expect(page.locator(`main [data-page-id="${pageId}"] img`)).toBeVisible({ timeout: 30_000 });

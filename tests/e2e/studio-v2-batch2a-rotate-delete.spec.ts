@@ -1,5 +1,6 @@
 import { test, expect, Page } from '@playwright/test';
 import path from 'path';
+import { authenticateProUser } from '../helpers/auth';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
 const FIXTURE_PATH = path.resolve(
@@ -8,6 +9,7 @@ const FIXTURE_PATH = path.resolve(
 );
 
 async function uploadRealPdf(page: Page, fixturePath = FIXTURE_PATH) {
+  await authenticateProUser(page);
   await page.goto('/studio-v2');
   await expect(page.getByRole('heading', { name: 'Open a PDF in Studio' })).toBeVisible();
   const uploadResponse = page.waitForResponse(
@@ -75,6 +77,7 @@ test.describe('Studio V2 Batch 2A user-facing page controls', () => {
     expect(payload.vdm.page_count).toBe(10);
     const firstPageId = payload.vdm.pages[0].page_id as string;
 
+    await page.getByRole('button', { name: 'Organize', exact: true }).click();
     await page.locator(`[data-page-id="${firstPageId}"]`).click();
     const rotateButton = page.getByRole('button', { name: 'Rotate clockwise 90°' });
     await expect(rotateButton).toBeEnabled();
@@ -88,19 +91,19 @@ test.describe('Studio V2 Batch 2A user-facing page controls', () => {
     expect(command.status()).toBe(200);
     const commandPayload = await command.json();
     expect(commandPayload.vdm.pages[0].rotation).toBe(90);
-    await expect(page.getByTestId('studio-version')).toHaveText('Version 1');
+    await expect(page.getByText('Version 1', { exact: true })).toBeVisible();
     await waitForTileShape(page, `main [data-page-id="${firstPageId}"] img`, true);
 
     const undo = page.getByRole('button', { name: 'Undo' });
     await expect(undo).toBeEnabled();
     await undo.click();
-    await expect(page.getByTestId('studio-version')).toHaveText('Version 0');
+    await expect(page.getByText('Version 0', { exact: true })).toBeVisible();
     await waitForTileShape(page, `main [data-page-id="${firstPageId}"] img`, false);
 
     const redo = page.getByRole('button', { name: 'Redo' });
     await expect(redo).toBeEnabled();
     await redo.click();
-    await expect(page.getByTestId('studio-version')).toHaveText('Version 1');
+    await expect(page.getByText('Version 1', { exact: true })).toBeVisible();
     await waitForTileShape(page, `main [data-page-id="${firstPageId}"] img`, true);
 
     const afterMetrics = await page.request.get(`${BACKEND_URL}/studio/v1/metrics`).then((response) => response.json());
@@ -117,6 +120,7 @@ test.describe('Studio V2 Batch 2A user-facing page controls', () => {
     const payload = await uploadRealPdf(page);
     const deletedPageId = payload.vdm.pages[1].page_id as string;
     const nextPageId = payload.vdm.pages[2].page_id as string;
+    await page.getByRole('button', { name: 'Organize', exact: true }).click();
     await page.locator(`[data-page-id="${deletedPageId}"]`).click();
 
     const deleteButton = page.getByRole('button', { name: 'Delete selected page' });
@@ -130,16 +134,16 @@ test.describe('Studio V2 Batch 2A user-facing page controls', () => {
     expect(command.status()).toBe(200);
     const commandPayload = await command.json();
     expect(commandPayload.vdm.page_count).toBe(9);
-    await expect(page.getByTestId('studio-version')).toHaveText('Version 1');
+    await expect(page.getByText('Version 1', { exact: true })).toBeVisible();
     await expect(page.locator('main [data-page-id]')).toHaveCount(9);
     await expect(page.locator(`main [data-page-id="${deletedPageId}"]`)).toHaveCount(0);
     await expect(page.locator(`main [data-page-id="${nextPageId}"]`)).toHaveClass(/ring-2/);
 
     await page.getByRole('button', { name: 'Undo' }).click();
-    await expect(page.getByTestId('studio-page-count')).toHaveText('10');
+    await expect(page.locator('main [data-page-id]')).toHaveCount(10);
     await expect(page.locator(`main [data-page-id="${deletedPageId}"]`)).toHaveCount(1);
     await page.getByRole('button', { name: 'Redo' }).click();
-    await expect(page.getByTestId('studio-page-count')).toHaveText('9');
+    await expect(page.locator('main [data-page-id]')).toHaveCount(9);
 
     // The backend rejects deleting the final page; the UI surfaces that 400 without local mutation.
     const onePageFixture = path.resolve(
@@ -148,6 +152,7 @@ test.describe('Studio V2 Batch 2A user-facing page controls', () => {
     );
     const onePage = await uploadRealPdf(page, onePageFixture);
     const onePageId = onePage.vdm.pages[0].page_id as string;
+    await page.getByRole('button', { name: 'Organize', exact: true }).click();
     await page.locator(`[data-page-id="${onePageId}"]`).click();
     const rejectedCommand = page.waitForResponse(
       (response) => response.url().includes('/commands') && response.request().method() === 'POST',
@@ -156,7 +161,7 @@ test.describe('Studio V2 Batch 2A user-facing page controls', () => {
     await page.getByRole('button', { name: 'Delete selected page' }).click();
     expect((await rejectedCommand).status()).toBe(400);
     await expect(page.locator('div[role="alert"]').filter({ hasText: /delete|page/i })).toContainText(/delete|page/i);
-    await expect(page.getByTestId('studio-page-count')).toHaveText('1');
+    await expect(page.locator('main [data-page-id]')).toHaveCount(1);
     assertNoErrors(1);
   });
 });

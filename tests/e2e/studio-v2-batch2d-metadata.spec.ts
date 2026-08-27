@@ -1,5 +1,6 @@
 import { test, expect, Page } from '@playwright/test';
 import path from 'path';
+import { authenticateProUser } from '../helpers/auth';
 
 const FIXTURE_PATH = path.resolve(
   __dirname,
@@ -35,6 +36,7 @@ function monitorBrowser(page: Page) {
 }
 
 async function uploadRealPdf(page: Page) {
+  await authenticateProUser(page);
   await page.goto('/studio-v2');
   await expect(page.getByRole('heading', { name: 'Open a PDF in Studio' })).toBeVisible();
   const uploadResponse = page.waitForResponse(
@@ -91,23 +93,23 @@ test.describe('Studio V2 Batch 2D metadata', () => {
       Subject: 'Metadata state contract',
       Keywords: 'studio, metadata, v2',
     });
-    await expect(page.getByTestId('studio-version')).toHaveText('Version 1');
+    await expect(page.getByText('Version 1', { exact: true })).toBeVisible();
     await expect(page.getByTestId('studio-metadata-title')).toHaveValue('Batch 2D title');
 
     await page.reload();
-    await expect(page.getByTestId('studio-version')).toHaveText('Version 1');
+    await expect(page.getByText('Version 1', { exact: true })).toBeVisible();
     await expect(page.getByTestId('studio-metadata-title')).toHaveValue('Batch 2D title');
     await expect(page.getByTestId('studio-metadata-author')).toHaveValue('Studio QA');
     await expect(page.getByTestId('studio-metadata-subject')).toHaveValue('Metadata state contract');
     await expect(page.getByTestId('studio-metadata-keywords')).toHaveValue('studio, metadata, v2');
 
     await waitForUndoRedo(page, 'undo');
-    await expect(page.getByTestId('studio-version')).toHaveText('Version 0');
+    await expect(page.getByText('Version 0', { exact: true })).toBeVisible();
     await expect(page.getByTestId('studio-metadata-title')).toHaveValue('');
     await expect(page.getByTestId('studio-metadata-author')).toHaveValue('');
 
     await waitForUndoRedo(page, 'redo');
-    await expect(page.getByTestId('studio-version')).toHaveText('Version 1');
+    await expect(page.getByText('Version 1', { exact: true })).toBeVisible();
     await expect(page.getByTestId('studio-metadata-title')).toHaveValue('Batch 2D title');
     await expect(page.getByTestId('studio-metadata-keywords')).toHaveValue('studio, metadata, v2');
     assertNoBrowserIssues();

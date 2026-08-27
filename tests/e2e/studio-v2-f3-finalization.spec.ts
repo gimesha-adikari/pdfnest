@@ -19,9 +19,14 @@ async function openAuthenticatedStudio(page: Page) {
 
 test.describe('Studio V2 F3 finalization', () => {
   test('redirects unauthenticated visitors before mounting Studio', async ({ page }) => {
+    const studioRequests: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('/studio/v1/')) studioRequests.push(`${request.method()} ${request.url()}`);
+    });
     await page.goto('/studio-v2');
     await expect(page).toHaveURL(/\/login\?callbackUrl=%2Fstudio-v2/);
     await expect(page.getByText('Checking Studio access…')).not.toBeVisible();
+    expect(studioRequests).toEqual([]);
   });
 
   test('keeps the inspector category-scoped and exposes one accessible search', async ({ page }) => {
@@ -88,5 +93,18 @@ test.describe('Studio V2 F3 finalization', () => {
     await trashDialog.getByRole('button', { name: 'Discard session' }).click();
     await expect(page).toHaveURL(/\/$/);
     expect(deleteAttempts).toBe(2);
+  });
+
+  test('keeps Home cancellable and confirms navigation only after explicit approval', async ({ page }) => {
+    await openAuthenticatedStudio(page);
+
+    await page.getByRole('button', { name: 'Go to Platen home' }).click();
+    const leaveDialog = page.getByRole('dialog', { name: 'Leave Studio?' });
+    await expect(leaveDialog).toBeVisible();
+    await leaveDialog.getByRole('button', { name: 'Stay' }).click();
+    await expect(leaveDialog).not.toBeVisible();
+    await page.getByRole('button', { name: 'Go to Platen home' }).click();
+    await leaveDialog.getByRole('button', { name: 'Go to home' }).click();
+    await expect(page).toHaveURL(/\/$/);
   });
 });

@@ -476,7 +476,7 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
         <div className="w-px h-4 bg-[var(--studio-border)] mx-1" />
 
         {/* Authenticated Studio has no sign-in affordance. */}
-        <div className="hidden lg:flex items-center gap-1 rounded-md border border-[var(--studio-border)] bg-[var(--studio-surface)] p-1" aria-label="Optimization actions">
+        <div className="hidden 2xl:flex items-center gap-1 rounded-md border border-[var(--studio-border)] bg-[var(--studio-surface)] p-1" aria-label="Optimization actions">
           <button
             ref={compressTriggerRef}
             type="button"
@@ -501,7 +501,7 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
           <button ref={watermarkTriggerRef} type="button" onClick={() => { setWatermarkError(null); togglePopover("watermark"); }} disabled={materializeDisabled || isMaterializing} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50" aria-label="Watermark PDF" aria-expanded={activeToolbarPopover === "watermark"} aria-haspopup="dialog" title="Add a text or image watermark to all current pages">Watermark</button>
           <button ref={pageNumbersTriggerRef} type="button" onClick={() => { setPageNumbersError(null); togglePopover("pageNumbers"); }} disabled={materializeDisabled || isMaterializing} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50" aria-label="Page Numbers" aria-expanded={activeToolbarPopover === "pageNumbers"} aria-haspopup="dialog" title="Add or remove sequential page numbers" data-testid="studio-page-numbers-button">Page Numbers</button>
         </div>
-        <button ref={moreTriggerRef} type="button" onClick={() => togglePopover("more")} className="studio-v2-focus studio-v2-toolbar-control flex items-center gap-1 rounded border px-2.5 py-1.5 text-xs lg:hidden" aria-label="More document tools" aria-expanded={activeToolbarPopover === "more"} aria-haspopup="dialog"><MoreHorizontal className="w-3.5 h-3.5" /> More</button>
+        <button ref={moreTriggerRef} type="button" onClick={() => togglePopover("more")} className="studio-v2-focus studio-v2-toolbar-control flex items-center gap-1 rounded border px-2.5 py-1.5 text-xs 2xl:hidden" aria-label="More document tools" aria-expanded={activeToolbarPopover === "more"} aria-haspopup="dialog"><MoreHorizontal className="w-3.5 h-3.5" /> More</button>
         <button
           onClick={() => void submissionGuard.run("export", async () => { await onExport?.(); })}
           disabled={exportDisabled || isExporting || submissionGuard.isPending("export")}
@@ -533,6 +533,7 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
       <StudioV2Popover open={activeToolbarPopover === "more"} onClose={() => setActiveToolbarPopover(null)} triggerRef={moreTriggerRef} label="More document tools" width={240}>
         <div className="mb-2 text-xs font-semibold">Document tools</div>
         <div className="grid gap-1">
+          <button type="button" onClick={() => openPopoverFromMore("compress")} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs">Compress</button>
           <button type="button" onClick={() => { openPopoverFromMore("redact"); setRedactError(null); }} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs">Redact</button>
           <button type="button" onClick={() => { openPopoverFromMore("mergeSplit"); setMergeUploadError(null); setSplitError(null); }} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs">Merge / Split</button>
           <button type="button" onClick={() => { openPopoverFromMore("watermark"); setWatermarkError(null); }} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs">Watermark</button>

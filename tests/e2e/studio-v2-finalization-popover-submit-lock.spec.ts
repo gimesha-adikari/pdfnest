@@ -1,9 +1,11 @@
 import { test, expect, Page } from '@playwright/test';
 import path from 'path';
+import { authenticateProUser } from '../helpers/auth';
 
 const FIXTURE_PATH = path.resolve(__dirname, '../../../benchmarks/rendering/corpus/standard_a4_10p.pdf');
 
 async function uploadStudioDocument(page: Page) {
+  await authenticateProUser(page);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/studio-v2');
   await expect(page.getByRole('heading', { name: 'Open a PDF in Studio' })).toBeVisible();
@@ -11,6 +13,7 @@ async function uploadStudioDocument(page: Page) {
   await page.locator('input[type="file"]').first().setInputFiles(FIXTURE_PATH);
   expect((await upload).status()).toBe(201);
   await expect(page.locator('main [data-page-id]').first()).toBeVisible({ timeout: 60_000 });
+  await page.getByRole('button', { name: 'Pages', exact: true }).click();
   await expect(page.getByTestId('studio-version')).toHaveText('Version 0');
 }
 
@@ -37,6 +40,16 @@ async function dispatchTwoClicksSynchronously(locator: ReturnType<Page['getByRol
     (element as HTMLButtonElement).click();
     (element as HTMLButtonElement).click();
   });
+}
+
+async function openCompressPanel(page: Page) {
+  const direct = page.getByRole('button', { name: 'Compress PDF' });
+  if (await direct.isVisible()) {
+    await direct.click();
+    return;
+  }
+  await page.getByRole('button', { name: 'More document tools' }).click();
+  await page.getByRole('button', { name: 'Compress', exact: true }).click();
 }
 
 test.describe('Studio V2 F1 finalization hotfix', () => {
@@ -115,7 +128,7 @@ test.describe('Studio V2 F1 finalization hotfix', () => {
 
   test('counts exactly one materialization request for synchronous duplicate Compress activation', async ({ page }) => {
     await uploadStudioDocument(page);
-    await page.getByRole('button', { name: 'Compress PDF' }).click();
+    await openCompressPanel(page);
     const apply = page.getByRole('button', { name: /Apply Compress|Retry Compress/ });
     let requests = 0;
     page.on('request', (request) => {
@@ -127,8 +140,9 @@ test.describe('Studio V2 F1 finalization hotfix', () => {
     expect(requests).toBe(1);
   });
 
-test('counts exactly one command request for rapid keyboard Rotate activation', async ({ page }) => {
+  test('counts exactly one command request for rapid keyboard Rotate activation', async ({ page }) => {
     await uploadStudioDocument(page);
+    await page.getByRole('button', { name: 'Organize', exact: true }).click();
     const pageTile = page.locator('main [data-page-id]').first();
     await pageTile.click();
     const rotate = page.getByRole('button', { name: 'Rotate clockwise 90°' });
@@ -174,7 +188,7 @@ test('counts exactly one command request for rapid keyboard Rotate activation', 
 
   test('releases the materialization guard after failure and permits one intentional retry', async ({ page }) => {
     await uploadStudioDocument(page);
-    await page.getByRole('button', { name: 'Compress PDF' }).click();
+    await openCompressPanel(page);
     const apply = page.getByRole('button', { name: /Apply Compress|Retry Compress/ });
     let requests = 0;
     page.on('request', (request) => {

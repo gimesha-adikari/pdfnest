@@ -4,6 +4,7 @@ import { execFileSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { authenticateProUser } from '../helpers/auth';
 
 async function createBlankPDF(pageCount = 1) {
   const pdf = await PDFDocument.create();
@@ -17,6 +18,7 @@ const signaturePNG = Buffer.from(
 );
 
 async function uploadBlank(page: Page, pageCount = 1) {
+  await authenticateProUser(page);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/studio-v2');
   await expect(page.getByRole('heading', { name: 'Open a PDF in Studio' })).toBeVisible();
