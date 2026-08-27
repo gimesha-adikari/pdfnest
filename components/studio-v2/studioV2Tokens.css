@@ -1,0 +1,43 @@
+:root {
+  --studio-surface: #14171c;
+  --studio-surface-raised: #181b21;
+  --studio-border: #303640;
+  --studio-border-hover: #4a5260;
+  --studio-border-active: #81769d;
+  --studio-focus: #b6a5e6;
+  --studio-accent: #9f91c2;
+  --studio-cta: #705ca8;
+  --studio-cta-hover: #806db8;
+  --studio-text: #f5f7fa;
+  --studio-muted: #9aa1ad;
+}
+
+.studio-v2-focus:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
+}
+
+.studio-v2-toolbar-control {
+  border-color: var(--studio-border);
+  color: var(--studio-muted);
+}
+
+.studio-v2-toolbar-control:hover:not(:disabled) {
+  border-color: var(--studio-border-hover);
+  color: var(--studio-text);
+  background: var(--studio-surface-raised);
+}
+
+.studio-v2-toolbar-control[aria-expanded="true"] {
+  border-color: var(--studio-border-active);
+  color: var(--studio-text);
+  background: color-mix(in srgb, var(--studio-accent) 16%, var(--studio-surface));
+}
+
+.studio-v2-primary {
+  background: var(--studio-cta);
+}
+
+.studio-v2-primary:hover:not(:disabled) {
+  background: var(--studio-cta-hover);
+}
