@@ -65,7 +65,16 @@ assert.ok(offlineHrefs.has("/strikeout-pdf"), "Strikeout PDF must be offline-cap
 assert.ok(offlineHrefs.has("/code-to-pdf"), "Code to PDF must be offline-capable");
 assert.ok(offlineHrefs.has("/markdown-to-pdf"), "Markdown to PDF must be offline-capable");
 assert.ok(offlineHrefs.has("/edit-metadata"), "Edit Metadata must be offline-capable (with fallback)");
-assert.ok(offlineHrefs.has("/studio"), "Studio must be offline-capable (hybrid workspace)");
+assert.ok(offlineHrefs.has("/studio-v2"), "Studio must be offline-capable (hybrid workspace)");
+
+// Legacy CMS rows may still carry the old public page route; normalize them
+// to the current Studio product entry without altering the legacy page.
+const legacyStudio = normalizeTool({ title: "PDF Studio", href: "/studio", category: "studio" });
+assert.ok(legacyStudio, "Legacy CMS Studio row must normalize");
+assert.strictEqual(legacyStudio.href, "/studio-v2", "CMS Studio rows must target Studio V2");
+const legacyRelated = normalizeTool({ title: "PDF Editor", href: "/edit-pdf", related: ["/studio"] });
+assert.ok(legacyRelated, "Tool with legacy Studio recommendation must normalize");
+assert.deepStrictEqual(legacyRelated.related, ["/studio-v2"], "CMS Studio recommendations must target Studio V2");
 
 // Verify backend-required tools are NOT in offline set
 assert.ok(!offlineHrefs.has("/edit-pdf"), "Edit PDF must NOT be offline-capable");

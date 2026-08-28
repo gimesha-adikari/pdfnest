@@ -623,7 +623,7 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
     {
         title: "PDF Studio",
         description: "Edit, chain operations, process, reorganize layout topologies, and configure your PDF in one tool.",
-        href: "/studio",
+        href: "/studio-v2",
         category: "studio",
         capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false, isHybridWorkspace: true },
         clientCapable: true,
@@ -907,7 +907,7 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
             "patch structural layer inline"
         ],
         related: [
-            "/studio",
+            "/studio-v2",
             "/sign-pdf"
         ],
         accept: ".pdf",

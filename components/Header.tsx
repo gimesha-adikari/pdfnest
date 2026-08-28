@@ -537,7 +537,7 @@ export default function Header() {
                                             </div>
 
                                             <Link
-                                                href="/studio"
+                                                href="/studio-v2"
                                                 onClick={closeMenu}
                                                 className="
                                                     block

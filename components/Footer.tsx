@@ -227,7 +227,7 @@ export default function Footer() {
 
                         <div className="flex flex-col gap-1.5 text-xs text-[var(--muted)]">
                             <Link
-                                href="/studio"
+                                href="/studio-v2"
                                 className="
                                     flex
                                     items-center

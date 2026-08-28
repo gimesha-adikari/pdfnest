@@ -13,6 +13,13 @@ function parseJsonField<T>(raw: unknown, field: string, toolHref: string): T[] {
     }
 }
 
+function normalizePublicHref(href: string): string {
+    const cleanHref = href.startsWith("/") ? href : `/${href}`;
+    if (cleanHref === "/studio") return "/studio-v2";
+    if (cleanHref.startsWith("/studio?")) return `/studio-v2${cleanHref.slice("/studio".length)}`;
+    return cleanHref;
+}
+
 // Static fallback map indexed by lowercase clean href for runtime capability inheritance
 const staticFallbackMap = new Map<string, ToolItem>();
 for (const item of NAV_TOOLS_FALLBACK) {
@@ -35,30 +42,33 @@ export function normalizeTool(rawTool: any): ToolItem | null {
         return null;
     }
 
-    const cleanHref = href.startsWith("/") ? href : `/${href}`;
-    const staticFallback = staticFallbackMap.get(cleanHref.toLowerCase());
+    // Keep CMS records on the public Studio product pointed at the current UI
+    // generation without changing the legacy /studio page itself.
+    const publicHref = normalizePublicHref(href);
+    const staticFallback = staticFallbackMap.get(publicHref.toLowerCase());
+    const normalizeRelated = (related: string[]): string[] => related.map(normalizePublicHref);
 
     return {
         ID: rawTool.ID || rawTool.id,
         title,
         description,
-        href: cleanHref,
+        href: publicHref,
         category: (category || staticFallback?.category || "organize").toLowerCase(),
         keywords: Array.isArray(rawTool.keywords)
             ? rawTool.keywords
-            : parseJsonField<string>(rawTool.keywordsJson || rawTool.KeywordsJson, "keywordsJson", cleanHref),
+            : parseJsonField<string>(rawTool.keywordsJson || rawTool.KeywordsJson, "keywordsJson", publicHref),
         seoTitle: rawTool.seoTitle || rawTool.SeoTitle || staticFallback?.seoTitle || "",
         seoDescription: rawTool.seoDescription || rawTool.SeoDescription || staticFallback?.seoDescription || "",
         intent: rawTool.intent || rawTool.Intent || staticFallback?.intent || "",
         related: Array.isArray(rawTool.related)
-            ? rawTool.related
-            : parseJsonField<string>(rawTool.relatedJson || rawTool.RelatedJson, "relatedJson", cleanHref),
+            ? normalizeRelated(rawTool.related)
+            : normalizeRelated(parseJsonField<string>(rawTool.relatedJson || rawTool.RelatedJson, "relatedJson", publicHref)),
         faq: Array.isArray(rawTool.faq)
             ? rawTool.faq
-            : parseJsonField<ToolFAQ>(rawTool.faqJson || rawTool.FaqJson, "faqJson", cleanHref),
+            : parseJsonField<ToolFAQ>(rawTool.faqJson || rawTool.FaqJson, "faqJson", publicHref),
         features: Array.isArray(rawTool.features)
             ? rawTool.features
-            : parseJsonField<string>(rawTool.featuresJson || rawTool.FeaturesJson, "featuresJson", cleanHref),
+            : parseJsonField<string>(rawTool.featuresJson || rawTool.FeaturesJson, "featuresJson", publicHref),
         isNew: rawTool.isNew !== undefined ? rawTool.isNew : (rawTool.IsNew ?? staticFallback?.isNew ?? false),
         accept: rawTool.accept || rawTool.Accept || staticFallback?.accept || ".pdf",
         multiple: rawTool.multiple !== undefined ? rawTool.multiple : (rawTool.Multiple ?? staticFallback?.multiple ?? false),

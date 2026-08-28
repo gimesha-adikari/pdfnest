@@ -208,7 +208,7 @@ export default function MobileNav() {
                                 text="Tools Directory"
                                 close={closeSidebar}
                             />
-                            <MobileLink href="/studio" icon={<Sparkles size={16} />} text="PDF Studio" close={closeSidebar} />
+                            <MobileLink href="/studio-v2" icon={<Sparkles size={16} />} text="PDF Studio" close={closeSidebar} />
                             <MobileLink href="/pricing" icon={<Zap size={16} />} text="Pricing" close={closeSidebar} />
                             <MobileLink href="/about" icon={<Info size={16} />} text="About" close={closeSidebar} />
                         </div>

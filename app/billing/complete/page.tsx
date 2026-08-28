@@ -43,7 +43,7 @@ export default function BillingCompletePage() {
         if (!subscription) return;
 
         if (subscription.tier === "plus" || subscription.tier === "pro") {
-            router.replace("/studio");
+            router.replace("/studio-v2");
         }
     }, [subscription, router]);
 
