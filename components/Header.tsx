@@ -551,6 +551,16 @@ export default function Header() {
                                                 PDF Studio →
                                             </Link>
 
+                                            {isLoggedIn && (
+                                                <Link
+                                                    href="/dashboard/studio-sessions"
+                                                    onClick={closeMenu}
+                                                    className="block text-xs font-semibold text-[var(--foreground)] transition-colors hover:text-[var(--accent)]"
+                                                >
+                                                    Saved Studio Sessions →
+                                                </Link>
+                                            )}
+
                                             <Link
                                                 href="/repository-analyzer"
                                                 onClick={closeMenu}

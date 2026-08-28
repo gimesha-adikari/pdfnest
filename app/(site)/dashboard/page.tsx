@@ -6,6 +6,7 @@ import {useAuth} from "@/context/AuthContext";
 import {fetchJson} from "@/lib/api";
 import {ArrowUpRight, CheckCircle2, Coins, History, Loader2, Sparkles, Zap, Settings} from "lucide-react";
 import {notify} from "@/lib/notify";
+import StudioSessions from "@/components/dashboard/StudioSessions";
 
 export default function UserDashboard() {
     const {
@@ -110,6 +111,8 @@ export default function UserDashboard() {
                         Account Settings
                     </Link>
                 </div>
+
+                <StudioSessions compact />
 
                 {/* Main Plan Overview Status Display Card */}
                 <div

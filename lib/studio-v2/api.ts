@@ -13,6 +13,10 @@ const studioV2Client = axios.create({
   },
 });
 
+export function studioV2PageTileURL(sessionId: string, versionId: string, pageId: string): string {
+  return studioV2Client.getUri({ url: `/sessions/${sessionId}/versions/${versionId}/pages/${pageId}/tile`, params: { scale: 0.35 } });
+}
+
 export interface StudioSessionDTO {
   id: string;
   user_id?: string | null;
@@ -21,6 +25,21 @@ export interface StudioSessionDTO {
   created_at: string;
   last_accessed_at: string;
   expires_at: string;
+  title?: string;
+}
+
+export interface StudioSessionSummaryDTO {
+  session: StudioSessionDTO;
+  document: StudioDocumentDTO;
+  active_version: StudioVersionDTO;
+  preview_page_id?: string;
+}
+
+export interface StudioSessionListResponse {
+  sessions: StudioSessionSummaryDTO[];
+  total: number;
+  page: number;
+  page_size: number;
 }
 
 export interface StudioDocumentDTO {
@@ -583,6 +602,22 @@ export const studioV2Api = {
     } catch (err) {
       return handleAxiosError(err);
     }
+  },
+
+  async listSessions(params: { query?: string; sort?: "edited" | "created"; page?: number; pageSize?: number } = {}): Promise<StudioSessionListResponse> {
+    try {
+      const res = await studioV2Client.get<StudioSessionListResponse>("/sessions", {
+        params: { q: params.query || undefined, sort: params.sort || "edited", page: params.page || 1, page_size: params.pageSize || 12 },
+      });
+      return res.data;
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  async renameSession(sessionId: string, title: string): Promise<{ renamed: boolean; title: string }> {
+    try {
+      const res = await studioV2Client.patch<{ renamed: boolean; title: string }>(`/sessions/${sessionId}`, { title });
+      return res.data;
+    } catch (err) { return handleAxiosError(err); }
   },
 
   async deleteSession(sessionId: string): Promise<DeleteStudioSessionResponse> {
