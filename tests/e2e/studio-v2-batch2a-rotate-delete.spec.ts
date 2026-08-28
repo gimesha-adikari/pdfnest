@@ -1,8 +1,8 @@
 import { test, expect, Page } from '@playwright/test';
 import path from 'path';
-import { authenticateProUser } from '../helpers/auth';
+import { authenticateProUser, getE2EApiBaseUrl } from '../helpers/auth';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
+const BACKEND_URL = getE2EApiBaseUrl();
 const FIXTURE_PATH = path.resolve(
   __dirname,
   '../../../benchmarks/rendering/corpus/standard_a4_10p.pdf'

@@ -9,6 +9,21 @@ export interface AuthSessionDetails {
   authMode: 'PRO SUBSCRIBER' | 'ADMIN ELEVATED ACCESS' | 'STANDARD USER';
 }
 
+function trimTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, '');
+}
+
+export function getE2EFrontendBaseUrl(): string {
+  return trimTrailingSlash(process.env.E2E_BASE_URL || 'http://localhost:3000');
+}
+
+export function getE2EApiBaseUrl(): string {
+  const configured = trimTrailingSlash(
+    process.env.E2E_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api'
+  );
+  return configured.endsWith('/api') ? configured : `${configured}/api`;
+}
+
 /**
  * Authenticates the Playwright browser context using dedicated E2E test credentials.
  *
@@ -34,7 +49,8 @@ export async function authenticateProUser(page: Page): Promise<AuthSessionDetail
   }
 
   if (!token && email && password) {
-    const response = await page.request.post('http://localhost:8080/api/auth/login', {
+    const apiBaseUrl = getE2EApiBaseUrl();
+    const response = await page.request.post(`${apiBaseUrl}/auth/login`, {
       data: { email, password },
     });
 
@@ -47,7 +63,7 @@ export async function authenticateProUser(page: Page): Promise<AuthSessionDetail
     if (match) {
       token = match[1];
     } else {
-      const cookies = await page.context().cookies('http://localhost:8080');
+      const cookies = await page.context().cookies(getE2EApiBaseUrl());
       const found = cookies.find(c => c.name === 'auth_token');
       if (found) token = found.value;
     }
@@ -58,27 +74,15 @@ export async function authenticateProUser(page: Page): Promise<AuthSessionDetail
   }
 
   // Set auth_token cookie on browser context across origin domains
+  const frontendBaseUrl = getE2EFrontendBaseUrl();
+  const apiBaseUrl = getE2EApiBaseUrl();
   await page.context().addCookies([
-    {
-      name: 'auth_token',
-      value: token,
-      domain: 'localhost',
-      path: '/',
-    },
-    {
-      name: 'auth_token',
-      value: token,
-      url: 'http://localhost:3000',
-    },
-    {
-      name: 'auth_token',
-      value: token,
-      url: 'http://localhost:8080',
-    },
+    { name: 'auth_token', value: token, url: frontendBaseUrl },
+    { name: 'auth_token', value: token, url: new URL(apiBaseUrl).origin },
   ]);
 
   // Full Authentication & Entitlement Chain Verification
-  const sessionRes = await page.request.get('http://localhost:8080/api/auth/session');
+  const sessionRes = await page.request.get(`${apiBaseUrl}/auth/session`);
   if (!sessionRes.ok()) {
     throw new Error(`[AUTH FATAL] Session verification endpoint returned HTTP ${sessionRes.status()}`);
   }

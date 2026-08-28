@@ -4,7 +4,7 @@ import { execFileSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { authenticateProUser } from '../helpers/auth';
+import { authenticateProUser, getE2EApiBaseUrl } from '../helpers/auth';
 
 async function createBlankPDF(pageCount = 1) {
   const pdf = await PDFDocument.create();
@@ -224,7 +224,7 @@ test.describe('Studio V2 Batch U3B direct Sign and Add Text manipulation', () =>
     await page.getByTestId(`studio-signature-overlay-${second.overlay.id}`).click();
     await expect(page.getByTestId(`studio-interactive-overlay-${second.overlay.id}`)).toHaveClass(/ring-2/);
 
-    const finalVDM = await page.request.get(`http://localhost:8080/api/studio/v1/sessions/${payload.session.id}`).then((response) => response.json());
+    const finalVDM = await page.request.get(`${getE2EApiBaseUrl()}/studio/v1/sessions/${payload.session.id}`).then((response) => response.json());
     const signatures = finalVDM.vdm.pages[0].overlays.filter((candidate: { type: string }) => candidate.type === 'signature');
     expect(signatures.map((candidate: { id: string }) => candidate.id)).toEqual(expect.arrayContaining([first.overlay.id, second.overlay.id]));
 

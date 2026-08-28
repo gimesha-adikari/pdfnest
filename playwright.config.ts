@@ -21,6 +21,9 @@ if (fs.existsSync(dedicatedEnvFile)) {
   }
 }
 
+const managedTarget = Boolean(process.env.E2E_BASE_URL);
+const managedStorageState = process.env.E2E_STORAGE_STATE || undefined;
+
 /**
  * PDFNest End-to-End Testing Configuration
  * See https://playwright.dev/docs/test-configuration.
@@ -41,6 +44,7 @@ export default defineConfig({
   },
   use: {
     baseURL: process.env.E2E_BASE_URL || 'http://localhost:3000',
+    ...(managedStorageState ? { storageState: managedStorageState } : {}),
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -53,10 +57,14 @@ export default defineConfig({
     },
   ],
 
-  webServer: {
-    command: 'npm run dev',
-    url: process.env.E2E_BASE_URL || 'http://localhost:3000',
-    reuseExistingServer: true,
-    timeout: 60_000,
-  },
+  ...(managedTarget
+    ? {}
+    : {
+        webServer: {
+          command: 'npm run dev',
+          url: 'http://localhost:3000',
+          reuseExistingServer: true,
+          timeout: 60_000,
+        },
+      }),
 });
