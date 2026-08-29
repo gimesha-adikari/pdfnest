@@ -124,6 +124,8 @@ export function safeMessageForSearchablePdfCode(code: string): string {
         case "INVALID_ENGINE_OUTPUT":
         case "ENGINE_FAILURE":
             return "The searchable PDF could not be completed. Please try again.";
+        case "PDF_RENDER_FAILURE":
+            return "The searchable PDF could not be rendered while preserving the source image.";
         default:
             return "The searchable PDF request could not be completed. Please try again.";
     }

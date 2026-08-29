@@ -30,6 +30,7 @@ assert.strictEqual(normalizeSearchablePdfV2State("cancelled"), "CANCELLED");
 assert.strictEqual(normalizeSearchablePdfV2State("failed"), "FAILED");
 assert.strictEqual(safeSearchablePdfDownloadFilename("Receipt / August.png"), "Receipt-August-searchable.pdf");
 assert.strictEqual(safeMessageForSearchablePdfCode("AUTHENTICATION_REQUIRED"), "Sign in to create a searchable PDF.");
+assert.strictEqual(safeMessageForSearchablePdfCode("PDF_RENDER_FAILURE"), "The searchable PDF could not be rendered while preserving the source image.");
 
 const originalFetch = globalThis.fetch;
 const requests: Array<{ url: string; method: string; headers: Headers; body?: FormData }> = [];
