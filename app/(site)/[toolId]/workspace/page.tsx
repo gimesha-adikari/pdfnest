@@ -44,13 +44,14 @@ import HighlightPdfWorkspace from "@/components/tools/HighlightPdfWorkspace";
 import UnderlinePdfWorkspace from "@/components/tools/UnderlinePdfWorkspace";
 import StrikeoutPdfWorkspace from "@/components/tools/StrikeoutPdfWorkspace";
 import RepositoryAnalyzerWorkspace from "@/components/tools/RepositoryAnalyzerWorkspace";
+import OcrTextV2Workspace from "@/components/tools/OcrTextV2Workspace";
 
 export default function SharedWorkspacePage() {
     const router = useRouter();
     const { toolId, file, isLoadingConfig } = useSharedTool();
 
     useEffect(() => {
-        if (!isLoadingConfig && !file) {
+        if (!isLoadingConfig && !file && toolId !== "ocr-text-v2") {
             router.replace(`/${toolId}`);
         }
     }, [file, toolId, router, isLoadingConfig]);
@@ -69,7 +70,7 @@ export default function SharedWorkspacePage() {
         );
     }
 
-    if (!file) return null;
+    if (!file && toolId !== "ocr-text-v2") return null;
 
     return (
         <PdfToolLayout>
@@ -111,6 +112,7 @@ export default function SharedWorkspacePage() {
             {toolId === "underline-pdf" && <UnderlinePdfWorkspace />}
             {toolId === "strikeout-pdf" && <StrikeoutPdfWorkspace />}
             {toolId === "repository-analyzer" && <RepositoryAnalyzerWorkspace />}
+            {toolId === "ocr-text-v2" && <OcrTextV2Workspace />}
         </PdfToolLayout>
     );
 }

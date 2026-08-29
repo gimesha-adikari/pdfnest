@@ -71,7 +71,7 @@ export function isToolAvailableOffline(tool: ToolItem): boolean {
 }
 
 /** Total number of tools in the full static registry. */
-export const TOTAL_TOOL_COUNT = 39;
+export const TOTAL_TOOL_COUNT = 40;
 
 /**
  * Number of truly offline-capable tools (16 fully offline standalone + 1 metadata + 1 studio suite + Wave 8 sign/repair + Wave 9 code/markdown + repository-analyzer).
@@ -559,6 +559,52 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
                 answer: "The tool outputs clean, raw text data into a standard TXT format file that you can easily copy, edit, and paste anywhere."
             }
         ]
+    },
+    {
+        title: "OCR Text V2",
+        description: "Extract trustworthy text from native and scanned PDFs with durable page-by-page processing.",
+        href: "/ocr-text-v2",
+        category: "convert",
+        capability: {
+            clientExecutable: false,
+            workspaceOffline: false,
+            requiresBackend: true,
+            offlineReason: "Requires authenticated OCR Text V2 job processing",
+        },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
+        isNew: true,
+        seoTitle: "OCR Text V2 Online - Extract Text from Scanned PDFs",
+        seoDescription: "Extract copyable text from native and scanned PDF documents with durable processing and page progress.",
+        intent: "Users want to extract readable text from native or scanned PDF documents.",
+        keywords: [
+            "ocr text",
+            "scanned pdf to text",
+            "pdf ocr",
+            "extract text from scanned pdf",
+        ],
+        related: [
+            "/pdf-to-text",
+            "/image-to-searchable-pdf",
+        ],
+        accept: ".pdf",
+        multiple: false,
+        iconName: "ScanText",
+        features: [
+            "Durable page-by-page OCR progress",
+            "Copy and download extracted text",
+            "Manual language selection",
+        ],
+        faq: [
+            {
+                question: "Can OCR Text V2 process scanned PDFs?",
+                answer: "Yes. Select an available language and the service will process scanned pages into copyable plain text.",
+            },
+            {
+                question: "Can I leave while a document is processing?",
+                answer: "Yes. The job is durable, and you can return to the OCR Text V2 workspace to resume its status.",
+            },
+        ],
     },
     {
         title: "Image to Searchable PDF",
