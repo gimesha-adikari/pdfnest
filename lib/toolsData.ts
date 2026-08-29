@@ -71,7 +71,7 @@ export function isToolAvailableOffline(tool: ToolItem): boolean {
 }
 
 /** Total number of tools in the full static registry. */
-export const TOTAL_TOOL_COUNT = 40;
+export const TOTAL_TOOL_COUNT = 41;
 
 /**
  * Number of truly offline-capable tools (16 fully offline standalone + 1 metadata + 1 studio suite + Wave 8 sign/repair + Wave 9 code/markdown + repository-analyzer).
@@ -665,6 +665,57 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
                 answer: "OCR language support depends on the installed OCR engine languages. Most major global languages can be recognized accurately when the corresponding language packs are available."
             }
         ]
+    },
+    {
+        title: "Searchable PDF V2",
+        description: "Create a searchable PDF from ordered scanned images with durable processing and a preserved visual page layer.",
+        href: "/searchable-pdf-v2",
+        category: "create",
+        capability: {
+            clientExecutable: false,
+            workspaceOffline: false,
+            requiresBackend: true,
+            offlineReason: "Requires authenticated server-side OCR and PDF rendering",
+        },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
+        isNew: true,
+        seoTitle: "Searchable PDF V2 Online - Create Searchable PDFs from Images",
+        seoDescription: "Arrange scanned images and create a searchable PDF with durable page-by-page processing.",
+        intent: "Users want to turn ordered scanned images into a searchable PDF without changing the visual pages.",
+        keywords: [
+            "searchable pdf v2",
+            "scanned images to searchable pdf",
+            "image ocr pdf",
+            "make scanned pdf searchable",
+        ],
+        related: [
+            "/ocr-text-v2",
+            "/image-to-searchable-pdf",
+            "/images-to-pdf",
+        ],
+        accept: "image/jpeg, image/png, image/webp",
+        multiple: true,
+        iconName: "ScanSearch",
+        features: [
+            "Arrange image pages before processing",
+            "Durable page-by-page progress",
+            "Download a PDF with an invisible searchable text layer",
+        ],
+        faq: [
+            {
+                question: "Can I change the page order before processing?",
+                answer: "Yes. Add your images and drag pages into the order you want, or use the keyboard-friendly move controls.",
+            },
+            {
+                question: "Will the original image appearance be preserved?",
+                answer: "Yes. The generated PDF preserves each uploaded image as the visual page and adds searchable OCR text separately.",
+            },
+            {
+                question: "Can I leave while the PDF is processing?",
+                answer: "Yes. The job is durable, and the workspace can resume its server status after a reload.",
+            },
+        ],
     },
     {
         title: "PDF Studio",

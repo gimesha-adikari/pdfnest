@@ -35,6 +35,7 @@ const KNOWN_ICON_NAMES = [
     "Hash",
     "Stamp",
     "ScanSearch",
+    "ScanText",
     "Wrench",
     "FileSpreadsheet",
     "Presentation",
