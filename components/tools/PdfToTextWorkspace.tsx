@@ -142,7 +142,13 @@ export default function PdfToTextWorkspace() {
 
     const handleTaskComplete = async (downloadUrl: string) => {
         try {
-            const response = await fetch(`${getBaseUrl()}${downloadUrl}`, {
+            // The durable task contract may return either a backend-relative
+            // path or the absolute authenticated download URL built by
+            // useAsyncTask. Do not concatenate the base twice.
+            const resolvedDownloadUrl = /^https?:\/\//i.test(downloadUrl)
+                ? downloadUrl
+                : `${getBaseUrl()}${downloadUrl}`;
+            const response = await fetch(resolvedDownloadUrl, {
                 credentials: "include",
             });
             if (!response.ok) {
