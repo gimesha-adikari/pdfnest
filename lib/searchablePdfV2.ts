@@ -12,6 +12,7 @@ export type SearchablePdfV2State =
     | "CANCELLED";
 
 export type SearchablePdfV2RoutingPolicy = "AUTO" | "FAST" | "QUALITY";
+export type SearchablePdfV2LanguageMode = "EXPLICIT" | "AUTO";
 
 export interface SearchablePdfV2Language {
     code: string;
@@ -39,6 +40,12 @@ export interface SearchablePdfV2Capabilities {
     languages: SearchablePdfV2Language[];
     routing_modes: SearchablePdfV2RoutingMode[];
     searchable_pdf: SearchablePdfV2Capability;
+    language_policy?: {
+        modes: SearchablePdfV2LanguageMode[];
+        default_mode: SearchablePdfV2LanguageMode;
+        max_languages: number;
+        auto_statuses: string[];
+    };
 }
 
 export interface SearchablePdfV2Progress {
@@ -181,6 +188,8 @@ export async function createSearchablePdfV2Job(
     const form = new FormData();
     for (const file of files) form.append("file", file);
     form.append("language", language);
+    form.append("language_mode", language === "auto" ? "AUTO" : "EXPLICIT");
+    if (language !== "auto") for (const code of language.split("+")) form.append("languages", code);
     form.append("routing_policy", routingPolicy);
 
     return requestJson<SearchablePdfV2JobStatus>("/api/v2/ocr/searchable-pdf/jobs", {

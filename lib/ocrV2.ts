@@ -12,6 +12,7 @@ export type OcrTextV2State =
     | "CANCELLED";
 
 export type OcrTextV2RoutingPolicy = "AUTO" | "FAST" | "QUALITY";
+export type OcrLanguageMode = "EXPLICIT" | "AUTO";
 
 export interface OcrTextV2Language {
     code: string;
@@ -31,6 +32,12 @@ export interface OcrTextV2Capabilities {
     languages: OcrTextV2Language[];
     routing_modes: OcrTextV2RoutingMode[];
     quality_engine_available: boolean;
+    language_policy?: {
+        modes: OcrLanguageMode[];
+        default_mode: OcrLanguageMode;
+        max_languages: number;
+        auto_statuses: string[];
+    };
 }
 
 export interface OcrTextV2Progress {
@@ -136,6 +143,8 @@ export function safeMessageForCode(code: string): string {
             return "Choose a valid PDF and try again.";
         case "UNSUPPORTED_LANGUAGE":
             return "Choose one of the available languages to continue.";
+        case "LANGUAGE_DETECTION_UNCERTAIN":
+            return "We couldn't reliably determine the OCR language. Choose the language(s) used in this document.";
         case "ENGINE_UNAVAILABLE":
             return "OCR is temporarily unavailable. Please try again shortly.";
         case "TIMEOUT":
@@ -195,6 +204,8 @@ export async function createOcrTextV2Job(
     const form = new FormData();
     form.append("file", file);
     form.append("language", language);
+    form.append("language_mode", language === "auto" ? "AUTO" : "EXPLICIT");
+    if (language !== "auto") for (const code of language.split("+")) form.append("languages", code);
     form.append("routing_policy", routingPolicy);
 
     return requestJson<OcrTextV2JobStatus>("/api/v2/ocr/text/jobs", {

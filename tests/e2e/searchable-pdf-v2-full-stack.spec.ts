@@ -76,7 +76,7 @@ async function submitThroughUi(page: Page, files: string[], artifactName: string
   await input.setInputFiles(files);
   for (const file of files) await expect(page.getByText(path.basename(file), { exact: true })).toBeVisible();
 
-  await page.getByRole('combobox', { name: 'OCR language' }).selectOption('eng');
+  await page.locator('select[aria-label="OCR language"]').selectOption('eng');
   await expect(page.getByRole('button', { name: 'Create searchable PDF' })).toBeEnabled();
 
   let resultResponse: Response | undefined;

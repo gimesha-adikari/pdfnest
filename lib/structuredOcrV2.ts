@@ -124,6 +124,8 @@ export async function createStructuredOcrV2Job(file: File, profile: StructuredOc
     const form = new FormData();
     form.append("file", file);
     form.append("language", language);
+    form.append("language_mode", language === "auto" ? "AUTO" : "EXPLICIT");
+    if (language !== "auto") for (const code of language.split("+").filter(Boolean)) form.append("languages", code);
     form.append("routing_policy", routingPolicy);
     form.append("profile", profile);
     return requestJson<StructuredOcrV2Job>(`/api/v2/ocr/${pathFor(profile)}/jobs`, {

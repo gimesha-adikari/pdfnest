@@ -134,9 +134,12 @@ export default function OcrTextV2Workspace() {
 
     const fileName = file?.name || resumedFileName || "your PDF";
     const active = state === "SUBMITTING" || state === "QUEUED" || state === "RUNNING" || state === "CANCELLING";
-    const canSubmit = Boolean(file && language && capabilities && state === "FILE_READY");
+    const languageFallback = state === "FAILED" && errorCodeValue === "LANGUAGE_DETECTION_UNCERTAIN";
+    const canSubmit = Boolean(file && language && capabilities && (state === "FILE_READY" || languageFallback));
     const selectedLanguageName = useMemo(
-        () => capabilities?.languages.find((item) => item.code === language)?.name || language,
+        () => language === "auto"
+            ? "Detect automatically"
+            : language.split("+").filter(Boolean).map((code) => capabilities?.languages.find((item) => item.code === code)?.name || code).join(" + ") || language,
         [capabilities, language]
     );
     const selectedPageResult = result?.pages[selectedPage] || null;
@@ -152,7 +155,11 @@ export default function OcrTextV2Workspace() {
                 throw new OcrTextV2ApiError("UNSUPPORTED_LANGUAGE", "No OCR languages are currently available.", 200);
             }
             setCapabilities({ ...next, languages: usableLanguages });
-            setLanguage((current) => current && usableLanguages.some((item) => item.code === current) ? current : "");
+            setLanguage((current) => {
+                if (current === "auto") return current;
+                const selected = current.split("+").filter((code) => usableLanguages.some((item) => item.code === code));
+                return selected.join("+");
+            });
         } catch (loadError) {
             setCapabilities(null);
             setCapabilityError(displayError(loadError));
@@ -226,8 +233,11 @@ export default function OcrTextV2Workspace() {
                 }
                 if (nextState === "FAILED" || nextState === "CANCELLED") {
                     setState(nextState);
-                    setErrorCodeValue(nextJob.error?.code || (nextState === "CANCELLED" ? "CANCELLED" : "ENGINE_FAILURE"));
-                    setError(nextJob.error?.message || (nextState === "CANCELLED" ? safeMessageForCode("CANCELLED") : safeMessageForCode("ENGINE_FAILURE")));
+                    const nextErrorCode = nextJob.error?.code || (nextState === "CANCELLED" ? "CANCELLED" : "ENGINE_FAILURE");
+                    setErrorCodeValue(nextErrorCode);
+                    setError(nextErrorCode === "LANGUAGE_DETECTION_UNCERTAIN"
+                        ? safeMessageForCode(nextErrorCode)
+                        : nextJob.error?.message || safeMessageForCode(nextErrorCode));
                     return;
                 }
                 setState(state === "CANCELLING" ? "CANCELLING" : nextState);
@@ -270,6 +280,7 @@ export default function OcrTextV2Workspace() {
         setErrorCodeValue(null);
         setResult(null);
         setJob(null);
+        setJobId(null);
         resultLoadedForRef.current = null;
         const requestId = crypto.randomUUID();
         const idempotencyKey = crypto.randomUUID();
@@ -418,7 +429,7 @@ export default function OcrTextV2Workspace() {
                         <div className="mt-7 grid gap-5 lg:grid-cols-[1fr_1fr]">
                             <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--background)]/40 p-5">
                                 <div className="flex items-center gap-2 text-sm font-bold text-[color:var(--foreground)]"><Languages size={17} className="text-indigo-500" /> Language</div>
-                                <p className="mt-1 text-xs text-[color:var(--muted)]">Choose the language pack used for this document. Automatic detection is not available in this product.</p>
+                                <p className="mt-1 text-xs text-[color:var(--muted)]">Choose one or more installed language packs, or let the bounded detector choose.</p>
                                 {isAuthLoading || isLoadingCapabilities ? (
                                     <div className="mt-5 flex items-center gap-2 text-sm text-[color:var(--muted)]"><Loader2 className="animate-spin" size={16} /> Loading available languages…</div>
                                 ) : !isAuthenticated ? (
@@ -426,8 +437,8 @@ export default function OcrTextV2Workspace() {
                                 ) : capabilityError ? (
                                     <div className="mt-5 space-y-3"><p className="text-xs text-rose-600">{capabilityError}</p><button type="button" onClick={() => void loadCapabilities()} className="inline-flex items-center gap-2 rounded-xl border border-[color:var(--border)] px-3 py-2 text-xs font-semibold"><RefreshCw size={14} /> Try again</button></div>
                                 ) : (
-                                    <select aria-label="OCR language" value={language} onChange={(event) => setLanguage(event.target.value)} disabled={!capabilities || active} className="mt-5 w-full rounded-xl border border-[color:var(--border)] bg-[var(--card)] px-3 py-3 text-sm text-[color:var(--foreground)] outline-none focus:border-indigo-500">
-                                        <option value="">Select a language</option>
+                                    <select aria-label="OCR language" multiple value={language === "auto" ? ["auto"] : language ? language.split("+") : []} onChange={(event) => { const values = Array.from(event.target.selectedOptions, (option) => option.value); setLanguage(values.includes("auto") ? "auto" : values.sort().join("+")); }} disabled={!capabilities || active} className="mt-5 min-h-28 w-full rounded-xl border border-[color:var(--border)] bg-[var(--card)] px-3 py-3 text-sm text-[color:var(--foreground)] outline-none focus:border-indigo-500">
+                                        <option value="auto">Detect automatically</option>
                                         {capabilities?.languages.map((item) => <option key={item.code} value={item.code}>{item.name} ({item.code})</option>)}
                                     </select>
                                 )}
@@ -448,9 +459,9 @@ export default function OcrTextV2Workspace() {
                         </div>
                     )}
 
-                    {file && !active && !result && state === "FILE_READY" && (
+                    {file && !active && !result && (state === "FILE_READY" || languageFallback) && (
                         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <p className="text-xs text-[color:var(--muted)]">The backend will validate the PDF, page limit, language, and processing eligibility before queueing it.</p>
+                            <p className="text-xs text-[color:var(--muted)]">{languageFallback ? "Choose the language(s) used in this document, then try the same upload again." : "The backend will validate the PDF, page limit, language, and processing eligibility before queueing it."}</p>
                             <button type="button" onClick={handleSubmit} disabled={!canSubmit} className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-md transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"><ShieldCheck size={16} /> Start OCR</button>
                         </div>
                     )}
@@ -473,7 +484,7 @@ export default function OcrTextV2Workspace() {
 
                     {(state === "FAILED" || state === "CANCELLED") && !result && (
                         <div className="mt-7 rounded-2xl border border-rose-500/25 bg-rose-500/5 p-5" role="alert">
-                            <div className="flex items-start gap-3"><AlertCircle className="mt-0.5 shrink-0 text-rose-600" size={18} /><div><p className="text-sm font-bold text-[color:var(--foreground)]">{statusLabel(state)}</p><p className="mt-1 text-sm text-[color:var(--muted)]">{error || (state === "CANCELLED" ? safeMessageForCode("CANCELLED") : safeMessageForCode("ENGINE_FAILURE"))}</p>{errorCodeValue === "UNSUPPORTED_LANGUAGE" && <p className="mt-2 text-xs text-[color:var(--muted)]">Choose another available language and start a new run.</p>}</div></div>
+                            <div className="flex items-start gap-3"><AlertCircle className="mt-0.5 shrink-0 text-rose-600" size={18} /><div><p className="text-sm font-bold text-[color:var(--foreground)]">{statusLabel(state)}</p><p className="mt-1 text-sm text-[color:var(--muted)]">{error || (state === "CANCELLED" ? safeMessageForCode("CANCELLED") : safeMessageForCode("ENGINE_FAILURE"))}</p>{errorCodeValue === "UNSUPPORTED_LANGUAGE" && <p className="mt-2 text-xs text-[color:var(--muted)]">Choose another available language and start a new run.</p>}{errorCodeValue === "LANGUAGE_DETECTION_UNCERTAIN" && <p className="mt-2 text-xs text-[color:var(--muted)]">Your upload is still selected. Choose the language(s) used in this document and start OCR again.</p>}</div></div>
                             <button type="button" onClick={() => file ? setState("FILE_READY") : reset()} className="mt-4 inline-flex items-center gap-2 rounded-xl border border-[color:var(--border)] px-3 py-2 text-xs font-semibold text-[color:var(--foreground)]"><RefreshCw size={14} /> {file ? "Try again" : "Choose another PDF"}</button>
                         </div>
                     )}
