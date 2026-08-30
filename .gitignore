@@ -60,3 +60,4 @@ node_modules/
 /.auth/
 /tests/.auth/
 /tests/merge.spec.ts
+/.next-phase6-stale-20260830/

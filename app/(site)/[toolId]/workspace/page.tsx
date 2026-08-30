@@ -46,13 +46,14 @@ import StrikeoutPdfWorkspace from "@/components/tools/StrikeoutPdfWorkspace";
 import RepositoryAnalyzerWorkspace from "@/components/tools/RepositoryAnalyzerWorkspace";
 import OcrTextV2Workspace from "@/components/tools/OcrTextV2Workspace";
 import SearchablePdfV2Workspace from "@/components/tools/SearchablePdfV2Workspace";
+import StructuredDocumentV2Workspace from "@/components/tools/StructuredDocumentV2Workspace";
 
 export default function SharedWorkspacePage() {
     const router = useRouter();
     const { toolId, file, isLoadingConfig } = useSharedTool();
 
     useEffect(() => {
-        if (!isLoadingConfig && !file && toolId !== "ocr-text-v2" && toolId !== "searchable-pdf-v2") {
+        if (!isLoadingConfig && !file && !["ocr-text-v2", "searchable-pdf-v2", "document-extraction-v2", "pdf-to-markdown-v2"].includes(toolId)) {
             router.replace(`/${toolId}`);
         }
     }, [file, toolId, router, isLoadingConfig]);
@@ -71,7 +72,7 @@ export default function SharedWorkspacePage() {
         );
     }
 
-    if (!file && toolId !== "ocr-text-v2" && toolId !== "searchable-pdf-v2") return null;
+    if (!file && !["ocr-text-v2", "searchable-pdf-v2", "document-extraction-v2", "pdf-to-markdown-v2"].includes(toolId)) return null;
 
     return (
         <PdfToolLayout>
@@ -115,6 +116,8 @@ export default function SharedWorkspacePage() {
             {toolId === "repository-analyzer" && <RepositoryAnalyzerWorkspace />}
             {toolId === "ocr-text-v2" && <OcrTextV2Workspace />}
             {toolId === "searchable-pdf-v2" && <SearchablePdfV2Workspace />}
+            {toolId === "document-extraction-v2" && <StructuredDocumentV2Workspace profile="DOCUMENT_EXTRACTION_V2" />}
+            {toolId === "pdf-to-markdown-v2" && <StructuredDocumentV2Workspace profile="PDF_MARKDOWN_V2" />}
         </PdfToolLayout>
     );
 }

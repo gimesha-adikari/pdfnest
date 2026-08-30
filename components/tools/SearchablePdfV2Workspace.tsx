@@ -61,10 +61,6 @@ interface StoredSearchableJob {
     routingPolicy: SearchablePdfV2RoutingPolicy;
 }
 
-interface ExtendedFile extends File {
-    initialBatch?: File[];
-}
-
 function isJobId(value: string | null): value is string {
     return Boolean(value && JOB_ID_PATTERN.test(value));
 }
@@ -214,6 +210,7 @@ export default function SearchablePdfV2Workspace() {
     const [isDownloading, setIsDownloading] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const seededFileRef = useRef<File | null>(null);
+    const initialBatchRef = useRef<File[] | null>(null);
     const pollingJobRef = useRef<string | null>(null);
     const cancelRequestedRef = useRef(false);
     const resultLoadedRef = useRef<string | null>(null);
@@ -257,13 +254,13 @@ export default function SearchablePdfV2Workspace() {
     useEffect(() => {
         if (!file || seededFileRef.current === file) return;
         seededFileRef.current = file;
-        const initialBatch = (file as ExtendedFile).initialBatch || [file];
+        const initialBatch = initialBatchRef.current || [file];
+        initialBatchRef.current = null;
         const supported = initialBatch.filter((item) => isSupportedImage(item, selectedFormats));
         const nextPages = supported.map(makePage);
         setPages(nextPages);
         setState(nextPages.length > 0 ? "FILES_READY" : "IDLE");
         if (supported.length !== initialBatch.length) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
             setError("One or more files were skipped because their format is not available.");
         }
     }, [file, selectedFormats]);
@@ -379,7 +376,8 @@ export default function SearchablePdfV2Workspace() {
         setPages((current) => [...current, ...nextPages]);
         setState("FILES_READY");
         setError(supported.length !== incoming.length ? "Some files were skipped because their format is not available." : null);
-        setFile((file || supported[0]) as File);
+        if (!file && supported.length > 1) initialBatchRef.current = supported;
+        setFile(file || supported[0]);
     }, [active, file, selectedFormats, setFile]);
 
     const handleDrop = useCallback((event: React.DragEvent<HTMLDivElement>) => {

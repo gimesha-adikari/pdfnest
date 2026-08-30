@@ -20,6 +20,7 @@ const KNOWN_ICON_NAMES = [
     "Unlock",
     "FileImage",
     "FileCode",
+    "FileSearch",
     "FileDown",
     "Globe",
     "Pen",

@@ -71,7 +71,7 @@ export function isToolAvailableOffline(tool: ToolItem): boolean {
 }
 
 /** Total number of tools in the full static registry. */
-export const TOTAL_TOOL_COUNT = 41;
+export const TOTAL_TOOL_COUNT = 43;
 
 /**
  * Number of truly offline-capable tools (16 fully offline standalone + 1 metadata + 1 studio suite + Wave 8 sign/repair + Wave 9 code/markdown + repository-analyzer).
@@ -716,6 +716,40 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
                 answer: "Yes. The job is durable, and the workspace can resume its server status after a reload.",
             },
         ],
+    },
+    {
+        title: "Document Extraction V2",
+        description: "Extract a typed structured document result from native, scanned, and mixed PDFs.",
+        href: "/document-extraction-v2",
+        category: "convert",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires authenticated structured document processing" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
+        isNew: true,
+        seoTitle: "Document Extraction V2 - Structured PDF Extraction",
+        seoDescription: "Extract headings, paragraphs, lists, tables, and geometry from native and scanned PDFs with durable processing.",
+        related: ["/ocr-text-v2", "/pdf-to-markdown-v2"],
+        accept: ".pdf",
+        multiple: false,
+        iconName: "FileSearch",
+        features: ["Native-first PDF extraction", "Structured JSON result", "Durable progress and resume"],
+    },
+    {
+        title: "PDF to Markdown V2",
+        description: "Convert native, scanned, and mixed PDFs into Markdown from the shared structured OCR result.",
+        href: "/pdf-to-markdown-v2",
+        category: "convert",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires authenticated structured document processing" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
+        isNew: true,
+        seoTitle: "PDF to Markdown V2 - Structured Markdown Extraction",
+        seoDescription: "Convert PDFs to Markdown using native-first structured extraction and explicit OCR capability warnings.",
+        related: ["/document-extraction-v2", "/pdf-to-markdown"],
+        accept: ".pdf",
+        multiple: false,
+        iconName: "FileCode",
+        features: ["Native-first Markdown", "Scanned-page OCR fallback", "Copy and download Markdown"],
     },
     {
         title: "PDF Studio",

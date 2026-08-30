@@ -1,3 +1,13 @@
+/* Tailwind v4's automatic source scan must not parse repository binary assets. */
+@source not "../**/*.png";
+@source not "../**/*.jpg";
+@source not "../**/*.jpeg";
+@source not "../**/*.pdf";
+@source not "../tests/fixtures";
+@source not "../output";
+@source not "../playwright-report";
+@source not "../public";
+
 @import "tailwindcss";
 @import "../components/studio-v2/studioV2Tokens.css";
 
