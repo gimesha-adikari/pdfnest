@@ -239,6 +239,9 @@ export interface StudioEditorElementDTO {
   original_text?: string;
   x: number; y: number; width: number; height: number; size: number;
   font: string; bg_color?: string; text_color?: string; transparent_bg?: boolean;
+  ocr_v2?: boolean; source?: string; provenance?: string[]; word_ids?: string[];
+  word_geometry?: Array<{ id: string; text: string; x: number; y: number; width: number; height: number }>;
+  reading_order?: string[]; confidence?: number;
 }
 export interface StudioEditorPageDTO {
   page_num: number; width: number; height: number;

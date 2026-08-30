@@ -52,13 +52,18 @@ async function waitForDurableStatus(page: Page, jobId: string): Promise<{ job: D
   let last: DurableStatus | null = null;
   while (Date.now() < deadline) {
     const response = await page.request.get(`${getE2EApiBaseUrl()}/v2/ocr/searchable-pdf/jobs/${encodeURIComponent(jobId)}`);
+    if (response.status() === 429) {
+      const retryAfter = Number(response.headers()['retry-after'] || '2');
+      await new Promise((resolve) => setTimeout(resolve, Math.max(1000, Math.min(5000, retryAfter * 1000))));
+      continue;
+    }
     expect(response.ok(), `job status HTTP ${response.status()}`).toBeTruthy();
     last = (await response.json()) as DurableStatus;
     if (statuses[statuses.length - 1] !== last.status) statuses.push(last.status);
     if (last.status === 'SUCCEEDED' || last.status === 'FAILED' || last.status === 'CANCELLED') {
       return { job: last, statuses };
     }
-    await new Promise((resolve) => setTimeout(resolve, 700));
+    await new Promise((resolve) => setTimeout(resolve, 1500));
   }
   throw new Error(`Timed out waiting for durable job ${jobId}; observed statuses: ${statuses.join(',')}`);
 }

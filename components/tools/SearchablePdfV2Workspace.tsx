@@ -103,6 +103,11 @@ function errorCode(error: unknown): string {
     return error instanceof SearchablePdfV2ApiError ? error.code : "ENGINE_FAILURE";
 }
 
+function isTransientPollError(error: unknown): boolean {
+    if (!(error instanceof SearchablePdfV2ApiError)) return false;
+    return error.status === 0 || error.status === 429 || error.status >= 500;
+}
+
 function makePage(file: File): SearchablePage {
     return {
         id: newSearchablePdfV2RequestIdentity(),
@@ -310,20 +315,23 @@ export default function SearchablePdfV2Workspace() {
         let timer: number | undefined;
         let interval = 1200;
 
-        const loadResult = async () => {
-            if (!mounted || resultLoadedRef.current === jobId) return;
+        const loadResult = async (): Promise<boolean> => {
+            if (!mounted || resultLoadedRef.current === jobId) return true;
             try {
                 const nextArtifact = await downloadSearchablePdfV2Result(jobId);
-                if (!mounted) return;
+                if (!mounted) return true;
                 resultLoadedRef.current = jobId;
                 setArtifact(nextArtifact);
                 setState("SUCCEEDED");
                 setError(null);
+                return true;
             } catch (resultError) {
-                if (!mounted) return;
+                if (!mounted) return true;
+                if (isTransientPollError(resultError)) return false;
                 setErrorCodeValue(errorCode(resultError));
                 setError(displayError(resultError));
                 setState("FAILED");
+                return true;
             }
         };
 
@@ -334,7 +342,11 @@ export default function SearchablePdfV2Workspace() {
                 setJob(nextJob);
                 const nextState = normalizeSearchablePdfV2State(nextJob.status);
                 if (nextState === "SUCCEEDED") {
-                    await loadResult();
+                    const loaded = await loadResult();
+                    if (!loaded && mounted) {
+                        interval = 2500;
+                        timer = window.setTimeout(() => { void poll(); }, interval);
+                    }
                     return;
                 }
                 if (nextState === "FAILED" || nextState === "CANCELLED") {
@@ -348,6 +360,11 @@ export default function SearchablePdfV2Workspace() {
                 timer = window.setTimeout(() => { void poll(); }, interval);
             } catch (pollError) {
                 if (!mounted) return;
+                if (isTransientPollError(pollError)) {
+                    interval = 2500;
+                    timer = window.setTimeout(() => { void poll(); }, interval);
+                    return;
+                }
                 setErrorCodeValue(errorCode(pollError));
                 setError(displayError(pollError));
                 setState("FAILED");

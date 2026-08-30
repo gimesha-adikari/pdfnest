@@ -71,7 +71,7 @@ export function isToolAvailableOffline(tool: ToolItem): boolean {
 }
 
 /** Total number of tools in the full static registry. */
-export const TOTAL_TOOL_COUNT = 43;
+export const TOTAL_TOOL_COUNT = 46;
 
 /**
  * Number of truly offline-capable tools (16 fully offline standalone + 1 metadata + 1 studio suite + Wave 8 sign/repair + Wave 9 code/markdown + repository-analyzer).
@@ -750,6 +750,51 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         multiple: false,
         iconName: "FileCode",
         features: ["Native-first Markdown", "Scanned-page OCR fallback", "Copy and download Markdown"],
+    },
+    {
+        title: "Highlight PDF V2",
+        description: "Highlight exact text in native or scanned PDFs using OCR V2 word geometry.",
+        href: "/highlight-pdf-v2",
+        category: "edit",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires authenticated OCR-aware markup processing" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
+        isNew: true,
+        accept: ".pdf",
+        multiple: false,
+        iconName: "Highlighter",
+        related: ["/underline-pdf-v2", "/strikeout-pdf-v2", "/highlight-pdf"],
+        features: ["Native-first text selection", "Scanned PDF OCR V2 selection", "Durable searchable annotations"],
+    },
+    {
+        title: "Underline PDF V2",
+        description: "Underline exact text in native or scanned PDFs using the shared OCR V2 selection foundation.",
+        href: "/underline-pdf-v2",
+        category: "edit",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires authenticated OCR-aware markup processing" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
+        isNew: true,
+        accept: ".pdf",
+        multiple: false,
+        iconName: "Underline",
+        related: ["/highlight-pdf-v2", "/strikeout-pdf-v2", "/underline-pdf"],
+        features: ["Shared canonical word selection", "Rotation-aware geometry", "Durable PDF annotations"],
+    },
+    {
+        title: "Strikeout PDF V2",
+        description: "Strike out exact text in native or scanned PDFs using the shared OCR V2 selection foundation.",
+        href: "/strikeout-pdf-v2",
+        category: "edit",
+        capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires authenticated OCR-aware markup processing" },
+        clientCapable: false,
+        toolPolicy: "BACKEND_ONLY",
+        isNew: true,
+        accept: ".pdf",
+        multiple: false,
+        iconName: "Strikethrough",
+        related: ["/highlight-pdf-v2", "/underline-pdf-v2", "/strikeout-pdf"],
+        features: ["Reading-order phrase matching", "Genuine OCR word geometry", "Durable PDF annotations"],
     },
     {
         title: "PDF Studio",

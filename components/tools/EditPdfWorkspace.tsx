@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
     AlertTriangle,
     Bold,
@@ -67,6 +67,13 @@ interface LayoutElement {
     bg_color?: string;
     text_color?: string;
     style?: ElementStyle;
+    ocr_v2?: boolean;
+    source?: string;
+    provenance?: string[];
+    word_ids?: string[];
+    word_geometry?: Array<{ id: string; text: string; x: number; y: number; width: number; height: number }>;
+    reading_order?: string[];
+    confidence?: number;
 }
 
 interface PageData {
@@ -115,6 +122,8 @@ function EditPdfWorkspace() {
     const { requireAuth } = useAuth();
     const router = useRouter();
     const { file: sharedFile, setDownloadData, toolId } = useSharedTool();
+    const searchParams = useSearchParams();
+    const useOcrV2 = searchParams.get("ocr_v2") === "1";
     const file = sharedFile as CustomPdfFile | null;
 
     const [isExtracting, setIsExtracting] = useState(false);
@@ -154,6 +163,14 @@ function EditPdfWorkspace() {
     const [currentPage, setCurrentPage] = useState<number>(1);
     const [selectedElementIdx, setSelectedElementIdx] = useState<number | null>(null);
     const [activeSelection, setActiveSelection] = useState<ActiveSelection | null>(null);
+    const [searchQuery, setSearchQuery] = useState("");
+    const searchMatches = useMemo(() => {
+        const query = searchQuery.trim().toLocaleLowerCase();
+        if (!query) return [] as Array<{ pageIdx: number; elementIdx: number }>;
+        return pages.flatMap((candidate, pageIdx) => candidate.elements.flatMap((element, elementIdx) =>
+            element.text.toLocaleLowerCase().includes(query) ? [{ pageIdx, elementIdx }] : []
+        ));
+    }, [pages, searchQuery]);
 
     const containerRef = useRef<HTMLDivElement>(null);
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -332,10 +349,12 @@ function EditPdfWorkspace() {
 
                 const formData = new FormData();
                 formData.append("file", file);
+                if (useOcrV2) formData.append("ocr_v2", "true");
 
                 const submission = await submitEditorExtract(formData);
                 if (cancelled) return;
 
+                setSourceTracker(submission.source_tracker || "");
                 setExtractJobId(submission.job_id);
             } catch (e) {
                 if (cancelled) return;
@@ -352,7 +371,7 @@ function EditPdfWorkspace() {
         return () => {
             cancelled = true;
         };
-    }, [file]);
+    }, [file, useOcrV2]);
 
     // Poll extract job
     useEffect(() => {
@@ -374,8 +393,8 @@ function EditPdfWorkspace() {
                     setHistory([JSON.parse(JSON.stringify(pagesData))]);
                     setHistoryIndex(0);
 
-                    setSourceTracker(job.result.source_tracker || "");
-                    setUprightTracker(job.result.upright_tracker || "");
+                    setSourceTracker(typeof job.result.source_tracker === "string" ? job.result.source_tracker : sourceTracker);
+                    setUprightTracker(typeof job.result.upright_tracker === "string" ? job.result.upright_tracker : uprightTracker);
 
                     if (job.result.analysis) {
                         setAnalysis(job.result.analysis as PDFAnalysis);
@@ -585,8 +604,10 @@ function EditPdfWorkspace() {
         <>
             <PdfToolHero
                 title="Precision PDF Layout Editor"
-                description="Modify text elements inline while preserving original formatting matrix loops perfectly."
+                description={useOcrV2 ? "Edit native text and discover scanned text through OCR V2 canonical geometry." : "Modify text elements inline while preserving original formatting matrix loops perfectly."}
             />
+
+            {useOcrV2 && <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-800 dark:border-indigo-900/50 dark:bg-indigo-950/30 dark:text-indigo-200" data-testid="editor-ocr-v2-mode">OCR V2 editor mode · native-first extraction with canonical word geometry for scanned pages</div>}
 
             <div className="mt-12 rounded-3xl border border-border bg-card p-8 shadow-lg">
                 <div className="flex flex-col gap-4">
@@ -686,6 +707,12 @@ function EditPdfWorkspace() {
                                 </div>
 
                                 <div className="flex items-center gap-3">
+                                    {useOcrV2 && <div className="flex items-center gap-2">
+                                        <label htmlFor="editor-search" className="sr-only">Search editor text</label>
+                                        <input id="editor-search" data-testid="editor-search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search text" className="w-36 rounded-lg border border-gray-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-indigo-500 dark:border-zinc-800" />
+                                        <span data-testid="editor-search-count" className="text-xs font-semibold text-zinc-500">{searchMatches.length} matches</span>
+                                        {searchMatches[0] && <button type="button" onClick={() => { setCurrentPage(searchMatches[0].pageIdx + 1); setSelectedElementIdx(searchMatches[0].elementIdx); }} className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs font-semibold hover:bg-gray-100 dark:border-zinc-800 dark:hover:bg-zinc-800">Select first</button>}
+                                    </div>}
                                     {/* Page Nav */}
                                     <div className="flex items-center gap-1.5 text-xs font-semibold">
                                         <button

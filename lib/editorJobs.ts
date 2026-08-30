@@ -16,6 +16,7 @@ export interface EditorJobSubmission {
     status: string;
     queue_name: string;
     source_tracker?: string;
+    source_name?: string;
 }
 
 export interface EditorJobRecord {
@@ -24,7 +25,7 @@ export interface EditorJobRecord {
     status: EditorJobStatus;
     progress: number;
     message: string;
-    result: Record<string, any> | null;
+    result: Record<string, unknown> | null;
     error: string | null;
     cancel_requested: boolean;
 }

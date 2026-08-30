@@ -47,13 +47,14 @@ import RepositoryAnalyzerWorkspace from "@/components/tools/RepositoryAnalyzerWo
 import OcrTextV2Workspace from "@/components/tools/OcrTextV2Workspace";
 import SearchablePdfV2Workspace from "@/components/tools/SearchablePdfV2Workspace";
 import StructuredDocumentV2Workspace from "@/components/tools/StructuredDocumentV2Workspace";
+import OcrAwareMarkupV2Workspace from "@/components/tools/OcrAwareMarkupV2Workspace";
 
 export default function SharedWorkspacePage() {
     const router = useRouter();
     const { toolId, file, isLoadingConfig } = useSharedTool();
 
     useEffect(() => {
-        if (!isLoadingConfig && !file && !["ocr-text-v2", "searchable-pdf-v2", "document-extraction-v2", "pdf-to-markdown-v2"].includes(toolId)) {
+        if (!isLoadingConfig && !file && !["ocr-text-v2", "searchable-pdf-v2", "document-extraction-v2", "pdf-to-markdown-v2", "highlight-pdf-v2", "underline-pdf-v2", "strikeout-pdf-v2"].includes(toolId)) {
             router.replace(`/${toolId}`);
         }
     }, [file, toolId, router, isLoadingConfig]);
@@ -72,7 +73,7 @@ export default function SharedWorkspacePage() {
         );
     }
 
-    if (!file && !["ocr-text-v2", "searchable-pdf-v2", "document-extraction-v2", "pdf-to-markdown-v2"].includes(toolId)) return null;
+    if (!file && !["ocr-text-v2", "searchable-pdf-v2", "document-extraction-v2", "pdf-to-markdown-v2", "highlight-pdf-v2", "underline-pdf-v2", "strikeout-pdf-v2"].includes(toolId)) return null;
 
     return (
         <PdfToolLayout>
@@ -118,6 +119,9 @@ export default function SharedWorkspacePage() {
             {toolId === "searchable-pdf-v2" && <SearchablePdfV2Workspace />}
             {toolId === "document-extraction-v2" && <StructuredDocumentV2Workspace profile="DOCUMENT_EXTRACTION_V2" />}
             {toolId === "pdf-to-markdown-v2" && <StructuredDocumentV2Workspace profile="PDF_MARKDOWN_V2" />}
+            {toolId === "highlight-pdf-v2" && <OcrAwareMarkupV2Workspace action="highlight" />}
+            {toolId === "underline-pdf-v2" && <OcrAwareMarkupV2Workspace action="underline" />}
+            {toolId === "strikeout-pdf-v2" && <OcrAwareMarkupV2Workspace action="strikeout" />}
         </PdfToolLayout>
     );
 }
