@@ -10,6 +10,7 @@ import { authenticateProUser, getE2EApiBaseUrl } from "../helpers/auth";
 
 const OUTPUT_DIR = process.env.E2E_OUTPUT_DIR || path.resolve(process.cwd(), "../output/playwright/multilingual-language-routing-v1/final-run-01/evidence");
 const SINHALA = /[\u0d80-\u0dff]/;
+const APPROVED_REAL_BILINGUAL_IMAGE = "/home/gimesha/pdfnest-tests/images/1.jpeg";
 
 type Job = {
   job_id: string;
@@ -68,9 +69,12 @@ function createUncertainPng(directory: string): string {
 async function pdfFromImages(imagePaths: string[]): Promise<Buffer> {
   const pdf = await PDFDocument.create();
   for (const imagePath of imagePaths) {
-    const page = pdf.addPage([900, 350]);
-    const image = await pdf.embedPng(fs.readFileSync(imagePath));
-    page.drawImage(image, { x: 0, y: 0, width: 900, height: 350 });
+    const imageBytes = fs.readFileSync(imagePath);
+    const image = /\.jpe?g$/i.test(imagePath)
+      ? await pdf.embedJpg(imageBytes)
+      : await pdf.embedPng(imageBytes);
+    const page = pdf.addPage([image.width, image.height]);
+    page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height });
   }
   return Buffer.from(await pdf.save());
 }
@@ -100,9 +104,12 @@ function safeFileMetadata(filePath: string) {
 }
 
 async function submitOcrText(page: Page, pdf: Buffer, language: "eng" | "sin" | "eng+sin" | "auto", evidenceName: string): Promise<OcrResult> {
-  await page.goto("/ocr-text-v2");
+  await page.goto("/ocr-text-v2/workspace");
   await expect(page.getByRole("heading", { name: "OCR Text V2" })).toBeVisible();
+  await page.getByRole("link", { name: "Choose PDF" }).click();
+  await expect(page).toHaveURL(/\/ocr-text-v2$/);
   await page.locator('input[type="file"]').first().setInputFiles({ name: `${evidenceName}.pdf`, mimeType: "application/pdf", buffer: pdf });
+  await expect(page).toHaveURL(/\/ocr-text-v2\/workspace$/);
   await page.getByLabel("OCR language").selectOption(language === "auto" ? "auto" : language.split("+"));
   const postResponsePromise = page.waitForResponse((response) => response.request().method() === "POST" && response.url().endsWith("/api/v2/ocr/text/jobs"));
   await page.getByRole("button", { name: "Start OCR" }).click();
@@ -138,6 +145,9 @@ async function submitOcrText(page: Page, pdf: Buffer, language: "eng" | "sin" | 
       language: item.language,
     })),
   }, null, 2)}\n`, "utf8");
+  await page.getByRole("button", { name: "New document" }).click();
+  await expect(page).toHaveURL(/\/ocr-text-v2$/);
+  await expect(page.locator('input[type="file"]').first()).toBeAttached();
   return result;
 }
 
@@ -216,6 +226,28 @@ test.describe.serial("Multilingual Language Routing V1 real local full-stack E2E
     }
   });
 
+  test("AUTO preserves English and Sinhala coverage for the approved real bilingual page", async ({ page }) => {
+    await authenticateProUser(page);
+    expect(fs.existsSync(APPROVED_REAL_BILINGUAL_IMAGE)).toBe(true);
+    const result = await submitOcrText(
+      page,
+      await pdfFromImages([APPROVED_REAL_BILINGUAL_IMAGE]),
+      "auto",
+      "ocr-text-auto-approved-real-eng-sin"
+    );
+    expect(result.pages).toHaveLength(1);
+    expect(result.pages[0].language.detected).toEqual(expect.arrayContaining(["eng", "sin"]));
+    expect(SINHALA.test(result.pages[0].text)).toBe(true);
+
+    const searchable = await submitSearchable(
+      page,
+      [APPROVED_REAL_BILINGUAL_IMAGE],
+      "auto",
+      "searchable-auto-approved-real-eng-sin"
+    );
+    expect(searchable.job.progress.total_pages).toBe(1);
+  });
+
   test("Searchable PDF V2 explicit and AUTO mixed-language paths preserve Unicode text", async ({ page }) => {
     await authenticateProUser(page);
     const directory = fixtureDir();
@@ -240,9 +272,12 @@ test.describe.serial("Multilingual Language Routing V1 real local full-stack E2E
     try {
       const uncertain = createUncertainPng(directory);
       const pdf = await pdfFromImages([uncertain]);
-      await page.goto("/ocr-text-v2");
+      await page.goto("/ocr-text-v2/workspace");
       await expect(page.getByRole("heading", { name: "OCR Text V2" })).toBeVisible();
+      await page.getByRole("link", { name: "Choose PDF" }).click();
+      await expect(page).toHaveURL(/\/ocr-text-v2$/);
       await page.locator('input[type="file"]').first().setInputFiles({ name: "auto-uncertain.pdf", mimeType: "application/pdf", buffer: pdf });
+      await expect(page).toHaveURL(/\/ocr-text-v2\/workspace$/);
       await page.getByLabel("OCR language").selectOption("auto");
       const firstPost = page.waitForResponse((response) => response.request().method() === "POST" && response.url().endsWith("/api/v2/ocr/text/jobs"));
       await page.getByRole("button", { name: "Start OCR" }).click();
