@@ -103,14 +103,26 @@ function safeFileMetadata(filePath: string) {
   return { path: filePath, bytes: bytes.length, sha256: crypto.createHash("sha256").update(bytes).digest("hex") };
 }
 
+async function chooseOcrLanguage(page: Page, language: "eng" | "sin" | "eng+sin" | "auto"): Promise<void> {
+  const picker = page.getByRole("combobox", { name: "OCR language" });
+  await picker.click();
+  if (language === "auto") {
+    await page.getByRole("option", { name: /Detect automatically/ }).click();
+    return;
+  }
+  const labels: Record<string, string> = { eng: "English", sin: "Sinhala" };
+  for (const code of language.split("+")) await page.getByRole("option", { name: labels[code], exact: true }).click();
+  await picker.click();
+}
+
 async function submitOcrText(page: Page, pdf: Buffer, language: "eng" | "sin" | "eng+sin" | "auto", evidenceName: string): Promise<OcrResult> {
   await page.goto("/ocr-text-v2/workspace");
-  await expect(page.getByRole("heading", { name: "OCR Text V2" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Extract Text from PDF" })).toBeVisible();
   await page.getByRole("link", { name: "Choose PDF" }).click();
   await expect(page).toHaveURL(/\/ocr-text-v2$/);
   await page.locator('input[type="file"]').first().setInputFiles({ name: `${evidenceName}.pdf`, mimeType: "application/pdf", buffer: pdf });
   await expect(page).toHaveURL(/\/ocr-text-v2\/workspace$/);
-  await page.getByLabel("OCR language").selectOption(language === "auto" ? "auto" : language.split("+"));
+  await chooseOcrLanguage(page, language);
   const postResponsePromise = page.waitForResponse((response) => response.request().method() === "POST" && response.url().endsWith("/api/v2/ocr/text/jobs"));
   await page.getByRole("button", { name: "Start OCR" }).click();
   const postResponse = await postResponsePromise;
@@ -273,12 +285,12 @@ test.describe.serial("Multilingual Language Routing V1 real local full-stack E2E
       const uncertain = createUncertainPng(directory);
       const pdf = await pdfFromImages([uncertain]);
       await page.goto("/ocr-text-v2/workspace");
-      await expect(page.getByRole("heading", { name: "OCR Text V2" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Extract Text from PDF" })).toBeVisible();
       await page.getByRole("link", { name: "Choose PDF" }).click();
       await expect(page).toHaveURL(/\/ocr-text-v2$/);
       await page.locator('input[type="file"]').first().setInputFiles({ name: "auto-uncertain.pdf", mimeType: "application/pdf", buffer: pdf });
       await expect(page).toHaveURL(/\/ocr-text-v2\/workspace$/);
-      await page.getByLabel("OCR language").selectOption("auto");
+      await chooseOcrLanguage(page, "auto");
       const firstPost = page.waitForResponse((response) => response.request().method() === "POST" && response.url().endsWith("/api/v2/ocr/text/jobs"));
       await page.getByRole("button", { name: "Start OCR" }).click();
       const firstCreated = await (await firstPost).json() as Job;
@@ -287,9 +299,9 @@ test.describe.serial("Multilingual Language Routing V1 real local full-stack E2E
       expect(firstDurable.job.error?.code).toBe("LANGUAGE_DETECTION_UNCERTAIN");
 
       await expect(page.getByText("We couldn't reliably determine the OCR language. Choose the language(s) used in this document.", { exact: true })).toBeVisible({ timeout: 15_000 });
-      const languageSelect = page.getByLabel("OCR language");
+      const languageSelect = page.getByRole("combobox", { name: "OCR language" });
       await expect(languageSelect).toBeEnabled();
-      await languageSelect.selectOption("eng");
+      await chooseOcrLanguage(page, "eng");
       await expect(page.getByRole("button", { name: "Start OCR" })).toBeEnabled();
 
       const retryPost = page.waitForResponse((response) => response.request().method() === "POST" && response.url().endsWith("/api/v2/ocr/text/jobs"));

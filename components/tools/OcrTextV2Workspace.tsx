@@ -22,6 +22,8 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
+import OcrLanguagePicker from "@/components/tools/OcrLanguagePicker";
+import { languageLabel } from "@/lib/languagePresentation";
 import {
     cancelOcrTextV2Job,
     createOcrTextV2Job,
@@ -110,12 +112,12 @@ function statusLabel(state: OcrTextV2State): string {
 }
 
 export default function OcrTextV2Workspace() {
-    const { requireAuth, isAuthenticated, isLoading: isAuthLoading } = useAuth();
+    const { openAuthModal, requireAuth, isAuthenticated, isLoading: isAuthLoading } = useAuth();
     const { file, setFile, toolId } = useSharedTool();
     const router = useRouter();
     const searchParams = useSearchParams();
     const [capabilities, setCapabilities] = useState<OcrTextV2Capabilities | null>(null);
-    const [capabilityError, setCapabilityError] = useState<string | null>(null);
+    const [capabilityError, setCapabilityError] = useState<OcrTextV2ApiError | null>(null);
     const [isLoadingCapabilities, setIsLoadingCapabilities] = useState(false);
     const [language, setLanguage] = useState("");
     const [routingPolicy, setRoutingPolicy] = useState<OcrTextV2RoutingPolicy>("AUTO");
@@ -135,17 +137,17 @@ export default function OcrTextV2Workspace() {
     const fileName = file?.name || resumedFileName || "your PDF";
     const active = state === "SUBMITTING" || state === "QUEUED" || state === "RUNNING" || state === "CANCELLING";
     const languageFallback = state === "FAILED" && errorCodeValue === "LANGUAGE_DETECTION_UNCERTAIN";
-    const canSubmit = Boolean(file && language && capabilities && (state === "FILE_READY" || languageFallback));
+    const languageReady = language !== "" && (!languageFallback || language !== "auto");
+    const canSubmit = Boolean(file && isAuthenticated && languageReady && capabilities && (state === "FILE_READY" || languageFallback));
     const selectedLanguageName = useMemo(
         () => language === "auto"
             ? "Detect automatically"
-            : language.split("+").filter(Boolean).map((code) => capabilities?.languages.find((item) => item.code === code)?.name || code).join(" + ") || language,
+            : language.split("+").filter(Boolean).map((code) => languageLabel(capabilities?.languages.find((item) => item.code === code) || { code, name: code })).join(" + ") || language,
         [capabilities, language]
     );
     const selectedPageResult = result?.pages[selectedPage] || null;
 
     const loadCapabilities = useCallback(async () => {
-        if (!isAuthenticated) return;
         setIsLoadingCapabilities(true);
         setCapabilityError(null);
         try {
@@ -156,23 +158,25 @@ export default function OcrTextV2Workspace() {
             }
             setCapabilities({ ...next, languages: usableLanguages });
             setLanguage((current) => {
-                if (current === "auto") return current;
+                if (current === "auto" || current === "") return current || "auto";
                 const selected = current.split("+").filter((code) => usableLanguages.some((item) => item.code === code));
                 return selected.join("+");
             });
         } catch (loadError) {
             setCapabilities(null);
-            setCapabilityError(displayError(loadError));
+            setCapabilityError(loadError instanceof OcrTextV2ApiError
+                ? loadError
+                : new OcrTextV2ApiError("TASK_STORAGE_UNAVAILABLE", safeMessageForCode("TASK_STORAGE_UNAVAILABLE"), 0));
         } finally {
             setIsLoadingCapabilities(false);
         }
-    }, [isAuthenticated]);
+    }, []);
 
     useEffect(() => {
-        if (isAuthLoading || !isAuthenticated) return;
+        if (isAuthLoading) return;
         const timer = window.setTimeout(() => { void loadCapabilities(); }, 0);
         return () => window.clearTimeout(timer);
-    }, [isAuthLoading, isAuthenticated, loadCapabilities]);
+    }, [isAuthLoading, loadCapabilities]);
 
     useEffect(() => {
         if (jobId || file) return;
@@ -235,6 +239,7 @@ export default function OcrTextV2Workspace() {
                     setState(nextState);
                     const nextErrorCode = nextJob.error?.code || (nextState === "CANCELLED" ? "CANCELLED" : "ENGINE_FAILURE");
                     setErrorCodeValue(nextErrorCode);
+                    if (nextErrorCode === "LANGUAGE_DETECTION_UNCERTAIN") setLanguage("");
                     setError(nextErrorCode === "LANGUAGE_DETECTION_UNCERTAIN"
                         ? safeMessageForCode(nextErrorCode)
                         : nextJob.error?.message || safeMessageForCode(nextErrorCode));
@@ -379,13 +384,31 @@ export default function OcrTextV2Workspace() {
     const totalPages = job?.progress?.total_pages || result?.pages.length || 0;
     const completedPages = job?.progress?.completed_pages || (result ? result.pages.length : 0);
     const failedPages = job?.progress?.failed_pages || [];
-    const routingModes = capabilities?.routing_modes.filter((mode) => mode.id === "AUTO" || mode.id === "FAST" || mode.id === "QUALITY") || [];
+    const routingModes = capabilities?.routing_modes.filter((mode) => mode.id === "AUTO" || mode.id === "FAST" || mode.id === "QUALITY").map((mode) => ({
+        ...mode,
+        label: mode.id === "AUTO" ? "Balanced" : mode.id === "FAST" ? "Fast" : "Best quality",
+    })) || [];
+    const capabilityRequiresAuth = capabilityError?.status === 401 || capabilityError?.status === 403;
+    const capabilityErrorMessage = capabilityRequiresAuth
+        ? "Sign in to process this document."
+        : capabilityError?.status === 0
+            ? "We couldn't connect to the processing service."
+            : "We couldn't load the available OCR languages.";
+    const submitDisabledReason = !file
+        ? "Choose a PDF first"
+        : !isAuthenticated
+            ? "Sign in required"
+            : !capabilities
+                ? "Languages unavailable"
+                : !languageReady
+                    ? "Choose at least one language"
+                    : "";
 
     return (
         <>
             <PdfToolHero
-                title="OCR Text V2"
-                description="Turn scanned or native PDFs into trustworthy, copyable plain text with durable page-by-page progress."
+                title="Extract Text from PDF"
+                description="Extract copyable text from scanned or digital PDFs."
             />
 
             <div className="mx-auto mt-10 max-w-5xl space-y-6">
@@ -413,7 +436,7 @@ export default function OcrTextV2Workspace() {
                     {!file && !jobId && (
                         <div className="mt-7 rounded-2xl border border-dashed border-indigo-500/40 bg-indigo-500/5 p-7 text-center">
                             <UploadCloud className="mx-auto text-indigo-500" size={28} />
-                            <p className="mt-3 text-sm font-semibold text-[color:var(--foreground)]">Choose a PDF to start OCR Text V2</p>
+                            <p className="mt-3 text-sm font-semibold text-[color:var(--foreground)]">Choose a PDF to extract its text</p>
                             <Link href={`/${toolId}`} className="mt-4 inline-flex rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700">Choose PDF</Link>
                         </div>
                     )}
@@ -429,18 +452,15 @@ export default function OcrTextV2Workspace() {
                         <div className="mt-7 grid gap-5 lg:grid-cols-[1fr_1fr]">
                             <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--background)]/40 p-5">
                                 <div className="flex items-center gap-2 text-sm font-bold text-[color:var(--foreground)]"><Languages size={17} className="text-indigo-500" /> Language</div>
-                                <p className="mt-1 text-xs text-[color:var(--muted)]">Choose one or more installed language packs, or let the bounded detector choose.</p>
+                                <p className="mt-1 text-xs text-[color:var(--muted)]">We’ll detect the document language automatically, or you can choose it yourself.</p>
                                 {isAuthLoading || isLoadingCapabilities ? (
                                     <div className="mt-5 flex items-center gap-2 text-sm text-[color:var(--muted)]"><Loader2 className="animate-spin" size={16} /> Loading available languages…</div>
-                                ) : !isAuthenticated ? (
-                                    <button type="button" onClick={() => requireAuth(() => { void loadCapabilities(); })} className="mt-5 w-full rounded-xl border border-indigo-500/40 px-4 py-3 text-sm font-semibold text-indigo-600 transition hover:bg-indigo-500/10">Sign in to load languages</button>
                                 ) : capabilityError ? (
-                                    <div className="mt-5 space-y-3"><p className="text-xs text-rose-600">{capabilityError}</p><button type="button" onClick={() => void loadCapabilities()} className="inline-flex items-center gap-2 rounded-xl border border-[color:var(--border)] px-3 py-2 text-xs font-semibold"><RefreshCw size={14} /> Try again</button></div>
+                                    <div className="mt-5 space-y-3"><p className="text-xs text-rose-600">{capabilityErrorMessage}</p>{capabilityRequiresAuth ? <button type="button" onClick={() => openAuthModal("login")} className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/40 px-3 py-2 text-xs font-semibold text-indigo-600"><ShieldCheck size={14} /> Sign in</button> : <button type="button" onClick={() => void loadCapabilities()} className="inline-flex items-center gap-2 rounded-xl border border-[color:var(--border)] px-3 py-2 text-xs font-semibold"><RefreshCw size={14} /> Try again</button>}</div>
+                                ) : !isAuthenticated ? (
+                                    <div className="mt-5 space-y-3"><p className="text-sm font-semibold text-rose-600">Sign in to process this document.</p><button type="button" onClick={() => openAuthModal("login")} className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/40 px-3 py-2 text-xs font-semibold text-indigo-600"><ShieldCheck size={14} /> Sign in</button></div>
                                 ) : (
-                                    <select aria-label="OCR language" multiple value={language === "auto" ? ["auto"] : language ? language.split("+") : []} onChange={(event) => { const values = Array.from(event.target.selectedOptions, (option) => option.value); setLanguage(values.includes("auto") ? "auto" : values.sort().join("+")); }} disabled={!capabilities || active} className="mt-5 min-h-28 w-full rounded-xl border border-[color:var(--border)] bg-[var(--card)] px-3 py-3 text-sm text-[color:var(--foreground)] outline-none focus:border-indigo-500">
-                                        <option value="auto">Detect automatically</option>
-                                        {capabilities?.languages.map((item) => <option key={item.code} value={item.code}>{item.name} ({item.code})</option>)}
-                                    </select>
+                                    <OcrLanguagePicker languages={capabilities?.languages || []} value={language} onChange={setLanguage} disabled={!capabilities || active} />
                                 )}
                             </div>
 
@@ -461,7 +481,7 @@ export default function OcrTextV2Workspace() {
 
                     {file && !active && !result && (state === "FILE_READY" || languageFallback) && (
                         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <p className="text-xs text-[color:var(--muted)]">{languageFallback ? "Choose the language(s) used in this document, then try the same upload again." : "The backend will validate the PDF, page limit, language, and processing eligibility before queueing it."}</p>
+                            <div><p className="text-xs text-[color:var(--muted)]">{languageFallback ? "Choose the language(s) used in this document, then start the same upload again." : "The backend will validate the PDF, page limit, language, and processing eligibility before queueing it."}</p>{!canSubmit && <p className="mt-1 text-xs font-semibold text-amber-600" role="status">{submitDisabledReason}</p>}</div>
                             <button type="button" onClick={handleSubmit} disabled={!canSubmit} className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-md transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"><ShieldCheck size={16} /> Start OCR</button>
                         </div>
                     )}

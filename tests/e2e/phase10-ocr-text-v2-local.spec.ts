@@ -64,9 +64,12 @@ async function waitForJob(page: Page, jobId: string): Promise<{ job: Job; status
 test("OCR Text V2 scanned UI path completes a durable real-Tesseract job", async ({ page }) => {
   await authenticateProUser(page);
   await page.goto("/ocr-text-v2");
-  await expect(page.getByRole("heading", { name: "OCR Text V2" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Extract Text from PDF" })).toBeVisible();
   await page.locator('input[type="file"]').first().setInputFiles({ name: "phase10-ocr-text.pdf", mimeType: "application/pdf", buffer: await scannedPdf() });
-  await page.getByLabel("OCR language").selectOption("eng");
+  const picker = page.getByRole("combobox", { name: "OCR language" });
+  await picker.click();
+  await page.getByRole("option", { name: "English", exact: true }).click();
+  await picker.click();
 
   const postResponsePromise = page.waitForResponse((response) => response.request().method() === "POST" && response.url().endsWith("/api/v2/ocr/text/jobs"));
   await page.getByRole("button", { name: "Start OCR" }).click();

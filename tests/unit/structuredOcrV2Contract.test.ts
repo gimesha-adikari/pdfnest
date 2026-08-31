@@ -1,6 +1,7 @@
 import assert from "assert";
 import {
     createStructuredOcrV2Job,
+    getStructuredCapabilities,
     getStructuredOcrV2Job,
     getStructuredOcrV2Result,
     normalizeStructuredState,
@@ -34,6 +35,16 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise
         warnings: [],
         result_available: false,
     };
+    if (String(input).endsWith("/structured/capabilities")) {
+        return new Response(JSON.stringify({
+            schema_version: "ocr_v2_structured_capabilities.v1",
+            service_ready: true,
+            native_first: true,
+            languages: [{ code: "eng", name: "English" }, { code: "jpn_vert", name: "jpn_vert" }],
+            routing_modes: [{ id: "AUTO", label: "Automatic", description: "Automatic", available: true }],
+            language_policy: { modes: ["EXPLICIT", "AUTO"], default_mode: "AUTO", max_languages: 3, auto_statuses: ["DETECTED", "UNCERTAIN"] },
+        }), { status: 200 });
+    }
     if (String(input).endsWith("/result")) {
         return new Response(JSON.stringify({ schema_version: "ocr_v2_structured_document.v1", result_id: "result-1", source: {}, pages: [], capabilities: [], available_capabilities: [], warnings: [], validation: { valid: true } }), { status: 200 });
     }
@@ -42,6 +53,9 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise
 
 async function run(): Promise<void> {
     try {
+        const capabilities = await getStructuredCapabilities();
+        assert.deepStrictEqual(capabilities.languages.map((item) => item.code), ["eng", "jpn_vert"]);
+        assert.strictEqual(capabilities.routing_modes[0].id, "AUTO");
         const created = await createStructuredOcrV2Job(new File(["%PDF-1.7"], "sample.pdf", { type: "application/pdf" }), "DOCUMENT_EXTRACTION_V2", "eng", "AUTO", "idem-1", "request-1");
         assert.strictEqual(created.job_id, "123e4567-e89b-12d3-a456-426614174000");
         assert.strictEqual(lastRequest?.headers.get("Idempotency-Key"), "idem-1");

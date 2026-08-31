@@ -4,6 +4,31 @@ export type StructuredOcrV2Profile = "DOCUMENT_EXTRACTION_V2" | "PDF_MARKDOWN_V2
 export type StructuredOcrV2State = "IDLE" | "FILE_READY" | "SUBMITTING" | "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELLING" | "CANCELLED";
 export type StructuredOcrV2RoutingPolicy = "AUTO" | "FAST" | "QUALITY";
 
+export interface StructuredOcrV2Language {
+    code: string;
+    name: string;
+}
+
+export interface StructuredOcrV2RoutingMode {
+    id: StructuredOcrV2RoutingPolicy;
+    label: string;
+    description: string;
+    available: boolean;
+}
+
+export interface StructuredOcrV2Capabilities {
+    schema_version?: string;
+    service_ready?: boolean;
+    languages: StructuredOcrV2Language[];
+    routing_modes: StructuredOcrV2RoutingMode[];
+    language_policy?: {
+        modes: string[];
+        default_mode: string;
+        max_languages: number;
+        auto_statuses: string[];
+    };
+}
+
 export interface StructuredOcrV2Progress {
     completed_pages: number;
     total_pages: number;
@@ -81,6 +106,7 @@ export function safeStructuredMessage(code: string): string {
         case "FORBIDDEN": return "This document job is not available for your account.";
         case "INVALID_INPUT": return "Choose a valid PDF and try again.";
         case "UNSUPPORTED_LANGUAGE": return "Choose one of the available languages to continue.";
+        case "LANGUAGE_DETECTION_UNCERTAIN": return "We couldn't reliably determine the document language.";
         case "STRUCTURED_ENGINE_UNAVAILABLE": return "Structured document processing is temporarily unavailable.";
         case "STRUCTURED_OUTPUT_INVALID": return "The document result could not be validated safely.";
         case "STRUCTURED_PROFILE_NOT_ELIGIBLE": return "This document is not eligible for the selected structured output.";
@@ -116,8 +142,8 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
     }
 }
 
-export async function getStructuredCapabilities(): Promise<Record<string, unknown>> {
-    return requestJson<Record<string, unknown>>("/api/v2/ocr/structured/capabilities");
+export async function getStructuredCapabilities(): Promise<StructuredOcrV2Capabilities> {
+    return requestJson<StructuredOcrV2Capabilities>("/api/v2/ocr/structured/capabilities");
 }
 
 export async function createStructuredOcrV2Job(file: File, profile: StructuredOcrV2Profile, language: string, routingPolicy: StructuredOcrV2RoutingPolicy, idempotencyKey: string, requestId: string): Promise<StructuredOcrV2Job> {

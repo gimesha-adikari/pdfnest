@@ -131,6 +131,14 @@ async function runApiClientTests(): Promise<void> {
 
         globalThis.fetch = async (): Promise<Response> => new Response(JSON.stringify({ code: "FORBIDDEN", message: "not yours" }), { status: 403 });
         await assert.rejects(() => getOcrTextV2Job(created.job_id), (error: unknown) => error instanceof OcrTextV2ApiError && error.code === "FORBIDDEN");
+
+        let authFailureRequests = 0;
+        globalThis.fetch = async (): Promise<Response> => {
+            authFailureRequests += 1;
+            return new Response(JSON.stringify({ error: "authentication required" }), { status: 401 });
+        };
+        await assert.rejects(() => getOcrTextV2Capabilities(), (error: unknown) => error instanceof OcrTextV2ApiError && error.code === "AUTHENTICATION_REQUIRED");
+        assert.strictEqual(authFailureRequests, 1, "authentication failures must not be retried automatically");
     } finally {
         globalThis.fetch = originalFetch;
     }

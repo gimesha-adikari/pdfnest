@@ -158,7 +158,7 @@ export function safeMessageForCode(code: string): string {
         case "FORBIDDEN":
             return "This OCR job is not available for your account.";
         case "AUTHENTICATION_REQUIRED":
-            return "Sign in to use OCR Text V2.";
+            return "Sign in to process this document.";
         case "TASK_STORAGE_UNAVAILABLE":
             return "The OCR service is temporarily unavailable. Please retry this submission.";
         case "PROFILE_NOT_ELIGIBLE":
