@@ -6,6 +6,7 @@ import {
     getStructuredOcrV2Result,
     normalizeStructuredState,
     safeStructuredMessage,
+    projectStructuredWarnings,
     StructuredOcrV2ApiError,
     structuredDownloadName,
 } from "@/lib/structuredOcrV2";
@@ -18,6 +19,8 @@ assert.strictEqual(normalizeStructuredState("failed"), "FAILED");
 assert.strictEqual(structuredDownloadName("Quarterly report.pdf", "PDF_MARKDOWN_V2"), "Quarterly-report-markdown.md");
 assert.strictEqual(structuredDownloadName(".pdf", "DOCUMENT_EXTRACTION_V2"), "document-structured.json");
 assert.strictEqual(safeStructuredMessage("STRUCTURED_ENGINE_UNAVAILABLE"), "Structured document processing is temporarily unavailable.");
+assert.deepStrictEqual(projectStructuredWarnings(["TABLE_STRUCTURE_UNAVAILABLE:0", "TABLE_STRUCTURE_UNAVAILABLE:1", "FORMULA_STRUCTURE_UNAVAILABLE_WITH_CURRENT_LOCAL_ENGINES"]), ["Some table formatting could not be recovered reliably from 2 pages.", "Some equations may appear as plain text."]);
+assert.deepStrictEqual(projectStructuredWarnings(["MIXED_PAGE_RECONCILED:0"]), []);
 
 const originalFetch = globalThis.fetch;
 let lastRequest: { url: string; method: string; headers: Headers; body: FormData | null } | null = null;

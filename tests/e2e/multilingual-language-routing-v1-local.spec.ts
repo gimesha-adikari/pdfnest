@@ -165,9 +165,19 @@ async function submitOcrText(page: Page, pdf: Buffer, language: "eng" | "sin" | 
 
 async function submitSearchable(page: Page, files: string[], language: "eng+sin" | "auto", evidenceName: string): Promise<{ job: Job; pdfPath: string }> {
   await page.goto("/searchable-pdf-v2/workspace");
-  await expect(page.getByRole("heading", { name: "Searchable PDF V2" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Build a searchable PDF" })).toBeVisible();
   await page.locator('input[type="file"]').first().setInputFiles(files);
-  await page.locator('select[aria-label="OCR language"]').selectOption(language === "auto" ? "auto" : language.split("+"));
+  const picker = page.getByRole("combobox", { name: "OCR language" });
+  await picker.click();
+  if (language === "auto") {
+    await page.getByRole("option", { name: /Detect automatically/ }).click();
+  } else {
+    for (const code of language.split("+")) {
+      const label = code === "eng" ? "English" : code === "sin" ? "Sinhala" : code;
+      await page.getByRole("option", { name: label, exact: true }).click();
+    }
+    await page.keyboard.press("Escape");
+  }
   const postResponsePromise = page.waitForResponse((response) => response.request().method() === "POST" && response.url().endsWith("/api/v2/ocr/searchable-pdf/jobs"));
   await page.getByRole("button", { name: "Create searchable PDF" }).click();
   const postResponse = await postResponsePromise;

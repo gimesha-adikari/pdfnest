@@ -22,9 +22,9 @@ import {
     XCircle,
 } from "lucide-react";
 
-import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
+import OcrLanguagePicker from "@/components/tools/OcrLanguagePicker";
 import {
     cancelSearchablePdfV2Job,
     createSearchablePdfV2Job,
@@ -34,6 +34,7 @@ import {
     newSearchablePdfV2RequestIdentity,
     normalizeSearchablePdfV2State,
     safeMessageForSearchablePdfCode,
+    searchablePdfV2RetryDelayMs,
     type SearchablePdfV2Capabilities,
     type SearchablePdfV2JobStatus,
     type SearchablePdfV2RoutingPolicy,
@@ -95,7 +96,7 @@ function saveStoredJob(job: StoredSearchableJob): void {
 }
 
 function displayError(error: unknown): string {
-    if (error instanceof SearchablePdfV2ApiError) return error.message || safeMessageForSearchablePdfCode(error.code);
+    if (error instanceof SearchablePdfV2ApiError) return safeMessageForSearchablePdfCode(error.code);
     return "The searchable PDF could not be completed. Please try again.";
 }
 
@@ -196,13 +197,12 @@ function SortablePageCard({
 }
 
 export default function SearchablePdfV2Workspace() {
-    const { requireAuth, isAuthenticated, isLoading: isAuthLoading } = useAuth();
     const { file, setFile, setDownloadData } = useSharedTool();
     const [pages, setPages] = useState<SearchablePage[]>([]);
     const [capabilities, setCapabilities] = useState<SearchablePdfV2Capabilities | null>(null);
     const [capabilityError, setCapabilityError] = useState<string | null>(null);
     const [isLoadingCapabilities, setIsLoadingCapabilities] = useState(false);
-    const [language, setLanguage] = useState("");
+    const [language, setLanguage] = useState("auto");
     const [routingPolicy, setRoutingPolicy] = useState<SearchablePdfV2RoutingPolicy>("AUTO");
     const [state, setState] = useState<SearchablePdfV2State>("IDLE");
     const [jobId, setJobId] = useState<string | null>(null);
@@ -271,7 +271,6 @@ export default function SearchablePdfV2Workspace() {
     }, [file, selectedFormats]);
 
     const loadCapabilities = useCallback(async () => {
-        if (!isAuthenticated) return;
         setIsLoadingCapabilities(true);
         setCapabilityError(null);
         try {
@@ -282,7 +281,8 @@ export default function SearchablePdfV2Workspace() {
             setCapabilities({ ...next, languages: usableLanguages });
             setLanguage((current) => {
                 if (current === "auto") return current;
-                return current.split("+").filter((code) => usableLanguages.some((item) => item.code === code)).sort().join("+");
+                const filtered = current.split("+").filter((code) => usableLanguages.some((item) => item.code === code)).sort().join("+");
+                return filtered || "auto";
             });
             setRoutingPolicy((current) => next.routing_modes.some((mode) => mode.id === current && mode.available) ? current : ((next.routing_modes.find((mode) => mode.available)?.id as SearchablePdfV2RoutingPolicy) || "AUTO"));
         } catch (loadError) {
@@ -291,13 +291,12 @@ export default function SearchablePdfV2Workspace() {
         } finally {
             setIsLoadingCapabilities(false);
         }
-    }, [isAuthenticated]);
+    }, []);
 
     useEffect(() => {
-        if (isAuthLoading || !isAuthenticated) return;
         const timer = window.setTimeout(() => { void loadCapabilities(); }, 0);
         return () => window.clearTimeout(timer);
-    }, [isAuthLoading, isAuthenticated, loadCapabilities]);
+    }, [loadCapabilities]);
 
     useEffect(() => {
         if (jobId || file) return;
@@ -317,6 +316,13 @@ export default function SearchablePdfV2Workspace() {
         let mounted = true;
         let timer: number | undefined;
         let interval = 1200;
+        let transientRetryAttempt = 0;
+
+        const scheduleTransientPoll = (pollError?: unknown) => {
+            const delay = searchablePdfV2RetryDelayMs(pollError, transientRetryAttempt);
+            transientRetryAttempt = Math.min(transientRetryAttempt + 1, 3);
+            timer = window.setTimeout(() => { void poll(); }, delay);
+        };
 
         const loadResult = async (): Promise<boolean> => {
             if (!mounted || resultLoadedRef.current === jobId) return true;
@@ -330,7 +336,10 @@ export default function SearchablePdfV2Workspace() {
                 return true;
             } catch (resultError) {
                 if (!mounted) return true;
-                if (isTransientPollError(resultError)) return false;
+                if (isTransientPollError(resultError)) {
+                    scheduleTransientPoll(resultError);
+                    return true;
+                }
                 setErrorCodeValue(errorCode(resultError));
                 setError(displayError(resultError));
                 setState("FAILED");
@@ -343,13 +352,10 @@ export default function SearchablePdfV2Workspace() {
                 const nextJob = await getSearchablePdfV2Job(jobId);
                 if (!mounted) return;
                 setJob(nextJob);
+                transientRetryAttempt = 0;
                 const nextState = normalizeSearchablePdfV2State(nextJob.status);
                 if (nextState === "SUCCEEDED") {
-                    const loaded = await loadResult();
-                    if (!loaded && mounted) {
-                        interval = 2500;
-                        timer = window.setTimeout(() => { void poll(); }, interval);
-                    }
+                    await loadResult();
                     return;
                 }
                 if (nextState === "FAILED" || nextState === "CANCELLED") {
@@ -364,8 +370,7 @@ export default function SearchablePdfV2Workspace() {
             } catch (pollError) {
                 if (!mounted) return;
                 if (isTransientPollError(pollError)) {
-                    interval = 2500;
-                    timer = window.setTimeout(() => { void poll(); }, interval);
+                    scheduleTransientPoll(pollError);
                     return;
                 }
                 setErrorCodeValue(errorCode(pollError));
@@ -539,14 +544,14 @@ export default function SearchablePdfV2Workspace() {
         }
     }, [artifact, setDownloadData]);
 
-    const handleSubmit = () => requireAuth(() => { void submit(); });
+    const handleSubmit = () => { void submit(); };
     const selectedLanguageName = useMemo(() => language === "auto"
         ? "Detect automatically"
         : language.split("+").filter(Boolean).map((code) => capabilities?.languages.find((item) => item.code === code)?.name || code).join(" + ") || language, [capabilities, language]);
 
     return (
         <>
-            <PdfToolHero title="Searchable PDF V2" description="Turn a set of scanned images into one searchable PDF while preserving the page order and original appearance." />
+            <PdfToolHero title="Build a searchable PDF" description="Turn scanned images into one searchable PDF while preserving the page order and original appearance." />
             <div className="mx-auto mt-10 max-w-5xl space-y-6 px-4 pb-10">
                 <section className="rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-5 shadow-lg sm:p-8">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -562,15 +567,15 @@ export default function SearchablePdfV2Workspace() {
 
                     {pages.length > 0 && !active && !jobId && <div className="mt-7"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-sm font-bold text-[color:var(--foreground)]">Pages in order</h2><p className="mt-1 text-xs text-[color:var(--muted)]">Drag a page, or use Up and Down for keyboard-friendly reordering.</p></div><><input ref={inputRef} type="file" accept={selectedFormats.length > 0 ? selectedFormats.join(",") : "image/jpeg,image/png,image/webp"} multiple className="sr-only" onChange={(event) => { addFiles(Array.from(event.target.files || [])); event.target.value = ""; }} /><button type="button" onClick={() => inputRef.current?.click()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[color:var(--border)] px-3 py-2 text-xs font-semibold hover:border-indigo-500"><ImagePlus size={15} /> Add more</button></></div><DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}><SortableContext items={pages.map((page) => page.id)} strategy={verticalListSortingStrategy}><ol aria-label="Selected image pages" className="mt-4 grid gap-3">{pages.map((page, index) => <SortablePageCard key={page.id} page={page} index={index} disabled={active} onRemove={() => removePage(page.id)} onMove={(direction) => movePage(index, direction)} />)}</ol></SortableContext></DndContext></div>}
 
-                    {!isAuthenticated && !isAuthLoading && !active && !jobId && <p className="mt-5 text-center text-xs text-[color:var(--muted)]">Sign in before submitting. Your images stay in this browser until you start the job.</p>}
+                    {!active && !jobId && <p className="mt-5 text-center text-xs text-[color:var(--muted)]">You can process this document as a guest. Sign in if you want account-based access to your history.</p>}
 
-                    {pages.length > 0 && !active && !jobId && <div className="mt-7 grid gap-5 lg:grid-cols-[1fr_1fr]"><div className="rounded-2xl border border-[color:var(--border)] bg-[var(--background)]/40 p-5"><div className="flex items-center gap-2 text-sm font-bold text-[color:var(--foreground)]"><Languages size={17} className="text-indigo-500" /> OCR language</div><p className="mt-1 text-xs text-[color:var(--muted)]">Choose one or more installed packs, or use bounded automatic detection.</p>{isAuthLoading || isLoadingCapabilities ? <div className="mt-5 flex items-center gap-2 text-sm text-[color:var(--muted)]"><Loader2 className="animate-spin" size={16} /> Loading available languages…</div> : !isAuthenticated ? <button type="button" onClick={() => requireAuth(() => { void loadCapabilities(); })} className="mt-5 w-full rounded-xl border border-indigo-500/40 px-4 py-3 text-sm font-semibold text-indigo-600 hover:bg-indigo-500/10">Sign in to load languages</button> : capabilityError ? <div className="mt-5 space-y-3"><p className="text-xs text-rose-600">{capabilityError}</p><button type="button" onClick={() => void loadCapabilities()} className="inline-flex items-center gap-2 rounded-xl border border-[color:var(--border)] px-3 py-2 text-xs font-semibold"><RefreshCw size={14} /> Try again</button></div> : <select aria-label="OCR language" multiple value={language === "auto" ? ["auto"] : language ? language.split("+") : []} onChange={(event) => { const values = Array.from(event.target.selectedOptions, (option) => option.value); setLanguage(values.includes("auto") ? "auto" : values.sort().join("+")); }} className="mt-5 min-h-28 w-full rounded-xl border border-[color:var(--border)] bg-[var(--card)] px-3 py-3 text-sm text-[color:var(--foreground)] outline-none focus:border-indigo-500"><option value="auto">Detect automatically</option>{capabilities?.languages.map((item) => <option key={item.code} value={item.code}>{item.name} ({item.code})</option>)}</select>}</div><div className="rounded-2xl border border-[color:var(--border)] bg-[var(--background)]/40 p-5"><div className="flex items-center gap-2 text-sm font-bold text-[color:var(--foreground)]"><ShieldCheck size={17} className="text-emerald-500" /> Processing path</div><p className="mt-1 text-xs text-[color:var(--muted)]">The service will preserve your page order and add an invisible text layer.</p><div className="mt-5 grid gap-2">{routingModes.map((mode) => <button key={mode.id} type="button" onClick={() => setRoutingPolicy(mode.id as SearchablePdfV2RoutingPolicy)} className={`rounded-xl border px-3 py-3 text-left transition ${routingPolicy === mode.id ? "border-indigo-500 bg-indigo-500/10" : "border-[color:var(--border)] hover:border-indigo-400"}`}><span className="flex items-center justify-between text-sm font-semibold text-[color:var(--foreground)]"><span>{mode.label}</span>{routingPolicy === mode.id && <Check size={15} className="text-indigo-500" />}</span><span className="mt-1 block text-xs text-[color:var(--muted)]">{mode.description}</span></button>)}{routingModes.length === 0 && <p className="text-xs text-[color:var(--muted)]">No processing paths are currently available.</p>}</div></div></div>}
+                    {pages.length > 0 && !active && !jobId && <div className="mt-7 grid gap-5 lg:grid-cols-[1fr_1fr]"><div className="rounded-2xl border border-[color:var(--border)] bg-[var(--background)]/40 p-5"><div className="flex items-center gap-2 text-sm font-bold text-[color:var(--foreground)]"><Languages size={17} className="text-indigo-500" /> Language</div><p className="mt-1 text-xs text-[color:var(--muted)]">Detect the languages automatically, or choose one or more languages manually.</p>{isLoadingCapabilities ? <div className="mt-5 flex items-center gap-2 text-sm text-[color:var(--muted)]"><Loader2 className="animate-spin" size={16} /> Loading available languages…</div> : capabilityError ? <div className="mt-5 space-y-3"><p className="text-xs text-rose-600">{capabilityError}</p><button type="button" onClick={() => void loadCapabilities()} className="inline-flex items-center gap-2 rounded-xl border border-[color:var(--border)] px-3 py-2 text-xs font-semibold"><RefreshCw size={14} /> Try again</button></div> : <OcrLanguagePicker languages={capabilities?.languages || []} value={language} onChange={setLanguage} disabled={!capabilities || active} />}</div><div className="rounded-2xl border border-[color:var(--border)] bg-[var(--background)]/40 p-5"><div className="flex items-center gap-2 text-sm font-bold text-[color:var(--foreground)]"><ShieldCheck size={17} className="text-emerald-500" /> Processing mode</div><p className="mt-1 text-xs text-[color:var(--muted)]">Choose how quickly to create the PDF. The service selects the actual processing method.</p><div className="mt-5 grid gap-2">{routingModes.map((mode) => <button key={mode.id} type="button" onClick={() => setRoutingPolicy(mode.id as SearchablePdfV2RoutingPolicy)} className={`rounded-xl border px-3 py-3 text-left transition ${routingPolicy === mode.id ? "border-indigo-500 bg-indigo-500/10" : "border-[color:var(--border)] hover:border-indigo-400"}`}><span className="flex items-center justify-between text-sm font-semibold text-[color:var(--foreground)]"><span>{mode.label}</span>{routingPolicy === mode.id && <Check size={15} className="text-indigo-500" />}</span><span className="mt-1 block text-xs text-[color:var(--muted)]">{mode.description}</span></button>)}{routingModes.length === 0 && <p className="text-xs text-[color:var(--muted)]">No processing modes are currently available.</p>}</div></div></div>}
 
                     {pages.length > 0 && !active && !jobId && <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-xs text-[color:var(--muted)]">{pages.length} page{pages.length === 1 ? "" : "s"} will be submitted in exactly this order.</p><button type="button" onClick={handleSubmit} disabled={!canSubmit} className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-md hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"><ShieldCheck size={16} /> Create searchable PDF</button></div>}
 
                     {active && <div className="mt-7 rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-5" role="status" aria-live="polite"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-bold text-[color:var(--foreground)]">{statusLabel(state)}</p><p className="mt-1 text-xs text-[color:var(--muted)]">{state === "QUEUED" ? "Your images are safely queued." : state === "CANCELLING" ? "Waiting for the server to confirm cancellation." : `Using ${selectedLanguageName || "the selected language"}.`}</p></div>{(state === "QUEUED" || state === "RUNNING") && <button type="button" onClick={() => void cancel()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-500/40 px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-500/10"><XCircle size={15} /> Cancel</button>}{state === "CANCELLING" && <span className="inline-flex items-center gap-2 text-xs font-semibold text-amber-600"><Loader2 className="animate-spin" size={15} /> Cancelling…</span>}</div><div className="mt-5" role="progressbar" aria-label="Searchable PDF page progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent(job)}><div className="flex items-center justify-between text-xs font-semibold text-[color:var(--muted)]"><span>{totalPages ? `${completedPages} of ${totalPages} pages complete` : "Preparing page progress…"}</span><span>{totalPages ? `${progressPercent(job)}%` : ""}</span></div><div className="mt-2 h-2.5 overflow-hidden rounded-full bg-[color:var(--border)]">{totalPages ? <div className="h-full rounded-full bg-indigo-600 transition-all" style={{ width: `${progressPercent(job)}%` }} /> : <div className="h-full w-1/3 animate-pulse rounded-full bg-indigo-600" />}</div>{job?.progress.current_page !== undefined && state === "RUNNING" && <p className="mt-3 text-xs text-[color:var(--muted)]">Working on page {job.progress.current_page + 1} of {totalPages}.</p>}</div></div>}
 
-                    {(state === "FAILED" || state === "CANCELLED") && !artifact && <div className="mt-7 rounded-2xl border border-rose-500/25 bg-rose-500/5 p-5" role="alert"><div className="flex items-start gap-3"><AlertCircle className="mt-0.5 shrink-0 text-rose-600" size={18} /><div><p className="text-sm font-bold text-[color:var(--foreground)]">{statusLabel(state)}</p><p className="mt-1 text-sm text-[color:var(--muted)]">{error || safeMessageForSearchablePdfCode(errorCodeValue || "ENGINE_FAILURE")}</p><p className="mt-2 text-xs text-[color:var(--muted)]">No new request was started automatically.</p></div></div><button type="button" onClick={() => pages.length > 0 ? prepareRetry() : reset()} className="mt-4 inline-flex items-center gap-2 rounded-xl border border-[color:var(--border)] px-3 py-2 text-xs font-semibold"><RefreshCw size={14} /> {pages.length > 0 ? "Try again" : "Choose images"}</button></div>}
+                    {(state === "FAILED" || state === "CANCELLED") && !artifact && <div className="mt-7 rounded-2xl border border-rose-500/25 bg-rose-500/5 p-5" role="alert"><div className="flex items-start gap-3"><AlertCircle className="mt-0.5 shrink-0 text-rose-600" size={18} /><div><p className="text-sm font-bold text-[color:var(--foreground)]">{statusLabel(state)}</p><p className="mt-1 text-sm text-[color:var(--muted)]">{error || safeMessageForSearchablePdfCode(errorCodeValue || "ENGINE_FAILURE")}</p><p className="mt-2 text-xs text-[color:var(--muted)]">No new request was started automatically.</p></div></div><button type="button" onClick={() => errorCodeValue === "INPUT_DOWNLOAD" ? reset() : pages.length > 0 ? prepareRetry() : reset()} className="mt-4 inline-flex items-center gap-2 rounded-xl border border-[color:var(--border)] px-3 py-2 text-xs font-semibold"><RefreshCw size={14} /> {errorCodeValue === "INPUT_DOWNLOAD" ? "Upload images again" : pages.length > 0 ? "Try again" : "Choose images"}</button></div>}
                 </section>
 
                 {artifact && state === "SUCCEEDED" && <section className="overflow-hidden rounded-3xl border border-[color:var(--border)] bg-[var(--card)] shadow-lg"><div className="flex flex-col gap-4 border-b border-[color:var(--border)] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6"><div className="flex items-center gap-3"><CheckCircle2 className="text-emerald-500" size={22} /><div><h2 className="text-lg font-bold text-[color:var(--foreground)]">Your searchable PDF is ready</h2><p className="mt-1 text-xs text-[color:var(--muted)]">{displayedFileNames.length} page{displayedFileNames.length === 1 ? "" : "s"} · {selectedLanguageName || "Selected language"}</p></div></div><div className="flex flex-wrap gap-2"><button type="button" onClick={download} disabled={isDownloading} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"><Download size={14} /> Download PDF</button><button type="button" onClick={reset} className="inline-flex items-center gap-2 rounded-xl border border-[color:var(--border)] px-3 py-2 text-xs font-semibold hover:border-indigo-500"><RotateCcw size={14} /> New PDF</button></div></div>{previewUrl && <div className="bg-[var(--background)] p-3 sm:p-5"><iframe title="Searchable PDF preview" src={previewUrl} className="h-[560px] w-full rounded-2xl border border-[color:var(--border)] bg-white" /></div>}<div className="border-t border-[color:var(--border)] px-5 py-4 text-xs text-[color:var(--muted)] sm:px-6">The visual pages are preserved, with searchable text added by the server.</div></section>}

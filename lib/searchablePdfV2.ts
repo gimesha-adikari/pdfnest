@@ -81,12 +81,14 @@ export interface SearchablePdfV2JobStatus {
 export class SearchablePdfV2ApiError extends Error {
     readonly code: string;
     readonly status: number;
+    readonly retryAfterMs?: number;
 
-    constructor(code: string, message: string, status: number) {
+    constructor(code: string, message: string, status: number, retryAfterMs?: number) {
         super(message);
         this.name = "SearchablePdfV2ApiError";
         this.code = code;
         this.status = status;
+        this.retryAfterMs = retryAfterMs;
     }
 }
 
@@ -126,8 +128,10 @@ export function safeMessageForSearchablePdfCode(code: string): string {
             return "Searchable PDF processing was cancelled.";
         case "INVALID_INPUT":
             return "Choose at least one supported image and try again.";
+        case "INPUT_DOWNLOAD":
+            return "We couldn't access one of your uploaded images. Upload the images again to start over.";
         case "TASK_STORAGE_UNAVAILABLE":
-            return "The searchable PDF service is temporarily unavailable. Please try again.";
+            return "We couldn't save your searchable PDF. Please try again.";
         case "INVALID_ENGINE_OUTPUT":
         case "ENGINE_FAILURE":
             return "The searchable PDF could not be completed. Please try again.";
@@ -136,6 +140,21 @@ export function safeMessageForSearchablePdfCode(code: string): string {
         default:
             return "The searchable PDF request could not be completed. Please try again.";
     }
+}
+
+function retryAfterMilliseconds(value: string | null): number | undefined {
+    if (!value) return undefined;
+    const seconds = Number(value);
+    if (Number.isFinite(seconds) && seconds >= 0) return Math.min(10_000, Math.max(250, seconds * 1000));
+    const date = Date.parse(value);
+    if (!Number.isFinite(date)) return undefined;
+    return Math.min(10_000, Math.max(250, date - Date.now()));
+}
+
+export function searchablePdfV2RetryDelayMs(error: unknown, attempt: number): number {
+    if (error instanceof SearchablePdfV2ApiError && error.retryAfterMs !== undefined) return error.retryAfterMs;
+    const boundedAttempt = Math.max(0, Math.min(3, attempt));
+    return Math.min(8_000, 1_000 * (2 ** boundedAttempt));
 }
 
 async function parseError(response: Response): Promise<SearchablePdfV2ApiError> {
@@ -149,7 +168,7 @@ async function parseError(response: Response): Promise<SearchablePdfV2ApiError> 
     const detail = isRecord(root.detail) ? root.detail : root;
     const code = typeof detail.code === "string" ? detail.code : codeForStatus(response.status);
     const message = typeof detail.message === "string" ? detail.message : safeMessageForSearchablePdfCode(code);
-    return new SearchablePdfV2ApiError(code, message, response.status);
+    return new SearchablePdfV2ApiError(code, message, response.status, retryAfterMilliseconds(response.headers.get("Retry-After")));
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {

@@ -779,10 +779,10 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
                                     className="w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--background)] px-4 py-2 text-sm font-medium text-[color:var(--foreground)] outline-none transition focus:border-indigo-500"
                                 >
                                     <option value="smart" disabled={!canUseSmartMode}>
-                                        Smart (text first, OCR fallback)
+                                        Smart (recommended)
                                     </option>
                                     <option value="manual">Manual highlight</option>
-                                    <option value="ocr">OCR page</option>
+                                        <option value="ocr">Recognize scanned text</option>
                                 </select>
                             </div>
 
@@ -849,9 +849,9 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
                                             </p>
                                             <p className="mt-0.5 opacity-80">
                                                 {isScannedPage
-                                                    ? "This page has no selectable text. Choose Manual highlight or Recognize Text."
+                                                    ? "This page has no selectable text. Manual highlight or Recognize scanned text is recommended."
                                                     : isMixedPage
-                                                        ? "Could be scanned document. Manual highlight or Recognize Text is recommended."
+                                                        ? "This may be a scanned document. Manual highlight or Recognize scanned text is recommended."
                                                         : isTextPage
                                                             ? "Selectable text detected. Smart mode is recommended."
                                                             : "No clear text structure detected on this page."}
@@ -954,9 +954,9 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
                                 </div>
 
                                 <p className="mt-2 text-[11px] text-[color:var(--muted)]">
-                                    {jobError ||
+                                        {jobError ||
                                         job?.message ||
-                                        (isProcessing ? "Uploading file to worker..." : "Waiting for job update...")}
+                                            (isProcessing ? "Uploading your document..." : "Waiting for processing to start...")}
                                 </p>
 
                                 {jobId ? (

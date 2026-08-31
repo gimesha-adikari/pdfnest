@@ -6,6 +6,7 @@ import {
     getSearchablePdfV2Job,
     normalizeSearchablePdfV2State,
     safeMessageForSearchablePdfCode,
+    searchablePdfV2RetryDelayMs,
     safeSearchablePdfDownloadFilename,
     SearchablePdfV2ApiError,
     type SearchablePdfV2JobStatus,
@@ -31,6 +32,11 @@ assert.strictEqual(normalizeSearchablePdfV2State("failed"), "FAILED");
 assert.strictEqual(safeSearchablePdfDownloadFilename("Receipt / August.png"), "Receipt-August-searchable.pdf");
 assert.strictEqual(safeMessageForSearchablePdfCode("AUTHENTICATION_REQUIRED"), "Sign in to create a searchable PDF.");
 assert.strictEqual(safeMessageForSearchablePdfCode("PDF_RENDER_FAILURE"), "The searchable PDF could not be rendered while preserving the source image.");
+assert.strictEqual(safeMessageForSearchablePdfCode("TASK_STORAGE_UNAVAILABLE"), "We couldn't save your searchable PDF. Please try again.");
+assert.strictEqual(safeMessageForSearchablePdfCode("INPUT_DOWNLOAD"), "We couldn't access one of your uploaded images. Upload the images again to start over.");
+assert.strictEqual(searchablePdfV2RetryDelayMs(new SearchablePdfV2ApiError("SERVER_BUSY", "busy", 429, 4000), 0), 4000);
+assert.strictEqual(searchablePdfV2RetryDelayMs(new SearchablePdfV2ApiError("SERVER_BUSY", "busy", 429), 0), 1000);
+assert.strictEqual(searchablePdfV2RetryDelayMs(new SearchablePdfV2ApiError("SERVER_BUSY", "busy", 429), 8), 8000);
 
 const originalFetch = globalThis.fetch;
 const requests: Array<{ url: string; method: string; headers: Headers; body?: FormData }> = [];

@@ -1,4 +1,5 @@
 import { getBaseUrl } from "@/lib/api";
+import type { OcrTextV2Language } from "@/lib/ocrV2";
 
 export type OcrAwareMarkupAction = "highlight" | "underline" | "strikeout";
 export type OcrAwareMarkupMode = "smart" | "ocr" | "native";
@@ -19,6 +20,16 @@ export interface OcrAwareMarkupJob {
     error?: { code: string; message: string };
 }
 
+export interface OcrAwareMarkupCapabilities {
+    schema_version?: string;
+    service_ready?: boolean;
+    profile?: string;
+    actions: OcrAwareMarkupAction[];
+    modes: OcrAwareMarkupMode[];
+    languages: OcrTextV2Language[];
+    required_capabilities?: string[];
+}
+
 export class OcrAwareMarkupError extends Error {
     constructor(readonly code: string, message: string, readonly status: number) {
         super(message);
@@ -32,12 +43,14 @@ function endpoint(path: string): string {
 
 function messageFor(code: string): string {
     switch (code) {
+        case "AUTHENTICATION_REQUIRED": return "Sign in to apply a mark to this PDF.";
         case "TEXT_NOT_FOUND": return "The requested text was not found in the document.";
         case "WORD_GEOMETRY_NOT_AVAILABLE": return "Automatic text selection is unavailable for this document.";
         case "ENGINE_UNAVAILABLE": return "OCR is temporarily unavailable. Manual markup remains available in the legacy workspace.";
         case "ANNOTATION_WRITE_FAILURE": return "The requested markup could not be written to the PDF.";
         case "FORBIDDEN": return "This markup job is not available for your account.";
         case "CANCELLED": return "Markup processing was cancelled.";
+        case "INVALID_INPUT": return "Choose a PDF and enter the text you want to mark.";
         default: return "OCR-aware markup could not be completed.";
     }
 }
@@ -63,6 +76,8 @@ export async function submitOcrAwareMarkup(
     form.append("query", query);
     form.append("mode", mode);
     form.append("language", language);
+    form.append("language_mode", language === "auto" ? "AUTO" : "EXPLICIT");
+    if (language !== "auto") form.append("languages", language);
     form.append("routing_policy", "FAST");
     form.append("color", color);
     const response = await fetch(endpoint(`/api/v2/ocr/markup/${action}/jobs`), {
@@ -76,6 +91,12 @@ export async function submitOcrAwareMarkup(
     });
     if (!response.ok) throw await parseError(response);
     return await response.json() as OcrAwareMarkupJob;
+}
+
+export async function getOcrAwareMarkupCapabilities(): Promise<OcrAwareMarkupCapabilities> {
+    const response = await fetch(endpoint("/api/v2/ocr/markup/capabilities"), { credentials: "include" });
+    if (!response.ok) throw await parseError(response);
+    return await response.json() as OcrAwareMarkupCapabilities;
 }
 
 export async function fetchOcrAwareMarkupJob(jobId: string): Promise<OcrAwareMarkupJob> {

@@ -101,10 +101,10 @@ async function waitForJob(page: Page, jobId: string): Promise<{ job: Job; status
 
 async function runMarkup(page: Page, action: Action, file: { name: string; mimeType: string; buffer: Buffer }, query: string, name: string) {
   await page.goto(`/${action}-pdf-v2/workspace`);
-  await expect(page.getByRole("heading", { name: `${action === "strikeout" ? "Strikeout" : action[0].toUpperCase() + action.slice(1)} PDF V2` })).toBeVisible();
+  await expect(page.getByRole("heading", { name: `${action === "strikeout" ? "Strike out text" : action[0].toUpperCase() + action.slice(1) + " text"} in PDF` })).toBeVisible();
   await page.getByLabel("PDF document").setInputFiles(file);
   await page.getByLabel("Text query").fill(query);
-  await page.getByLabel("Selection source").selectOption("smart");
+  await page.getByLabel("How should we find the text?").selectOption("smart");
 
   const postResponsePromise = page.waitForResponse((response) => response.request().method() === "POST" && response.url().endsWith(`/api/v2/ocr/markup/${action}/jobs`));
   const resultResponsePromise = page.waitForResponse((response) => response.request().method() === "GET" && response.url().includes("/api/v2/ocr/markup/jobs/") && response.url().endsWith("/result"), { timeout: 120_000 });

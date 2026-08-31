@@ -70,13 +70,16 @@ async function waitForDurableStatus(page: Page, jobId: string): Promise<{ job: D
 
 async function submitThroughUi(page: Page, files: string[], artifactName: string): Promise<UiJobEvidence> {
   await page.goto('/searchable-pdf-v2/workspace');
-  await expect(page.getByRole('heading', { name: 'Searchable PDF V2' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Build a searchable PDF' }).first()).toBeVisible();
 
   const input = page.locator('input[type="file"]').first();
   await input.setInputFiles(files);
   for (const file of files) await expect(page.getByText(path.basename(file), { exact: true })).toBeVisible();
 
-  await page.locator('select[aria-label="OCR language"]').selectOption('eng');
+  const languagePicker = page.getByRole('combobox', { name: 'OCR language' });
+  await languagePicker.click();
+  await page.getByRole('option', { name: 'English', exact: true }).click();
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'Create searchable PDF' })).toBeEnabled();
 
   let resultResponse: Response | undefined;

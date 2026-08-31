@@ -84,7 +84,7 @@ export default function JobProgressCard({
             </div>
 
             <div className="mt-3 flex items-center justify-between text-[11px] opacity-80">
-                <span>{active ? "Processing in worker queue" : "Waiting"}</span>
+                <span>{active ? "Processing your document" : "Waiting"}</span>
                 <span>{job?.id ? `Job ${job.id.slice(0, 8)}` : "No job yet"}</span>
             </div>
         </div>

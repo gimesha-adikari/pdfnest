@@ -59,7 +59,7 @@ export default function OcrLanguagePicker({ languages, value, onChange, disabled
         : selected.map((code) => languageLabel(languages.find((language) => language.code === code) || { code, name: code }));
 
     return (
-        <div ref={rootRef} className="relative mt-5">
+        <div ref={rootRef} className="relative mt-5" onKeyDown={(event) => { if (event.key === "Escape") setOpen(false); }}>
             <button
                 type="button"
                 role="combobox"
@@ -68,6 +68,7 @@ export default function OcrLanguagePicker({ languages, value, onChange, disabled
                 aria-controls="ocr-language-options"
                 disabled={disabled}
                 onClick={() => setOpen((current) => !current)}
+                onKeyDown={(event) => { if (event.key === "Escape") setOpen(false); }}
                 className="flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-[color:var(--border)] bg-[var(--card)] px-3 py-2 text-left text-sm text-[color:var(--foreground)] outline-none transition hover:border-indigo-400 focus:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
                 <span className="flex min-w-0 flex-wrap gap-1.5">

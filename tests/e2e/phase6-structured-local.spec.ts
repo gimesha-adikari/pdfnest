@@ -43,7 +43,7 @@ async function createScannedPdf(): Promise<Buffer> {
 async function submitThroughUi(page: Page, profile: Profile, file: string | { name: string; mimeType: string; buffer: Buffer }, resultName: string, expectedPages: number) {
   const tool = profile === "PDF_MARKDOWN_V2" ? "pdf-to-markdown-v2" : "document-extraction-v2";
   await page.goto(`/${tool}/workspace`);
-  await expect(page.getByRole("heading", { name: profile === "PDF_MARKDOWN_V2" ? "PDF to Markdown V2" : "Extract Data from PDF" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: profile === "PDF_MARKDOWN_V2" ? "Convert PDF to Markdown" : "Extract Data from PDF" })).toBeVisible();
   await page.locator('input[type="file"]').first().setInputFiles(file);
   await expect(page.getByText(typeof file === "string" ? path.basename(file) : file.name, { exact: true })).toBeVisible();
   const postResponsePromise = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith(`/api/v2/ocr/${tool}/jobs`));

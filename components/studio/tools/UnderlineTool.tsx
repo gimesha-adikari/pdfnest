@@ -788,10 +788,10 @@ export default function UnderlineTool({ baseFile, onUnderlinedFile }: UnderlineT
                                     className="w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--background)] px-4 py-2 text-sm font-medium text-[color:var(--foreground)] outline-none transition focus:border-indigo-500"
                                 >
                                     <option value="smart" disabled={!canUseSmartMode}>
-                                        Smart (text first, OCR fallback)
+                                        Smart (recommended)
                                     </option>
                                     <option value="manual">Manual line</option>
-                                    <option value="ocr">OCR page</option>
+                                    <option value="ocr">Recognize scanned text</option>
                                 </select>
                             </div>
 
@@ -961,9 +961,9 @@ export default function UnderlineTool({ baseFile, onUnderlinedFile }: UnderlineT
                                 </div>
 
                                 <p className="mt-2 text-[11px] text-[color:var(--muted)]">
-                                    {jobError ||
+                                        {jobError ||
                                         job?.message ||
-                                        (isProcessing ? "Uploading file to worker..." : "Waiting for job update...")}
+                                            (isProcessing ? "Uploading your document..." : "Waiting for processing to start...")}
                                 </p>
 
                                 {jobId ? (

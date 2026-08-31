@@ -604,10 +604,10 @@ function EditPdfWorkspace() {
         <>
             <PdfToolHero
                 title="Precision PDF Layout Editor"
-                description={useOcrV2 ? "Edit native text and discover scanned text through OCR V2 canonical geometry." : "Modify text elements inline while preserving original formatting matrix loops perfectly."}
+                description={useOcrV2 ? "Find and edit text in native PDFs, with scanned text discovery when available." : "Modify text elements inline while preserving the document's original formatting."}
             />
 
-            {useOcrV2 && <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-800 dark:border-indigo-900/50 dark:bg-indigo-950/30 dark:text-indigo-200" data-testid="editor-ocr-v2-mode">OCR V2 editor mode · native-first extraction with canonical word geometry for scanned pages</div>}
+            {useOcrV2 && <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-800 dark:border-indigo-900/50 dark:bg-indigo-950/30 dark:text-indigo-200" data-testid="editor-ocr-v2-mode">Scanned text discovery is enabled for this editor.</div>}
 
             <div className="mt-12 rounded-3xl border border-border bg-card p-8 shadow-lg">
                 <div className="flex flex-col gap-4">

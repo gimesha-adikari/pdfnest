@@ -25,7 +25,7 @@ export default function StructureJobCard({
     const message =
         error ||
         job?.message ||
-        (isSubmitting ? "Uploading file to worker..." : "Waiting for a job to start...");
+        (isSubmitting ? "Uploading your document..." : "Waiting for processing to start...");
 
     const colorClass =
         job?.status === "failed" || error

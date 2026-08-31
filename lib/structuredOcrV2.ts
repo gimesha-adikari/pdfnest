@@ -119,6 +119,27 @@ export function safeStructuredMessage(code: string): string {
     }
 }
 
+export function projectStructuredWarnings(warnings: string[]): string[] {
+    const counts = new Map<string, number>();
+    const tablePages = new Set<string>();
+    for (const warning of warnings) {
+        const code = warning.replace(/:\d+$/, "");
+        counts.set(code, (counts.get(code) || 0) + 1);
+        if (warning.startsWith("TABLE_STRUCTURE_UNAVAILABLE:")) tablePages.add(warning.slice(warning.lastIndexOf(":") + 1));
+    }
+    const messages: string[] = [];
+    const tableCount = Math.max(tablePages.size, counts.has("STRUCTURED_TABLES_REQUIRE_NATIVE_TABLES_OR_STRUCTURED_ENGINE") ? 1 : 0);
+    if (tableCount > 0) {
+        messages.push(tableCount === 1
+            ? "Some table formatting could not be recovered reliably."
+            : `Some table formatting could not be recovered reliably from ${tableCount} pages.`);
+    }
+    if (counts.has("FORMULA_STRUCTURE_UNAVAILABLE_WITH_CURRENT_LOCAL_ENGINES") || counts.has("FORMULA_STRUCTURE_UNAVAILABLE")) {
+        messages.push("Some equations may appear as plain text.");
+    }
+    return messages;
+}
+
 async function parseError(response: Response): Promise<StructuredOcrV2ApiError> {
     let payload: unknown = null;
     try { payload = await response.json(); } catch { /* safe fallback below */ }

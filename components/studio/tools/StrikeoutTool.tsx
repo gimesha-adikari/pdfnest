@@ -800,10 +800,10 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                                     className="w-full rounded-xl border border-border bg-background px-4 py-2 text-sm font-medium text-foreground outline-none transition focus:border-indigo-500"
                                 >
                                     <option value="smart" disabled={!canUseSmartMode}>
-                                        Smart (text first, OCR fallback)
+                                        Smart (recommended)
                                     </option>
                                     <option value="manual">Manual strikeout</option>
-                                    <option value="ocr">OCR page</option>
+                                    <option value="ocr">Recognize scanned text</option>
                                 </select>
                             </div>
 
@@ -968,9 +968,9 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                                 </div>
 
                                 <p className="mt-2 text-[11px] text-muted">
-                                    {jobError ||
+                                        {jobError ||
                                         job?.message ||
-                                        (isProcessing ? "Uploading file to worker..." : "Waiting for job update...")}
+                                            (isProcessing ? "Uploading your document..." : "Waiting for processing to start...")}
                                 </p>
 
                                 {jobId ? (
