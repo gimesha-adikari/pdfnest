@@ -1,0 +1,541 @@
+[     503ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     610ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     704ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     704ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     707ms] [WARNING] Image with src "/platen-logo.svg" was detected as the Largest Contentful Paint (LCP). Please add the `loading="eager"` property if this image is above the fold.
+Read more: https://nextjs.org/docs/app/api-reference/components/image#loading @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     738ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     738ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     755ms] [LOG] [upload] effect {toolId: highlight-pdf-v2, currentToolHref: /highlight-pdf-v2, isLoadingConfig: true, hasFile: false, shouldRestoreTransfer: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     778ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     778ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     787ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     787ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     848ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     848ms] [LOG] object @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     848ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     850ms] [LOG] object @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     877ms] [LOG] [upload] effect {toolId: highlight-pdf-v2, currentToolHref: /highlight-pdf-v2, isLoadingConfig: false, hasFile: false, shouldRestoreTransfer: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     878ms] [LOG] [upload] effect {toolId: highlight-pdf-v2, currentToolHref: /highlight-pdf-v2, isLoadingConfig: false, hasFile: false, shouldRestoreTransfer: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     886ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     886ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   21133ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   21214ms] [LOG] [Fast Refresh] done in 181ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   21349ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   21367ms] [LOG] [Fast Refresh] done in 119ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   57039ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   57049ms] [LOG] [Fast Refresh] done in 111ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  430775ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  431995ms] [LOG] [Fast Refresh] done in 1283ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1205717ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1207359ms] [ERROR] ./app/(site)/[toolId]/workspace/page.tsx:50:1
+Module not found: Can't resolve '@/components/tools/OcrAwareMarkupV2Workspace'
+  48 | ...archablePdfV2Workspace from "@/components/tools/SearchablePdfV2Work...
+  49 | ...ructuredDocumentV2Workspace from "@/components/tools/StructuredDocu...
+> 50 | ...rAwareMarkupV2Workspace from "@/components/tools/OcrAwareMarkupV2Wo...
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  51 | ...
+  52 | ...fault function SharedWorkspacePage() {
+  53 | ... router = useRouter();
+
+Import map: aliased to relative './components/tools/OcrAwareMarkupV2Workspace' inside of [project]/
+
+Import traces:
+  Client Component Browser:
+    ./app/(site)/[toolId]/workspace/page.tsx [Client Component Browser]
+    ./app/(site)/[toolId]/workspace/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/(site)/[toolId]/workspace/page.tsx [Client Component SSR]
+    ./app/(site)/[toolId]/workspace/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:3318
+[ 1207523ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1208069ms] [ERROR] ./app/(site)/[toolId]/workspace/page.tsx:50:1
+Module not found: Can't resolve '@/components/tools/OcrAwareMarkupV2Workspace'
+  48 | ...archablePdfV2Workspace from "@/components/tools/SearchablePdfV2Work...
+  49 | ...ructuredDocumentV2Workspace from "@/components/tools/StructuredDocu...
+> 50 | ...rAwareMarkupV2Workspace from "@/components/tools/OcrAwareMarkupV2Wo...
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  51 | ...
+  52 | ...fault function SharedWorkspacePage() {
+  53 | ... router = useRouter();
+
+Import map: aliased to relative './components/tools/OcrAwareMarkupV2Workspace' inside of [project]/
+
+Import traces:
+  Client Component Browser:
+    ./app/(site)/[toolId]/workspace/page.tsx [Client Component Browser]
+    ./app/(site)/[toolId]/workspace/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/(site)/[toolId]/workspace/page.tsx [Client Component SSR]
+    ./app/(site)/[toolId]/workspace/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:3318
+[ 1208072ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/highlight-pdf-v2?_rsc=RFPmwXn7E_hfz6c5:0
+[ 1208108ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/highlight-pdf-v2?_rsc=RFPmwXn7E_hfz6c5:0
+[ 1208196ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/highlight-pdf-v2:0
+[ 1208337ms] [ERROR] Refused to execute script from 'http://localhost:3000/_next/static/development/_clientMiddlewareManifest.js' because its MIME type ('application/json') is not executable, and strict MIME type checking is enabled. @ http://localhost:3000/highlight-pdf-v2:0
+[ 1208375ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_react-dom_0kla17-._.js:15305
+[ 1208451ms] Error: ./app/(site)/[toolId]/workspace/page.tsx:50:1
+Module not found: Can't resolve '@/components/tools/OcrAwareMarkupV2Workspace'
+  48 | ...archablePdfV2Workspace from "@/components/tools/SearchablePdfV2Work...
+  49 | ...ructuredDocumentV2Workspace from "@/components/tools/StructuredDocu...
+> 50 | ...rAwareMarkupV2Workspace from "@/components/tools/OcrAwareMarkupV2Wo...
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  51 | ...
+  52 | ...fault function SharedWorkspacePage() {
+  53 | ... router = useRouter();
+
+Import map: aliased to relative './components/tools/OcrAwareMarkupV2Workspace' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/(site)/[toolId]/workspace/page.tsx [Client Component Browser]
+    ./app/(site)/[toolId]/workspace/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/(site)/[toolId]/workspace/page.tsx [Client Component SSR]
+    ./app/(site)/[toolId]/workspace/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+    at <unknown> (Error: ./app/(site)/[toolId]/workspace/page.tsx:50:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
+    at Object.getCompilationErrors (file:///home/gimesha/My_Projects/platen/pdfnest/node_modules/next/dist/server/dev/hot-reloader-turbopack.js:1186:59)
+    at DevBundlerService.getCompilationError (file:///home/gimesha/My_Projects/platen/pdfnest/node_modules/next/dist/server/lib/dev-bundler-service.js:44:55)
+    at DevServer.getCompilationError (file:///home/gimesha/My_Projects/platen/pdfnest/node_modules/next/dist/server/dev/next-dev-server.js:720:42)
+    at DevServer.findPageComponents (file:///home/gimesha/My_Projects/platen/pdfnest/node_modules/next/dist/server/dev/next-dev-server.js:690:43)
+    at async DevServer.renderErrorToResponseImpl (file:///home/gimesha/My_Projects/platen/pdfnest/node_modules/next/dist/server/base-server.js:1753:26)
+[ 1208456ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1gdrd03._.js:1226
+[ 1208485ms] [ERROR] ./app/(site)/[toolId]/workspace/page.tsx:50:1
+Module not found: Can't resolve '@/components/tools/OcrAwareMarkupV2Workspace'
+  48 | ...archablePdfV2Workspace from "@/components/tools/SearchablePdfV2Work...
+  49 | ...ructuredDocumentV2Workspace from "@/components/tools/StructuredDocu...
+> 50 | ...rAwareMarkupV2Workspace from "@/components/tools/OcrAwareMarkupV2Wo...
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  51 | ...
+  52 | ...fault function SharedWorkspacePage() {
+  53 | ... router = useRouter();
+
+Import map: aliased to relative './components/tools/OcrAwareMarkupV2Workspace' inside of [project]/
+
+Import traces:
+  Client Component Browser:
+    ./app/(site)/[toolId]/workspace/page.tsx [Client Component Browser]
+    ./app/(site)/[toolId]/workspace/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/(site)/[toolId]/workspace/page.tsx [Client Component SSR]
+    ./app/(site)/[toolId]/workspace/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1gdrd03._.js:1945
+[ 1208521ms] [ERROR] ./app/(site)/[toolId]/workspace/page.tsx:50:1
+Module not found: Can't resolve '@/components/tools/OcrAwareMarkupV2Workspace'
+  48 | ...archablePdfV2Workspace from "@/components/tools/SearchablePdfV2Work...
+  49 | ...ructuredDocumentV2Workspace from "@/components/tools/StructuredDocu...
+> 50 | ...rAwareMarkupV2Workspace from "@/components/tools/OcrAwareMarkupV2Wo...
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  51 | ...
+  52 | ...fault function SharedWorkspacePage() {
+  53 | ... router = useRouter();
+
+Import map: aliased to relative './components/tools/OcrAwareMarkupV2Workspace' inside of [project]/
+
+Import traces:
+  Client Component Browser:
+    ./app/(site)/[toolId]/workspace/page.tsx [Client Component Browser]
+    ./app/(site)/[toolId]/workspace/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/(site)/[toolId]/workspace/page.tsx [Client Component SSR]
+    ./app/(site)/[toolId]/workspace/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1gdrd03._.js:1945
+[ 1208531ms] [ERROR] ./app/(site)/[toolId]/workspace/page.tsx:50:1
+Module not found: Can't resolve '@/components/tools/OcrAwareMarkupV2Workspace'
+  48 | ...archablePdfV2Workspace from "@/components/tools/SearchablePdfV2Work...
+  49 | ...ructuredDocumentV2Workspace from "@/components/tools/StructuredDocu...
+> 50 | ...rAwareMarkupV2Workspace from "@/components/tools/OcrAwareMarkupV2Wo...
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  51 | ...
+  52 | ...fault function SharedWorkspacePage() {
+  53 | ... router = useRouter();
+
+Import map: aliased to relative './components/tools/OcrAwareMarkupV2Workspace' inside of [project]/
+
+Import traces:
+  Client Component Browser:
+    ./app/(site)/[toolId]/workspace/page.tsx [Client Component Browser]
+    ./app/(site)/[toolId]/workspace/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/(site)/[toolId]/workspace/page.tsx [Client Component SSR]
+    ./app/(site)/[toolId]/workspace/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1gdrd03._.js:1945
+[ 1208622ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1gdrd03._.js:1226
+[ 1310979ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1gdrd03._.js:1226
+[ 1311452ms] [LOG] [Fast Refresh] done in 234ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1gdrd03._.js:1226
+[ 1312468ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1312588ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1312685ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1312686ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1312689ms] [WARNING] Image with src "/platen-logo.svg" was detected as the Largest Contentful Paint (LCP). Please add the `loading="eager"` property if this image is above the fold.
+Read more: https://nextjs.org/docs/app/api-reference/components/image#loading @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1312724ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1312724ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1312739ms] [LOG] [upload] effect {toolId: highlight-pdf-v2, currentToolHref: /highlight-pdf-v2, isLoadingConfig: true, hasFile: false, shouldRestoreTransfer: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1312757ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1312757ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1312765ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1312765ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1312786ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1312787ms] [LOG] object @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1312787ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1312787ms] [LOG] object @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1312802ms] [LOG] [upload] effect {toolId: highlight-pdf-v2, currentToolHref: /highlight-pdf-v2, isLoadingConfig: false, hasFile: false, shouldRestoreTransfer: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1312804ms] [LOG] [upload] effect {toolId: highlight-pdf-v2, currentToolHref: /highlight-pdf-v2, isLoadingConfig: false, hasFile: false, shouldRestoreTransfer: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1312812ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1312812ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1338026ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1338242ms] [LOG] [Fast Refresh] done in 92ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1338356ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1338394ms] [LOG] [Fast Refresh] done in 139ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1338422ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1338422ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1338435ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1338436ms] [LOG] object @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1338436ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1338436ms] [LOG] object @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1338447ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1338447ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1338457ms] [LOG] [upload] effect {toolId: highlight-pdf-v2, currentToolHref: /highlight-pdf-v2, isLoadingConfig: false, hasFile: false, shouldRestoreTransfer: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1450563ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1450591ms] [LOG] [Fast Refresh] done in 84ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1455718ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1455741ms] [LOG] [Fast Refresh] done in 80ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1484377ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1484401ms] [LOG] [Fast Refresh] done in 81ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1505877ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1505902ms] [LOG] [Fast Refresh] done in 82ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1591556ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1591576ms] [LOG] [Fast Refresh] done in 120ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1591736ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1591751ms] [LOG] [Fast Refresh] done in 116ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1606722ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1606741ms] [LOG] [Fast Refresh] done in 119ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1606927ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1606945ms] [LOG] [Fast Refresh] done in 121ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1719843ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1719857ms] [LOG] [Fast Refresh] done in 93ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1766710ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1766730ms] [LOG] [Fast Refresh] done in 87ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1912247ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1912258ms] [LOG] [Fast Refresh] done in 113ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1988260ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 1988283ms] [LOG] [Fast Refresh] done in 91ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 2016515ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 2016517ms] [LOG] [Fast Refresh] done in 103ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 2061413ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 2061441ms] [LOG] [Fast Refresh] done in 130ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 2061611ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 2061643ms] [LOG] [Fast Refresh] done in 132ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 2109636ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 2109655ms] [LOG] [Fast Refresh] done in 119ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 2109833ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 2109891ms] [LOG] [Fast Refresh] done in 157ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 2188448ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 2188474ms] [LOG] [Fast Refresh] done in 78ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 2199305ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 2199337ms] [LOG] [Fast Refresh] done in 133ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 2232020ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 2232054ms] [LOG] [Fast Refresh] done in 73ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 2258093ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 2258110ms] [LOG] [Fast Refresh] done in 117ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 2340034ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 2340040ms] [LOG] [Fast Refresh] done in 108ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 2522832ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 2522864ms] [LOG] [Fast Refresh] done in 132ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 2522977ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 2523008ms] [LOG] [Fast Refresh] done in 132ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 3062048ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 3062155ms] [LOG] [Fast Refresh] done in 209ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 3063959ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 3064081ms] [LOG] [Fast Refresh] done in 222ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 3179626ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 3179665ms] [LOG] [Fast Refresh] done in 139ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 3179779ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 3179784ms] [LOG] [Fast Refresh] done in 104ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4255287ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=PzjUvbAYzotA2P4Tpd4fg' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0r5nbpw._.js:13422
+[ 4256288ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=PzjUvbAYzotA2P4Tpd4fg' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0r5nbpw._.js:13422
+[ 4257289ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=PzjUvbAYzotA2P4Tpd4fg' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0r5nbpw._.js:13422
+[ 4258292ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=PzjUvbAYzotA2P4Tpd4fg' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0r5nbpw._.js:13422
+[ 4259295ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=PzjUvbAYzotA2P4Tpd4fg' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0r5nbpw._.js:13422
+[ 4264313ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267047ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267144ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267284ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267286ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267325ms] [WARNING] Image with src "/platen-logo.svg" was detected as the Largest Contentful Paint (LCP). Please add the `loading="eager"` property if this image is above the fold.
+Read more: https://nextjs.org/docs/app/api-reference/components/image#loading @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267386ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267387ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267417ms] [LOG] [upload] effect {toolId: highlight-pdf-v2, currentToolHref: /highlight-pdf-v2, isLoadingConfig: true, hasFile: false, shouldRestoreTransfer: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267447ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267448ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267452ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267454ms] [LOG] object @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267454ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267454ms] [LOG] object @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267475ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267475ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267480ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267480ms] [LOG] object @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267480ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267481ms] [LOG] object @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267484ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267484ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267509ms] [LOG] [upload] effect {toolId: highlight-pdf-v2, currentToolHref: /highlight-pdf-v2, isLoadingConfig: false, hasFile: false, shouldRestoreTransfer: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267526ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 4267526ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5384373ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5385142ms] [LOG] [Fast Refresh] done in 870ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5539157ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5540203ms] [ERROR] ./components/tools/OcrAwareMarkupV2Workspace.tsx:9:1
+Module not found: Can't resolve '@/components/tools/MarkupPdfPreview'
+   7 | import { useAuth } from "@/context/AuthContext";
+   8 | import OcrLanguagePicker from "@/components/tools/OcrLanguagePicker";
+>  9 | import MarkupPdfPreview, { type MarkupPreviewState, type MarkupTextSelection } from "@/components/tools/MarkupPdfPreview";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  10 | import {
+  11 |     cancelOcrAwareMarkup,
+  12 |     downloadOcrAwareMarkup,
+
+Import map: aliased to relative './components/tools/MarkupPdfPreview' inside of [project]/
+
+Import traces:
+  Client Component Browser:
+    ./components/tools/OcrAwareMarkupV2Workspace.tsx [Client Component Browser]
+    ./app/(site)/[toolId]/workspace/page.tsx [Client Component Browser]
+    ./app/(site)/[toolId]/workspace/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./components/tools/OcrAwareMarkupV2Workspace.tsx [Client Component SSR]
+    ./app/(site)/[toolId]/workspace/page.tsx [Client Component SSR]
+    ./app/(site)/[toolId]/workspace/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:3318
+[ 5540304ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5540458ms] [ERROR] ./components/tools/OcrAwareMarkupV2Workspace.tsx:9:1
+Module not found: Can't resolve '@/components/tools/MarkupPdfPreview'
+   7 | import { useAuth } from "@/context/AuthContext";
+   8 | import OcrLanguagePicker from "@/components/tools/OcrLanguagePicker";
+>  9 | import MarkupPdfPreview, { type MarkupPreviewState, type MarkupTextSelection } from "@/components/tools/MarkupPdfPreview";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  10 | import {
+  11 |     cancelOcrAwareMarkup,
+  12 |     downloadOcrAwareMarkup,
+
+Import map: aliased to relative './components/tools/MarkupPdfPreview' inside of [project]/
+
+Import traces:
+  Client Component Browser:
+    ./components/tools/OcrAwareMarkupV2Workspace.tsx [Client Component Browser]
+    ./app/(site)/[toolId]/workspace/page.tsx [Client Component Browser]
+    ./app/(site)/[toolId]/workspace/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./components/tools/OcrAwareMarkupV2Workspace.tsx [Client Component SSR]
+    ./app/(site)/[toolId]/workspace/page.tsx [Client Component SSR]
+    ./app/(site)/[toolId]/workspace/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:3318
+[ 5540481ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/highlight-pdf-v2?_rsc=RFPmwXn7E_hfz6c5:0
+[ 5540546ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/highlight-pdf-v2?_rsc=RFPmwXn7E_hfz6c5:0
+[ 5540566ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5540602ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/highlight-pdf-v2:0
+[ 5540724ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_react-dom_0kla17-._.js:15305
+[ 5540787ms] [ERROR] Refused to execute script from 'http://localhost:3000/_next/static/development/_clientMiddlewareManifest.js' because its MIME type ('application/json') is not executable, and strict MIME type checking is enabled. @ http://localhost:3000/highlight-pdf-v2:0
+[ 5540795ms] Error: ./components/tools/OcrAwareMarkupV2Workspace.tsx:9:1
+Module not found: Can't resolve '@/components/tools/MarkupPdfPreview'
+   7 | import { useAuth } from "@/context/AuthContext";
+   8 | import OcrLanguagePicker from "@/components/tools/OcrLanguagePicker";
+>  9 | import MarkupPdfPreview, { type MarkupPreviewState, type MarkupTextSelection } from "@/components/tools/MarkupPdfPreview";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  10 | import {
+  11 |     cancelOcrAwareMarkup,
+  12 |     downloadOcrAwareMarkup,
+
+Import map: aliased to relative './components/tools/MarkupPdfPreview' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./components/tools/OcrAwareMarkupV2Workspace.tsx [Client Component Browser]
+    ./app/(site)/[toolId]/workspace/page.tsx [Client Component Browser]
+    ./app/(site)/[toolId]/workspace/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./components/tools/OcrAwareMarkupV2Workspace.tsx [Client Component SSR]
+    ./app/(site)/[toolId]/workspace/page.tsx [Client Component SSR]
+    ./app/(site)/[toolId]/workspace/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+    at <unknown> (Error: ./components/tools/OcrAwareMarkupV2Workspace.tsx:9:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
+    at Object.getCompilationErrors (file:///home/gimesha/My_Projects/platen/pdfnest/node_modules/next/dist/server/dev/hot-reloader-turbopack.js:1186:59)
+    at DevBundlerService.getCompilationError (file:///home/gimesha/My_Projects/platen/pdfnest/node_modules/next/dist/server/lib/dev-bundler-service.js:44:55)
+    at DevServer.getCompilationError (file:///home/gimesha/My_Projects/platen/pdfnest/node_modules/next/dist/server/dev/next-dev-server.js:720:42)
+    at DevServer.findPageComponents (file:///home/gimesha/My_Projects/platen/pdfnest/node_modules/next/dist/server/dev/next-dev-server.js:690:43)
+    at async DevServer.renderErrorToResponseImpl (file:///home/gimesha/My_Projects/platen/pdfnest/node_modules/next/dist/server/base-server.js:1753:26)
+[ 5540791ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1gdrd03._.js:1226
+[ 5540795ms] [ERROR] ./components/tools/OcrAwareMarkupV2Workspace.tsx:9:1
+Module not found: Can't resolve '@/components/tools/MarkupPdfPreview'
+   7 | import { useAuth } from "@/context/AuthContext";
+   8 | import OcrLanguagePicker from "@/components/tools/OcrLanguagePicker";
+>  9 | import MarkupPdfPreview, { type MarkupPreviewState, type MarkupTextSelection } from "@/components/tools/MarkupPdfPreview";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  10 | import {
+  11 |     cancelOcrAwareMarkup,
+  12 |     downloadOcrAwareMarkup,
+
+Import map: aliased to relative './components/tools/MarkupPdfPreview' inside of [project]/
+
+Import traces:
+  Client Component Browser:
+    ./components/tools/OcrAwareMarkupV2Workspace.tsx [Client Component Browser]
+    ./app/(site)/[toolId]/workspace/page.tsx [Client Component Browser]
+    ./app/(site)/[toolId]/workspace/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./components/tools/OcrAwareMarkupV2Workspace.tsx [Client Component SSR]
+    ./app/(site)/[toolId]/workspace/page.tsx [Client Component SSR]
+    ./app/(site)/[toolId]/workspace/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1gdrd03._.js:1945
+[ 5540886ms] [ERROR] ./components/tools/OcrAwareMarkupV2Workspace.tsx:9:1
+Module not found: Can't resolve '@/components/tools/MarkupPdfPreview'
+   7 | import { useAuth } from "@/context/AuthContext";
+   8 | import OcrLanguagePicker from "@/components/tools/OcrLanguagePicker";
+>  9 | import MarkupPdfPreview, { type MarkupPreviewState, type MarkupTextSelection } from "@/components/tools/MarkupPdfPreview";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  10 | import {
+  11 |     cancelOcrAwareMarkup,
+  12 |     downloadOcrAwareMarkup,
+
+Import map: aliased to relative './components/tools/MarkupPdfPreview' inside of [project]/
+
+Import traces:
+  Client Component Browser:
+    ./components/tools/OcrAwareMarkupV2Workspace.tsx [Client Component Browser]
+    ./app/(site)/[toolId]/workspace/page.tsx [Client Component Browser]
+    ./app/(site)/[toolId]/workspace/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./components/tools/OcrAwareMarkupV2Workspace.tsx [Client Component SSR]
+    ./app/(site)/[toolId]/workspace/page.tsx [Client Component SSR]
+    ./app/(site)/[toolId]/workspace/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1gdrd03._.js:1945
+[ 5540915ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1gdrd03._.js:1226
+[ 5655589ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1gdrd03._.js:1226
+[ 5656189ms] [LOG] [Fast Refresh] done in 410ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1gdrd03._.js:1226
+[ 5656816ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5657059ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5657160ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5657160ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5657163ms] [WARNING] Image with src "/platen-logo.svg" was detected as the Largest Contentful Paint (LCP). Please add the `loading="eager"` property if this image is above the fold.
+Read more: https://nextjs.org/docs/app/api-reference/components/image#loading @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5657212ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5657212ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5657230ms] [LOG] [upload] effect {toolId: highlight-pdf-v2, currentToolHref: /highlight-pdf-v2, isLoadingConfig: true, hasFile: false, shouldRestoreTransfer: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5657246ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5657246ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5657254ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5657255ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5657275ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5657275ms] [LOG] object @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5657276ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5657276ms] [LOG] object @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5657293ms] [LOG] [upload] effect {toolId: highlight-pdf-v2, currentToolHref: /highlight-pdf-v2, isLoadingConfig: false, hasFile: false, shouldRestoreTransfer: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5657294ms] [LOG] [upload] effect {toolId: highlight-pdf-v2, currentToolHref: /highlight-pdf-v2, isLoadingConfig: false, hasFile: false, shouldRestoreTransfer: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5657311ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5657311ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5704584ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5704772ms] [LOG] [Fast Refresh] done in 119ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5704927ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5704927ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5704945ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5704945ms] [LOG] object @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5704945ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5704946ms] [LOG] object @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5704955ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5704956ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5704973ms] [LOG] [upload] effect {toolId: highlight-pdf-v2, currentToolHref: /highlight-pdf-v2, isLoadingConfig: false, hasFile: false, shouldRestoreTransfer: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5718969ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5719308ms] [LOG] [Fast Refresh] done in 272ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5719760ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5719760ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5719775ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5719775ms] [LOG] object @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5719775ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5719775ms] [LOG] object @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5719783ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5719783ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5719794ms] [LOG] [upload] effect {toolId: highlight-pdf-v2, currentToolHref: /highlight-pdf-v2, isLoadingConfig: false, hasFile: false, shouldRestoreTransfer: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5724403ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5724606ms] [LOG] [Fast Refresh] done in 282ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5746141ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5746161ms] [LOG] [Fast Refresh] done in 90ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5793093ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5793115ms] [LOG] [Fast Refresh] done in 87ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5801952ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 5801976ms] [LOG] [Fast Refresh] done in 110ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 6186125ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 6186156ms] [LOG] [Fast Refresh] done in 109ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 6271523ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 6271600ms] [LOG] [Fast Refresh] done in 177ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 6340230ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 6340261ms] [LOG] [Fast Refresh] done in 84ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 6382487ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 6382519ms] [LOG] [Fast Refresh] done in 111ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 6386804ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 6386828ms] [LOG] [Fast Refresh] done in 87ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 6392256ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 6392271ms] [LOG] [Fast Refresh] done in 117ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 6466025ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 6466451ms] [LOG] [Fast Refresh] done in 526ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 6466563ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 6466571ms] [LOG] [Fast Refresh] done in 109ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 6731262ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 6731298ms] [LOG] [Fast Refresh] done in 135ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 6790662ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 6790667ms] [LOG] [Fast Refresh] done in 106ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 7381528ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 7381556ms] [LOG] [Fast Refresh] done in 92ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 7450969ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 7450976ms] [LOG] [Fast Refresh] done in 107ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 7483618ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 7483623ms] [LOG] [Fast Refresh] done in 104ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 7487644ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 7487648ms] [LOG] [Fast Refresh] done in 105ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 7504896ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 7504909ms] [LOG] [Fast Refresh] done in 113ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 7770434ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 7770469ms] [LOG] [Fast Refresh] done in 116ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 7783279ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 7783298ms] [LOG] [Fast Refresh] done in 101ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 7830099ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 7830120ms] [LOG] [Fast Refresh] done in 84ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 7835025ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 7835067ms] [LOG] [Fast Refresh] done in 142ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 8197572ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 8197604ms] [LOG] [Fast Refresh] done in 132ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 8197714ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 8197725ms] [LOG] [Fast Refresh] done in 111ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477

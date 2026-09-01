@@ -1,0 +1,29 @@
+[     387ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     542ms] [LOG] [HMR] connected @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     679ms] [LOG] Logo rendered @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     679ms] [LOG] Logo rendered @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     682ms] [WARNING] Image with src "/platen-logo.svg" was detected as the Largest Contentful Paint (LCP). Please add the `loading="eager"` property if this image is above the fold.
+Read more: https://nextjs.org/docs/app/api-reference/components/image#loading @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     719ms] [LOG] Logo rendered @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     719ms] [LOG] Logo rendered @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     736ms] [LOG] [workspace] {toolId: pdf-to-markdown-v2, hasFile: false, isLoadingConfig: true} @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     750ms] [LOG] Logo rendered @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     750ms] [LOG] Logo rendered @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     757ms] [LOG] Logo rendered @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     757ms] [LOG] Logo rendered @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     813ms] [LOG] [workspace] {toolId: pdf-to-markdown-v2, hasFile: false, isLoadingConfig: false} @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     814ms] [LOG] [workspace] {toolId: pdf-to-markdown-v2, hasFile: false, isLoadingConfig: false} @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     821ms] [LOG] Logo rendered @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     821ms] [LOG] Logo rendered @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  159012ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  159644ms] [LOG] [Fast Refresh] done in 732ms @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  309162ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  309322ms] [LOG] [Fast Refresh] done in 235ms @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  355899ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  355942ms] [LOG] [Fast Refresh] done in 132ms @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  771319ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  771339ms] [LOG] [Fast Refresh] done in 121ms @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  952656ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  952719ms] [LOG] [Fast Refresh] done in 163ms @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 7560508ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[ 7560532ms] [LOG] [Fast Refresh] done in 124ms @ http://127.0.0.1:13031/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477

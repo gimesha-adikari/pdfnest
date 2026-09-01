@@ -1,0 +1,152 @@
+- generic [ref=f6e1]:
+  - generic [ref=f6e2]:
+    - banner [ref=f6e3]:
+      - generic [ref=f6e5]:
+        - link "Platen PLATEN CORE v2.0" [ref=f6e6] [cursor=pointer]:
+          - /url: /
+          - img "Platen" [ref=f6e9]
+          - generic [ref=f6e10]:
+            - generic [ref=f6e11]: PLATEN
+            - generic [ref=f6e12]: CORE v2.0
+        - navigation [ref=f6e13]:
+          - link "Home" [ref=f6e14] [cursor=pointer]:
+            - /url: /
+          - button "Tools" [ref=f6e16]
+          - link "Pricing" [ref=f6e20] [cursor=pointer]:
+            - /url: /pricing
+          - link "About" [ref=f6e21] [cursor=pointer]:
+            - /url: /about
+          - generic [ref=f6e22]:
+            - textbox "Search tools..." [ref=f6e26]
+            - generic: ⌘K
+        - generic [ref=f6e27]:
+          - generic [ref=f6e28]:
+            - link "Sign In" [ref=f6e29] [cursor=pointer]:
+              - /url: /login?callbackUrl=%2Fhighlight-pdf-v2%2Fworkspace
+            - link "Create Account" [ref=f6e91] [cursor=pointer]:
+              - /url: /register?callbackUrl=%2Fhighlight-pdf-v2%2Fworkspace
+          - button "Switch to light theme" [ref=f6e92]
+    - main [ref=f6e30]:
+      - generic [ref=f6e100]:
+        - generic [ref=f6e101]:
+          - heading "Highlight text in PDF" [level=1] [ref=f6e107]
+          - paragraph [ref=f6e108]: Review your PDF, select text visually or find a phrase, then highlight it with a durable PDF result.
+        - generic [ref=f6e109]:
+          - generic [ref=f6e111]:
+            - generic [ref=f6e112]:
+              - generic [ref=f6e113]:
+                - heading "Review your document" [level=2] [ref=f6e114]
+                - paragraph [ref=f6e115]: Check the page and drag across selectable text before you apply a mark.
+              - button "Choose another PDF" [ref=f6e116]
+            - region "PDF preview" [ref=f6e121]:
+              - generic [ref=f6e122]:
+                - generic [ref=f6e123]:
+                  - paragraph [ref=f6e124]: Preview your PDF
+                  - paragraph [ref=f6e125]: Select text in the page when a text layer is available.
+                - generic [ref=f6e126]:
+                  - button "Previous PDF page" [disabled] [ref=f6e127]
+                  - generic [ref=f6e130]: Page 1 of 1
+                  - button "Next PDF page" [disabled] [ref=f6e131]
+              - generic [ref=f6e135]:
+                - generic "PDF page 1" [ref=f6e136]
+                - generic "Selectable PDF text" [ref=f6e137]: Markup Alpha Bravo A second line keeps the preview useful.
+              - paragraph [ref=f6e141]: Drag across text in the preview to use it as your mark target.
+              - generic [ref=f6e142]: Markup Alpha Bravo A second line keeps the preview useful.
+          - generic [ref=f6e143]:
+            - generic [ref=f6e144]:
+              - heading "Set up your mark" [level=2] [ref=f6e145]
+              - paragraph [ref=f6e146]: Choose text in the preview or use Find text for a keyboard-friendly workflow.
+            - generic [ref=f6e147]:
+              - text: PDF document
+              - button "PDF document" [active] [ref=f6e148]
+            - generic [ref=f6e149]:
+              - paragraph [ref=f6e150]: highlight-visual-selection.source.pdf
+              - paragraph [ref=f6e151]: 924 B · PDF selected
+            - generic [ref=f6e152]:
+              - generic [ref=f6e153]: Text to highlight
+              - textbox "Text query" [ref=f6e154]:
+                - /placeholder: Select text in the preview or enter an exact phrase
+            - generic [ref=f6e155]:
+              - text: How should we find the text?
+              - combobox "How should we find the text?" [ref=f6e156]:
+                - option "Smart (recommended)" [selected]
+                - option "Recognize scanned text"
+                - option "Use existing PDF text"
+              - generic [ref=f6e157]: Uses existing PDF text when available and OCR when needed.
+            - generic [ref=f6e158]:
+              - generic [ref=f6e159]: Language
+              - paragraph [ref=f6e164]: Detect automatically, or choose languages manually when the document needs guidance.
+              - combobox "OCR language" [ref=f6e166]:
+                - generic [ref=f6e167]: Detect automatically
+            - generic [ref=f6e171]:
+              - text: Mark color
+              - textbox "Mark color" [ref=f6e172] [cursor=pointer]: "#ffff00"
+            - generic [ref=f6e173]:
+              - paragraph [ref=f6e174]: Sign in to apply a durable mark.
+              - button "Sign in" [ref=f6e178]
+            - generic [ref=f6e179]:
+              - button "Highlight text" [disabled] [ref=f6e180]
+              - button "Start over" [ref=f6e184]
+            - paragraph [ref=f6e188]: Select text in the preview or enter a phrase.
+    - contentinfo [ref=f6e34]:
+      - generic [ref=f6e36]:
+        - generic [ref=f6e37]:
+          - link "Platen PLATEN CORE v2.0" [ref=f6e38] [cursor=pointer]:
+            - /url: /
+            - img "Platen" [ref=f6e41]
+            - generic [ref=f6e42]:
+              - generic [ref=f6e43]: PLATEN
+              - generic [ref=f6e44]: CORE v2.0
+          - paragraph [ref=f6e45]: Files are processed in secure, isolated sandbox environments and automatically purged. Precision document infrastructure.
+          - paragraph [ref=f6e46]: © 2026 Platen Engine. All rights reserved.
+        - generic [ref=f6e47]:
+          - generic [ref=f6e48]: PRODUCTS
+          - generic [ref=f6e49]:
+            - link "Merge PDF" [ref=f6e50] [cursor=pointer]:
+              - /url: /merge-pdf
+            - link "Edit PDF" [ref=f6e51] [cursor=pointer]:
+              - /url: /edit-pdf
+            - link "PDF to Word" [ref=f6e52] [cursor=pointer]:
+              - /url: /pdf-to-word
+            - link "PDF to Markdown" [ref=f6e53] [cursor=pointer]:
+              - /url: /pdf-to-markdown
+            - link "Browse all tools →" [ref=f6e54] [cursor=pointer]:
+              - /url: /tools
+        - generic [ref=f6e55]:
+          - generic [ref=f6e56]: ECOSYSTEM
+          - generic [ref=f6e57]:
+            - link "PDF Studio WORKSPACE" [ref=f6e58] [cursor=pointer]:
+              - /url: /studio-v2
+              - generic [ref=f6e59]: PDF Studio
+              - generic [ref=f6e60]: WORKSPACE
+            - link "Repository Analyzer NEW" [ref=f6e61] [cursor=pointer]:
+              - /url: /repository-analyzer
+              - generic [ref=f6e62]: Repository Analyzer
+              - generic [ref=f6e63]: NEW
+            - link "Pricing & Compute" [ref=f6e64] [cursor=pointer]:
+              - /url: /pricing
+            - link "Architecture Details" [ref=f6e65] [cursor=pointer]:
+              - /url: /about
+        - generic [ref=f6e66]:
+          - generic [ref=f6e67]: LEGAL & SECURE
+          - generic [ref=f6e68]:
+            - link "Security Architecture" [ref=f6e69] [cursor=pointer]:
+              - /url: /security
+            - link "Privacy Policy" [ref=f6e70] [cursor=pointer]:
+              - /url: /privacy
+            - link "Terms of Service" [ref=f6e71] [cursor=pointer]:
+              - /url: /terms
+            - link "Acceptable Use" [ref=f6e72] [cursor=pointer]:
+              - /url: /acceptable-use
+            - link "Cookie Policy" [ref=f6e73] [cursor=pointer]:
+              - /url: /cookies
+            - link "Refund Policy" [ref=f6e74] [cursor=pointer]:
+              - /url: /refund
+            - link "Contact" [ref=f6e75] [cursor=pointer]:
+              - /url: /contact
+        - generic [ref=f6e76]:
+          - generic [ref=f6e77]: SYSTEM
+          - generic [ref=f6e78]: All Systems Operational
+          - generic [ref=f6e81]: Zero-trust sandbox ready.
+  - button "Open Next.js Dev Tools" [ref=f6e87] [cursor=pointer]
+  - alert [ref=f6e189]

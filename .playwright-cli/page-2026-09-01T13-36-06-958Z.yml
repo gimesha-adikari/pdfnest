@@ -1,0 +1,152 @@
+- generic [ref=f5e1]:
+  - generic [ref=f5e2]:
+    - banner [ref=f5e3]:
+      - generic [ref=f5e5]:
+        - link "Platen PLATEN CORE v2.0" [ref=f5e6] [cursor=pointer]:
+          - /url: /
+          - img "Platen" [ref=f5e9]
+          - generic [ref=f5e10]:
+            - generic [ref=f5e11]: PLATEN
+            - generic [ref=f5e12]: CORE v2.0
+        - navigation [ref=f5e13]:
+          - link "Home" [ref=f5e14] [cursor=pointer]:
+            - /url: /
+          - button "Tools" [ref=f5e16]
+          - link "Pricing" [ref=f5e20] [cursor=pointer]:
+            - /url: /pricing
+          - link "About" [ref=f5e21] [cursor=pointer]:
+            - /url: /about
+          - generic [ref=f5e22]:
+            - textbox "Search tools..." [ref=f5e26]
+            - generic: ⌘K
+        - generic [ref=f5e27]:
+          - generic [ref=f5e28]:
+            - link "Sign In" [ref=f5e29] [cursor=pointer]:
+              - /url: /login?callbackUrl=%2Fhighlight-pdf-v2%2Fworkspace
+            - link "Create Account" [ref=f5e91] [cursor=pointer]:
+              - /url: /register?callbackUrl=%2Fhighlight-pdf-v2%2Fworkspace
+          - button "Switch to light theme" [ref=f5e92]
+    - main [ref=f5e30]:
+      - generic [ref=f5e100]:
+        - generic [ref=f5e101]:
+          - heading "Highlight text in PDF" [level=1] [ref=f5e107]
+          - paragraph [ref=f5e108]: Review your PDF, select text visually or find a phrase, then highlight it with a durable PDF result.
+        - generic [ref=f5e109]:
+          - generic [ref=f5e111]:
+            - generic [ref=f5e112]:
+              - generic [ref=f5e113]:
+                - heading "Review your document" [level=2] [ref=f5e114]
+                - paragraph [ref=f5e115]: Check the page and drag across selectable text before you apply a mark.
+              - button "Choose another PDF" [ref=f5e116]
+            - region "PDF preview" [ref=f5e121]:
+              - generic [ref=f5e122]:
+                - generic [ref=f5e123]:
+                  - paragraph [ref=f5e124]: Preview your PDF
+                  - paragraph [ref=f5e125]: Select text in the page when a text layer is available.
+                - generic [ref=f5e126]:
+                  - button "Previous PDF page" [disabled] [ref=f5e127]
+                  - generic [ref=f5e130]: Page 1 of 1
+                  - button "Next PDF page" [disabled] [ref=f5e131]
+              - generic [ref=f5e135]:
+                - generic "PDF page 1" [ref=f5e136]
+                - generic "Selectable PDF text" [ref=f5e137]: "WE ARE HIRING! INTERN Al & D DIGITAL TRANSFORMATION _ fifi | Place To Work. Certified JAN 2025-JAN 2026 LKA YOUR ROLE WILL INVOLVE REQUIRED QUALIFICATIONS Assist in developing Al-based solutions to improve business processes. Support automation of routine tasks and workflows. Assist in organizing and managing organizational knowledge and information. Explore Al tools and applications relevant to business operations. Support digital transformation and process improvement initiatives. Work with internal teams and technology partners on Al-related projects. Assist in testing, documenting and implementing new digital solutions. How to Apply e Degree/diploma or currently pursuing studies in IT, Computer Science, Al, Data Science, Engineering or a related field. Basic understanding of Al, automation and digital technologies. Good analytical and problem-solving skills. Willingness to learn and explore new Al tools and technologies. Basic knowledge of Microsoft Office / Google Workspace. Good communication and teamwork skills. Send your CV to: career@sisiliprojects.com SISILI Manager - Human Resources, Sisili Projects Consortium Pvt Ltd, No. 118/A, Barnes Place, Colombo 07 Tel: +94-112-576050/+94-76-549-5144 E-mail: career@sisiliprojects.com"
+              - paragraph [ref=f5e141]: Drag across text in the preview to use it as your mark target.
+              - generic [ref=f5e142]: "WE ARE HIRING! INTERN Al & D DIGITAL TRANSFORMATION _ fifi | Place To Work. Certified JAN 2025-JAN 2026 LKA YOUR ROLE WILL INVOLVE REQUIRED QUALIFICATIONS Assist in developing Al-based solutions to improve business processes. Support automation of routine tasks and workflows. Assist in organizing and managing organizational knowledge and information. Explore Al tools and applications relevant to business operations. Support digital transformation and process improvement initiatives. Work with internal teams and technology partners on Al-related projects. Assist in testing, documenting and implementing new digital solutions. How to Apply e Degree/diploma or currently pursuing studies in IT, Computer Science, Al, Data Science, Engineering or a related field. Basic understanding of Al, automation and digital technologies. Good analytical and problem-solving skills. Willingness to learn and explore new Al tools and technologies. Basic knowledge of Microsoft Office / Google Workspace. Good communication and teamwork skills. Send your CV to: career@sisiliprojects.com SISILI Manager - Human Resources, Sisili Projects Consortium Pvt Ltd, No. 118/A, Barnes Place, Colombo 07 Tel: +94-112-576050/+94-76-549-5144 E-mail: career@sisiliprojects.com"
+          - generic [ref=f5e143]:
+            - generic [ref=f5e144]:
+              - heading "Set up your mark" [level=2] [ref=f5e145]
+              - paragraph [ref=f5e146]: Choose text in the preview or use Find text for a keyboard-friendly workflow.
+            - generic [ref=f5e147]:
+              - text: PDF document
+              - button "PDF document" [active] [ref=f5e148]
+            - generic [ref=f5e149]:
+              - paragraph [ref=f5e150]: document-searchable.pdf
+              - paragraph [ref=f5e151]: 1.7 MB · PDF selected
+            - generic [ref=f5e152]:
+              - generic [ref=f5e153]: Text to highlight
+              - textbox "Text query" [ref=f5e154]:
+                - /placeholder: Select text in the preview or enter an exact phrase
+            - generic [ref=f5e155]:
+              - text: How should we find the text?
+              - combobox "How should we find the text?" [ref=f5e156]:
+                - option "Smart (recommended)" [selected]
+                - option "Recognize scanned text"
+                - option "Use existing PDF text"
+              - generic [ref=f5e157]: Uses existing PDF text when available and OCR when needed.
+            - generic [ref=f5e158]:
+              - generic [ref=f5e159]: Language
+              - paragraph [ref=f5e164]: Detect automatically, or choose languages manually when the document needs guidance.
+              - combobox "OCR language" [ref=f5e166]:
+                - generic [ref=f5e167]: Detect automatically
+            - generic [ref=f5e171]:
+              - text: Mark color
+              - textbox "Mark color" [ref=f5e172] [cursor=pointer]: "#ffff00"
+            - generic [ref=f5e173]:
+              - paragraph [ref=f5e174]: Sign in to apply a durable mark.
+              - button "Sign in" [ref=f5e178]
+            - generic [ref=f5e179]:
+              - button "Highlight text" [disabled] [ref=f5e180]
+              - button "Start over" [ref=f5e184]
+            - paragraph [ref=f5e188]: Select text in the preview or enter a phrase.
+    - contentinfo [ref=f5e34]:
+      - generic [ref=f5e36]:
+        - generic [ref=f5e37]:
+          - link "Platen PLATEN CORE v2.0" [ref=f5e38] [cursor=pointer]:
+            - /url: /
+            - img "Platen" [ref=f5e41]
+            - generic [ref=f5e42]:
+              - generic [ref=f5e43]: PLATEN
+              - generic [ref=f5e44]: CORE v2.0
+          - paragraph [ref=f5e45]: Files are processed in secure, isolated sandbox environments and automatically purged. Precision document infrastructure.
+          - paragraph [ref=f5e46]: © 2026 Platen Engine. All rights reserved.
+        - generic [ref=f5e47]:
+          - generic [ref=f5e48]: PRODUCTS
+          - generic [ref=f5e49]:
+            - link "Merge PDF" [ref=f5e50] [cursor=pointer]:
+              - /url: /merge-pdf
+            - link "Edit PDF" [ref=f5e51] [cursor=pointer]:
+              - /url: /edit-pdf
+            - link "PDF to Word" [ref=f5e52] [cursor=pointer]:
+              - /url: /pdf-to-word
+            - link "PDF to Markdown" [ref=f5e53] [cursor=pointer]:
+              - /url: /pdf-to-markdown
+            - link "Browse all tools →" [ref=f5e54] [cursor=pointer]:
+              - /url: /tools
+        - generic [ref=f5e55]:
+          - generic [ref=f5e56]: ECOSYSTEM
+          - generic [ref=f5e57]:
+            - link "PDF Studio WORKSPACE" [ref=f5e58] [cursor=pointer]:
+              - /url: /studio-v2
+              - generic [ref=f5e59]: PDF Studio
+              - generic [ref=f5e60]: WORKSPACE
+            - link "Repository Analyzer NEW" [ref=f5e61] [cursor=pointer]:
+              - /url: /repository-analyzer
+              - generic [ref=f5e62]: Repository Analyzer
+              - generic [ref=f5e63]: NEW
+            - link "Pricing & Compute" [ref=f5e64] [cursor=pointer]:
+              - /url: /pricing
+            - link "Architecture Details" [ref=f5e65] [cursor=pointer]:
+              - /url: /about
+        - generic [ref=f5e66]:
+          - generic [ref=f5e67]: LEGAL & SECURE
+          - generic [ref=f5e68]:
+            - link "Security Architecture" [ref=f5e69] [cursor=pointer]:
+              - /url: /security
+            - link "Privacy Policy" [ref=f5e70] [cursor=pointer]:
+              - /url: /privacy
+            - link "Terms of Service" [ref=f5e71] [cursor=pointer]:
+              - /url: /terms
+            - link "Acceptable Use" [ref=f5e72] [cursor=pointer]:
+              - /url: /acceptable-use
+            - link "Cookie Policy" [ref=f5e73] [cursor=pointer]:
+              - /url: /cookies
+            - link "Refund Policy" [ref=f5e74] [cursor=pointer]:
+              - /url: /refund
+            - link "Contact" [ref=f5e75] [cursor=pointer]:
+              - /url: /contact
+        - generic [ref=f5e76]:
+          - generic [ref=f5e77]: SYSTEM
+          - generic [ref=f5e78]: All Systems Operational
+          - generic [ref=f5e81]: Zero-trust sandbox ready.
+  - button "Open Next.js Dev Tools" [ref=f5e87] [cursor=pointer]
+  - alert [ref=f5e189]
