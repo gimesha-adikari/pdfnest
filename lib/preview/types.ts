@@ -47,6 +47,17 @@ export function createPreviewKey(request: PreviewRequest): PreviewKey {
 
 export type PreviewResourceType = "image-url" | "canvas";
 
+/** Safe metadata supplied with a processed preview resource. */
+export interface PreviewMetadata {
+    /** Backend-authoritative 1-based document page count, when available. */
+    pageCount?: number;
+    /** 1-based page represented by this resource. */
+    page?: number;
+    /** Rendered raster dimensions in pixels, when known. */
+    renderedWidth?: number;
+    renderedHeight?: number;
+}
+
 export interface PreviewResource {
     type: PreviewResourceType;
     url?: string;
@@ -55,6 +66,7 @@ export interface PreviewResource {
     height?: number;
     /** Identifier of the actual renderer that produced this resource */
     renderedBy?: string;
+    metadata?: PreviewMetadata;
     revoke?: () => void;
 }
 
@@ -114,4 +126,3 @@ export function getPdfSafetyCategory(file: File | null, pageCount?: number): Pdf
     }
     return "normal";
 }
-

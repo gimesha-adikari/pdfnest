@@ -15,6 +15,7 @@ export interface ServerPdfRendererOptions {
 
 interface PreviewSession {
     sessionId: string;
+    pageCount?: number;
 }
 
 /** Checks whether an unknown value is an AbortError without any cast. */
@@ -51,11 +52,10 @@ export class ServerPdfRenderer implements PreviewRenderer {
     private readonly baseUrl: string;
     private readonly fetchImpl: typeof fetch;
 
-    /** Active session keyed by file identity. */
-    private _session: PreviewSession | null = null;
-    private _sessionFileIdentity: string | null = null;
-    /** In-flight session creation promise — deduplicated across concurrent render calls. */
-    private _sessionPromise: Promise<PreviewSession> | null = null;
+    /** Active sessions keyed by file identity so source/result viewers cannot overwrite each other. */
+    private readonly _sessions = new Map<string, PreviewSession>();
+    /** In-flight session creation promises, also keyed by file identity. */
+    private readonly _sessionPromises = new Map<string, Promise<PreviewSession>>();
 
     constructor(options?: ServerPdfRendererOptions) {
         this.baseUrl =
@@ -90,7 +90,8 @@ export class ServerPdfRenderer implements PreviewRenderer {
             throw this._abortError();
         }
 
-        let response = await this._fetchPage(session.sessionId, request.page, scale, signal);
+        let activeSession = session;
+        let response = await this._fetchPage(activeSession.sessionId, request.page, scale, signal);
 
         if (signal.aborted) {
             throw this._abortError();
@@ -103,7 +104,8 @@ export class ServerPdfRenderer implements PreviewRenderer {
             if (signal.aborted) {
                 throw this._abortError();
             }
-            response = await this._fetchPage(fresh.sessionId, request.page, scale, signal);
+            activeSession = fresh;
+            response = await this._fetchPage(activeSession.sessionId, request.page, scale, signal);
             if (signal.aborted) {
                 throw this._abortError();
             }
@@ -129,6 +131,10 @@ export class ServerPdfRenderer implements PreviewRenderer {
             type: "image-url",
             url,
             renderedBy: this.id,
+            metadata: {
+                page: request.page,
+                ...(activeSession.pageCount ? { pageCount: activeSession.pageCount } : {}),
+            },
             revoke: () => {
                 if (revoked) return;
                 revoked = true;
@@ -147,11 +153,8 @@ export class ServerPdfRenderer implements PreviewRenderer {
 
     private _invalidateSession(file: File): void {
         const identity = this._fileIdentity(file);
-        if (this._sessionFileIdentity === identity) {
-            this._session = null;
-            this._sessionPromise = null;
-            this._sessionFileIdentity = null;
-        }
+        this._sessions.delete(identity);
+        this._sessionPromises.delete(identity);
     }
 
     /**
@@ -163,43 +166,33 @@ export class ServerPdfRenderer implements PreviewRenderer {
     private async _ensureSession(file: File, signal: AbortSignal): Promise<PreviewSession> {
         const identity = this._fileIdentity(file);
 
-        // File changed — discard previous session.
-        if (this._sessionFileIdentity !== identity) {
-            this._session = null;
-            this._sessionPromise = null;
-            this._sessionFileIdentity = identity;
-        }
-
-        if (this._session) {
+        const existing = this._sessions.get(identity);
+        if (existing) {
             if (signal.aborted) throw this._abortError();
-            return this._session;
+            return existing;
         }
 
-        if (!this._sessionPromise) {
+        let sessionPromise = this._sessionPromises.get(identity);
+        if (!sessionPromise) {
             // Start session creation without any caller signal — intentional.
             // Capture the promise reference so .then() closures can compare it correctly.
             const promise = this._createSession(file);
-            this._sessionPromise = promise;
+            sessionPromise = promise;
+            this._sessionPromises.set(identity, promise);
             promise.then(
                 (created) => {
-                    if (this._sessionFileIdentity === identity) {
-                        this._session = created;
-                    }
-                    if (this._sessionPromise === promise) {
-                        this._sessionPromise = null;
-                    }
+                    this._sessions.set(identity, created);
+                    if (this._sessionPromises.get(identity) === promise) this._sessionPromises.delete(identity);
                 },
                 () => {
-                    if (this._sessionPromise === promise) {
-                        this._sessionPromise = null;
-                    }
+                    if (this._sessionPromises.get(identity) === promise) this._sessionPromises.delete(identity);
                 },
             );
         }
 
         // Await the shared promise. If this caller's signal aborts while waiting,
         // throw AbortError — but the underlying fetch continues for other waiters.
-        const sharedPromise = this._sessionPromise;
+        const sharedPromise = sessionPromise;
         try {
             const result = await Promise.race([
                 sharedPromise,
@@ -216,8 +209,8 @@ export class ServerPdfRenderer implements PreviewRenderer {
         } catch (err) {
             // Only clear the shared promise if it failed for a non-abort reason
             // (abort only affects this caller — the shared promise keeps running).
-            if (!isAbortError(err) && this._sessionPromise === sharedPromise) {
-                this._sessionPromise = null;
+            if (!isAbortError(err) && this._sessionPromises.get(identity) === sharedPromise) {
+                this._sessionPromises.delete(identity);
             }
             throw err;
         }
@@ -253,7 +246,11 @@ export class ServerPdfRenderer implements PreviewRenderer {
             throw new Error("Preview session response did not contain a valid session ID.");
         }
 
-        return { sessionId: (data as Record<string, string>).session_id };
+        const record = data as Record<string, unknown>;
+        const pageCount = typeof record.page_count === "number" && Number.isInteger(record.page_count) && record.page_count > 0
+            ? record.page_count
+            : undefined;
+        return { sessionId: String(record.session_id), pageCount };
     }
 
     // ---------------------------------------------------------------------------

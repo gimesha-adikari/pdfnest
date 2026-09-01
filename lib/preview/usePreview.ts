@@ -7,6 +7,7 @@ import {
     DocumentHandle,
     PreviewError,
     PreviewMode,
+    PreviewMetadata,
     PreviewRendererPreference,
     PreviewRequest,
     PreviewResult,
@@ -30,6 +31,8 @@ export interface UsePreviewResult {
     src: string;
     isLoading: boolean;
     error: PreviewError | null;
+    metadata: PreviewMetadata | null;
+    retry: () => void;
     reset: () => void;
 }
 
@@ -75,6 +78,8 @@ export function usePreview(options: UsePreviewOptions): UsePreviewResult {
     const [src, setSrc] = useState<string>("");
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<PreviewError | null>(null);
+    const [metadata, setMetadata] = useState<PreviewMetadata | null>(null);
+    const [retryNonce, setRetryNonce] = useState(0);
 
     const handleRef = useRef<PreviewHandle | null>(null);
     const onErrorRef = useRef(onError);
@@ -93,6 +98,11 @@ export function usePreview(options: UsePreviewOptions): UsePreviewResult {
         setSrc("");
         setIsLoading(false);
         setError(null);
+        setMetadata(null);
+    }, []);
+
+    const retry = useCallback(() => {
+        setRetryNonce((current) => current + 1);
     }, []);
 
     useEffect(() => {
@@ -101,16 +111,21 @@ export function usePreview(options: UsePreviewOptions): UsePreviewResult {
                 handleRef.current.unsubscribe();
                 handleRef.current = null;
             }
+            // Reset the hook's externally-owned resource state when its input is disabled.
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setSrc("");
             setIsLoading(false);
             setError(null);
+            setMetadata(null);
             return;
         }
 
         // Prepare state for active request
+        // A new document/page request must clear the previous resource before subscribing.
         setSrc("");
         setIsLoading(true);
         setError(null);
+        setMetadata(null);
 
         const doc: DocumentHandle = {
             id: `${file.name}:${file.size}:${file.lastModified}:${file.type}`,
@@ -141,9 +156,11 @@ export function usePreview(options: UsePreviewOptions): UsePreviewResult {
                 setSrc(url);
                 setIsLoading(false);
                 setError(null);
+                setMetadata(result.resource.metadata ?? null);
             } else if (result.status === "error") {
                 setSrc("");
                 setIsLoading(false);
+                setMetadata(null);
                 const previewErr = result.error ?? {
                     code: "UNKNOWN",
                     message: "Preview failed",
@@ -168,12 +185,15 @@ export function usePreview(options: UsePreviewOptions): UsePreviewResult {
         resolvedScale,
         isEnabled,
         manager,
+        retryNonce,
     ]);
 
     return {
         src,
         isLoading,
         error,
+        metadata,
+        retry,
         reset,
     };
 }

@@ -36,8 +36,8 @@ function abortedSignal(): AbortSignal {
     return c.signal;
 }
 
-function sessionResponse(sessionId = "sess-1"): Response {
-    return new Response(JSON.stringify({ session_id: sessionId }), {
+function sessionResponse(sessionId = "sess-1", pageCount = 5): Response {
+    return new Response(JSON.stringify({ session_id: sessionId, page_count: pageCount }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
     });
@@ -118,6 +118,8 @@ async function test5_successfulRender(): Promise<void> {
     assert.equal(resource.type, "image-url");
     assert.ok(typeof resource.url === "string" && resource.url.startsWith("blob:"));
     assert.equal(resource.renderedBy, "server-pymupdf");
+    assert.equal(resource.metadata?.pageCount, 5);
+    assert.equal(resource.metadata?.page, 1);
     assert.ok(typeof resource.revoke === "function");
 }
 
@@ -314,7 +316,7 @@ async function test15_concurrentCancellationIndependence(): Promise<void> {
     let resolveSession!: (r: Response) => void;
     const sessionGate = new Promise<Response>((res) => { resolveSession = res; });
 
-    const fetchImpl: typeof fetch = async (input, _init) => {
+    const fetchImpl: typeof fetch = async (input) => {
         const url = String(input);
         if (url.includes("/session") && !url.includes("/page/")) {
             sessionCreateCount++;

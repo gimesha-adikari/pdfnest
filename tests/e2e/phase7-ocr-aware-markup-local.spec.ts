@@ -157,7 +157,7 @@ test.describe.serial("Phase 7 OCR-aware markup real local full-stack E2E", () =>
 
     const replay = await page.request.post(`${getE2EApiBaseUrl()}/v2/ocr/markup/highlight/jobs`, {
       headers: { "Idempotency-Key": highlight.idempotencyKey, "X-Request-ID": `${highlight.requestId}-replay` },
-      multipart: { file: { name: "native.pdf", mimeType: "application/pdf", buffer: native }, query: "Normal", mode: "smart", language: "eng", routing_policy: "FAST", color: "#FFFF00" },
+      multipart: { file: { name: "native.pdf", mimeType: "application/pdf", buffer: native }, query: "Normal", mode: "smart", language: "auto", language_mode: "AUTO", routing_policy: "FAST", color: "#FFFF00" },
     });
     expect(replay.status()).toBe(202);
     const replayBody = await replay.json() as { job_id: string; idempotent_replay?: boolean };
@@ -166,7 +166,7 @@ test.describe.serial("Phase 7 OCR-aware markup real local full-stack E2E", () =>
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/highlight-pdf-v2/workspace");
-    await expect(page.getByRole("heading", { name: "Highlight PDF V2" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Highlight text in PDF" })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
     fs.writeFileSync(path.join(OUTPUT_DIR, "e2e-evidence.json"), `${JSON.stringify({

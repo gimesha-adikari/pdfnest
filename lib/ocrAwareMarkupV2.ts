@@ -51,7 +51,10 @@ function messageFor(code: string): string {
         case "FORBIDDEN": return "This markup job is not available for your account.";
         case "CANCELLED": return "Markup processing was cancelled.";
         case "INVALID_INPUT": return "Choose a PDF and enter the text you want to mark.";
-        default: return "OCR-aware markup could not be completed.";
+        case "INPUT_DOWNLOAD": return "We couldn't access the PDF. Upload it again and start over.";
+        case "TASK_STORAGE_UNAVAILABLE": return "We couldn't save the marked PDF. Please try again.";
+        case "TIMEOUT": return "This PDF took too long to process. Please try again.";
+        default: return "We couldn't apply this mark to the PDF.";
     }
 }
 
