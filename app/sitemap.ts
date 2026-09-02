@@ -1,10 +1,9 @@
 import type { MetadataRoute } from "next";
 import { getTools } from "@/lib/server/tools";
-
-const BASE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://platenpdf.com").replace(/\/$/, "");
+import { toSiteUrl } from "@/lib/siteUrl";
 
 function url(pathname: string): string {
-    return new URL(pathname.startsWith("/") ? pathname : `/${pathname}`, BASE_URL).toString();
+    return toSiteUrl(pathname);
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

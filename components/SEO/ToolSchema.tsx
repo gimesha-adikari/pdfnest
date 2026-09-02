@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useTools } from "@/context/ToolContext";
-import { getFrontUrl } from "@/lib/getFrontUrl";
+import { toSiteUrl } from "@/lib/siteUrl";
 
 export default function ToolSchema({
     toolHref,
@@ -26,7 +26,7 @@ export default function ToolSchema({
         applicationCategory: "DocumentManagementApplication",
         operatingSystem: "Web",
         description: toolData.description,
-        url: `${getFrontUrl()}${toolData.href}`,
+        url: toSiteUrl(toolData.href),
         offers: {
             "@type": "Offer",
             price: "0",
@@ -41,7 +41,8 @@ export default function ToolSchema({
             ],
         publisher: {
             "@type": "Organization",
-            name: "Platen"
+            name: "Platen",
+            url: toSiteUrl("/"),
         }
     };
 

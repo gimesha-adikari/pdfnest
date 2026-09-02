@@ -1,12 +1,11 @@
 import { type ToolCategory } from "@/lib/toolsData";
 import { getTools } from "@/lib/server/tools";
+import { toSiteUrl } from "@/lib/siteUrl";
 
 export const dynamic = "force-dynamic";
 
-const BASE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://platenpdf.com").replace(/\/$/, "");
-
 function toAbsoluteUrl(pathname: string): string {
-    return new URL(pathname.startsWith("/") ? pathname : `/${pathname}`, BASE_URL).toString();
+    return toSiteUrl(pathname);
 }
 
 const CATEGORY_NAMES: Record<ToolCategory | string, string> = {

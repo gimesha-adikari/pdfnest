@@ -22,6 +22,21 @@ const nextConfig: NextConfig = {
             },
         ];
     },
+    async redirects() {
+        return [
+            {
+                source: "/:path*",
+                has: [
+                    {
+                        type: "host",
+                        value: "www.platenpdf.com",
+                    },
+                ],
+                destination: "https://platenpdf.com/:path*",
+                permanent: true,
+            },
+        ];
+    },
 };
 
 export default nextConfig;

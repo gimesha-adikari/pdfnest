@@ -1,32 +1,12 @@
 import type { Metadata } from "next";
 import { getToolBySlug } from "./server/tools";
+import { getSiteUrl, toSiteUrl } from "./siteUrl";
 
-const BASE_URL = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "https://platenpdf.com"
-).replace(/\/$/, "");
-
-function buildCanonicalUrl(baseUrl: string): string {
-    const url = new URL(baseUrl);
-    const hostname = url.hostname;
-    const parts = hostname.split(".");
-
-    const isApexDomain = parts.length === 2 && !hostname.startsWith("www.");
-
-    if (isApexDomain) {
-        url.hostname = `www.${hostname}`;
-    }
-
-    return url.toString().replace(/\/$/, "");
-}
-
-const CANONICAL_URL = buildCanonicalUrl(BASE_URL);
+const CANONICAL_URL = getSiteUrl();
 const OG_IMAGE = new URL("/platen-og.png", CANONICAL_URL).toString();
 
 function buildAbsoluteUrl(pathname: string): string {
-    return new URL(
-        pathname.startsWith("/") ? pathname : `/${pathname}`,
-        CANONICAL_URL
-    ).toString();
+    return toSiteUrl(pathname);
 }
 
 function buildCommonMetadata(

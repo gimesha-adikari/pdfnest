@@ -7,8 +7,9 @@ import { AuthProvider } from "@/context/AuthContext";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { WorkflowProvider } from "@/context/WorkflowContext";
 import { BackendHealthProvider } from "@/context/BackendHealthContext";
+import { getSiteUrl } from "@/lib/siteUrl";
 
-const SITE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://platenpdf.com").replace(/\/$/, "");
+const SITE_URL = getSiteUrl();
 
 const geistSans = Geist({
     variable: "--font-geist-sans",

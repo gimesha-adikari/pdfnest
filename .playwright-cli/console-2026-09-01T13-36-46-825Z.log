@@ -393,3 +393,10 @@ https://nextjs.org/docs/messages/module-not-found @ http://localhost:3000/_next/
 [16476424ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=L2Td29ZqreRYDVZrVQwb9' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0r5nbpw._.js:13422
 [16481467ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=L2Td29ZqreRYDVZrVQwb9' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0r5nbpw._.js:13422
 [16486599ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=L2Td29ZqreRYDVZrVQwb9' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0r5nbpw._.js:13422
+[58845015ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/3d36gagc74j_c.js:0
+[58845030ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/3d36gagc74j_c.js:0
+[58845041ms] [LOG] [workspace] {toolId: highlight-pdf-v2, hasFile: false, isLoadingConfig: true} @ http://localhost:3000/_next/static/chunks/2-o9ig1cga36-.js:8
+[58845062ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/3d36gagc74j_c.js:0
+[58845064ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/3d36gagc74j_c.js:0
+[58845135ms] [LOG] [workspace] {toolId: highlight-pdf-v2, hasFile: false, isLoadingConfig: false} @ http://localhost:3000/_next/static/chunks/2-o9ig1cga36-.js:8
+[58845156ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/3d36gagc74j_c.js:0
