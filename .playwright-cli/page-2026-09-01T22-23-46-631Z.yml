@@ -1,0 +1,116 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e5]:
+        - link "Platen PLATEN CORE v2.0" [ref=e6] [cursor=pointer]:
+          - /url: /
+          - img "Platen" [ref=e9]
+          - generic [ref=e10]:
+            - generic [ref=e11]: PLATEN
+            - generic [ref=e12]: CORE v2.0
+        - navigation [ref=e13]:
+          - link "Home" [ref=e14] [cursor=pointer]:
+            - /url: /
+          - button "Tools" [ref=e16]
+          - link "Pricing" [ref=e20] [cursor=pointer]:
+            - /url: /pricing
+          - link "About" [ref=e21] [cursor=pointer]:
+            - /url: /about
+          - generic [ref=e22]:
+            - textbox "Search tools..." [ref=e26]
+            - generic: ⌘K
+          - link "Admin" [ref=e180] [cursor=pointer]:
+            - /url: /admin
+        - generic [ref=e27]:
+          - generic [ref=e28]:
+            - link "plus" [ref=e183] [cursor=pointer]:
+              - /url: /dashboard
+            - button "Sign Out" [ref=e187]
+          - button "Switch to light theme" [ref=e105]
+    - main [ref=e30]:
+      - generic [ref=e319]:
+        - generic [ref=e320]:
+          - generic [ref=e322]:
+            - generic [ref=e323]: PDF
+            - generic [ref=e324]:
+              - paragraph [ref=e325]: compiled-images.pdf
+              - paragraph [ref=e326]: 0.13 MB
+            - button "Remove" [ref=e327]
+          - generic [ref=e328]:
+            - generic [ref=e329]:
+              - paragraph [ref=e330]: Source document weight
+              - paragraph [ref=e331]: 0.13 MB
+            - generic [ref=e332]:
+              - paragraph [ref=e333]: Target office syntax
+              - paragraph [ref=e334]: Word (.docx)
+          - button "Convert PDF to DOCX" [ref=e335]
+        - generic [ref=e342]:
+          - heading "Ready for Extraction Pipeline" [level=4] [ref=e343]
+          - paragraph [ref=e344]: Executing this module maps visual tables and multi-font flow channels safely into native workspace element attributes.
+      - generic [ref=e213]:
+        - heading "Frequently Asked Questions" [level=2] [ref=e214]
+        - generic [ref=e215]:
+          - button "Can I edit the converted Word document?" [ref=e217]
+          - button "Will complex layouts like columns be kept intact?" [ref=e222]
+    - contentinfo [ref=e47]:
+      - generic [ref=e49]:
+        - generic [ref=e50]:
+          - link "Platen PLATEN CORE v2.0" [ref=e51] [cursor=pointer]:
+            - /url: /
+            - img "Platen" [ref=e54]
+            - generic [ref=e55]:
+              - generic [ref=e56]: PLATEN
+              - generic [ref=e57]: CORE v2.0
+          - paragraph [ref=e58]: Files are processed in secure, isolated sandbox environments and automatically purged. Precision document infrastructure.
+          - paragraph [ref=e59]: © 2026 Platen Engine. All rights reserved.
+        - generic [ref=e60]:
+          - generic [ref=e61]: PRODUCTS
+          - generic [ref=e62]:
+            - link "Merge PDF" [ref=e63] [cursor=pointer]:
+              - /url: /merge-pdf
+            - link "Edit PDF" [ref=e64] [cursor=pointer]:
+              - /url: /edit-pdf
+            - link "PDF to Word" [ref=e65] [cursor=pointer]:
+              - /url: /pdf-to-word
+            - link "PDF to Markdown" [ref=e66] [cursor=pointer]:
+              - /url: /pdf-to-markdown
+            - link "Browse all tools →" [ref=e67] [cursor=pointer]:
+              - /url: /tools
+        - generic [ref=e68]:
+          - generic [ref=e69]: ECOSYSTEM
+          - generic [ref=e70]:
+            - link "PDF Studio WORKSPACE" [ref=e71] [cursor=pointer]:
+              - /url: /studio-v2
+              - generic [ref=e72]: PDF Studio
+              - generic [ref=e73]: WORKSPACE
+            - link "Repository Analyzer NEW" [ref=e74] [cursor=pointer]:
+              - /url: /repository-analyzer
+              - generic [ref=e75]: Repository Analyzer
+              - generic [ref=e76]: NEW
+            - link "Pricing & Compute" [ref=e77] [cursor=pointer]:
+              - /url: /pricing
+            - link "Architecture Details" [ref=e78] [cursor=pointer]:
+              - /url: /about
+        - generic [ref=e79]:
+          - generic [ref=e80]: LEGAL & SECURE
+          - generic [ref=e81]:
+            - link "Security Architecture" [ref=e82] [cursor=pointer]:
+              - /url: /security
+            - link "Privacy Policy" [ref=e83] [cursor=pointer]:
+              - /url: /privacy
+            - link "Terms of Service" [ref=e84] [cursor=pointer]:
+              - /url: /terms
+            - link "Acceptable Use" [ref=e85] [cursor=pointer]:
+              - /url: /acceptable-use
+            - link "Cookie Policy" [ref=e86] [cursor=pointer]:
+              - /url: /cookies
+            - link "Refund Policy" [ref=e87] [cursor=pointer]:
+              - /url: /refund
+            - link "Contact" [ref=e88] [cursor=pointer]:
+              - /url: /contact
+        - generic [ref=e89]:
+          - generic [ref=e90]: SYSTEM
+          - generic [ref=e91]: All Systems Operational
+          - generic [ref=e94]: Zero-trust sandbox ready.
+  - button "Open Next.js Dev Tools" [ref=e100] [cursor=pointer]
+  - alert [ref=e147]: Convert PDF to Word Online Free | Platen PDF

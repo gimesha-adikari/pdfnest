@@ -1,0 +1,98 @@
+[     413ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     531ms] [LOG] [HMR] connected @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     620ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     620ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     658ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     658ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     674ms] [LOG] [upload] effect {toolId: pdf-to-word, currentToolHref: /pdf-to-word, isLoadingConfig: true, hasFile: false, shouldRestoreTransfer: false} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     681ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     682ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     689ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     689ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     717ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     717ms] [LOG] object @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     717ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     717ms] [LOG] object @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     731ms] [LOG] [upload] effect {toolId: pdf-to-word, currentToolHref: /pdf-to-word, isLoadingConfig: false, hasFile: false, shouldRestoreTransfer: false} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     732ms] [LOG] [upload] effect {toolId: pdf-to-word, currentToolHref: /pdf-to-word, isLoadingConfig: false, hasFile: false, shouldRestoreTransfer: false} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     734ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     738ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     739ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     818ms] [LOG] [Fast Refresh] done in 189ms @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   17008ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   17036ms] [LOG] [Fast Refresh] done in 129ms @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   17052ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   17052ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   17182ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://127.0.0.1:13000/login?callbackUrl=%2Fpdf-to-word:0
+[   37856ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   37856ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   37874ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   37875ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   37962ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   37963ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   37984ms] [LOG] [upload] effect {toolId: pdf-to-word, currentToolHref: /pdf-to-word, isLoadingConfig: true, hasFile: false, shouldRestoreTransfer: false} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   37986ms] [LOG] [upload] effect {toolId: pdf-to-word, currentToolHref: /pdf-to-word, isLoadingConfig: true, hasFile: false, shouldRestoreTransfer: false} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   37987ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   37987ms] [LOG] object @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   37987ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   37987ms] [LOG] object @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   37996ms] [LOG] [upload] effect {toolId: pdf-to-word, currentToolHref: /pdf-to-word, isLoadingConfig: false, hasFile: false, shouldRestoreTransfer: false} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   51394ms] [LOG] [upload] user selected file {toolId: pdf-to-word, fileName: compiled-images.pdf} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   51396ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   51397ms] [LOG] object @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   51397ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   51397ms] [LOG] object @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   51402ms] [LOG] [upload] effect {toolId: pdf-to-word, currentToolHref: /pdf-to-word, isLoadingConfig: false, hasFile: true, shouldRestoreTransfer: false} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   51485ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   51485ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   51532ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   51532ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   51664ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   51664ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   51742ms] [LOG] [workspace] {toolId: pdf-to-word, hasFile: true, isLoadingConfig: false} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   51743ms] [LOG] [workspace] {toolId: pdf-to-word, hasFile: true, isLoadingConfig: false} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   65102ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   65102ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  144373ms] [LOG] [Workflow] clearTransfer @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  144473ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  144473ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  144485ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  144486ms] [LOG] object @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  144486ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  144486ms] [LOG] object @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  144495ms] [LOG] [upload] effect {toolId: pdf-to-word, currentToolHref: /pdf-to-word, isLoadingConfig: false, hasFile: false, shouldRestoreTransfer: false} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  144496ms] [LOG] [upload] effect {toolId: pdf-to-word, currentToolHref: /pdf-to-word, isLoadingConfig: false, hasFile: false, shouldRestoreTransfer: false} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  162202ms] [LOG] [upload] user selected file {toolId: pdf-to-word, fileName: compiled-images.pdf} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  162204ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  162204ms] [LOG] object @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  162205ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  162205ms] [LOG] object @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  162209ms] [LOG] [upload] effect {toolId: pdf-to-word, currentToolHref: /pdf-to-word, isLoadingConfig: false, hasFile: true, shouldRestoreTransfer: false} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  162227ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  162228ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  162256ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  162256ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  162290ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  162290ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  162315ms] [LOG] [workspace] {toolId: pdf-to-word, hasFile: true, isLoadingConfig: false} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  162316ms] [LOG] [workspace] {toolId: pdf-to-word, hasFile: true, isLoadingConfig: false} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  324803ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  324803ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  324834ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  324834ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  324860ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  324860ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  325423ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  325505ms] [LOG] [Fast Refresh] done in 183ms @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  987810ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:13000/_next/webpack-hmr?id=TFPPzJlTnVtRFCtY_3tLH' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_client_0r5nbpw._.js:13422
+[  988811ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:13000/_next/webpack-hmr?id=TFPPzJlTnVtRFCtY_3tLH' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_client_0r5nbpw._.js:13422
+[  989812ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:13000/_next/webpack-hmr?id=TFPPzJlTnVtRFCtY_3tLH' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_client_0r5nbpw._.js:13422
+[  990814ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:13000/_next/webpack-hmr?id=TFPPzJlTnVtRFCtY_3tLH' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_client_0r5nbpw._.js:13422
+[  991815ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:13000/_next/webpack-hmr?id=TFPPzJlTnVtRFCtY_3tLH' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_client_0r5nbpw._.js:13422
+[  996817ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:13000/_next/webpack-hmr?id=TFPPzJlTnVtRFCtY_3tLH' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_client_0r5nbpw._.js:13422
+[ 1001823ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:13000/_next/webpack-hmr?id=TFPPzJlTnVtRFCtY_3tLH' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_client_0r5nbpw._.js:13422
+[ 1006840ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:13000/_next/webpack-hmr?id=TFPPzJlTnVtRFCtY_3tLH' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_client_0r5nbpw._.js:13422
+[ 1011867ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:13000/_next/webpack-hmr?id=TFPPzJlTnVtRFCtY_3tLH' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_client_0r5nbpw._.js:13422
+[ 1016931ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:13000/_next/webpack-hmr?id=TFPPzJlTnVtRFCtY_3tLH' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_client_0r5nbpw._.js:13422
+[ 1021998ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:13000/_next/webpack-hmr?id=TFPPzJlTnVtRFCtY_3tLH' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_client_0r5nbpw._.js:13422
+[ 1027176ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:13000/_next/webpack-hmr?id=TFPPzJlTnVtRFCtY_3tLH' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_client_0r5nbpw._.js:13422

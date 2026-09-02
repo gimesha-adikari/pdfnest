@@ -1,0 +1,110 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e5]:
+        - link "Platen PLATEN CORE v2.0" [ref=e6] [cursor=pointer]:
+          - /url: /
+          - img "Platen" [ref=e9]
+          - generic [ref=e10]:
+            - generic [ref=e11]: PLATEN
+            - generic [ref=e12]: CORE v2.0
+        - navigation [ref=e13]:
+          - link "Home" [ref=e14] [cursor=pointer]:
+            - /url: /
+          - button "Tools" [ref=e16]
+          - link "Pricing" [ref=e20] [cursor=pointer]:
+            - /url: /pricing
+          - link "About" [ref=e21] [cursor=pointer]:
+            - /url: /about
+          - generic [ref=e22]:
+            - textbox "Search tools..." [ref=e26]
+            - generic: ⌘K
+        - generic [ref=e27]:
+          - generic [ref=e28]:
+            - link "Sign In" [active] [ref=e29] [cursor=pointer]:
+              - /url: /login?callbackUrl=%2Flogin
+            - link "Create Account" [ref=e104] [cursor=pointer]:
+              - /url: /register?callbackUrl=%2Flogin
+          - button "Switch to light theme" [ref=e105]
+    - main [ref=e30]:
+      - generic [ref=e148]:
+        - link "Back to Home" [ref=e149] [cursor=pointer]:
+          - /url: /
+        - generic [ref=e152]:
+          - generic [ref=e153]:
+            - generic [ref=e154]: PN
+            - heading "Welcome back" [level=1] [ref=e156]
+            - paragraph [ref=e157]: Sign in to lift your daily PDF limits.
+          - generic [ref=e158]:
+            - textbox "Email address" [ref=e163]
+            - textbox "Password" [ref=e168]
+            - button "Sign In" [ref=e169]
+            - button "Resend verification email" [ref=e171]
+          - generic [ref=e172]: Or continue with
+          - button "Continue with Google" [ref=e177]
+          - generic [ref=e178]:
+            - text: Don't have an account?
+            - link "Sign up" [ref=e179] [cursor=pointer]:
+              - /url: /register?callbackUrl=%2Fpdf-to-word
+    - contentinfo [ref=e47]:
+      - generic [ref=e49]:
+        - generic [ref=e50]:
+          - link "Platen PLATEN CORE v2.0" [ref=e51] [cursor=pointer]:
+            - /url: /
+            - img "Platen" [ref=e54]
+            - generic [ref=e55]:
+              - generic [ref=e56]: PLATEN
+              - generic [ref=e57]: CORE v2.0
+          - paragraph [ref=e58]: Files are processed in secure, isolated sandbox environments and automatically purged. Precision document infrastructure.
+          - paragraph [ref=e59]: © 2026 Platen Engine. All rights reserved.
+        - generic [ref=e60]:
+          - generic [ref=e61]: PRODUCTS
+          - generic [ref=e62]:
+            - link "Merge PDF" [ref=e63] [cursor=pointer]:
+              - /url: /merge-pdf
+            - link "Edit PDF" [ref=e64] [cursor=pointer]:
+              - /url: /edit-pdf
+            - link "PDF to Word" [ref=e65] [cursor=pointer]:
+              - /url: /pdf-to-word
+            - link "PDF to Markdown" [ref=e66] [cursor=pointer]:
+              - /url: /pdf-to-markdown
+            - link "Browse all tools →" [ref=e67] [cursor=pointer]:
+              - /url: /tools
+        - generic [ref=e68]:
+          - generic [ref=e69]: ECOSYSTEM
+          - generic [ref=e70]:
+            - link "PDF Studio WORKSPACE" [ref=e71] [cursor=pointer]:
+              - /url: /studio-v2
+              - generic [ref=e72]: PDF Studio
+              - generic [ref=e73]: WORKSPACE
+            - link "Repository Analyzer NEW" [ref=e74] [cursor=pointer]:
+              - /url: /repository-analyzer
+              - generic [ref=e75]: Repository Analyzer
+              - generic [ref=e76]: NEW
+            - link "Pricing & Compute" [ref=e77] [cursor=pointer]:
+              - /url: /pricing
+            - link "Architecture Details" [ref=e78] [cursor=pointer]:
+              - /url: /about
+        - generic [ref=e79]:
+          - generic [ref=e80]: LEGAL & SECURE
+          - generic [ref=e81]:
+            - link "Security Architecture" [ref=e82] [cursor=pointer]:
+              - /url: /security
+            - link "Privacy Policy" [ref=e83] [cursor=pointer]:
+              - /url: /privacy
+            - link "Terms of Service" [ref=e84] [cursor=pointer]:
+              - /url: /terms
+            - link "Acceptable Use" [ref=e85] [cursor=pointer]:
+              - /url: /acceptable-use
+            - link "Cookie Policy" [ref=e86] [cursor=pointer]:
+              - /url: /cookies
+            - link "Refund Policy" [ref=e87] [cursor=pointer]:
+              - /url: /refund
+            - link "Contact" [ref=e88] [cursor=pointer]:
+              - /url: /contact
+        - generic [ref=e89]:
+          - generic [ref=e90]: SYSTEM
+          - generic [ref=e91]: All Systems Operational
+          - generic [ref=e94]: Zero-trust sandbox ready.
+  - button "Open Next.js Dev Tools" [ref=e100] [cursor=pointer]
+  - alert [ref=e147]: Platen PDF - Free PDF Tools Online

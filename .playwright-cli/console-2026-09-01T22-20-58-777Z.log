@@ -1,0 +1,24 @@
+[     436ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     541ms] [LOG] [HMR] connected @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     633ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     633ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     668ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     668ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     686ms] [LOG] [upload] effect {toolId: pdf-to-word, currentToolHref: /pdf-to-word, isLoadingConfig: true, hasFile: false, shouldRestoreTransfer: false} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     695ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     695ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     697ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     698ms] [LOG] object @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     698ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     698ms] [LOG] object @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     705ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     705ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     708ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     708ms] [LOG] object @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     708ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     708ms] [LOG] object @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     712ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     712ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     718ms] [LOG] [upload] effect {toolId: pdf-to-word, currentToolHref: /pdf-to-word, isLoadingConfig: false, hasFile: false, shouldRestoreTransfer: false} @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     724ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     724ms] [LOG] Logo rendered @ http://127.0.0.1:13000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
