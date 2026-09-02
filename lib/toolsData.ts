@@ -636,7 +636,7 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         related: [
             "/pdf-to-text",
             "/images-to-pdf",
-            "/ocr-pdf"
+            "/ocr-text-v2"
         ],
 
         accept: "image/*, .png, .jpg, .jpeg, .webp, .gif",

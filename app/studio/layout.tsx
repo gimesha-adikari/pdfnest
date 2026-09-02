@@ -1,5 +1,9 @@
 import GlobalNotifications from "@/components/ui/GlobalNotifications";
 import AuthModal from "@/components/auth/AuthModal";
+import type { Metadata } from "next";
+import { buildNoIndexMetadata } from "@/lib/seoMetadata";
+
+export const metadata: Metadata = buildNoIndexMetadata();
 
 export default function StudioLayout({
                                          children,

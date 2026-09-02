@@ -25,6 +25,11 @@ const nextConfig: NextConfig = {
     async redirects() {
         return [
             {
+                source: "/ocr-pdf",
+                destination: "/image-to-searchable-pdf",
+                permanent: true,
+            },
+            {
                 source: "/:path*",
                 has: [
                     {

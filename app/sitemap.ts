@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { getTools } from "@/lib/server/tools";
 import { toSiteUrl } from "@/lib/siteUrl";
+import { isIndexableSitemapPath } from "@/lib/seoRoutes";
 
 function url(pathname: string): string {
     return toSiteUrl(pathname);
@@ -27,11 +28,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
             url: url("/pricing"),
             changeFrequency: "weekly",
             priority: 0.9,
-        },
-        {
-            url: url("/subscribe"),
-            changeFrequency: "weekly",
-            priority: 0.8,
         },
         {
             url: url("/privacy"),
@@ -71,11 +67,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ];
 
     const tools = await getTools();
-    const toolPages: MetadataRoute.Sitemap = tools.map((tool) => ({
-        url: url(tool.href || (tool as any).Href),
-        changeFrequency: "weekly",
-        priority: 0.8,
-    }));
+    const toolPages: MetadataRoute.Sitemap = tools
+        .map((tool) => tool.href)
+        .filter((href): href is string => Boolean(href) && isIndexableSitemapPath(href))
+        .map((href) => ({
+            url: url(href),
+            changeFrequency: "weekly" as const,
+            priority: 0.8,
+        }));
 
     return [...staticPages, ...toolPages];
 }
