@@ -1,0 +1,85 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e5]:
+        - link "Platen PLATEN CORE v2.0" [ref=e6] [cursor=pointer]:
+          - /url: /
+          - img "Platen" [ref=e9]
+          - generic [ref=e10]:
+            - generic [ref=e11]: PLATEN
+            - generic [ref=e12]: CORE v2.0
+        - navigation [ref=e13]:
+          - link "Home" [ref=e14] [cursor=pointer]:
+            - /url: /
+          - button "Tools" [ref=e16]
+          - link "Pricing" [ref=e20] [cursor=pointer]:
+            - /url: /pricing
+          - link "About" [ref=e21] [cursor=pointer]:
+            - /url: /about
+          - generic [ref=e22]:
+            - textbox "Search tools..." [ref=e26]
+            - generic: ⌘K
+        - link "Sign In" [ref=e29] [cursor=pointer]:
+          - /url: /login?callbackUrl=%2Fpdf-to-markdown-v2%2Fworkspace
+    - main [ref=e30]
+    - contentinfo [ref=e34]:
+      - generic [ref=e36]:
+        - generic [ref=e37]:
+          - link "Platen PLATEN CORE v2.0" [ref=e38] [cursor=pointer]:
+            - /url: /
+            - img "Platen" [ref=e41]
+            - generic [ref=e42]:
+              - generic [ref=e43]: PLATEN
+              - generic [ref=e44]: CORE v2.0
+          - paragraph [ref=e45]: Files are processed in secure, isolated sandbox environments and automatically purged. Precision document infrastructure.
+          - paragraph [ref=e46]: © 2026 Platen Engine. All rights reserved.
+        - generic [ref=e47]:
+          - generic [ref=e48]: PRODUCTS
+          - generic [ref=e49]:
+            - link "Merge PDF" [ref=e50] [cursor=pointer]:
+              - /url: /merge-pdf
+            - link "Edit PDF" [ref=e51] [cursor=pointer]:
+              - /url: /edit-pdf
+            - link "PDF to Word" [ref=e52] [cursor=pointer]:
+              - /url: /pdf-to-word
+            - link "PDF to Markdown" [ref=e53] [cursor=pointer]:
+              - /url: /pdf-to-markdown
+            - link "Browse all tools →" [ref=e54] [cursor=pointer]:
+              - /url: /tools
+        - generic [ref=e55]:
+          - generic [ref=e56]: ECOSYSTEM
+          - generic [ref=e57]:
+            - link "PDF Studio WORKSPACE" [ref=e58] [cursor=pointer]:
+              - /url: /studio-v2
+              - generic [ref=e59]: PDF Studio
+              - generic [ref=e60]: WORKSPACE
+            - link "Repository Analyzer NEW" [ref=e61] [cursor=pointer]:
+              - /url: /repository-analyzer
+              - generic [ref=e62]: Repository Analyzer
+              - generic [ref=e63]: NEW
+            - link "Pricing & Compute" [ref=e64] [cursor=pointer]:
+              - /url: /pricing
+            - link "Architecture Details" [ref=e65] [cursor=pointer]:
+              - /url: /about
+        - generic [ref=e66]:
+          - generic [ref=e67]: LEGAL & SECURE
+          - generic [ref=e68]:
+            - link "Security Architecture" [ref=e69] [cursor=pointer]:
+              - /url: /security
+            - link "Privacy Policy" [ref=e70] [cursor=pointer]:
+              - /url: /privacy
+            - link "Terms of Service" [ref=e71] [cursor=pointer]:
+              - /url: /terms
+            - link "Acceptable Use" [ref=e72] [cursor=pointer]:
+              - /url: /acceptable-use
+            - link "Cookie Policy" [ref=e73] [cursor=pointer]:
+              - /url: /cookies
+            - link "Refund Policy" [ref=e74] [cursor=pointer]:
+              - /url: /refund
+            - link "Contact" [ref=e75] [cursor=pointer]:
+              - /url: /contact
+        - generic [ref=e76]:
+          - generic [ref=e77]: SYSTEM
+          - generic [ref=e78]: All Systems Operational
+          - generic [ref=e81]: Zero-trust sandbox ready.
+  - button "Open Next.js Dev Tools" [ref=e87] [cursor=pointer]
