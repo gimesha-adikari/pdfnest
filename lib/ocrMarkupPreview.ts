@@ -72,7 +72,9 @@ async function parseError(response: Response): Promise<OcrMarkupPreviewError> {
     return new OcrMarkupPreviewError(code, messageFor(code), response.status);
 }
 
-export async function fetchOcrMarkupPreview(file: File, language = "auto", signal?: AbortSignal): Promise<OcrMarkupPreview> {
+export async function fetchOcrMarkupPreview(file: File, language = "auto", pageIndexOrSignal?: number | AbortSignal, signal?: AbortSignal): Promise<OcrMarkupPreview> {
+    const pageIndex = typeof pageIndexOrSignal === "number" ? pageIndexOrSignal : undefined;
+    const requestSignal = typeof pageIndexOrSignal === "number" ? signal : pageIndexOrSignal;
     const form = new FormData();
     form.append("file", file);
     form.append("request_id", `markup-preview-${crypto.randomUUID()}`);
@@ -82,6 +84,7 @@ export async function fetchOcrMarkupPreview(file: File, language = "auto", signa
     if (language !== "auto") {
         for (const code of language.split("+").filter(Boolean)) form.append("languages", code);
     }
+    if (pageIndex !== undefined) form.append("page_index", String(pageIndex));
     form.append("routing_policy", "FAST");
 
     let response: Response;
@@ -90,7 +93,7 @@ export async function fetchOcrMarkupPreview(file: File, language = "auto", signa
             method: "POST",
             body: form,
             credentials: "include",
-            signal,
+            signal: requestSignal,
             headers: { "X-Request-ID": crypto.randomUUID() },
         });
     } catch (cause) {

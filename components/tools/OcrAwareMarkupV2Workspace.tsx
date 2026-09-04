@@ -6,7 +6,7 @@ import { CheckCircle2, Download, FileText, Highlighter, Languages, Loader2, Rota
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import { useAuth } from "@/context/AuthContext";
 import OcrLanguagePicker from "@/components/tools/OcrLanguagePicker";
-import MarkupPdfPreview, { type MarkupPreviewState, type MarkupTextSelection } from "@/components/tools/MarkupPdfPreview";
+import MarkupPdfPreview, { type MarkupFindState, type MarkupPreviewState, type MarkupTextSelection } from "@/components/tools/MarkupPdfPreview";
 import { fetchOcrMarkupPreview, safeOcrMarkupPreviewMessage, type OcrMarkupPreview } from "@/lib/ocrMarkupPreview";
 import {
     cancelOcrAwareMarkup,
@@ -86,7 +86,7 @@ function statusLabel(job: OcrAwareMarkupJob): string {
 
 export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAwareMarkupAction }) {
     const { file, setFile } = useSharedTool();
-    const { openAuthModal, isLoggedIn, isLoading: isAuthLoading } = useAuth();
+    const { openAuthModal, isAuthenticated, isGuest, isLoading: isAuthLoading } = useAuth();
     const [query, setQuery] = useState("");
     const [mode, setMode] = useState<OcrAwareMarkupMode>("smart");
     const [language, setLanguage] = useState("auto");
@@ -105,7 +105,11 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
     const [ocrPreview, setOcrPreview] = useState<OcrMarkupPreview | null>(null);
     const [ocrPreviewStatus, setOcrPreviewStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
     const [ocrPreviewError, setOcrPreviewError] = useState<string | null>(null);
-    const [ocrPreviewKey, setOcrPreviewKey] = useState<string | null>(null);
+    const [findQuery, setFindQuery] = useState("");
+    const [submittedFindQuery, setSubmittedFindQuery] = useState("");
+    const [findOccurrence, setFindOccurrence] = useState(0);
+    const [findState, setFindState] = useState<MarkupFindState>({ count: 0, activeIndex: -1, current: null });
+    const ocrPreviewCacheRef = useRef<Map<string, OcrMarkupPreview>>(new Map());
     const abortRef = useRef<AbortController | null>(null);
     const ocrPreviewRequestRef = useRef<{ key: string; controller: AbortController } | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -175,6 +179,9 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
         }
 
         cancelActiveJobWithoutAwait();
+        ocrPreviewRequestRef.current?.controller.abort();
+        ocrPreviewRequestRef.current = null;
+        ocrPreviewCacheRef.current.clear();
         setUploadError(null);
         setError(null);
         setJob(null);
@@ -185,7 +192,10 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
         setOcrPreview(null);
         setOcrPreviewStatus("idle");
         setOcrPreviewError(null);
-        setOcrPreviewKey(null);
+        setFindQuery("");
+        setSubmittedFindQuery("");
+        setFindOccurrence(0);
+        setFindState({ count: 0, activeIndex: -1, current: null });
         clearResult();
         setFile(nextFile);
         event.currentTarget.value = "";
@@ -198,12 +208,40 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
         setError(null);
     }, []);
 
+    const handleFindStateChange = useCallback((next: MarkupFindState) => {
+        setFindState(next);
+    }, []);
+
+    const runFind = useCallback(() => {
+        const nextQuery = findQuery.trim();
+        setSubmittedFindQuery(nextQuery);
+        setFindOccurrence(0);
+        setError(null);
+    }, [findQuery]);
+
+    const selectFindOccurrence = () => {
+        if (findState.current) handleTextSelected(findState.current);
+    };
+
+    const previousFindOccurrence = useCallback(() => {
+        if (findState.count === 0) return;
+        setFindOccurrence((findState.activeIndex - 1 + findState.count) % findState.count);
+    }, [findState.activeIndex, findState.count]);
+
+    const nextFindOccurrence = useCallback(() => {
+        if (findState.count === 0) return;
+        setFindOccurrence((findState.activeIndex + 1) % findState.count);
+    }, [findState.activeIndex, findState.count]);
+
     const handleLanguageChange = useCallback((value: string) => {
         setLanguage(value);
         setOcrPreview(null);
         setOcrPreviewStatus("idle");
         setOcrPreviewError(null);
-        setOcrPreviewKey(null);
+        setFindQuery("");
+        setSubmittedFindQuery("");
+        setFindOccurrence(0);
+        setFindState({ count: 0, activeIndex: -1, current: null });
         if (selection?.source === "ocr") {
             setSelection(null);
             setQuery("");
@@ -212,22 +250,38 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
 
     useEffect(() => {
         const previewFile = file;
-        if (!previewFile || !capabilities || !isLoggedIn || isAuthLoading) {
+        if (!previewFile || !capabilities || !isAuthenticated || isAuthLoading) {
             ocrPreviewRequestRef.current?.controller.abort();
             ocrPreviewRequestRef.current = null;
             return;
         }
         if (!previewState.pageHasScannedContent) {
+            // A page transition from scanned to native must cancel any page-
+            // scoped OCR request that is no longer relevant. The native text
+            // layer remains usable; stale OCR state must not arrive later and
+            // overwrite the active page's selection surface.
+            ocrPreviewRequestRef.current?.controller.abort();
+            ocrPreviewRequestRef.current = null;
             return;
         }
 
-        const previewKey = `${previewFile.name}:${previewFile.size}:${previewFile.lastModified}:${language}`;
+        const previewKey = `${previewFile.name}:${previewFile.size}:${previewFile.lastModified}:${previewFile.type}:${language}:${previewState.page}`;
         const activeRequest = ocrPreviewRequestRef.current;
         if (activeRequest && activeRequest.key !== previewKey) {
             activeRequest.controller.abort();
             ocrPreviewRequestRef.current = null;
         }
-        if (ocrPreviewKey === previewKey || ocrPreviewRequestRef.current?.key === previewKey) return;
+        const cachedPreview = ocrPreviewCacheRef.current.get(previewKey);
+        if (cachedPreview) {
+            setOcrPreview((current) => {
+                const pages = [...(current?.pages || []).filter((item) => item.page_number !== previewState.page), ...cachedPreview.pages];
+                return { ...cachedPreview, page_count: cachedPreview.page_count || current?.page_count || previewState.pageCount, pages };
+            });
+            setOcrPreviewStatus("ready");
+            setOcrPreviewError(null);
+            return;
+        }
+        if (ocrPreviewRequestRef.current?.key === previewKey) return;
 
         const controller = new AbortController();
         ocrPreviewRequestRef.current = { key: previewKey, controller };
@@ -235,27 +289,30 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
         // may be refreshed without discarding the PDF or its native preview.
         setOcrPreviewStatus("loading");
         setOcrPreviewError(null);
-        setOcrPreviewKey(previewKey);
-        void fetchOcrMarkupPreview(previewFile, language, controller.signal)
+        void fetchOcrMarkupPreview(previewFile, language, previewState.page - 1, controller.signal)
             .then((next) => {
-                if (controller.signal.aborted) return;
-                setOcrPreview(next);
+                if (controller.signal.aborted || ocrPreviewRequestRef.current?.controller !== controller) return;
+                ocrPreviewCacheRef.current.set(previewKey, next);
+                setOcrPreview((current) => {
+                    const pages = [...(current?.pages || []).filter((item) => item.page_number !== previewState.page), ...next.pages];
+                    return { ...next, page_count: next.page_count || current?.page_count || previewState.pageCount, pages };
+                });
                 setOcrPreviewStatus("ready");
             })
             .catch((cause: unknown) => {
-                if (controller.signal.aborted) return;
-                setOcrPreview(null);
+                if (controller.signal.aborted || ocrPreviewRequestRef.current?.controller !== controller) return;
+                setOcrPreview((current) => current ? { ...current, pages: current.pages.filter((item) => item.page_number !== previewState.page) } : null);
                 setOcrPreviewStatus("error");
                 setOcrPreviewError(safeOcrMarkupPreviewMessage(cause));
             })
             .finally(() => {
                 if (ocrPreviewRequestRef.current?.controller === controller) ocrPreviewRequestRef.current = null;
             });
-    }, [capabilities, file, isAuthLoading, isLoggedIn, language, ocrPreviewKey, previewState.pageHasScannedContent]);
+    }, [capabilities, file, isAuthLoading, isAuthenticated, language, previewState.page, previewState.pageCount, previewState.pageHasScannedContent]);
 
     const submit = useCallback(async () => {
         if (!file || !query.trim() || !capabilities) return;
-        if (!isLoggedIn) {
+        if (!isAuthenticated) {
             openAuthModal("login");
             return;
         }
@@ -285,7 +342,7 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
             if (abortRef.current === controller) abortRef.current = null;
             setIsSubmitting(false);
         }
-    }, [action, capabilities, color, file, isLoggedIn, language, mode, openAuthModal, query, clearResult]);
+    }, [action, capabilities, color, file, isAuthenticated, language, mode, openAuthModal, query, clearResult]);
 
     const cancel = useCallback(async () => {
         abortRef.current?.abort();
@@ -313,7 +370,13 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
         setOcrPreview(null);
         setOcrPreviewStatus("idle");
         setOcrPreviewError(null);
-        setOcrPreviewKey(null);
+        ocrPreviewRequestRef.current?.controller.abort();
+        ocrPreviewRequestRef.current = null;
+        ocrPreviewCacheRef.current.clear();
+        setFindQuery("");
+        setSubmittedFindQuery("");
+        setFindOccurrence(0);
+        setFindState({ count: 0, activeIndex: -1, current: null });
         clearResult();
         openFileChooser();
     }, [cancelActiveJobWithoutAwait, clearResult, openFileChooser, setFile]);
@@ -322,7 +385,7 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
     const Icon = ICONS[action];
     const availableModes = (capabilities?.modes || DEFAULT_MODES).filter((item, index, values) => values.indexOf(item) === index);
     const active = isSubmitting || Boolean(job && ["QUEUED", "RUNNING"].includes(job.status));
-    const visibleOcrPreview = isLoggedIn && !isAuthLoading && Boolean(capabilities) ? ocrPreview : null;
+    const visibleOcrPreview = isAuthenticated && !isAuthLoading && Boolean(capabilities) ? ocrPreview : null;
     const visibleOcrPreviewStatus = visibleOcrPreview ? ocrPreviewStatus : "idle";
     const disabledReason = isSubmitting
         ? "Processing…"
@@ -336,7 +399,7 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
                         ? "Languages unavailable."
                         : !query.trim()
                             ? "Select text in the preview or enter a phrase."
-                            : isAuthLoading || !isLoggedIn
+                            : isAuthLoading || !isAuthenticated
                                 ? "Sign in required."
                                 : null;
     const canSubmit = !disabledReason;
@@ -360,7 +423,7 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
                             {file && <button type="button" data-testid="markup-v2-choose-another" onClick={openFileChooser} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-semibold"><RotateCcw size={14} /> Choose another PDF</button>}
                         </div>
                         <div className="mt-4">
-                            <MarkupPdfPreview file={file} ocrPreview={visibleOcrPreview} ocrPreviewStatus={visibleOcrPreviewStatus} ocrPreviewError={visibleOcrPreview ? ocrPreviewError : null} activeSelectionText={selection?.source === "ocr" ? selection.text : null} onTextSelected={handleTextSelected} onStateChange={setPreviewState} />
+                            <MarkupPdfPreview file={file} ocrPreview={visibleOcrPreview} ocrPreviewStatus={visibleOcrPreviewStatus} ocrPreviewError={visibleOcrPreview ? ocrPreviewError : null} activeSelectionText={selection?.source === "ocr" ? selection.text : null} findQuery={submittedFindQuery} activeFindOccurrence={findOccurrence} onTextSelected={handleTextSelected} onFindStateChange={handleFindStateChange} onStateChange={setPreviewState} />
                         </div>
                     </section>
                 </div>
@@ -387,6 +450,20 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
                         <input data-testid="markup-v2-query" aria-label="Text query" value={query} onChange={(event) => { setQuery(event.target.value); setSelection(null); setError(null); }} placeholder="Select text in the preview or enter an exact phrase" className="mt-2 w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2" />
                     </label>
 
+                    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-secondary)] p-3" data-testid="markup-v2-find">
+                        <label className="block text-sm font-medium text-[var(--foreground)]" htmlFor="markup-v2-find-query">
+                            <span>Find text in this page</span>
+                            <div className="mt-2 flex gap-2">
+                                <input id="markup-v2-find-query" data-testid="markup-v2-find-query" aria-label="Find text in this page" value={findQuery} onChange={(event) => { const value = event.target.value; setFindQuery(value); if (!value.trim()) { setSubmittedFindQuery(""); setFindOccurrence(0); } }} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); runFind(); } }} placeholder="Search the visible page" className="min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm" />
+                                <button type="button" data-testid="markup-v2-find-submit" onClick={runFind} disabled={!findQuery.trim()} className="rounded-lg border border-indigo-500/40 px-3 py-2 text-xs font-semibold text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-indigo-300">Find</button>
+                            </div>
+                        </label>
+                        {submittedFindQuery && <div className="mt-3 flex flex-wrap items-center gap-2 text-xs" role="status" aria-live="polite" data-testid="markup-v2-find-status">
+                            {findState.count === 0 ? <span className="font-semibold text-amber-700 dark:text-amber-300">No matches on this page.</span> : <><span className="font-semibold text-[var(--foreground)]">Match {findState.activeIndex + 1} of {findState.count}</span><button type="button" data-testid="markup-v2-find-previous" onClick={previousFindOccurrence} aria-label="Previous text match" className="rounded border border-[var(--border)] px-2 py-1">Previous</button><button type="button" data-testid="markup-v2-find-next" onClick={nextFindOccurrence} aria-label="Next text match" className="rounded border border-[var(--border)] px-2 py-1">Next</button><button type="button" data-testid="markup-v2-find-select" onClick={selectFindOccurrence} disabled={!findState.current} className="rounded bg-indigo-600 px-2 py-1 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">Use this match</button></>}
+                        </div>}
+                        <p className="mt-2 text-xs text-[var(--muted)]">Find highlights text already discovered on the visible page. It does not start the final mark.</p>
+                    </div>
+
                     {selection && <div data-testid="markup-v2-selection-summary" className="rounded-xl border border-indigo-300/60 bg-indigo-500/5 px-3 py-3 text-xs text-[var(--muted)]"><p className="font-semibold text-[var(--foreground)]">Selected text</p><p className="mt-1 break-words">“{selection.text}”</p><p className="mt-2">Page {selection.page} · All matching occurrences will be marked.</p></div>}
                     {query.trim() && !selection && <p className="text-xs text-[var(--muted)]">Find text mode marks every matching occurrence of this phrase.</p>}
 
@@ -406,7 +483,8 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
 
                     <label className="block text-sm font-medium text-[var(--foreground)]">Mark color<input aria-label="Mark color" type="color" value={color} onChange={(event) => setColor(event.target.value)} disabled={active} className="mt-2 h-10 w-full cursor-pointer rounded-lg border border-[var(--border)] bg-transparent p-1" /></label>
 
-                    {!isAuthLoading && !isLoggedIn && <div className="rounded-xl border border-amber-300/60 bg-amber-500/5 px-3 py-3 text-xs text-[var(--muted)]"><p className="flex items-center gap-2 font-semibold text-[var(--foreground)]"><ShieldCheck size={14} /> Sign in to apply a durable mark.</p><button type="button" onClick={() => openAuthModal("login")} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-indigo-500/40 px-3 py-2 text-xs font-semibold text-indigo-700 dark:text-indigo-300">Sign in</button></div>}
+                    {isGuest && <div className="rounded-xl border border-emerald-300/60 bg-emerald-500/5 px-3 py-3 text-xs text-[var(--muted)]"><p className="flex items-center gap-2 font-semibold text-[var(--foreground)]"><ShieldCheck size={14} /> Guest access is available.</p><p className="mt-1">Guest usage limits still apply to processing.</p></div>}
+                    {!isAuthLoading && !isAuthenticated && <div className="rounded-xl border border-amber-300/60 bg-amber-500/5 px-3 py-3 text-xs text-[var(--muted)]"><p className="flex items-center gap-2 font-semibold text-[var(--foreground)]"><ShieldCheck size={14} /> Sign in to continue when guest access is unavailable.</p><button type="button" onClick={() => openAuthModal("login")} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-indigo-500/40 px-3 py-2 text-xs font-semibold text-indigo-700 dark:text-indigo-300">Sign in</button></div>}
 
                     <div className="flex flex-wrap gap-3">
                         <button data-testid="markup-v2-submit" type="submit" disabled={!canSubmit || active} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{isSubmitting ? <Loader2 className="animate-spin" size={16} /> : <Icon size={16} />}{isSubmitting ? "Processing" : `${meta.verb} text`}</button>

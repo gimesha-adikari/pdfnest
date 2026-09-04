@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, FileWarning, Loader2, MousePointer2, ScanText } from "lucide-react";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, PDFPageProxy, TextLayer } from "pdfjs-dist";
 
 import type { OcrMarkupPreview, OcrMarkupPreviewPage, OcrMarkupPreviewWord } from "@/lib/ocrMarkupPreview";
+import { findTextItemMatches, findWordMatches, type MarkupFindMatch } from "@/lib/markupFind";
 import { usePreview } from "@/lib/preview/usePreview";
 import type { PreviewError } from "@/lib/preview/types";
 
@@ -12,6 +13,12 @@ export interface MarkupTextSelection {
     text: string;
     page: number;
     source: "native" | "ocr";
+}
+
+export interface MarkupFindState {
+    count: number;
+    activeIndex: number;
+    current: MarkupTextSelection | null;
 }
 
 export interface MarkupPreviewState {
@@ -43,7 +50,10 @@ interface MarkupPdfPreviewProps {
     ocrPreviewStatus?: "idle" | "loading" | "ready" | "error";
     ocrPreviewError?: string | null;
     activeSelectionText?: string | null;
+    findQuery?: string;
+    activeFindOccurrence?: number;
     onTextSelected?: (selection: MarkupTextSelection) => void;
+    onFindStateChange?: (state: MarkupFindState) => void;
     onStateChange?: (state: MarkupPreviewState) => void;
     /** Result previews use the same processed page viewer without selection controls. */
     readOnly?: boolean;
@@ -92,7 +102,10 @@ export default function MarkupPdfPreview({
     ocrPreviewStatus = "idle",
     ocrPreviewError = null,
     activeSelectionText = null,
+    findQuery = "",
+    activeFindOccurrence = 0,
     onTextSelected,
+    onFindStateChange,
     onStateChange,
     readOnly = false,
     testIdPrefix = "markup-pdf",
@@ -105,6 +118,8 @@ export default function MarkupPdfPreview({
     const [pageHasSelectableText, setPageHasSelectableText] = useState(false);
     const [pageHasScannedContent, setPageHasScannedContent] = useState(false);
     const [pageText, setPageText] = useState("");
+    const [nativeTextItems, setNativeTextItems] = useState<PdfTextItem[]>([]);
+    const [textLayerVersion, setTextLayerVersion] = useState(0);
     const [error, setError] = useState<string | null>(null);
 
     const pageFrameRef = useRef<HTMLDivElement | null>(null);
@@ -125,6 +140,19 @@ export default function MarkupPdfPreview({
     const currentOcrPage = ocrPreview?.pages.find((item) => item.page_number === page) || null;
     const selectionEnabled = !readOnly;
     const useOcrSelection = selectionEnabled && Boolean(currentOcrPage?.selection_mode === "ocr" && currentOcrPage.words.length > 0);
+    const ocrFindMatches = useMemo(
+        () => findWordMatches(currentOcrPage?.words || [], findQuery),
+        [currentOcrPage?.words, findQuery],
+    );
+    const nativeFindMatches = useMemo(
+        () => findTextItemMatches(nativeTextItems, findQuery),
+        [findQuery, nativeTextItems],
+    );
+    const findMatches = useOcrSelection ? ocrFindMatches : nativeFindMatches;
+    const activeFindIndex = findMatches.length > 0
+        ? Math.min(Math.max(0, activeFindOccurrence), findMatches.length - 1)
+        : -1;
+    const activeFindMatch = activeFindIndex >= 0 ? findMatches[activeFindIndex] : null;
     const backendPreviewError = serverPreviewErrorMessage(serverPreview.error);
     const previewFailure = error || backendPreviewError;
     const effectivePageCount = serverPreview.metadata?.pageCount || pageCount;
@@ -164,6 +192,7 @@ export default function MarkupPdfPreview({
         setPageHasSelectableText(false);
         setPageHasScannedContent(false);
         setPageText("");
+        setNativeTextItems([]);
         setError(null);
 
         if (!file) return () => { cancelled = true; destroy(); };
@@ -243,6 +272,7 @@ export default function MarkupPdfPreview({
                     // PDF.js may omit the operator list for unusual documents; text-layer state still works.
                 }
                 setPageText(text);
+                setNativeTextItems(textItems);
                 setPageHasSelectableText(textItems.length > 0);
                 setPageHasScannedContent(imageContent || textItems.length === 0);
 
@@ -278,6 +308,7 @@ export default function MarkupPdfPreview({
                     resizeObserver.observe(frame);
                 }
 
+                let textItemIndex = 0;
                 for (const child of Array.from(textLayerElement.children) as HTMLElement[]) {
                     child.style.position = "absolute";
                     child.style.whiteSpace = "pre";
@@ -287,7 +318,12 @@ export default function MarkupPdfPreview({
                     child.style.transform = "rotate(var(--rotate)) scaleX(var(--scale-x))";
                     child.style.userSelect = "text";
                     child.style.cursor = "text";
+                    if (textItemIndex < textItems.length) {
+                        child.dataset.textItemIndex = String(textItemIndex);
+                        textItemIndex += 1;
+                    }
                 }
+                setTextLayerVersion((version) => version + 1);
             } catch (cause) {
                 if (!cancelled) setError(previewErrorMessage(cause));
             } finally {
@@ -305,6 +341,45 @@ export default function MarkupPdfPreview({
             clearElement(textLayerElement);
         };
     }, [page, pdfDocument, selectionEnabled]);
+
+    useEffect(() => {
+        const root = textLayerRef.current;
+        if (!root) return;
+
+        const matchedByItem = new Map<number, number>();
+        nativeFindMatches.forEach((match, occurrence) => {
+            for (let index = match.startIndex; index <= match.endIndex; index += 1) {
+                if (!matchedByItem.has(index)) matchedByItem.set(index, occurrence);
+            }
+        });
+
+        for (const child of Array.from(root.children) as HTMLElement[]) {
+            const itemIndex = Number(child.dataset.textItemIndex);
+            const occurrence = Number.isInteger(itemIndex) ? matchedByItem.get(itemIndex) : undefined;
+            if (occurrence === undefined) {
+                delete child.dataset.findMatch;
+                child.style.backgroundColor = "";
+                child.style.outline = "";
+                child.style.outlineOffset = "";
+                continue;
+            }
+            child.dataset.findMatch = "true";
+            child.style.backgroundColor = occurrence === activeFindIndex ? "rgba(250, 204, 21, 0.42)" : "rgba(59, 130, 246, 0.22)";
+            child.style.outline = occurrence === activeFindIndex ? "2px solid rgba(217, 119, 6, 0.85)" : "1px solid rgba(37, 99, 235, 0.6)";
+            child.style.outlineOffset = "1px";
+        }
+    }, [activeFindIndex, nativeFindMatches, textLayerVersion]);
+
+    useEffect(() => {
+        const current = activeFindMatch
+            ? {
+                text: activeFindMatch.text,
+                page,
+                source: useOcrSelection ? "ocr" as const : "native" as const,
+            }
+            : null;
+        onFindStateChange?.({ count: findMatches.length, activeIndex: activeFindIndex, current });
+    }, [activeFindIndex, activeFindMatch, findMatches.length, onFindStateChange, page, useOcrSelection]);
 
     useEffect(() => {
         if (!textLayerRef.current) return;
@@ -400,7 +475,7 @@ export default function MarkupPdfPreview({
                         </>}
                         <div ref={textLayerRef} data-testid={testId("text-layer")} aria-label={selectionEnabled && pageHasSelectableText ? "Selectable PDF text" : undefined} />
                         {useOcrSelection && currentOcrPage && (
-                            <OcrWordSelectionLayer key={`${currentOcrPage.page_id}-${currentOcrPage.page_number}`} page={currentOcrPage} activeSelectionText={activeSelectionText} onTextSelected={onTextSelected} />
+                            <OcrWordSelectionLayer key={`${currentOcrPage.page_id}-${currentOcrPage.page_number}`} page={currentOcrPage} activeSelectionText={activeSelectionText} findMatches={ocrFindMatches} activeFindOccurrence={activeFindIndex} onTextSelected={onTextSelected} />
                         )}
                         {pageHasScannedContent && ocrPreviewStatus === "loading" && (
                             <div className="pointer-events-none absolute inset-x-3 top-3 z-[4] flex justify-center">
@@ -425,10 +500,12 @@ export default function MarkupPdfPreview({
 interface OcrWordSelectionLayerProps {
     page: OcrMarkupPreviewPage;
     activeSelectionText?: string | null;
+    findMatches: MarkupFindMatch[];
+    activeFindOccurrence: number;
     onTextSelected?: (selection: MarkupTextSelection) => void;
 }
 
-function OcrWordSelectionLayer({ page, activeSelectionText, onTextSelected }: OcrWordSelectionLayerProps) {
+function OcrWordSelectionLayer({ page, activeSelectionText, findMatches, activeFindOccurrence, onTextSelected }: OcrWordSelectionLayerProps) {
     const [anchor, setAnchor] = useState<number | null>(null);
     const [focus, setFocus] = useState<number | null>(null);
     const pointerDown = useRef(false);
@@ -484,16 +561,23 @@ function OcrWordSelectionLayer({ page, activeSelectionText, onTextSelected }: Oc
                 const width = Math.max(0, Math.min(100 - left, (word.width / page.width) * 100));
                 const height = Math.max(0, Math.min(100 - top, (word.height / page.height) * 100));
                 const selected = selectedRange(index, index);
+                const matchingOccurrences = findMatches
+                    .map((match, occurrence) => ({ match, occurrence }))
+                    .filter(({ match }) => index >= match.startIndex && index <= match.endIndex);
+                const findOccurrence = matchingOccurrences[0]?.occurrence;
+                const isFindMatch = findOccurrence !== undefined;
+                const isActiveFindMatch = isFindMatch && findOccurrence === activeFindOccurrence;
                 return (
                     <span
                         key={word.id}
                         role="button"
                         tabIndex={0}
-                        aria-label={`Select ${word.text}`}
+                        aria-label={`${isFindMatch ? "Find match. " : ""}Select ${word.text}`}
                         data-testid="markup-pdf-ocr-word"
                         data-word-id={word.id}
+                        data-find-match={isFindMatch ? "true" : undefined}
                         className="absolute rounded-sm outline-none transition focus-visible:ring-2 focus-visible:ring-indigo-500"
-                        style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%`, background: selected ? "rgba(99, 102, 241, 0.35)" : "transparent", boxShadow: selected ? "inset 0 0 0 1px rgba(79, 70, 229, 0.55)" : undefined, cursor: "text", touchAction: "none" }}
+                        style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%`, background: selected ? "rgba(99, 102, 241, 0.35)" : isActiveFindMatch ? "rgba(250, 204, 21, 0.42)" : isFindMatch ? "rgba(59, 130, 246, 0.22)" : "transparent", boxShadow: selected ? "inset 0 0 0 1px rgba(79, 70, 229, 0.75)" : isActiveFindMatch ? "inset 0 0 0 2px rgba(217, 119, 6, 0.9)" : isFindMatch ? "inset 0 0 0 1px rgba(37, 99, 235, 0.65)" : undefined, cursor: "text", touchAction: "none" }}
                         onPointerDown={(event) => { event.preventDefault(); pointerDown.current = true; setAnchor(index); setFocus(index); }}
                         onPointerEnter={() => { if (pointerDown.current) setFocus(index); }}
                         onPointerUp={(event) => { event.preventDefault(); event.stopPropagation(); commit(index); }}

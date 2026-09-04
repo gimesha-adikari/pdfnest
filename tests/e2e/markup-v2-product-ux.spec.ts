@@ -151,10 +151,10 @@ test.describe.serial("OCR-aware markup V2 product UX", () => {
             await expect(page.getByTestId("markup-v2-query")).toHaveValue("Markup Alpha");
             await expect(page.getByTestId("markup-v2-mode")).toHaveValue("ocr");
             await expect(page.getByRole("combobox", { name: "OCR language" })).toContainText("English");
-            await expect(page.getByTestId("markup-v2-submit")).toBeDisabled();
-            await expect(page.getByTestId("markup-v2-disabled-reason")).toContainText("Sign in required");
+            await expect(page.getByTestId("markup-v2-submit")).toBeEnabled();
+            await expect(page.getByText("Guest access is available.", { exact: true })).toBeVisible();
 
-            results.push({ action, selected_file: true, preview: true, query_preserved: true, mode_preserved: true, language_preserved: true, signed_out_action_reason: "Sign in required" });
+            results.push({ action, selected_file: true, preview: true, query_preserved: true, mode_preserved: true, language_preserved: true, guest_action_available: true });
             await page.getByTestId("markup-v2-reset").click();
             await expect(page.getByTestId("markup-v2-selected-file")).toHaveCount(0);
         }

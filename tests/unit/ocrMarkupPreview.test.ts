@@ -52,6 +52,11 @@ async function runTests(): Promise<void> {
         assert.strictEqual(body.get("language_mode"), "EXPLICIT");
         assert.deepStrictEqual(body.getAll("languages"), ["eng", "sin"]);
 
+        capturedRequests.length = 0;
+        await fetchOcrMarkupPreview(file, "eng", 2);
+        const pageScopedBody = capturedRequests[0]?.init?.body as FormData;
+        assert.strictEqual(pageScopedBody.get("page_index"), "2");
+
         globalThis.fetch = async (): Promise<Response> => new Response(JSON.stringify({ code: "ENGINE_FAILURE", message: "private stack detail" }), { status: 502 });
         await assert.rejects(
             () => fetchOcrMarkupPreview(file),
