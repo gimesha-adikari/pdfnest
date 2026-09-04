@@ -8,6 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import OcrLanguagePicker from "@/components/tools/OcrLanguagePicker";
 import MarkupPdfPreview, { type MarkupFindState, type MarkupPreviewState, type MarkupTextSelection } from "@/components/tools/MarkupPdfPreview";
 import { fetchOcrMarkupPreview, safeOcrMarkupPreviewMessage, type OcrMarkupPreview } from "@/lib/ocrMarkupPreview";
+import { rememberOcrMarkupPreview } from "@/lib/ocrMarkupPreviewCache";
 import {
     cancelOcrAwareMarkup,
     downloadOcrAwareMarkup,
@@ -109,6 +110,7 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
     const [submittedFindQuery, setSubmittedFindQuery] = useState("");
     const [findOccurrence, setFindOccurrence] = useState(0);
     const [findState, setFindState] = useState<MarkupFindState>({ count: 0, activeIndex: -1, current: null });
+    const previewPageRef = useRef(1);
     const ocrPreviewCacheRef = useRef<Map<string, OcrMarkupPreview>>(new Map());
     const abortRef = useRef<AbortController | null>(null);
     const ocrPreviewRequestRef = useRef<{ key: string; controller: AbortController } | null>(null);
@@ -212,6 +214,16 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
         setFindState(next);
     }, []);
 
+    const handlePreviewStateChange = useCallback((next: MarkupPreviewState) => {
+        if (previewPageRef.current !== next.page) {
+            previewPageRef.current = next.page;
+            setSelection(null);
+            setQuery("");
+            setError(null);
+        }
+        setPreviewState(next);
+    }, []);
+
     const runFind = useCallback(() => {
         const nextQuery = findQuery.trim();
         setSubmittedFindQuery(nextQuery);
@@ -292,7 +304,7 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
         void fetchOcrMarkupPreview(previewFile, language, previewState.page - 1, controller.signal)
             .then((next) => {
                 if (controller.signal.aborted || ocrPreviewRequestRef.current?.controller !== controller) return;
-                ocrPreviewCacheRef.current.set(previewKey, next);
+                rememberOcrMarkupPreview(ocrPreviewCacheRef.current, previewKey, next);
                 setOcrPreview((current) => {
                     const pages = [...(current?.pages || []).filter((item) => item.page_number !== previewState.page), ...next.pages];
                     return { ...next, page_count: next.page_count || current?.page_count || previewState.pageCount, pages };
@@ -311,7 +323,8 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
     }, [capabilities, file, isAuthLoading, isAuthenticated, language, previewState.page, previewState.pageCount, previewState.pageHasScannedContent]);
 
     const submit = useCallback(async () => {
-        if (!file || !query.trim() || !capabilities) return;
+        const selectedGeometry = selection?.geometry;
+        if (!file || (!query.trim() && !selectedGeometry) || !capabilities) return;
         if (!isAuthenticated) {
             openAuthModal("login");
             return;
@@ -325,7 +338,7 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
         abortRef.current = controller;
 
         try {
-            const created = await submitOcrAwareMarkup(action, file, query.trim(), mode, language, color);
+            const created = await submitOcrAwareMarkup(action, file, query.trim(), mode, language, color, selectedGeometry);
             setJob(created);
             const completed = await waitForOcrAwareMarkupJob(created.job_id, setJob, controller.signal);
             setJob(completed);
@@ -342,7 +355,7 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
             if (abortRef.current === controller) abortRef.current = null;
             setIsSubmitting(false);
         }
-    }, [action, capabilities, color, file, isAuthenticated, language, mode, openAuthModal, query, clearResult]);
+    }, [action, capabilities, color, file, isAuthenticated, language, mode, openAuthModal, query, clearResult, selection?.geometry]);
 
     const cancel = useCallback(async () => {
         abortRef.current?.abort();
@@ -385,8 +398,11 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
     const Icon = ICONS[action];
     const availableModes = (capabilities?.modes || DEFAULT_MODES).filter((item, index, values) => values.indexOf(item) === index);
     const active = isSubmitting || Boolean(job && ["QUEUED", "RUNNING"].includes(job.status));
-    const visibleOcrPreview = isAuthenticated && !isAuthLoading && Boolean(capabilities) ? ocrPreview : null;
-    const visibleOcrPreviewStatus = visibleOcrPreview ? ocrPreviewStatus : "idle";
+    const canShowOcrPreview = isAuthenticated && !isAuthLoading && Boolean(capabilities);
+    const visibleOcrPreview = canShowOcrPreview ? ocrPreview : null;
+    const visibleOcrPreviewStatus = canShowOcrPreview ? ocrPreviewStatus : "idle";
+    const visibleOcrPreviewError = canShowOcrPreview ? ocrPreviewError : null;
+    const hasSelectedGeometry = Boolean(selection?.geometry);
     const disabledReason = isSubmitting
         ? "Processing…"
         : !file
@@ -397,7 +413,7 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
                     ? "Loading available languages…"
                     : !capabilities
                         ? "Languages unavailable."
-                        : !query.trim()
+                        : !query.trim() && !hasSelectedGeometry
                             ? "Select text in the preview or enter a phrase."
                             : isAuthLoading || !isAuthenticated
                                 ? "Sign in required."
@@ -423,7 +439,7 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
                             {file && <button type="button" data-testid="markup-v2-choose-another" onClick={openFileChooser} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-semibold"><RotateCcw size={14} /> Choose another PDF</button>}
                         </div>
                         <div className="mt-4">
-                            <MarkupPdfPreview file={file} ocrPreview={visibleOcrPreview} ocrPreviewStatus={visibleOcrPreviewStatus} ocrPreviewError={visibleOcrPreview ? ocrPreviewError : null} activeSelectionText={selection?.source === "ocr" ? selection.text : null} findQuery={submittedFindQuery} activeFindOccurrence={findOccurrence} onTextSelected={handleTextSelected} onFindStateChange={handleFindStateChange} onStateChange={setPreviewState} />
+                            <MarkupPdfPreview file={file} ocrPreview={visibleOcrPreview} ocrPreviewStatus={visibleOcrPreviewStatus} ocrPreviewError={visibleOcrPreviewError} findQuery={submittedFindQuery} activeFindOccurrence={findOccurrence} onTextSelected={handleTextSelected} onFindStateChange={handleFindStateChange} onStateChange={handlePreviewStateChange} />
                         </div>
                     </section>
                 </div>
@@ -464,7 +480,7 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
                         <p className="mt-2 text-xs text-[var(--muted)]">Find highlights text already discovered on the visible page. It does not start the final mark.</p>
                     </div>
 
-                    {selection && <div data-testid="markup-v2-selection-summary" className="rounded-xl border border-indigo-300/60 bg-indigo-500/5 px-3 py-3 text-xs text-[var(--muted)]"><p className="font-semibold text-[var(--foreground)]">Selected text</p><p className="mt-1 break-words">“{selection.text}”</p><p className="mt-2">Page {selection.page} · All matching occurrences will be marked.</p></div>}
+                    {selection && <div data-testid="markup-v2-selection-summary" className="rounded-xl border border-indigo-300/60 bg-indigo-500/5 px-3 py-3 text-xs text-[var(--muted)]"><p className="font-semibold text-[var(--foreground)]">Selected text</p><p className="mt-1 break-words">“{selection.text}”</p><p className="mt-2">Page {selection.page} · {selection.geometry ? "Only this selected range will be marked." : "All matching occurrences will be marked."}</p></div>}
                     {query.trim() && !selection && <p className="text-xs text-[var(--muted)]">Find text mode marks every matching occurrence of this phrase.</p>}
 
                     <label className="block text-sm font-medium text-[var(--foreground)]">

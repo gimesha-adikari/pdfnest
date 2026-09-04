@@ -70,8 +70,8 @@ export function isToolAvailableOffline(tool: ToolItem): boolean {
     return tool.clientCapable === true;
 }
 
-/** Total number of tools in the full static registry. */
-export const TOTAL_TOOL_COUNT = 46;
+/** Number of tools currently exposed by the normal public fallback catalog. */
+export const TOTAL_TOOL_COUNT = 39;
 
 /**
  * Number of truly offline-capable tools (16 fully offline standalone + 1 metadata + 1 studio suite + Wave 8 sign/repair + Wave 9 code/markdown + repository-analyzer).
@@ -560,7 +560,14 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
             }
         ]
     },
-    {
+    /*
+     * TEMPORARILY HIDDEN FROM NORMAL PUBLIC DISCOVERY
+     *
+     * These dedicated OCR V2 routes remain available through the developing
+     * tools hub and their direct URLs. Keep the registry objects here as
+     * source history instead of deleting their product definitions.
+     */
+    /* {
         title: "Extract Text from PDF",
         description: "Extract copyable text from scanned or digital PDFs.",
         href: "/ocr-text-v2",
@@ -605,7 +612,7 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
                 answer: "Yes. The job is durable, and you can return to the workspace to resume its status.",
             },
         ],
-    },
+    }, */
     {
         title: "Image to Searchable PDF",
         description: "Convert scanned images into searchable PDFs while preserving the original layout, colors, logos, formatting, and design.",
@@ -666,7 +673,7 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
             }
         ]
     },
-    {
+    /* {
         title: "Build a searchable PDF",
         description: "Create a searchable PDF from ordered scanned images with durable processing and a preserved visual page layer.",
         href: "/searchable-pdf-v2",
@@ -716,8 +723,8 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
                 answer: "Yes. The job is durable, and the workspace can resume its server status after a reload.",
             },
         ],
-    },
-    {
+    }, */
+    /* {
         title: "Extract Data from PDF",
         description: "Extract structured text, sections, lists, tables, and document content from scanned or digital PDFs.",
         href: "/document-extraction-v2",
@@ -733,8 +740,8 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         multiple: false,
         iconName: "FileSearch",
         features: ["Native-first PDF extraction", "Structured JSON result", "Durable progress and resume", "Automatic language detection"],
-    },
-    {
+    }, */
+    /* {
         title: "Convert PDF to Markdown",
         description: "Turn native, scanned, and mixed PDFs into clean Markdown with durable processing.",
         href: "/pdf-to-markdown-v2",
@@ -750,8 +757,8 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         multiple: false,
         iconName: "FileCode",
         features: ["Clean Markdown output", "Scanned-page text recognition", "Copy and download Markdown"],
-    },
-    {
+    }, */
+    /* {
         title: "Highlight text in PDF",
         description: "Highlight exact text in native or scanned PDFs with precise text selection.",
         href: "/highlight-pdf-v2",
@@ -765,8 +772,8 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         iconName: "Highlighter",
         related: ["/underline-pdf-v2", "/strikeout-pdf-v2", "/highlight-pdf"],
         features: ["Precise text selection", "Scanned PDF text recognition", "Durable PDF annotations"],
-    },
-    {
+    }, */
+    /* {
         title: "Underline text in PDF",
         description: "Underline exact text in native or scanned PDFs with precise text selection.",
         href: "/underline-pdf-v2",
@@ -780,8 +787,8 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         iconName: "Underline",
         related: ["/highlight-pdf-v2", "/strikeout-pdf-v2", "/underline-pdf"],
         features: ["Precise text selection", "Works with rotated pages", "Durable PDF annotations"],
-    },
-    {
+    }, */
+    /* {
         title: "Strike out text in PDF",
         description: "Strike out exact text in native or scanned PDFs with precise text selection.",
         href: "/strikeout-pdf-v2",
@@ -795,7 +802,7 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         iconName: "Strikethrough",
         related: ["/highlight-pdf-v2", "/underline-pdf-v2", "/strikeout-pdf"],
         features: ["Reading-order phrase matching", "Scanned PDF text recognition", "Durable PDF annotations"],
-    },
+    }, */
     {
         title: "PDF Studio",
         description: "Edit, chain operations, process, reorganize layout topologies, and configure your PDF in one tool.",

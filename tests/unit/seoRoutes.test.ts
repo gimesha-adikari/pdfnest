@@ -16,6 +16,9 @@ for (const privatePath of [
     "/admin/content",
     "/billing/complete",
     "/studio-v2",
+    "/developing-tools",
+    "/ocr-text-v2",
+    "/strikeout-pdf-v2",
 ]) {
     assert.equal(isIndexableSitemapPath(privatePath), false, privatePath);
 }

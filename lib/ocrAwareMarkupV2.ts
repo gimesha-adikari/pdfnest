@@ -1,4 +1,5 @@
 import { getBaseUrl } from "@/lib/api";
+import type { MarkupSelectionGeometry } from "@/lib/markupSelection";
 import type { OcrTextV2Language } from "@/lib/ocrV2";
 
 export type OcrAwareMarkupAction = "highlight" | "underline" | "strikeout";
@@ -73,6 +74,7 @@ export async function submitOcrAwareMarkup(
     mode: OcrAwareMarkupMode,
     language = "eng",
     color = action === "highlight" ? "#FFFF00" : action === "underline" ? "#2563EB" : "#DC2626",
+    selection?: MarkupSelectionGeometry,
 ): Promise<OcrAwareMarkupJob> {
     const form = new FormData();
     form.append("file", file);
@@ -83,6 +85,7 @@ export async function submitOcrAwareMarkup(
     if (language !== "auto") form.append("languages", language);
     form.append("routing_policy", "FAST");
     form.append("color", color);
+    if (selection) form.append("selection", JSON.stringify(selection));
     const response = await fetch(endpoint(`/api/v2/ocr/markup/${action}/jobs`), {
         method: "POST",
         body: form,

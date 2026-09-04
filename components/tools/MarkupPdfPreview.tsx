@@ -1,11 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { ChevronLeft, ChevronRight, FileWarning, Loader2, MousePointer2, ScanText } from "lucide-react";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, PDFPageProxy, TextLayer } from "pdfjs-dist";
 
-import type { OcrMarkupPreview, OcrMarkupPreviewPage, OcrMarkupPreviewWord } from "@/lib/ocrMarkupPreview";
+import type { OcrMarkupPreview, OcrMarkupPreviewPage } from "@/lib/ocrMarkupPreview";
 import { findTextItemMatches, findWordMatches, type MarkupFindMatch } from "@/lib/markupFind";
+import {
+    MARKUP_COORDINATE_SPACE,
+    clientRectsToMarkupSelectionRects,
+    normalizeMarkupSelectionText,
+    selectedWordElements,
+    wordRectsToMarkupSelectionRects,
+    type MarkupSelectionGeometry,
+} from "@/lib/markupSelection";
 import { usePreview } from "@/lib/preview/usePreview";
 import type { PreviewError } from "@/lib/preview/types";
 
@@ -13,6 +21,7 @@ export interface MarkupTextSelection {
     text: string;
     page: number;
     source: "native" | "ocr";
+    geometry?: MarkupSelectionGeometry;
 }
 
 export interface MarkupFindState {
@@ -49,7 +58,6 @@ interface MarkupPdfPreviewProps {
     ocrPreview?: OcrMarkupPreview | null;
     ocrPreviewStatus?: "idle" | "loading" | "ready" | "error";
     ocrPreviewError?: string | null;
-    activeSelectionText?: string | null;
     findQuery?: string;
     activeFindOccurrence?: number;
     onTextSelected?: (selection: MarkupTextSelection) => void;
@@ -101,7 +109,6 @@ export default function MarkupPdfPreview({
     ocrPreview,
     ocrPreviewStatus = "idle",
     ocrPreviewError = null,
-    activeSelectionText = null,
     findQuery = "",
     activeFindOccurrence = 0,
     onTextSelected,
@@ -124,9 +131,11 @@ export default function MarkupPdfPreview({
 
     const pageFrameRef = useRef<HTMLDivElement | null>(null);
     const textLayerRef = useRef<HTMLDivElement | null>(null);
+    const ocrLayerRef = useRef<HTMLDivElement | null>(null);
     const loadingTaskRef = useRef<PDFDocumentLoadingTask | null>(null);
     const pdfDocumentRef = useRef<PdfDocumentWithCleanup | null>(null);
     const textLayerInstanceRef = useRef<TextLayer | null>(null);
+    const nativePageGeometryRef = useRef({ width: 0, height: 0, rotation: 0, cropBox: null as number[] | null });
 
     const serverPreview = usePreview({
         file,
@@ -260,6 +269,12 @@ export default function MarkupPdfPreview({
                 // PDF.js is used only for native text geometry and page classification.
                 // The visible page is always the backend-rendered image below.
                 const viewport = pageProxy.getViewport({ scale: 1 });
+                nativePageGeometryRef.current = {
+                    width: viewport.width,
+                    height: viewport.height,
+                    rotation: viewport.rotation,
+                    cropBox: [0, 0, viewport.width, viewport.height],
+                };
                 frame.style.aspectRatio = `${viewport.width} / ${viewport.height}`;
                 const textContent = await pageProxy.getTextContent();
                 const textItems = textContent.items
@@ -387,22 +402,105 @@ export default function MarkupPdfPreview({
     }, [pageHasSelectableText, selectionEnabled, useOcrSelection]);
 
     useEffect(() => {
-        const handleSelectionChange = () => {
-            if (!selectionEnabled || useOcrSelection || !onTextSelected) return;
+        const captureSelection = () => {
+            if (!selectionEnabled || !onTextSelected) return;
             const selection = window.getSelection();
-            const root = textLayerRef.current;
+            const source = useOcrSelection ? "ocr" as const : "native" as const;
+            const root = source === "ocr" ? ocrLayerRef.current : textLayerRef.current;
             if (!selection || selection.isCollapsed || !root || !selection.anchorNode || !selection.focusNode) return;
             if (!root.contains(selection.anchorNode) || !root.contains(selection.focusNode)) return;
-            const text = selection.toString().replace(/\s+/g, " ").trim();
-            if (text) onTextSelected?.({ text, page, source: "native" });
+            const text = normalizeMarkupSelectionText(selection.toString());
+            if (!text || !pageFrameRef.current) return;
+
+            const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+            if (!range) return;
+            const pageGeometry = source === "ocr" && currentOcrPage
+                ? {
+                    width: currentOcrPage.width,
+                    height: currentOcrPage.height,
+                    rotation: currentOcrPage.rotation,
+                    cropBox: currentOcrPage.crop_box || null,
+                    coordinateSpace: currentOcrPage.coordinate_space,
+                }
+                : {
+                    width: nativePageGeometryRef.current.width,
+                    height: nativePageGeometryRef.current.height,
+                    rotation: nativePageGeometryRef.current.rotation,
+                    cropBox: nativePageGeometryRef.current.cropBox,
+                    coordinateSpace: MARKUP_COORDINATE_SPACE,
+                };
+            if (pageGeometry.width <= 0 || pageGeometry.height <= 0) return;
+
+            const frame = pageFrameRef.current.getBoundingClientRect();
+            const rangeRects = clientRectsToMarkupSelectionRects(
+                Array.from(range.getClientRects()),
+                frame,
+                pageGeometry.width,
+                pageGeometry.height,
+            );
+            const selectedElements = source === "ocr" ? selectedWordElements(root, range) : [];
+            const wordIds = selectedElements
+                .map((element) => element.dataset.wordId)
+                .filter((value): value is string => Boolean(value));
+            const rects = source === "ocr" && currentOcrPage && wordIds.length > 0
+                ? wordRectsToMarkupSelectionRects(currentOcrPage.words, wordIds, pageGeometry.width, pageGeometry.height)
+                : rangeRects;
+            if (rects.length === 0) return;
+
+            onTextSelected({
+                text,
+                page,
+                source,
+                geometry: {
+                    page,
+                    source,
+                    coordinate_space: pageGeometry.coordinateSpace,
+                    page_width: pageGeometry.width,
+                    page_height: pageGeometry.height,
+                    rotation: pageGeometry.rotation,
+                    crop_box: pageGeometry.cropBox,
+                    word_ids: [...new Set(wordIds)],
+                    rects,
+                    text,
+                },
+            });
         };
 
-        document.addEventListener("selectionchange", handleSelectionChange);
-        return () => document.removeEventListener("selectionchange", handleSelectionChange);
-    }, [onTextSelected, page, selectionEnabled, useOcrSelection]);
+        let pointerSelectionActive = false;
+        const handlePointerDown = (event: PointerEvent) => {
+            const target = event.target;
+            const root = useOcrSelection ? ocrLayerRef.current : textLayerRef.current;
+            pointerSelectionActive = Boolean(root && target instanceof Node && root.contains(target));
+        };
+        const handlePointerUp = () => {
+            if (!pointerSelectionActive) return;
+            pointerSelectionActive = false;
+            captureSelection();
+        };
+        const handleSelectionChange = () => {
+            if (!pointerSelectionActive) captureSelection();
+        };
 
-    const previousPage = () => setPage((current) => Math.max(1, current - 1));
-    const nextPage = () => setPage((current) => Math.min(effectivePageCount, current + 1));
+        document.addEventListener("pointerdown", handlePointerDown, true);
+        document.addEventListener("pointerup", handlePointerUp, true);
+        document.addEventListener("selectionchange", handleSelectionChange);
+        return () => {
+            document.removeEventListener("pointerdown", handlePointerDown, true);
+            document.removeEventListener("pointerup", handlePointerUp, true);
+            document.removeEventListener("selectionchange", handleSelectionChange);
+        };
+    }, [currentOcrPage, onTextSelected, page, selectionEnabled, useOcrSelection]);
+
+    const goToPage = (nextPage: number) => {
+        if (nextPage === page) return;
+        setPageHasSelectableText(false);
+        setPageHasScannedContent(false);
+        setPageText("");
+        setNativeTextItems([]);
+        setPage(nextPage);
+    };
+    const previousPage = () => goToPage(Math.max(1, page - 1));
+    const nextPage = () => goToPage(Math.min(effectivePageCount, page + 1));
 
     if (!file) {
         return (
@@ -416,6 +514,7 @@ export default function MarkupPdfPreview({
         );
     }
 
+    const hasOcrPage = Boolean(currentOcrPage);
     const hasOcrWords = useOcrSelection;
     const guidance = hasOcrWords
         ? "Select text in the preview to use it as your mark target."
@@ -423,6 +522,8 @@ export default function MarkupPdfPreview({
             ? "Drag across text in the preview to use it as your mark target."
             : pageHasScannedContent && ocrPreviewStatus === "loading"
                 ? "Preparing selectable text for this image-based page…"
+                : pageHasScannedContent && ocrPreviewStatus === "ready" && hasOcrPage
+                    ? "No selectable text was found on this page. Use Find text or choose another language."
                 : pageHasScannedContent
                     ? ocrPreviewError || "Selectable text is unavailable on this image-based page. Use Find text below instead."
                     : "Drag across text in the preview when selectable text is available.";
@@ -475,7 +576,7 @@ export default function MarkupPdfPreview({
                         </>}
                         <div ref={textLayerRef} data-testid={testId("text-layer")} aria-label={selectionEnabled && pageHasSelectableText ? "Selectable PDF text" : undefined} />
                         {useOcrSelection && currentOcrPage && (
-                            <OcrWordSelectionLayer key={`${currentOcrPage.page_id}-${currentOcrPage.page_number}`} page={currentOcrPage} activeSelectionText={activeSelectionText} findMatches={ocrFindMatches} activeFindOccurrence={activeFindIndex} onTextSelected={onTextSelected} />
+                            <OcrWordSelectionLayer key={`${currentOcrPage.page_id}-${currentOcrPage.page_number}`} layerRef={ocrLayerRef} page={currentOcrPage} findMatches={ocrFindMatches} activeFindOccurrence={activeFindIndex} />
                         )}
                         {pageHasScannedContent && ocrPreviewStatus === "loading" && (
                             <div className="pointer-events-none absolute inset-x-3 top-3 z-[4] flex justify-center">
@@ -487,7 +588,7 @@ export default function MarkupPdfPreview({
             </div>
 
             {!readOnly && !isLoadingDocument && !previewFailure && pdfDocument && (
-                <div className="flex items-start gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--muted)]" data-testid={testId("selection-guidance")}>
+                <div role="status" aria-live="polite" className="flex items-start gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--muted)]" data-testid={testId("selection-guidance")}>
                     {hasOcrWords || (!pageHasSelectableText && pageHasScannedContent) ? <ScanText className="mt-0.5 shrink-0 text-amber-600" size={15} /> : <MousePointer2 className="mt-0.5 shrink-0 text-[var(--primary)]" size={15} />}
                     <p>{guidance}</p>
                 </div>
@@ -498,69 +599,38 @@ export default function MarkupPdfPreview({
 }
 
 interface OcrWordSelectionLayerProps {
+    layerRef: RefObject<HTMLDivElement | null>;
     page: OcrMarkupPreviewPage;
-    activeSelectionText?: string | null;
     findMatches: MarkupFindMatch[];
     activeFindOccurrence: number;
-    onTextSelected?: (selection: MarkupTextSelection) => void;
 }
 
-function OcrWordSelectionLayer({ page, activeSelectionText, findMatches, activeFindOccurrence, onTextSelected }: OcrWordSelectionLayerProps) {
-    const [anchor, setAnchor] = useState<number | null>(null);
-    const [focus, setFocus] = useState<number | null>(null);
-    const pointerDown = useRef(false);
+function OcrWordSelectionLayer({ layerRef, page, findMatches, activeFindOccurrence }: OcrWordSelectionLayerProps) {
+    const [displayScale, setDisplayScale] = useState(1);
 
     useEffect(() => {
-        // A page change invalidates only the temporary visual selection; the
-        // selected PDF remains untouched.
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setAnchor(null);
-        setFocus(null);
-    }, [page.page_number]);
-
-    useEffect(() => {
-        // A language change or query edit clears the temporary visual
-        // selection without clearing the selected PDF.
-        if (!activeSelectionText) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setAnchor(null);
-            setFocus(null);
-        }
-    }, [activeSelectionText]);
-
-    const selectedRange = (left: number, right: number): boolean => {
-        if (anchor === null || focus === null) return false;
-        const start = Math.min(anchor, focus);
-        const end = Math.max(anchor, focus);
-        return left >= start && right <= end;
-    };
-
-    const commit = useCallback((index: number | null) => {
-        if (index === null || anchor === null) return;
-        const start = Math.min(anchor, index);
-        const end = Math.max(anchor, index);
-        const words = page.words.slice(start, end + 1);
-        const text = words.map((word) => word.text).join(" ").replace(/\s+/g, " ").trim();
-        if (text) onTextSelected?.({ text, page: page.page_number, source: "ocr" });
-        pointerDown.current = false;
-    }, [anchor, onTextSelected, page.page_number, page.words]);
-
-    const selectWordWithKeyboard = (word: OcrMarkupPreviewWord, index: number, event: React.KeyboardEvent<HTMLSpanElement>) => {
-        if (event.key !== "Enter" && event.key !== " ") return;
-        event.preventDefault();
-        setAnchor(index);
-        setFocus(index);
-        onTextSelected?.({ text: word.text, page: page.page_number, source: "ocr" });
-    };
+        const layer = layerRef.current;
+        if (!layer) return;
+        const updateScale = () => {
+            const width = layer.getBoundingClientRect().width;
+            if (width > 0 && page.width > 0) setDisplayScale(width / page.width);
+        };
+        updateScale();
+        if (typeof ResizeObserver === "undefined") return;
+        const observer = new ResizeObserver(updateScale);
+        observer.observe(layer);
+        return () => observer.disconnect();
+    }, [layerRef, page.width]);
 
     return (
-        <div className="absolute inset-0 z-[3]" data-testid="markup-pdf-ocr-layer" role="group" aria-label="Selectable scanned text" onPointerUp={() => commit(focus)} onPointerCancel={() => { pointerDown.current = false; }}>
+        <div ref={layerRef} className="absolute inset-0 z-[3] select-text" data-testid="markup-pdf-ocr-layer" aria-label="Selectable scanned text" style={{ userSelect: "text", WebkitUserSelect: "text", pointerEvents: "auto", touchAction: "auto" }}>
             {page.words.map((word, index) => {
                 const left = Math.max(0, Math.min(100, (word.x / page.width) * 100));
                 const top = Math.max(0, Math.min(100, (word.y / page.height) * 100));
                 const width = Math.max(0, Math.min(100 - left, (word.width / page.width) * 100));
                 const height = Math.max(0, Math.min(100 - top, (word.height / page.height) * 100));
-                const selected = selectedRange(index, index);
+                const fontSize = Math.max(1, Math.min(word.height * displayScale * 0.75, word.width * displayScale / Math.max(1, word.text.length * 0.8)));
+                const lineHeight = Math.max(1, word.height * displayScale);
                 const matchingOccurrences = findMatches
                     .map((match, occurrence) => ({ match, occurrence }))
                     .filter(({ match }) => index >= match.startIndex && index <= match.endIndex);
@@ -570,19 +640,14 @@ function OcrWordSelectionLayer({ page, activeSelectionText, findMatches, activeF
                 return (
                     <span
                         key={word.id}
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`${isFindMatch ? "Find match. " : ""}Select ${word.text}`}
+                        aria-label={isFindMatch ? `Find match. ${word.text}` : undefined}
                         data-testid="markup-pdf-ocr-word"
                         data-word-id={word.id}
+                        data-word-index={index}
                         data-find-match={isFindMatch ? "true" : undefined}
-                        className="absolute rounded-sm outline-none transition focus-visible:ring-2 focus-visible:ring-indigo-500"
-                        style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%`, background: selected ? "rgba(99, 102, 241, 0.35)" : isActiveFindMatch ? "rgba(250, 204, 21, 0.42)" : isFindMatch ? "rgba(59, 130, 246, 0.22)" : "transparent", boxShadow: selected ? "inset 0 0 0 1px rgba(79, 70, 229, 0.75)" : isActiveFindMatch ? "inset 0 0 0 2px rgba(217, 119, 6, 0.9)" : isFindMatch ? "inset 0 0 0 1px rgba(37, 99, 235, 0.65)" : undefined, cursor: "text", touchAction: "none" }}
-                        onPointerDown={(event) => { event.preventDefault(); pointerDown.current = true; setAnchor(index); setFocus(index); }}
-                        onPointerEnter={() => { if (pointerDown.current) setFocus(index); }}
-                        onPointerUp={(event) => { event.preventDefault(); event.stopPropagation(); commit(index); }}
-                        onKeyDown={(event) => selectWordWithKeyboard(word, index, event)}
-                    />
+                        className="absolute block overflow-visible rounded-sm"
+                        style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%`, background: isActiveFindMatch ? "rgba(250, 204, 21, 0.42)" : isFindMatch ? "rgba(59, 130, 246, 0.22)" : "transparent", boxShadow: isActiveFindMatch ? "inset 0 0 0 2px rgba(217, 119, 6, 0.9)" : isFindMatch ? "inset 0 0 0 1px rgba(37, 99, 235, 0.65)" : undefined, color: "transparent", WebkitTextFillColor: "transparent", fontFamily: "Arial, sans-serif", fontSize: `${fontSize}px`, lineHeight: `${lineHeight}px`, whiteSpace: "pre", userSelect: "text", WebkitUserSelect: "text", cursor: "text", pointerEvents: "auto" }}
+                    >{word.text}{"\u00a0\u00a0"}</span>
                 );
             })}
         </div>

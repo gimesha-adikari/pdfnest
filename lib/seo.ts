@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getToolBySlug } from "./server/tools";
 import { getSiteUrl, toSiteUrl } from "./siteUrl";
+import { getOcrV2DevelopmentSurfaceByHref } from "./ocrV2DevelopmentTools";
 
 const CANONICAL_URL = getSiteUrl();
 const OG_IMAGE = new URL("/platen-og.png", CANONICAL_URL).toString();
@@ -101,6 +102,16 @@ export async function getToolMetadata(toolHref: string): Promise<Metadata> {
     const tool = await getToolBySlug(toolHref);
 
     if (!tool) {
+        const developmentSurface = getOcrV2DevelopmentSurfaceByHref(toolHref);
+        if (developmentSurface) {
+            return {
+                metadataBase: new URL(CANONICAL_URL),
+                title: `${developmentSurface.title} | OCR V2 Developing Tools`,
+                description: developmentSurface.description,
+                robots: { index: false, follow: false },
+                alternates: { canonical: null },
+            };
+        }
         return buildBaseMetadata();
     }
 

@@ -15,6 +15,7 @@ import ToolSchema from "@/components/SEO/ToolSchema";
 import { resolveIcon, type LucideIcon } from "@/lib/iconResolver";
 import { BackendOnlyToolGuard } from "@/components/pdf/BackendOnlyToolGuard";
 import { RepositoryAnalyzerProvider } from "@/context/RepositoryAnalyzerContext";
+import { getOcrV2DevelopmentRouteConfig } from "@/lib/ocrV2DevelopmentTools";
 
 interface ToolItem {
     title: string;
@@ -93,22 +94,24 @@ export default function ClientToolLayout({ children }: { children: ReactNode }) 
     const file = activeToolHref === currentToolHref ? fileState : null;
 
     const localFallback = getToolByHref(currentToolHref);
+    const developmentFallback = getOcrV2DevelopmentRouteConfig(toolId);
+    const routeFallback = localFallback || developmentFallback;
     // Extract capability policy from the static registry so the guard works
     // even before the CMS hydration completes.
-    const toolPolicyValue = (localFallback as any)?.toolPolicy ?? undefined;
+    const toolPolicyValue = (routeFallback as any)?.toolPolicy ?? undefined;
     const initialConfig: ToolConfig = {
-        name: localFallback?.title || (localFallback as any)?.Title || "PDF Tool",
-        description: localFallback?.description || (localFallback as any)?.Description || "Process your PDF files securely.",
-        icon: resolveIcon(localFallback?.iconName || (localFallback as any)?.IconName),
-        multiple: localFallback?.multiple || (localFallback as any)?.Multiple || false,
-        accept: localFallback?.accept || (localFallback as any)?.Accept || ".pdf",
+        name: routeFallback?.title || (routeFallback as any)?.Title || "PDF Tool",
+        description: routeFallback?.description || (routeFallback as any)?.Description || "Process your PDF files securely.",
+        icon: resolveIcon(routeFallback?.iconName || (routeFallback as any)?.IconName),
+        multiple: routeFallback?.multiple || (routeFallback as any)?.Multiple || false,
+        accept: routeFallback?.accept || (routeFallback as any)?.Accept || ".pdf",
     };
 
     const [toolConfig, setToolConfig] = useState<ToolConfig>(initialConfig);
     const [isLoadingConfig, setIsLoadingConfig] = useState(true);
 
     useEffect(() => {
-        const activeFallback = getToolByHref(currentToolHref);
+        const activeFallback = getToolByHref(currentToolHref) || getOcrV2DevelopmentRouteConfig(toolId);
 
         if (activeFallback) {
             setToolConfig({
@@ -150,7 +153,7 @@ export default function ClientToolLayout({ children }: { children: ReactNode }) 
         if (!isLoadingTools) {
             notFound();
         }
-    }, [currentToolHref, getToolByHref, isLoadingTools]);
+    }, [currentToolHref, getToolByHref, isLoadingTools, toolId]);
 
     const setFile = (nextFile: File | null) => {
         setFileState(nextFile);

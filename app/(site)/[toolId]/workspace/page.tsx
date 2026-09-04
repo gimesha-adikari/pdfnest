@@ -48,13 +48,14 @@ import OcrTextV2Workspace from "@/components/tools/OcrTextV2Workspace";
 import SearchablePdfV2Workspace from "@/components/tools/SearchablePdfV2Workspace";
 import StructuredDocumentV2Workspace from "@/components/tools/StructuredDocumentV2Workspace";
 import OcrAwareMarkupV2Workspace from "@/components/tools/OcrAwareMarkupV2Workspace";
+import { isOcrV2DevelopmentToolId } from "@/lib/ocrV2DevelopmentTools";
 
 export default function SharedWorkspacePage() {
     const router = useRouter();
     const { toolId, file, isLoadingConfig } = useSharedTool();
 
     useEffect(() => {
-        if (!isLoadingConfig && !file && !["ocr-text-v2", "searchable-pdf-v2", "document-extraction-v2", "pdf-to-markdown-v2", "highlight-pdf-v2", "underline-pdf-v2", "strikeout-pdf-v2"].includes(toolId)) {
+        if (!isLoadingConfig && !file && !isOcrV2DevelopmentToolId(toolId)) {
             router.replace(`/${toolId}`);
         }
     }, [file, toolId, router, isLoadingConfig]);
@@ -73,7 +74,7 @@ export default function SharedWorkspacePage() {
         );
     }
 
-    if (!file && !["ocr-text-v2", "searchable-pdf-v2", "document-extraction-v2", "pdf-to-markdown-v2", "highlight-pdf-v2", "underline-pdf-v2", "strikeout-pdf-v2"].includes(toolId)) return null;
+    if (!file && !isOcrV2DevelopmentToolId(toolId)) return null;
 
     return (
         <PdfToolLayout>

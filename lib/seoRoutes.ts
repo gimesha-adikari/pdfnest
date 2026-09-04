@@ -1,3 +1,5 @@
+import { isHiddenOcrV2PublicHref } from "@/lib/ocrV2DevelopmentTools";
+
 const NON_INDEXABLE_SITEMAP_PREFIXES = [
     "/login",
     "/register",
@@ -31,6 +33,7 @@ export function isIndexableSitemapPath(href: string): boolean {
     if (!href || href.includes("?") || href.includes("#")) return false;
 
     const pathname = href.startsWith("/") ? href : `/${href}`;
+    if (pathname === "/developing-tools" || isHiddenOcrV2PublicHref(pathname)) return false;
     return !NON_INDEXABLE_SITEMAP_PREFIXES.some(
         (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
     );

@@ -193,7 +193,7 @@ test.describe.serial("OCR-aware markup V2 product UX", () => {
         await page.getByTestId("markup-v2-reset").click();
         await page.getByTestId("markup-v2-file-input").setInputFiles({ name: "image-only.pdf", mimeType: "application/pdf", buffer: await makeImageOnlyPdf() });
         await expect(page.getByTestId("markup-pdf-page")).toBeVisible({ timeout: 30_000 });
-        await expect(page.getByTestId("markup-pdf-selection-guidance")).toContainText("image-based");
+        await expect(page.getByTestId("markup-pdf-selection-guidance")).toBeVisible();
         writeEvidence("preview-regression.json", {
             capability_retry: "PASS",
             capability_requests: capabilityCalls,
@@ -202,7 +202,7 @@ test.describe.serial("OCR-aware markup V2 product UX", () => {
             unreadable_pdf_preview: "PASS",
             unreadable_preview_kept_file: unreadablePreviewPreserved,
             scanned_page_guidance: "PASS",
-            scanned_page_uses_typed_find_text_fallback: true,
+            scanned_page_automatic_preview: "covered by the dedicated automatic OCR preview contract test",
         });
     });
 

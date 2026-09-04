@@ -1,5 +1,6 @@
 import { fetchJson } from "@/lib/api";
 import { NAV_TOOLS_FALLBACK, ToolFAQ, ToolItem } from "@/lib/toolsData";
+import { isHiddenOcrV2PublicHref } from "@/lib/ocrV2DevelopmentTools";
 
 function parseJsonField<T>(raw: unknown, field: string, toolHref: string): T[] {
     if (typeof raw !== "string" || raw.trim() === "") return [];
@@ -46,7 +47,9 @@ export function normalizeTool(rawTool: any): ToolItem | null {
     // generation without changing the legacy /studio page itself.
     const publicHref = normalizePublicHref(href);
     const staticFallback = staticFallbackMap.get(publicHref.toLowerCase());
-    const normalizeRelated = (related: string[]): string[] => related.map(normalizePublicHref);
+    const normalizeRelated = (related: string[]): string[] => related
+        .map(normalizePublicHref)
+        .filter((relatedHref) => !isHiddenOcrV2PublicHref(relatedHref));
 
     return {
         ID: rawTool.ID || rawTool.id,
@@ -98,7 +101,7 @@ export function mergeToolCatalog(
         for (const tool of backendTools) {
             if (!tool) continue;
             const key = getToolCanonicalKey(tool);
-            if (key && !seenKeys.has(key)) {
+            if (key && !isHiddenOcrV2PublicHref(key) && !seenKeys.has(key)) {
                 seenKeys.add(key);
                 result.push(tool);
             }
@@ -109,7 +112,7 @@ export function mergeToolCatalog(
         for (const tool of staticTools) {
             if (!tool) continue;
             const key = getToolCanonicalKey(tool);
-            if (key && !seenKeys.has(key)) {
+            if (key && !isHiddenOcrV2PublicHref(key) && !seenKeys.has(key)) {
                 seenKeys.add(key);
                 result.push(tool);
             }
