@@ -1,0 +1,115 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e5]:
+        - link "Platen PLATEN CORE v2.0" [ref=e6] [cursor=pointer]:
+          - /url: /
+          - img "Platen" [ref=e9]
+          - generic [ref=e10]:
+            - generic [ref=e11]: PLATEN
+            - generic [ref=e12]: CORE v2.0
+        - navigation [ref=e13]:
+          - link "Home" [ref=e14] [cursor=pointer]:
+            - /url: /
+          - button "Tools" [ref=e16]
+          - link "Pricing" [ref=e20] [cursor=pointer]:
+            - /url: /pricing
+          - link "About" [ref=e21] [cursor=pointer]:
+            - /url: /about
+        - generic [ref=e22]:
+          - generic [ref=e23]:
+            - link "Sign In" [ref=e24] [cursor=pointer]:
+              - /url: /login?callbackUrl=%2Fedit-pdf%2Fworkspace
+            - link "Create Account" [ref=e99] [cursor=pointer]:
+              - /url: /register?callbackUrl=%2Fedit-pdf%2Fworkspace
+          - button "Switch to light theme" [ref=e100]
+    - main [ref=e25]:
+      - generic [ref=e143]:
+        - generic [ref=e144]:
+          - heading "Precision PDF Layout Editor" [level=1] [ref=e145]
+          - paragraph [ref=e146]: Find and edit text in native PDFs, with scanned text discovery when available.
+        - generic [ref=e147]: Scanned text discovery is enabled for this editor.
+        - generic [ref=e150]:
+          - generic [ref=e151]:
+            - generic [ref=e156]:
+              - heading "Extracting layout" [level=4] [ref=e157]
+              - paragraph [ref=e158]: Extracting text layers and geometry metrics...
+            - generic [ref=e159]:
+              - paragraph [ref=e160]: Queued
+              - paragraph [ref=e161]: 10%
+          - generic [ref=e164]:
+            - generic [ref=e165]: Processing your document
+            - generic [ref=e166]: No job yet
+      - generic [ref=e129]:
+        - heading "Frequently Asked Questions" [level=2] [ref=e130]
+        - generic [ref=e131]:
+          - button "Can I edit existing text in my PDF?" [ref=e133]
+          - button "Does the editor support custom fonts?" [ref=e138]
+    - contentinfo [ref=e42]:
+      - generic [ref=e44]:
+        - generic [ref=e45]:
+          - link "Platen PLATEN CORE v2.0" [ref=e46] [cursor=pointer]:
+            - /url: /
+            - img "Platen" [ref=e49]
+            - generic [ref=e50]:
+              - generic [ref=e51]: PLATEN
+              - generic [ref=e52]: CORE v2.0
+          - paragraph [ref=e53]: Files are processed in secure, isolated sandbox environments and automatically purged. Precision document infrastructure.
+          - paragraph [ref=e54]: © 2026 Platen Engine. All rights reserved.
+        - generic [ref=e55]:
+          - generic [ref=e56]: PRODUCTS
+          - generic [ref=e57]:
+            - link "Merge PDF" [ref=e58] [cursor=pointer]:
+              - /url: /merge-pdf
+            - link "Edit PDF" [ref=e59] [cursor=pointer]:
+              - /url: /edit-pdf
+            - link "PDF to Word" [ref=e60] [cursor=pointer]:
+              - /url: /pdf-to-word
+            - link "PDF to Markdown" [ref=e61] [cursor=pointer]:
+              - /url: /pdf-to-markdown
+            - link "Browse all tools →" [ref=e62] [cursor=pointer]:
+              - /url: /tools
+        - generic [ref=e63]:
+          - generic [ref=e64]: ECOSYSTEM
+          - generic [ref=e65]:
+            - link "PDF Studio WORKSPACE" [ref=e66] [cursor=pointer]:
+              - /url: /studio-v2
+              - generic [ref=e67]: PDF Studio
+              - generic [ref=e68]: WORKSPACE
+            - link "Repository Analyzer NEW" [ref=e69] [cursor=pointer]:
+              - /url: /repository-analyzer
+              - generic [ref=e70]: Repository Analyzer
+              - generic [ref=e71]: NEW
+            - link "Pricing & Compute" [ref=e72] [cursor=pointer]:
+              - /url: /pricing
+            - link "Architecture Details" [ref=e73] [cursor=pointer]:
+              - /url: /about
+        - generic [ref=e74]:
+          - generic [ref=e75]: LEGAL & SECURE
+          - generic [ref=e76]:
+            - link "Security Architecture" [ref=e77] [cursor=pointer]:
+              - /url: /security
+            - link "Privacy Policy" [ref=e78] [cursor=pointer]:
+              - /url: /privacy
+            - link "Terms of Service" [ref=e79] [cursor=pointer]:
+              - /url: /terms
+            - link "Acceptable Use" [ref=e80] [cursor=pointer]:
+              - /url: /acceptable-use
+            - link "Cookie Policy" [ref=e81] [cursor=pointer]:
+              - /url: /cookies
+            - link "Refund Policy" [ref=e82] [cursor=pointer]:
+              - /url: /refund
+            - link "Contact" [ref=e83] [cursor=pointer]:
+              - /url: /contact
+        - generic [ref=e84]:
+          - generic [ref=e85]: SYSTEM
+          - generic [ref=e86]: All Systems Operational
+          - generic [ref=e89]: Zero-trust sandbox ready.
+  - button "Open Next.js Dev Tools" [ref=e167] [cursor=pointer]:
+    - generic [ref=e170]:
+      - text: Compiling
+      - generic [ref=e171]:
+        - generic [ref=e172]: .
+        - generic [ref=e173]: .
+        - generic [ref=e174]: .
+  - alert [ref=e142]

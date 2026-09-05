@@ -1,0 +1,87 @@
+- generic [active] [ref=f1e1]:
+  - generic [ref=f1e2]:
+    - banner [ref=f1e3]:
+      - generic [ref=f1e5]:
+        - link "Platen PLATEN CORE v2.0" [ref=f1e6] [cursor=pointer]:
+          - /url: /
+          - img "Platen" [ref=f1e9]
+          - generic [ref=f1e10]:
+            - generic [ref=f1e11]: PLATEN
+            - generic [ref=f1e12]: CORE v2.0
+        - navigation [ref=f1e13]:
+          - link "Home" [ref=f1e14] [cursor=pointer]:
+            - /url: /
+          - button "Tools" [ref=f1e16]
+          - link "Pricing" [ref=f1e20] [cursor=pointer]:
+            - /url: /pricing
+          - link "About" [ref=f1e21] [cursor=pointer]:
+            - /url: /about
+        - link "Sign In" [ref=f1e24] [cursor=pointer]:
+          - /url: /login?callbackUrl=%2Fedit-pdf%2Fworkspace
+    - main [ref=f1e25]:
+      - generic [ref=f1e29]:
+        - heading "Frequently Asked Questions" [level=2] [ref=f1e30]
+        - generic [ref=f1e31]:
+          - button "Can I edit existing text in my PDF?" [ref=f1e33]
+          - button "Does the editor support custom fonts?" [ref=f1e38]
+    - contentinfo [ref=f1e42]:
+      - generic [ref=f1e44]:
+        - generic [ref=f1e45]:
+          - link "Platen PLATEN CORE v2.0" [ref=f1e46] [cursor=pointer]:
+            - /url: /
+            - img "Platen" [ref=f1e49]
+            - generic [ref=f1e50]:
+              - generic [ref=f1e51]: PLATEN
+              - generic [ref=f1e52]: CORE v2.0
+          - paragraph [ref=f1e53]: Files are processed in secure, isolated sandbox environments and automatically purged. Precision document infrastructure.
+          - paragraph [ref=f1e54]: © 2026 Platen Engine. All rights reserved.
+        - generic [ref=f1e55]:
+          - generic [ref=f1e56]: PRODUCTS
+          - generic [ref=f1e57]:
+            - link "Merge PDF" [ref=f1e58] [cursor=pointer]:
+              - /url: /merge-pdf
+            - link "Edit PDF" [ref=f1e59] [cursor=pointer]:
+              - /url: /edit-pdf
+            - link "PDF to Word" [ref=f1e60] [cursor=pointer]:
+              - /url: /pdf-to-word
+            - link "PDF to Markdown" [ref=f1e61] [cursor=pointer]:
+              - /url: /pdf-to-markdown
+            - link "Browse all tools →" [ref=f1e62] [cursor=pointer]:
+              - /url: /tools
+        - generic [ref=f1e63]:
+          - generic [ref=f1e64]: ECOSYSTEM
+          - generic [ref=f1e65]:
+            - link "PDF Studio WORKSPACE" [ref=f1e66] [cursor=pointer]:
+              - /url: /studio-v2
+              - generic [ref=f1e67]: PDF Studio
+              - generic [ref=f1e68]: WORKSPACE
+            - link "Repository Analyzer NEW" [ref=f1e69] [cursor=pointer]:
+              - /url: /repository-analyzer
+              - generic [ref=f1e70]: Repository Analyzer
+              - generic [ref=f1e71]: NEW
+            - link "Pricing & Compute" [ref=f1e72] [cursor=pointer]:
+              - /url: /pricing
+            - link "Architecture Details" [ref=f1e73] [cursor=pointer]:
+              - /url: /about
+        - generic [ref=f1e74]:
+          - generic [ref=f1e75]: LEGAL & SECURE
+          - generic [ref=f1e76]:
+            - link "Security Architecture" [ref=f1e77] [cursor=pointer]:
+              - /url: /security
+            - link "Privacy Policy" [ref=f1e78] [cursor=pointer]:
+              - /url: /privacy
+            - link "Terms of Service" [ref=f1e79] [cursor=pointer]:
+              - /url: /terms
+            - link "Acceptable Use" [ref=f1e80] [cursor=pointer]:
+              - /url: /acceptable-use
+            - link "Cookie Policy" [ref=f1e81] [cursor=pointer]:
+              - /url: /cookies
+            - link "Refund Policy" [ref=f1e82] [cursor=pointer]:
+              - /url: /refund
+            - link "Contact" [ref=f1e83] [cursor=pointer]:
+              - /url: /contact
+        - generic [ref=f1e84]:
+          - generic [ref=f1e85]: SYSTEM
+          - generic [ref=f1e86]: All Systems Operational
+          - generic [ref=f1e89]: Zero-trust sandbox ready.
+  - button "Open Next.js Dev Tools" [ref=f1e95] [cursor=pointer]

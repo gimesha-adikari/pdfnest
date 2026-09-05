@@ -1,0 +1,92 @@
+[     513ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     636ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     756ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     756ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     804ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     804ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     829ms] [LOG] [upload] effect {toolId: edit-pdf, currentToolHref: /edit-pdf, isLoadingConfig: true, hasFile: false, shouldRestoreTransfer: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     859ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     860ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     883ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     884ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     971ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     971ms] [LOG] object @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     971ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     971ms] [LOG] object @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[     988ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[    1005ms] [LOG] [upload] effect {toolId: edit-pdf, currentToolHref: /edit-pdf, isLoadingConfig: false, hasFile: false, shouldRestoreTransfer: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[    1007ms] [LOG] [upload] effect {toolId: edit-pdf, currentToolHref: /edit-pdf, isLoadingConfig: false, hasFile: false, shouldRestoreTransfer: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[    1020ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[    1021ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[    1338ms] [LOG] [Fast Refresh] done in 529ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   15696ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   15881ms] [LOG] [Fast Refresh] done in 285ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   30684ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   30802ms] [LOG] [upload] user selected file {toolId: edit-pdf, fileName: mixed_doc.pdf} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   30809ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   30809ms] [LOG] object @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   30809ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   30809ms] [LOG] object @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   30814ms] [LOG] [upload] effect {toolId: edit-pdf, currentToolHref: /edit-pdf, isLoadingConfig: false, hasFile: true, shouldRestoreTransfer: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   30816ms] [LOG] [Fast Refresh] done in 233ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   30928ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   30947ms] [LOG] [Fast Refresh] done in 118ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   31848ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   31848ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   31894ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   31895ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   32080ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   32080ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   32096ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   32182ms] [LOG] [workspace] {toolId: edit-pdf, hasFile: true, isLoadingConfig: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   32190ms] [LOG] [workspace] {toolId: edit-pdf, hasFile: true, isLoadingConfig: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[   32229ms] [ERROR] Failed to load resource: the server responded with a status of 429 (Too Many Requests) @ http://localhost:8080/api/edit/extract:0
+[   32754ms] [LOG] [Fast Refresh] done in 767ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  101770ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  101770ms] [LOG] [Fast Refresh] done in 101ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102235ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102289ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102408ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102409ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102457ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102457ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102470ms] [LOG] [workspace] {toolId: edit-pdf, hasFile: false, isLoadingConfig: true} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102481ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102481ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102487ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102488ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102512ms] [LOG] [workspace] {toolId: edit-pdf, hasFile: false, isLoadingConfig: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102517ms] [LOG] [workspace] {toolId: edit-pdf, hasFile: false, isLoadingConfig: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102537ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102537ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102574ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102870ms] [LOG] [Fast Refresh] done in 396ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102932ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102932ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102951ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102952ms] [LOG] object @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102952ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102952ms] [LOG] object @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102992ms] [LOG] [upload] effect {toolId: edit-pdf, currentToolHref: /edit-pdf, isLoadingConfig: false, hasFile: false, shouldRestoreTransfer: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  102995ms] [LOG] [upload] effect {toolId: edit-pdf, currentToolHref: /edit-pdf, isLoadingConfig: false, hasFile: false, shouldRestoreTransfer: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  116589ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  116632ms] [LOG] [Fast Refresh] done in 144ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  123219ms] [LOG] [upload] user selected file {toolId: edit-pdf, fileName: mixed_doc.pdf} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  123221ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  123221ms] [LOG] object @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  123222ms] [LOG] {$$typeof: Symbol(react.forward_ref), render: , displayName: undefined} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  123222ms] [LOG] object @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  123228ms] [LOG] [upload] effect {toolId: edit-pdf, currentToolHref: /edit-pdf, isLoadingConfig: false, hasFile: true, shouldRestoreTransfer: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  123350ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  123350ms] [LOG] Logo rendered @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  123391ms] [LOG] [workspace] {toolId: edit-pdf, hasFile: true, isLoadingConfig: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  123395ms] [LOG] [workspace] {toolId: edit-pdf, hasFile: true, isLoadingConfig: false} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  123402ms] [ERROR] Failed to load resource: the server responded with a status of 429 (Too Many Requests) @ http://localhost:8080/api/edit/extract:0
+[  123411ms] [ERROR] Failed to load resource: the server responded with a status of 429 (Too Many Requests) @ http://localhost:8080/api/edit/extract:0
+[  123413ms] [ERROR] Error: {"code":"HOURLY_LIMIT_REACHED","title":"Usage limit reached","message":"You've reached your 3-hour usage limit.","description":"Please wait until your usage window resets or upgrade your plan for a higher allowance.","window":"3h","upgradeRecommended":true,"requestedUnits":4,"tool":"pdf_edit_extract"}
+    at submitEditorExtract (http://localhost:3000/_next/static/chunks/lib_1pr_s6w._.js:6639:15)
+    at async EditPdfWorkspace.useEffect.runExtraction (http://localhost:3000/_next/static/chunks/components_tools_EditPdfWorkspace_tsx_0xkvp5l._.js:318:44) @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:3318
+[  123546ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  123837ms] [LOG] [Fast Refresh] done in 391ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  124450ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
+[  124457ms] [LOG] [Fast Refresh] done in 107ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2477
