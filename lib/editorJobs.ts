@@ -27,6 +27,7 @@ export interface EditorJobRecord {
     message: string;
     result: Record<string, unknown> | null;
     error: string | null;
+    error_code?: string | null;
     cancel_requested: boolean;
 }
 
@@ -67,9 +68,10 @@ export async function submitEditorCompile(body: unknown): Promise<EditorJobSubmi
     return response.json();
 }
 
-export async function getEditorJob(jobId: string): Promise<EditorJobRecord> {
+export async function getEditorJob(jobId: string, signal?: AbortSignal): Promise<EditorJobRecord> {
     const response = await fetch(`${getBaseUrl()}/api/edit/jobs/${jobId}`, {
         credentials: "include",
+        signal,
     });
 
     if (!response.ok) {
@@ -93,16 +95,21 @@ export async function downloadEditorJob(jobId: string): Promise<Blob> {
 
 export async function waitForEditorJob(
     jobId: string,
-    onUpdate?: (job: EditorJobRecord) => void
+    onUpdate?: (job: EditorJobRecord) => void,
+    signal?: AbortSignal,
 ): Promise<EditorJobRecord> {
     while (true) {
-        const job = await getEditorJob(jobId);
+        signal?.throwIfAborted();
+        const job = await getEditorJob(jobId, signal);
         onUpdate?.(job);
 
         if (TERMINAL.has(job.status)) {
             return job;
         }
 
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        await new Promise<void>((resolve, reject) => {
+            const timer = window.setTimeout(resolve, 1500);
+            signal?.addEventListener("abort", () => { window.clearTimeout(timer); reject(signal.reason); }, { once: true });
+        });
     }
 }

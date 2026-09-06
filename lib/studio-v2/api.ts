@@ -1,4 +1,5 @@
 import axios, { AxiosError } from "axios";
+import type { EditorLayout } from "@/components/editor-v2/model";
 
 const rawBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
 const normalizedBaseUrl = rawBaseUrl.endsWith("/api")
@@ -13,8 +14,8 @@ const studioV2Client = axios.create({
   },
 });
 
-export function studioV2PageTileURL(sessionId: string, versionId: string, pageId: string): string {
-  return studioV2Client.getUri({ url: `/sessions/${sessionId}/versions/${versionId}/pages/${pageId}/tile`, params: { scale: 0.35 } });
+export function studioV2PageTileURL(sessionId: string, versionId: string, pageId: string, scale = 0.35): string {
+  return studioV2Client.getUri({ url: `/sessions/${sessionId}/versions/${versionId}/pages/${pageId}/tile`, params: { scale } });
 }
 
 export interface StudioSessionDTO {
@@ -224,6 +225,7 @@ export interface StudioJobDTO {
   progress: number;
   message: string;
   error?: string;
+  error_code?: string;
   reconciled_at?: string | null;
   created_at: string;
   updated_at: string;
@@ -233,26 +235,7 @@ export interface StudioJobResponse {
   job: StudioJobDTO;
 }
 
-export interface StudioEditorElementDTO {
-  id: string;
-  text: string;
-  original_text?: string;
-  x: number; y: number; width: number; height: number; size: number;
-  font: string; bg_color?: string; text_color?: string; transparent_bg?: boolean;
-  ocr_v2?: boolean; source?: string; provenance?: string[]; word_ids?: string[];
-  word_geometry?: Array<{ id: string; text: string; x: number; y: number; width: number; height: number }>;
-  reading_order?: string[]; confidence?: number;
-}
-export interface StudioEditorPageDTO {
-  page_num: number; width: number; height: number;
-  kind: "text" | "mixed" | "scanned" | "blank";
-  elements: StudioEditorElementDTO[];
-}
-export interface StudioEditorLayoutDTO {
-  pages: StudioEditorPageDTO[];
-  source_tracker?: string;
-  upright_tracker?: string;
-}
+export type StudioEditorLayoutDTO = EditorLayout;
 export interface StudioEditorStateDTO {
   id: string; document_id: string; session_id: string; base_version_id: string;
   extract_job_id: string; layout: StudioEditorLayoutDTO; created_at: string;
@@ -266,7 +249,7 @@ export interface StudioJobRequest {
   base_version_id: string;
   idempotency_key: string;
   operation: StudioMarkupOperation | "editor_extract" | "editor_compile";
-  parameters: StudioMarkupJobParameters | Record<string, never> | StudioEditorCompileParameters;
+  parameters: StudioMarkupJobParameters | { language_mode: "AUTO" | "EXPLICIT"; languages: Array<"eng" | "sin" | "tam"> } | StudioEditorCompileParameters;
 }
 
 export interface CreateSessionRequest {

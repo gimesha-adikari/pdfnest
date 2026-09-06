@@ -1123,10 +1123,11 @@ export const StudioV2Shell: React.FC = () => {
 
   return (
     <div className="h-screen w-screen bg-[#0B0C0F] text-[#F5F7FA] font-sans antialiased overflow-hidden flex flex-col select-none">
-      {editMode && session && activeVersion ? <StudioV2EditWorkspace
+      {editMode && session && activeVersion && vdm ? <StudioV2EditWorkspace
         sessionId={session.id}
         baseVersionId={activeVersion.id}
         documentName={docInfo.name}
+        vdm={vdm}
         newIdempotencyKey={newIdempotencyKey}
         onBack={() => setEditMode(false)}
         onCompiled={async () => { await refetch(); setEditMode(false); }}
