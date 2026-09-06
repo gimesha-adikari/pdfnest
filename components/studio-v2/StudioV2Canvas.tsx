@@ -26,8 +26,6 @@ import {
   canonicalStudioV2OverlayToVisibleRect,
   visibleStudioV2RectToCanonicalOverlay,
   getStudioV2TextOverlaySize,
-  displayRectToCanonicalPdfRect,
-  canonicalPdfRectToDisplayRect,
 } from "./StudioV2Geometry";
 
 interface PageTileRendererProps {
@@ -92,27 +90,24 @@ export function mapVisibleMarkupRectToWorker(
     width: Math.max(0, clampedRight - clampedX),
     height: Math.max(0, clampedBottom - clampedY),
   };
-  const canonical = displayRectToCanonicalPdfRect(
-    { width: geometry.width, height: geometry.height, rotation: page.rotation },
-    displayRect,
-  );
   return {
     id,
-    x: canonical.x,
-    y: canonical.y,
-    width: canonical.width,
-    height: canonical.height,
+    x: Number(displayRect.x.toFixed(2)),
+    y: Number(displayRect.y.toFixed(2)),
+    width: Number(displayRect.width.toFixed(2)),
+    height: Number(displayRect.height.toFixed(2)),
     page: pageNumber,
     color,
   };
 }
 
-function mapWorkerMarkupBoxToVisible(page: VDMPageDescriptorDTO, box: StudioMarkupBox): VisibleRect {
-  const geometry = pageGeometry(page);
-  return canonicalPdfRectToDisplayRect(
-    { width: geometry.width, height: geometry.height, rotation: page.rotation },
-    { x: box.x, y: box.y, width: box.width, height: box.height },
-  );
+function mapWorkerMarkupBoxToVisible(_page: VDMPageDescriptorDTO, box: StudioMarkupBox): VisibleRect {
+  return {
+    x: box.x,
+    y: box.y,
+    width: box.width,
+    height: box.height,
+  };
 }
 
 const PageTileRenderer: React.FC<PageTileRendererProps> = ({
