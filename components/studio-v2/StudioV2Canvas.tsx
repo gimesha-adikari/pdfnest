@@ -26,6 +26,8 @@ import {
   canonicalStudioV2OverlayToVisibleRect,
   visibleStudioV2RectToCanonicalOverlay,
   getStudioV2TextOverlaySize,
+  displayRectToCanonicalPdfRect,
+  canonicalPdfRectToDisplayRect,
 } from "./StudioV2Geometry";
 
 interface PageTileRendererProps {
@@ -80,26 +82,37 @@ export function mapVisibleMarkupRectToWorker(
 ): StudioMarkupBox | null {
   const geometry = pageGeometry(page);
   if (!geometry.width || !geometry.height) return null;
-  const x = Math.max(0, Math.min(visible.x, geometry.visibleWidth));
-  const y = Math.max(0, Math.min(visible.y, geometry.visibleHeight));
-  const right = Math.max(x, Math.min(visible.x + visible.width, geometry.visibleWidth));
-  const bottom = Math.max(y, Math.min(visible.y + visible.height, geometry.visibleHeight));
-  // The worker receives the visible, crop-relative page coordinate system and
-  // applies the page's rotation-aware derotation at the PDF boundary. Keeping
-  // the payload in this same system avoids rotating the selection twice.
+  const clampedX = Math.max(0, Math.min(visible.x, geometry.visibleWidth));
+  const clampedY = Math.max(0, Math.min(visible.y, geometry.visibleHeight));
+  const clampedRight = Math.max(clampedX, Math.min(visible.x + visible.width, geometry.visibleWidth));
+  const clampedBottom = Math.max(clampedY, Math.min(visible.y + visible.height, geometry.visibleHeight));
+  const displayRect: StudioV2Rect = {
+    x: clampedX,
+    y: clampedY,
+    width: Math.max(0, clampedRight - clampedX),
+    height: Math.max(0, clampedBottom - clampedY),
+  };
+  const canonical = displayRectToCanonicalPdfRect(
+    { width: geometry.width, height: geometry.height, rotation: page.rotation },
+    displayRect,
+  );
   return {
     id,
-    x: Number(x.toFixed(2)),
-    y: Number(y.toFixed(2)),
-    width: Number(Math.max(0, right - x).toFixed(2)),
-    height: Number(Math.max(0, bottom - y).toFixed(2)),
+    x: canonical.x,
+    y: canonical.y,
+    width: canonical.width,
+    height: canonical.height,
     page: pageNumber,
     color,
   };
 }
 
 function mapWorkerMarkupBoxToVisible(page: VDMPageDescriptorDTO, box: StudioMarkupBox): VisibleRect {
-  return { x: box.x, y: box.y, width: box.width, height: box.height };
+  const geometry = pageGeometry(page);
+  return canonicalPdfRectToDisplayRect(
+    { width: geometry.width, height: geometry.height, rotation: page.rotation },
+    { x: box.x, y: box.y, width: box.width, height: box.height },
+  );
 }
 
 const PageTileRenderer: React.FC<PageTileRendererProps> = ({

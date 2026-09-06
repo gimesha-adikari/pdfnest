@@ -11,6 +11,8 @@ import {
   resizeStudioV2RectWithAspectRatio,
   visibleStudioV2RectToCanonicalCrop,
   visibleStudioV2RectToCanonicalOverlay,
+  displayRectToCanonicalPdfRect,
+  canonicalPdfRectToDisplayRect,
 } from "@/components/studio-v2/StudioV2Geometry";
 
 const page = {
@@ -53,4 +55,49 @@ const textSize = getStudioV2TextOverlaySize("Hello\nWorld", 24);
 assert.equal(textSize.width, 74);
 assert.ok(Math.abs(textSize.height - 57.6) < 1e-9);
 
-console.log("Studio V2 geometry tests passed: normalization, bounds, move/resize, zoom-independent rotation roundtrips, and non-zero crop origin.");
+// Markup authoritative coordinate transformations (displayRectToCanonicalPdfRect / canonicalPdfRectToDisplayRect)
+const markupTestPages = [
+  { width: 400, height: 600 },
+  { width: 612, height: 792 },
+];
+const testDisplayRects = [
+  { x: 30, y: 50, width: 120, height: 70 },
+  { x: 0, y: 0, width: 100, height: 50 },
+  { x: 150, y: 200, width: 80, height: 160 },
+];
+
+for (const testPage of markupTestPages) {
+  for (const rotation of [0, 90, 180, 270]) {
+    const pageWithRot = { ...testPage, rotation };
+    for (const rect of testDisplayRects) {
+      const canonical = displayRectToCanonicalPdfRect(pageWithRot, rect);
+      const displayRoundTrip = canonicalPdfRectToDisplayRect(pageWithRot, canonical);
+      assert.ok(Math.abs(displayRoundTrip.x - rect.x) < 1e-2, `markup x roundtrip at rot ${rotation}: got ${displayRoundTrip.x} expected ${rect.x}`);
+      assert.ok(Math.abs(displayRoundTrip.y - rect.y) < 1e-2, `markup y roundtrip at rot ${rotation}: got ${displayRoundTrip.y} expected ${rect.y}`);
+      assert.ok(Math.abs(displayRoundTrip.width - rect.width) < 1e-2, `markup width roundtrip at rot ${rotation}`);
+      assert.ok(Math.abs(displayRoundTrip.height - rect.height) < 1e-2, `markup height roundtrip at rot ${rotation}`);
+    }
+  }
+}
+
+// Explicit coordinate assertions matching PyMuPDF derotation matrix on 400x600 page:
+const p400x600 = { width: 400, height: 600 };
+const sampleDisplay = { x: 30, y: 50, width: 120, height: 70 };
+// At 0 deg: identical
+assert.deepEqual(displayRectToCanonicalPdfRect({ ...p400x600, rotation: 0 }, sampleDisplay), { x: 30, y: 50, width: 120, height: 70 });
+// At 90 deg: x=vy(50), y=H-(vx+vw)=600-(30+120)=450, w=vh(70), h=vw(120)
+assert.deepEqual(displayRectToCanonicalPdfRect({ ...p400x600, rotation: 90 }, sampleDisplay), { x: 50, y: 450, width: 70, height: 120 });
+// At 180 deg: x=W-(vx+vw)=400-(30+120)=250, y=H-(vy+vh)=600-(50+70)=480, w=vw(120), h=vh(70)
+assert.deepEqual(displayRectToCanonicalPdfRect({ ...p400x600, rotation: 180 }, sampleDisplay), { x: 250, y: 480, width: 120, height: 70 });
+// At 270 deg: x=W-(vy+vh)=400-(50+70)=280, y=vx(30), w=vh(70), h=vw(120)
+assert.deepEqual(displayRectToCanonicalPdfRect({ ...p400x600, rotation: 270 }, sampleDisplay), { x: 280, y: 30, width: 70, height: 120 });
+
+// Reverse drag normalization test
+const reverseDrag = { x: 150, y: 120, width: -120, height: -70 };
+assert.deepEqual(
+  displayRectToCanonicalPdfRect({ ...p400x600, rotation: 0 }, reverseDrag),
+  displayRectToCanonicalPdfRect({ ...p400x600, rotation: 0 }, sampleDisplay),
+);
+
+console.log("Studio V2 geometry tests passed: normalization, bounds, move/resize, zoom-independent rotation roundtrips, non-zero crop origin, and markup rotation coordinate parity.");
+

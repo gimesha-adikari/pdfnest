@@ -250,3 +250,100 @@ export function getStudioV2TextOverlaySize(text: string, fontSize: number): Stud
     height: Math.max(fontSize, lines.length * fontSize * 1.2),
   };
 }
+
+/**
+ * Authoritative transformation between displayed-page coordinates (rendered on screen)
+ * and canonical PDF markup coordinates (unrotated CropBox-relative PDF points with top-left origin).
+ */
+export function displayRectToCanonicalPdfRect(
+  page: { width: number; height: number; rotation: number },
+  displayRect: StudioV2Rect,
+): StudioV2Rect {
+  const normalized = normalizeStudioV2Rect(displayRect);
+  const normRot = ((page.rotation % 360) + 360) % 360;
+  const W_can = page.width;
+  const H_can = page.height;
+  const vx = normalized.x;
+  const vy = normalized.y;
+  const vw = normalized.width;
+  const vh = normalized.height;
+
+  switch (normRot) {
+    case 90:
+      return {
+        x: Number(vy.toFixed(2)),
+        y: Number((H_can - (vx + vw)).toFixed(2)),
+        width: Number(vh.toFixed(2)),
+        height: Number(vw.toFixed(2)),
+      };
+    case 180:
+      return {
+        x: Number((W_can - (vx + vw)).toFixed(2)),
+        y: Number((H_can - (vy + vh)).toFixed(2)),
+        width: Number(vw.toFixed(2)),
+        height: Number(vh.toFixed(2)),
+      };
+    case 270:
+      return {
+        x: Number((W_can - (vy + vh)).toFixed(2)),
+        y: Number(vx.toFixed(2)),
+        width: Number(vh.toFixed(2)),
+        height: Number(vw.toFixed(2)),
+      };
+    default: // 0
+      return {
+        x: Number(vx.toFixed(2)),
+        y: Number(vy.toFixed(2)),
+        width: Number(vw.toFixed(2)),
+        height: Number(vh.toFixed(2)),
+      };
+  }
+}
+
+/**
+ * Inverse transformation: convert canonical PDF markup coordinates back to displayed-page coordinates.
+ */
+export function canonicalPdfRectToDisplayRect(
+  page: { width: number; height: number; rotation: number },
+  canRect: StudioV2Rect,
+): StudioV2Rect {
+  const normalized = normalizeStudioV2Rect(canRect);
+  const normRot = ((page.rotation % 360) + 360) % 360;
+  const W_can = page.width;
+  const H_can = page.height;
+  const cx = normalized.x;
+  const cy = normalized.y;
+  const cw = normalized.width;
+  const ch = normalized.height;
+
+  switch (normRot) {
+    case 90:
+      return {
+        x: Number((H_can - (cy + ch)).toFixed(2)),
+        y: Number(cx.toFixed(2)),
+        width: Number(ch.toFixed(2)),
+        height: Number(cw.toFixed(2)),
+      };
+    case 180:
+      return {
+        x: Number((W_can - (cx + cw)).toFixed(2)),
+        y: Number((H_can - (cy + ch)).toFixed(2)),
+        width: Number(cw.toFixed(2)),
+        height: Number(ch.toFixed(2)),
+      };
+    case 270:
+      return {
+        x: Number(cy.toFixed(2)),
+        y: Number((W_can - (cx + cw)).toFixed(2)),
+        width: Number(ch.toFixed(2)),
+        height: Number(cw.toFixed(2)),
+      };
+    default: // 0
+      return {
+        x: Number(cx.toFixed(2)),
+        y: Number(cy.toFixed(2)),
+        width: Number(cw.toFixed(2)),
+        height: Number(ch.toFixed(2)),
+      };
+  }
+}
