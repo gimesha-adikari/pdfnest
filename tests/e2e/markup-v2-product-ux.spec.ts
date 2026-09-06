@@ -237,12 +237,13 @@ test.describe.serial("OCR-aware markup V2 product UX", () => {
             await page.screenshot({ path: path.join(SCREENSHOT_DIR, `${action}-ready.png`), fullPage: true });
 
             await page.getByTestId("markup-v2-submit").click();
-            await expect(page.getByTestId("markup-v2-job-status")).toContainText("Complete", { timeout: 120_000 });
-            await expect(page.getByTestId("markup-v2-result")).toBeVisible({ timeout: 30_000 });
+            await expect(page).toHaveURL(new RegExp(`/${action}-pdf-v2/download$`), { timeout: 120_000 });
+            await expect(page.getByTestId("markup-v2-result")).toHaveCount(0);
+            await expect(page.getByRole("button", { name: "Download File" })).toBeVisible();
             await page.screenshot({ path: path.join(SCREENSHOT_DIR, `${action}-result.png`), fullPage: true });
 
             const downloadPromise = page.waitForEvent("download");
-            await page.getByTestId("markup-v2-download").click();
+            await page.getByRole("button", { name: "Download File" }).click();
             const download = await downloadPromise;
             const outputPath = path.join(OUTPUT_DIR, `${action}-visual-selection.pdf`);
             const sourcePath = path.join(OUTPUT_DIR, `${action}-visual-selection.source.pdf`);

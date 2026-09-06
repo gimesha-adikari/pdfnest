@@ -213,15 +213,13 @@ test.describe.serial("OCR-aware markup V2 real scanned closure", () => {
                 expect(submitResponse.status()).toBe(202);
                 const created = await submitResponse.json() as { job_id?: string };
                 expect(created.job_id).toBeTruthy();
-                await expect(actionPage.getByTestId("markup-v2-job-status")).toContainText("Complete", { timeout: 240_000 });
-                await expect(actionPage.getByTestId("markup-v2-result")).toBeVisible({ timeout: 30_000 });
-                await expect(actionPage.getByTestId("markup-v2-result-preview")).toBeVisible({ timeout: 30_000 });
-                await expect(actionPage.getByTestId("markup-result-pdf-backend-preview-image")).toBeVisible({ timeout: 120_000 });
-                await expect(actionPage.getByTestId("markup-result-pdf-page").locator("canvas")).toHaveCount(0);
+                await expect(actionPage).toHaveURL(new RegExp(`/${action}-pdf-v2/download$`), { timeout: 240_000 });
+                await expect(actionPage.getByTestId("markup-v2-result")).toHaveCount(0);
+                await expect(actionPage.getByRole("button", { name: "Download File" })).toBeVisible();
                 await actionPage.screenshot({ path: path.join(SCREENSHOT_DIR, `${action}-scanned-result.png`), fullPage: true });
 
                 const downloadPromise = actionPage.waitForEvent("download");
-                await actionPage.getByTestId("markup-v2-download").click();
+                await actionPage.getByRole("button", { name: "Download File" }).click();
                 const download = await downloadPromise;
                 const outputPath = path.join(OUTPUT_DIR, `${action}-scanned-real.pdf`);
                 await download.saveAs(outputPath);
@@ -280,13 +278,12 @@ test.describe.serial("OCR-aware markup V2 real scanned closure", () => {
                 expect(submitResponse.status()).toBe(202);
                 const created = await submitResponse.json() as { job_id?: string };
                 expect(created.job_id).toBeTruthy();
-                await expect(actionPage.getByTestId("markup-v2-job-status")).toContainText("Complete", { timeout: 240_000 });
-                await expect(actionPage.getByTestId("markup-v2-result")).toBeVisible({ timeout: 30_000 });
-                await expect(actionPage.getByTestId("markup-result-pdf-backend-preview-image")).toBeVisible({ timeout: 120_000 });
-                await expect(actionPage.getByTestId("markup-result-pdf-page").locator("canvas")).toHaveCount(0);
+                await expect(actionPage).toHaveURL(new RegExp(`/${action}-pdf-v2/download$`), { timeout: 240_000 });
+                await expect(actionPage.getByTestId("markup-v2-result")).toHaveCount(0);
+                await expect(actionPage.getByRole("button", { name: "Download File" })).toBeVisible();
 
                 const downloadPromise = actionPage.waitForEvent("download");
-                await actionPage.getByTestId("markup-v2-download").click();
+                await actionPage.getByRole("button", { name: "Download File" }).click();
                 const download = await downloadPromise;
                 const outputPath = path.join(IMAGE_ONLY_OUTPUT_DIR, `${action}-compiled-images.pdf`);
                 await download.saveAs(outputPath);
