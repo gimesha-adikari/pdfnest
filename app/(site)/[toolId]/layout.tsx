@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { getToolMetadata } from "@/lib/seo";
 import ClientToolLayout from "./ClientToolLayout";
+import { resolveEditPdfEditorEngine } from "@/lib/editPdfEngine";
 
 type ToolLayoutParams = {
     toolId: string;
@@ -19,5 +20,6 @@ export default function ToolRouteLayout({
                                         }: {
     children: ReactNode;
 }) {
-    return <ClientToolLayout>{children}</ClientToolLayout>;
+    const editPdfEngine = resolveEditPdfEditorEngine(process.env.EDIT_PDF_EDITOR_ENGINE);
+    return <ClientToolLayout editPdfEngine={editPdfEngine}>{children}</ClientToolLayout>;
 }

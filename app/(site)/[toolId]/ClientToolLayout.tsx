@@ -16,6 +16,7 @@ import { resolveIcon, type LucideIcon } from "@/lib/iconResolver";
 import { BackendOnlyToolGuard } from "@/components/pdf/BackendOnlyToolGuard";
 import { RepositoryAnalyzerProvider } from "@/context/RepositoryAnalyzerContext";
 import { getOcrV2DevelopmentRouteConfig } from "@/lib/ocrV2DevelopmentTools";
+import { type EditPdfEditorEngine, resolveEditPdfEditorEngine } from "@/lib/editPdfEngine";
 
 interface ToolItem {
     title: string;
@@ -70,6 +71,7 @@ interface ToolContextProps {
     downloadData: { blob: Blob; fileName: string } | null;
     setDownloadData: (data: { blob: Blob; fileName: string } | null) => void;
     isLoadingConfig: boolean;
+    editPdfEngine: EditPdfEditorEngine;
 }
 
 const SharedToolContext = createContext<ToolContextProps | undefined>(undefined);
@@ -80,7 +82,16 @@ export function useSharedTool() {
     return context;
 }
 
-export default function ClientToolLayout({ children }: { children: ReactNode }) {
+interface ClientToolLayoutProps {
+    children: ReactNode;
+    editPdfEngine?: EditPdfEditorEngine;
+}
+
+export default function ClientToolLayout({
+    children,
+    editPdfEngine: initialEditPdfEngine,
+}: ClientToolLayoutProps) {
+    const editPdfEngine = resolveEditPdfEditorEngine(initialEditPdfEngine ?? process.env.EDIT_PDF_EDITOR_ENGINE);
     const params = useParams();
     const { getToolByHref, tools: allTools, isLoading: isLoadingTools } = useTools();
     const rawToolId = params?.toolId;
@@ -182,6 +193,7 @@ export default function ClientToolLayout({ children }: { children: ReactNode }) 
                 downloadData,
                 setDownloadData,
                 isLoadingConfig,
+                editPdfEngine,
             }}
         >
             <BackendOnlyToolGuard

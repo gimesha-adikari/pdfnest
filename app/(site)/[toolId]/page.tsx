@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Globe } from "lucide-react";
 
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
@@ -28,12 +28,10 @@ export default function SharedUploadPage() {
 
     const { pendingTransfer, consumeTransfer } = useWorkflow();
     const router = useRouter();
-    const searchParams = useSearchParams();
     const [urlInput, setUrlInput] = useState("");
     const handledTransferRef = useRef(false);
 
     const currentToolHref = `/${toolId}`;
-    const editorModeSuffix = toolId === "edit-pdf" && searchParams.get("ocr_v2") === "1" ? "?ocr_v2=1" : "";
     const shouldRestoreTransfer = pendingTransfer?.targetToolHref === currentToolHref;
 
     useEffect(() => {
@@ -65,7 +63,7 @@ export default function SharedUploadPage() {
             console.log("[upload] restoring file into", currentToolHref, restoredFile.name);
 
             setFile(restoredFile);
-            router.replace(`/${toolId}/workspace${editorModeSuffix}`);
+            router.replace(`/${toolId}/workspace`);
             return;
         }
 
@@ -74,12 +72,11 @@ export default function SharedUploadPage() {
                 toolId,
                 fileName: file.name,
             });
-            router.replace(`/${toolId}/workspace${editorModeSuffix}`);
+            router.replace(`/${toolId}/workspace`);
         }
     }, [
         consumeTransfer,
         currentToolHref,
-        editorModeSuffix,
         file,
         isLoadingConfig,
         pendingTransfer,
@@ -104,7 +101,7 @@ export default function SharedUploadPage() {
 
             handledTransferRef.current = true;
             setFile(baselineFile);
-            router.push(`/${toolId}/workspace${editorModeSuffix}`);
+            router.push(`/${toolId}/workspace`);
         }
     };
 
@@ -125,7 +122,7 @@ export default function SharedUploadPage() {
 
         handledTransferRef.current = true;
         setFile(virtualFile);
-        router.push(`/${toolId}/workspace${editorModeSuffix}`);
+        router.push(`/${toolId}/workspace`);
     };
 
     if (isLoadingConfig || shouldRestoreTransfer) {
