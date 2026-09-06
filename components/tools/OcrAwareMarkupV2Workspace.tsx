@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Download, FileText, Highlighter, Languages, Loader2, RotateCcw, ShieldCheck, Strikethrough, Underline } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { CheckCircle2, FileText, Highlighter, Languages, Loader2, RotateCcw, ShieldCheck, Strikethrough, Underline } from "lucide-react";
 
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import { useAuth } from "@/context/AuthContext";
@@ -86,7 +87,8 @@ function statusLabel(job: OcrAwareMarkupJob): string {
 }
 
 export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAwareMarkupAction }) {
-    const { file, setFile } = useSharedTool();
+    const router = useRouter();
+    const { toolId, file, setFile, setDownloadData } = useSharedTool();
     const { openAuthModal, isAuthenticated, isGuest, isLoading: isAuthLoading } = useAuth();
     const [query, setQuery] = useState("");
     const [mode, setMode] = useState<OcrAwareMarkupMode>("smart");
@@ -99,8 +101,6 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
     const [error, setError] = useState<string | null>(null);
     const [uploadError, setUploadError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [resultUrl, setResultUrl] = useState<string | null>(null);
-    const [resultFile, setResultFile] = useState<File | null>(null);
     const [selection, setSelection] = useState<MarkupTextSelection | null>(null);
     const [previewState, setPreviewState] = useState<MarkupPreviewState>({ status: "idle", page: 1, pageCount: 0, pageHasSelectableText: false, pageHasScannedContent: false });
     const [ocrPreview, setOcrPreview] = useState<OcrMarkupPreview | null>(null);
@@ -142,12 +142,6 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
         ocrPreviewRequestRef.current?.controller.abort();
     }, []);
 
-    useEffect(() => {
-        return () => {
-            if (resultUrl) URL.revokeObjectURL(resultUrl);
-        };
-    }, [resultUrl]);
-
     const openFileChooser = useCallback(() => {
         const input = fileInputRef.current;
         if (!input) return;
@@ -163,12 +157,6 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
             void cancelOcrAwareMarkup(job.job_id).catch(() => undefined);
         }
     }, [job]);
-
-    const clearResult = useCallback(() => {
-        if (resultUrl) URL.revokeObjectURL(resultUrl);
-        setResultUrl(null);
-        setResultFile(null);
-    }, [resultUrl]);
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const nextFile = event.target.files?.[0];
@@ -198,7 +186,6 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
         setSubmittedFindQuery("");
         setFindOccurrence(0);
         setFindState({ count: 0, activeIndex: -1, current: null });
-        clearResult();
         setFile(nextFile);
         event.currentTarget.value = "";
     };
@@ -333,7 +320,6 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
         setError(null);
         setJob(null);
         setIsSubmitting(true);
-        clearResult();
         const controller = new AbortController();
         abortRef.current = controller;
 
@@ -347,15 +333,18 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
                 return;
             }
             const blob = await downloadOcrAwareMarkup(created.job_id);
-            setResultUrl(URL.createObjectURL(blob));
-            setResultFile(new File([blob], `${action}-marked.pdf`, { type: "application/pdf" }));
+            const suffix = action === "highlight" ? "highlighted" : action === "underline" ? "underlined" : "strikeout";
+            const baseName = (file?.name || "document.pdf").replace(/\.pdf$/i, "");
+            const fileName = `${baseName}-${suffix}.pdf`;
+            setDownloadData({ blob, fileName });
+            router.push(`/${toolId || `${action}-pdf-v2`}/download`);
         } catch (cause) {
             if (!(cause instanceof DOMException && cause.name === "AbortError")) setError(errorMessage(cause));
         } finally {
             if (abortRef.current === controller) abortRef.current = null;
             setIsSubmitting(false);
         }
-    }, [action, capabilities, color, file, isAuthenticated, language, mode, openAuthModal, query, clearResult, selection?.geometry]);
+    }, [action, capabilities, color, file, isAuthenticated, language, mode, openAuthModal, query, router, selection?.geometry, setDownloadData, toolId]);
 
     const cancel = useCallback(async () => {
         abortRef.current?.abort();
@@ -390,9 +379,8 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
         setSubmittedFindQuery("");
         setFindOccurrence(0);
         setFindState({ count: 0, activeIndex: -1, current: null });
-        clearResult();
         openFileChooser();
-    }, [cancelActiveJobWithoutAwait, clearResult, openFileChooser, setFile]);
+    }, [cancelActiveJobWithoutAwait, openFileChooser, setFile]);
 
     const meta = LABELS[action];
     const Icon = ICONS[action];
@@ -511,7 +499,6 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
 
                     {job && <div aria-live="polite" data-testid="markup-v2-job-status" className="rounded-xl border border-[var(--border)] p-3 text-sm"><div className="flex items-center gap-2 font-semibold text-[var(--foreground)]"><span>{statusLabel(job)}</span>{job.status === "SUCCEEDED" && <CheckCircle2 className="text-green-600" size={17} />}</div><p className="mt-1 text-xs text-[var(--muted)]">{job.progress?.completed_pages || 0}/{job.progress?.total_pages || 0} pages · {job.progress?.percent || 0}%</p></div>}
                     {error && <p role="alert" data-testid="markup-v2-error" className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200">{error}</p>}
-                    {resultUrl && resultFile && <section data-testid="markup-v2-result" className="space-y-3 rounded-xl border border-green-300/60 bg-green-500/5 p-3"><p className="flex items-center gap-2 text-sm font-semibold text-green-800 dark:text-green-200"><CheckCircle2 size={16} /> Your marked PDF is ready.</p><div data-testid="markup-v2-result-preview" className="rounded-lg border border-green-300/50 bg-white/50 p-2"><MarkupPdfPreview file={resultFile} readOnly testIdPrefix="markup-result-pdf" /></div><div className="flex flex-wrap gap-2"><a data-testid="markup-v2-download" href={resultUrl} download={`${action}-document.pdf`} className="inline-flex items-center gap-2 rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white"><Download size={16} /> Download marked PDF</a><button type="button" data-testid="markup-v2-result-replace" onClick={openFileChooser} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-4 py-2 text-sm">Mark another PDF</button></div></section>}
                 </form>
             </div>
 
