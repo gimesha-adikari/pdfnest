@@ -93,11 +93,18 @@ export async function downloadEditorJob(jobId: string): Promise<Blob> {
     return response.blob();
 }
 
+const STALL_TIMEOUT_MS = 180_000; // 3 minutes without progress advance
+
 export async function waitForEditorJob(
     jobId: string,
     onUpdate?: (job: EditorJobRecord) => void,
     signal?: AbortSignal,
 ): Promise<EditorJobRecord> {
+    let lastProgress = -1;
+    let lastStatus = "";
+    let lastMessage = "";
+    let lastActivityTime = Date.now();
+
     while (true) {
         signal?.throwIfAborted();
         const job = await getEditorJob(jobId, signal);
@@ -105,6 +112,15 @@ export async function waitForEditorJob(
 
         if (TERMINAL.has(job.status)) {
             return job;
+        }
+
+        if (job.progress !== lastProgress || job.status !== lastStatus || job.message !== lastMessage) {
+            lastProgress = job.progress;
+            lastStatus = job.status;
+            lastMessage = job.message;
+            lastActivityTime = Date.now();
+        } else if (Date.now() - lastActivityTime > STALL_TIMEOUT_MS) {
+            throw new Error("Job execution stalled without progress for more than 3 minutes.");
         }
 
         await new Promise<void>((resolve, reject) => {

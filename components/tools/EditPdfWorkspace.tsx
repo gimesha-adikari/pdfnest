@@ -83,6 +83,12 @@ export default function EditPdfWorkspace({ engine }: EditPdfWorkspaceProps = {})
   const [compiling, setCompiling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const retryExtraction = () => {
+    setError(null);
+    setExtractJob(null);
+    setRetryCount((c) => c + 1);
+  };
   const changeLanguage = (next: EditorLanguageChoice) => {
     if (!dirty || window.confirm("Discard unsaved edits and extract again with this language?")) { setDirty(false); setLanguage(next); }
   };
@@ -108,7 +114,7 @@ export default function EditPdfWorkspace({ engine }: EditPdfWorkspaceProps = {})
       } catch (err) { if (!cancelled && !controller.signal.aborted) { setError("Failed to extract the editor layout."); handleClientError(err); } }
     })();
     return () => { cancelled = true; controller.abort(); };
-  }, [file, language, useOcrV2]);
+  }, [file, language, useOcrV2, retryCount]);
 
   const compile = (draft: EditorLayout) => void requireAuth(async () => {
     if (!file) return;
@@ -139,5 +145,5 @@ export default function EditPdfWorkspace({ engine }: EditPdfWorkspaceProps = {})
 
   if (!file) return <div className="flex h-full items-center justify-center p-8 text-muted-foreground">Select or upload a PDF first.</div>;
   const extracting = Boolean(extractJob && !["succeeded", "failed", "cancelled"].includes(extractJob.status));
-  return <><PdfToolHero title="Precision PDF Layout Editor" description="Edit native and scanned PDF text while preserving the source document."/><div className="mt-4 flex justify-end"><EditorLanguageControl value={language} onChange={changeLanguage} disabled={extracting}/></div>{!layout && <div className="mt-8"><JobProgressCard title="Extracting layout" job={extractJob} active={!error} description="Extracting text layers and geometry…"/></div>}{error && <div role="alert" className="mt-4 flex items-center gap-2 rounded border border-red-300 bg-red-50 p-3 text-red-700"><AlertTriangle size={18}/>{error}</div>}{layout && <div className="mt-8 flex h-[75vh] min-h-0 flex-col"><SharedEditor baseline={layout} renderPageVisual={renderPageVisual} onCompile={compile} compiling={compiling} compileLabel="Export edited PDF" onDirtyChange={setDirty}/></div>}</>;
+  return <><PdfToolHero title="Precision PDF Layout Editor" description="Edit native and scanned PDF text while preserving the source document."/><div className="mt-4 flex justify-end"><EditorLanguageControl value={language} onChange={changeLanguage} disabled={extracting}/></div>{!layout && <div className="mt-8"><JobProgressCard title="Extracting layout" job={extractJob} active={!error} description="Extracting text layers and geometry…"/></div>}{error && <div role="alert" className="mt-4 flex items-center justify-between gap-3 rounded border border-red-300 bg-red-50 p-3 text-red-700"><div className="flex items-center gap-2"><AlertTriangle size={18} className="shrink-0"/><span>{error}</span></div><button type="button" onClick={retryExtraction} className="shrink-0 rounded bg-red-100 px-3 py-1 text-sm font-medium text-red-800 hover:bg-red-200 transition-colors">Retry</button></div>}{layout && <div className="mt-8 flex h-[75vh] min-h-0 flex-col"><SharedEditor baseline={layout} renderPageVisual={renderPageVisual} onCompile={compile} compiling={compiling} compileLabel="Export edited PDF" onDirtyChange={setDirty}/></div>}</>;
 }
