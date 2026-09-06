@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, Clipboard, Download, FileText, Loader2, RotateCcw, ShieldCheck, XCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { AlertCircle, CheckCircle2, Clipboard, Download, FileText, Loader2, RotateCcw, ShieldCheck, UploadCloud, XCircle } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
@@ -22,9 +24,11 @@ function isJobId(value: unknown): value is string { return typeof value === "str
 interface Props { profile: StructuredOcrV2Profile; }
 
 export default function StructuredDocumentV2Workspace({ profile }: Props) {
+    const router = useRouter();
     const { openAuthModal, requireAuth, isAuthenticated, isGuest, isLoading: authLoading } = useAuth();
-    const { file, setFile } = useSharedTool();
+    const { toolId, file, setFile } = useSharedTool();
     const isMarkdown = profile === "PDF_MARKDOWN_V2";
+    const targetRoute = toolId ? `/${toolId}` : (isMarkdown ? "/pdf-to-markdown-v2" : "/document-extraction-v2");
     const canUseProduct = isAuthenticated;
     const title = isMarkdown ? "Convert PDF to Markdown" : "Extract Data from PDF";
     const description = isMarkdown ? "Turn native, scanned, and mixed PDFs into clean Markdown with durable processing." : "Extract structured text, sections, lists, tables, and document content from scanned or digital PDFs.";
@@ -154,8 +158,16 @@ export default function StructuredDocumentV2Workspace({ profile }: Props) {
 
     const reset = useCallback(() => {
         try { window.localStorage.removeItem(keyFor(profile)); } catch { /* optional */ }
-        setJobId(null); setJob(null); setResult(null); setError(null); setErrorCodeValue(null); setResumedFileName(""); setState("IDLE"); setFile(null);
-    }, [profile, setFile]);
+        setJobId(null);
+        setJob(null);
+        setResult(null);
+        setError(null);
+        setErrorCodeValue(null);
+        setResumedFileName("");
+        setState("IDLE");
+        setFile(null);
+        router.push(targetRoute);
+    }, [profile, router, setFile, targetRoute]);
 
     const cancel = async () => {
         if (!jobId || (state !== "QUEUED" && state !== "RUNNING")) return;
@@ -179,6 +191,17 @@ export default function StructuredDocumentV2Workspace({ profile }: Props) {
                     <div className="flex min-w-0 items-center gap-3"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-500"><FileText size={22} /></div><div className="min-w-0"><p className="truncate text-sm font-bold text-[color:var(--foreground)]">{fileName}</p><p className="mt-1 text-xs text-[color:var(--muted)]">{file ? `${(file.size / 1024 / 1024).toFixed(2)} MB · PDF` : jobId ? "Resuming a durable structured job" : "PDF input"}</p></div></div>
                     {(file || jobId) && state !== "SUCCEEDED" && <button type="button" onClick={reset} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[color:var(--border)] px-3 py-2 text-xs font-semibold"><RotateCcw size={14} /> New document</button>}
                 </div>
+                {!file && !jobId && (
+                    <div className="mt-7 rounded-2xl border border-dashed border-indigo-500/40 bg-indigo-500/5 p-7 text-center">
+                        <UploadCloud className="mx-auto text-indigo-500" size={28} />
+                        <p className="mt-3 text-sm font-semibold text-[color:var(--foreground)]">
+                            {isMarkdown ? "Choose a PDF to convert to Markdown" : "Choose a PDF to extract document data"}
+                        </p>
+                        <Link href={targetRoute} className="mt-4 inline-flex rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700">
+                            Choose PDF
+                        </Link>
+                    </div>
+                )}
                 <input ref={inputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={event => chooseFile(event.target.files?.[0] || null)} />
                 {file && !active && !result && <div className="mt-7 grid gap-5 sm:grid-cols-2"><div className="rounded-2xl border border-[color:var(--border)] bg-[var(--background)]/40 p-5"><div className="text-sm font-bold">Language</div><p className="mt-1 text-xs text-[color:var(--muted)]">We’ll detect the document language automatically, or you can choose it yourself.</p>{authLoading || isLoadingCapabilities ? <div className="mt-5 flex items-center gap-2 text-sm text-[color:var(--muted)]"><Loader2 className="animate-spin" size={16} /> Loading available languages…</div> : capabilityError ? <div className="mt-5 space-y-3"><p className="text-xs text-rose-600">{capabilityError.status === 401 || capabilityError.status === 403 ? (isMarkdown ? "Sign in to convert this document." : "Sign in to extract document data.") : capabilityError.status === 0 ? "We couldn't connect to the processing service." : "We couldn't load the available languages."}</p>{capabilityError.status === 401 || capabilityError.status === 403 ? <button type="button" onClick={() => openAuthModal("login")} className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/40 px-3 py-2 text-xs font-semibold text-indigo-600"><ShieldCheck size={14} /> Sign in</button> : <button type="button" onClick={() => void loadCapabilities()} className="inline-flex items-center gap-2 rounded-xl border border-[color:var(--border)] px-3 py-2 text-xs font-semibold"><RotateCcw size={14} /> Try again</button>}</div> : !canUseProduct ? <div className="mt-5 space-y-3"><p className="text-sm font-semibold text-rose-600">{isMarkdown ? "Sign in to convert this document." : "Sign in to extract document data."}</p><button type="button" onClick={() => openAuthModal("login")} className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/40 px-3 py-2 text-xs font-semibold text-indigo-600"><ShieldCheck size={14} /> Sign in</button></div> : <OcrLanguagePicker languages={capabilities?.languages || []} value={language} onChange={setLanguage} disabled={!capabilities || active} />}</div><div className="rounded-2xl border border-[color:var(--border)] bg-[var(--background)]/40 p-5"><div className="flex items-center gap-2 text-sm font-bold"><ShieldCheck size={17} className="text-emerald-500" /> Processing mode</div><p className="mt-1 block text-xs text-[color:var(--muted)]">Choose how you want the document handled. The service selects the best available method for each page.</p><div className="mt-5 grid gap-2">{(capabilities?.routing_modes || []).filter((mode) => mode.id === "AUTO" || mode.id === "FAST" || mode.id === "QUALITY").map((mode) => { const label = mode.id === "AUTO" ? "Automatic" : mode.id === "FAST" ? "Fast" : "Best quality"; const description = mode.id === "AUTO" ? "Automatically chooses the best available method for each page." : mode.id === "FAST" ? "Prioritizes a quicker standard extraction path." : "Uses the enhanced extraction path when available."; return <button key={mode.id} type="button" disabled={!mode.available || active} onClick={() => setRoutingPolicy(mode.id)} className={`rounded-xl border px-3 py-3 text-left transition ${routingPolicy === mode.id ? "border-indigo-500 bg-indigo-500/10" : "border-[color:var(--border)] hover:border-indigo-400"} disabled:cursor-not-allowed disabled:opacity-50`}><span className="flex items-center justify-between text-sm font-semibold"><span>{label}{mode.id === "AUTO" && <span className="ml-1 text-xs font-normal text-emerald-600">Recommended</span>}</span>{routingPolicy === mode.id && <CheckCircle2 size={15} className="text-indigo-500" />}</span><span className="mt-1 block text-xs text-[color:var(--muted)]">{description}{!mode.available && " Not currently available."}</span></button>; })}</div></div></div>}
                 {file && !active && !result && (effectiveState === "FILE_READY" || languageFallback) && <div className="mt-6 flex flex-col gap-3"><button type="button" onClick={() => requireAuth(() => { if (!authLoading && canUseProduct) void submit(); })} disabled={!canSubmit || authLoading} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"><ShieldCheck size={16} /> {isMarkdown ? "Convert to Markdown" : "Extract data"}</button>{isGuest && canSubmit && <p className="text-center text-xs text-[color:var(--muted)]">Guest access is available. Guest usage limits apply.</p>}{!canSubmit && <p className="text-center text-xs font-semibold text-amber-600" role="status">{!canUseProduct ? "Sign in required" : !capabilities ? "Languages unavailable" : !languageReady ? "Choose at least one language" : "Choose a PDF first"}</p>}</div>}
