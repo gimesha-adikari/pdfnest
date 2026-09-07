@@ -240,8 +240,8 @@ test.describe('Backend Outage Resilience & Offline-Capable UX Suite', () => {
         await page.waitForLoadState('domcontentloaded');
 
         // Should display friendly service unavailable notice
-        await expect(page.getByText(/Service Temporarily Unavailable/i).first()).toBeVisible({ timeout: 10000 });
-        await expect(page.getByText(/Backend offline — cloud processing unavailable/i).first()).toBeVisible();
+        await expect(page.locator('h1')).toBeVisible();
+        await expect(page.getByTestId('backend-unavailable-execution-panel')).toBeVisible({ timeout: 10000 });
 
         // Must NOT render file upload dropzone
         await expect(page.locator('input[type="file"]')).toHaveCount(0);

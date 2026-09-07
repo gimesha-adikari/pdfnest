@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import path from "path";
 import fs from "fs";
-import { TOTAL_TOOL_COUNT, OFFLINE_TOOL_COUNT, NAV_TOOLS_FALLBACK } from "@/lib/toolsData";
+import { TOTAL_TOOL_COUNT, NAV_TOOLS_FALLBACK } from "@/lib/toolsData";
 
 const samplePdfPath = path.resolve(process.cwd(), "tests/fixtures/sample.pdf");
 const samplePngPath = path.resolve(process.cwd(), "tests/fixtures/tmp_audit_test.png");
@@ -260,7 +260,7 @@ test.describe("PDFNest Full-Site Online & Offline Regression Audit", () => {
         await expect(page.getByText("Task completed successfully!")).toBeVisible();
     });
 
-    test("ENV B & F: Backend Offline Direct Access to Backend-Only Tools enforces Guard", async ({ page }) => {
+    test("ENV B & F: Backend Offline Direct Access keeps SEO content and replaces execution only", async ({ page }) => {
         await simulateBackendOffline(page);
 
         const backendOnlyRoutes = [
@@ -275,7 +275,9 @@ test.describe("PDFNest Full-Site Online & Offline Regression Audit", () => {
             await page.goto(route);
             await page.waitForLoadState("networkidle");
 
-            await expect(page.locator("text=Service Temporarily Unavailable")).toBeVisible();
+            await expect(page.locator("h1")).toBeVisible();
+            await expect(page.locator('script[type="application/ld+json"]')).toHaveCount(1);
+            await expect(page.getByTestId("backend-unavailable-execution-panel")).toBeVisible();
             await expect(page.locator("input[type='file']")).toHaveCount(0);
         }
     });
@@ -291,20 +293,20 @@ test.describe("PDFNest Full-Site Online & Offline Regression Audit", () => {
         await expect(page.locator("input[type='file']")).toBeAttached();
     });
 
-    test("ENV B: Dynamic Offline Tool Counting on About, Tools, and Home", async ({ page }) => {
+    test("ENV B: Public tool counting is stable during an outage", async ({ page }) => {
         await simulateBackendOffline(page);
 
         // 1. About
         await page.goto("/about");
         await page.waitForLoadState("networkidle");
-        await expect(page.locator(`text=${OFFLINE_TOOL_COUNT}+`)).toBeVisible();
-        await expect(page.locator("text=Local Tools (Cloud Offline)")).toBeVisible();
+        await expect(page.locator(`text=${TOTAL_TOOL_COUNT}+`)).toBeVisible();
+        await expect(page.locator("text=PDF Tools Available")).toBeVisible();
 
         // 2. Directory
         await page.goto("/tools");
         await page.waitForLoadState("networkidle");
-        const dirBadge = page.locator("main section div").filter({ hasText: /Local Tools Available/i });
+        const dirBadge = page.locator("main section div").filter({ hasText: /Document Utilities/i });
         await expect(dirBadge).toBeVisible();
-        await expect(dirBadge).toContainText(`${OFFLINE_TOOL_COUNT} Local Tools Available`);
+        await expect(dirBadge).toContainText(`${TOTAL_TOOL_COUNT} Document Utilities`);
     });
 });

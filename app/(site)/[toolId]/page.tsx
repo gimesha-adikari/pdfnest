@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Globe } from "lucide-react";
 
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
+import { useBackendOnlyToolAvailability } from "@/components/pdf/BackendOnlyToolGuard";
+import BackendUnavailableNotice from "@/components/pdf/BackendUnavailableNotice";
 import { useWorkflow } from "@/context/WorkflowContext";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
@@ -25,6 +27,7 @@ export default function SharedUploadPage() {
         file,
         isLoadingConfig,
     } = useSharedTool();
+    const { isExecutable } = useBackendOnlyToolAvailability();
 
     const { pendingTransfer, consumeTransfer } = useWorkflow();
     const router = useRouter();
@@ -150,7 +153,9 @@ export default function SharedUploadPage() {
             />
 
             <div className="mx-auto max-w-5xl px-4 py-8">
-                {toolId === "repository-analyzer" ? (
+                {!isExecutable ? (
+                    <BackendUnavailableNotice toolName={toolConfig.name} />
+                ) : toolId === "repository-analyzer" ? (
                     <RepositoryAnalyzerSourceSelector />
                 ) : toolId === "url-to-pdf" ? (
                     <form

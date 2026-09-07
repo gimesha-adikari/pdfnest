@@ -29,7 +29,7 @@ export default function Header() {
         user,
     } = useAuth();
 
-    const {displayTools: toolsList} = useTools();
+    const {tools: toolsList} = useTools();
     const pathname = usePathname();
     const [forceHide, setForceHide] = useState(false);
 

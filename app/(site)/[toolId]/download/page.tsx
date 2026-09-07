@@ -15,12 +15,12 @@ export default function SharedDownloadPage() {
     const router = useRouter();
     const { toolId, downloadData, setFile, setDownloadData } = useSharedTool();
     const { setPendingTransfer, clearTransfer } = useWorkflow();
-    const { displayTools } = useTools();
+    const { tools } = useTools();
 
     const leavingForNextToolRef = useRef(false);
     const suggestedTools = useMemo(
-        () => getSuggestedNextTools(`/${toolId}`, 3, displayTools),
-        [toolId, displayTools]
+        () => getSuggestedNextTools(`/${toolId}`, 3, tools),
+        [toolId, tools]
     );
 
 

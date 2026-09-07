@@ -41,7 +41,7 @@ export default function AboutPage() {
 
     // Tools come from ToolContext — already seeded from the static registry,
     // never shows 0 when the backend is offline
-    const { displayTools: toolsList, isOfflineMode, totalCount } = useTools();
+    const { tools: toolsList, totalCount } = useTools();
 
     useEffect(() => {
         fetchJson<AboutData>("/site-content/about")
@@ -99,19 +99,12 @@ export default function AboutPage() {
     );
     const workspaceCount = uniqueCategories.size;
 
-    const stats = isOfflineMode
-        ? [
-              { value: `${toolsList.length}+`, label: "Local Tools (Cloud Offline)" },
-              { value: String(workspaceCount), label: "Available Categories" },
-              { value: "Offline", label: "Local Mode Active" },
-              { value: "Free", label: "Zero Cloud Credits" },
-          ]
-        : [
-              { value: `${totalCount || TOTAL_TOOL_COUNT}+`, label: "PDF Tools Available" },
-              { value: String(workspaceCount), label: "Workspace Modules" },
-              { value: "Free", label: "Plan Available" },
-              { value: "Pro", label: "High-Capacity Plans" },
-          ];
+    const stats = [
+        { value: `${totalCount || TOTAL_TOOL_COUNT}+`, label: "PDF Tools Available" },
+        { value: String(workspaceCount), label: "Workspace Modules" },
+        { value: "Free", label: "Plan Available" },
+        { value: "Pro", label: "High-Capacity Plans" },
+    ];
 
     const parse = (json: string) => {
         try {

@@ -1,20 +1,26 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useMemo } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState, useMemo } from "react";
 import { fetchJson } from "@/lib/api";
 import { NAV_TOOLS_FALLBACK, ToolItem, isToolAvailableOffline } from "@/lib/toolsData";
 import { normalizeTool, mergeToolCatalog } from "@/lib/server/tools";
 import { useBackendHealth } from "@/context/BackendHealthContext";
 
+export interface ToolAvailability {
+    isExecutable: boolean;
+    requiresBackend: boolean;
+}
+
 interface ToolContextType {
+    /** Complete legitimate public catalog. Never filtered by runtime health. */
     tools: ToolItem[];
-    /** Offline-filtered subset: only genuinely offline-capable tools when backend is unavailable. */
-    displayTools: ToolItem[];
     isLoading: boolean;
     totalCount: number;
-    availableCount: number;
+    executableCount: number;
     isOfflineMode: boolean;
     getToolByHref: (href: string) => ToolItem | undefined;
+    isToolExecutable: (tool: ToolItem) => boolean;
+    getToolAvailability: (tool: ToolItem) => ToolAvailability;
 }
 
 const ToolContext = createContext<ToolContextType | undefined>(undefined);
@@ -40,7 +46,7 @@ export function ToolProvider({
     });
     const [isLoading, setIsLoading] = useState<boolean>(!initialTools || initialTools.length === 0);
 
-    const { isAvailable, status } = useBackendHealth();
+    const { status } = useBackendHealth();
 
     useEffect(() => {
         if (initialTools && initialTools.length > 0) {
@@ -77,37 +83,43 @@ export function ToolProvider({
         };
     }, [initialTools, staticNormalized]);
 
-    const getToolByHref = (href: string) => {
+    const getToolByHref = useCallback((href: string) => {
         const cleanHref = href.startsWith("/") ? href : `/${href}`;
-        // Always search the full tools list so backend-only tool pages can still resolve metadata
         return tools.find((t) => t.href === cleanHref || (t as any).Href === cleanHref);
-    };
+    }, [tools]);
 
-    /**
-     * displayTools: the list to show in navigation, search, command palette, and directories.
-     * When the backend is available (or status is unknown) all tools are shown.
-     * When the backend is confirmed offline only client-capable tools appear.
-     */
-    const displayTools = useMemo(() => {
-        if (status !== "offline") return tools;
-        return tools.filter(isToolAvailableOffline);
-    }, [tools, status]);
+    const getToolAvailability = useCallback((tool: ToolItem): ToolAvailability => {
+        const requiresBackend = !isToolAvailableOffline(tool);
+        return {
+            requiresBackend,
+            isExecutable: status !== "offline" || !requiresBackend,
+        };
+    }, [status]);
+
+    const isToolExecutable = useCallback(
+        (tool: ToolItem) => getToolAvailability(tool).isExecutable,
+        [getToolAvailability]
+    );
 
     const isOfflineMode = status === "offline";
     const totalCount = tools.length;
-    const availableCount = displayTools.length;
+    const executableCount = useMemo(
+        () => tools.filter(isToolExecutable).length,
+        [tools, isToolExecutable]
+    );
 
     const value = useMemo(
         () => ({
             tools,
-            displayTools,
             isLoading,
             totalCount,
-            availableCount,
+            executableCount,
             isOfflineMode,
             getToolByHref,
+            isToolExecutable,
+            getToolAvailability,
         }),
-        [tools, displayTools, isLoading, totalCount, availableCount, isOfflineMode]
+        [tools, isLoading, totalCount, executableCount, isOfflineMode, getToolByHref, isToolExecutable, getToolAvailability]
     );
 
     return <ToolContext.Provider value={value}>{children}</ToolContext.Provider>;
@@ -121,4 +133,3 @@ export function useTools() {
     }
     return context;
 }
-

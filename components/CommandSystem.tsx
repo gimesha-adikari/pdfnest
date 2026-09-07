@@ -13,7 +13,7 @@ export default function CommandSystem({
     externalOpen?: boolean;
     onClose?: () => void;
 }) {    const router = useRouter();
-    const { displayTools: toolsList } = useTools();
+    const { tools: toolsList } = useTools();
 
     const [internalOpen, setInternalOpen] = useState(false);
 

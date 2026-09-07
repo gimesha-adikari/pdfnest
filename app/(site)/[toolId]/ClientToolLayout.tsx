@@ -197,8 +197,6 @@ export default function ClientToolLayout({
             }}
         >
             <BackendOnlyToolGuard
-                toolId={toolId}
-                toolTitle={toolConfig.name}
                 toolPolicy={toolPolicyValue}
             >
                 <ToolSchema toolHref={`/${toolId}`} />

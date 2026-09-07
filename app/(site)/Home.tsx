@@ -35,7 +35,7 @@ export default function Home() {
         subscription,
         isLoading,
     } = useAuth();
-    const { displayTools: toolsList } = useTools();
+    const { tools: toolsList } = useTools();
 
     const [search, setSearch] = useState("");
     const [content, setContent] = useState<HomeContent>(fallbackHomeContent);

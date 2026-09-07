@@ -18,6 +18,7 @@ class BackendHealthTracker {
     private listeners: Set<HealthListener> = new Set();
     private inFlightCheck: Promise<boolean> | null = null;
     private cooldownMs = 15000; // 15s cooldown between automatic health checks
+    private recoveryCooldownMs = 60000; // Retry only after a user-driven recovery signal.
     private listenersInitialized = false;
 
     constructor() {
@@ -89,6 +90,18 @@ class BackendHealthTracker {
         } else {
             this.lastChecked = Date.now();
         }
+    }
+
+    /**
+     * Recover only after an explicit user-driven signal (navigation, tab focus, or retry).
+     * This deliberately does not schedule polling while the application is idle.
+     */
+    public maybeRecover(): Promise<boolean> {
+        if (this.status !== "offline") return Promise.resolve(this.status !== "checking");
+        if (this.lastChecked && Date.now() - this.lastChecked < this.recoveryCooldownMs) {
+            return Promise.resolve(false);
+        }
+        return this.checkHealth(true);
     }
 
     /**

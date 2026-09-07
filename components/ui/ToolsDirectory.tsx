@@ -17,7 +17,7 @@ type Category =
     | "studio";
 
 export default function ToolsDirectory() {
-    const { displayTools: toolsList, isOfflineMode } = useTools();
+    const { tools: toolsList } = useTools();
     const [search, setSearch] = useState("");
     const [category, setCategory] = useState<Category>("all");
 
@@ -50,17 +50,9 @@ export default function ToolsDirectory() {
         <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16 transition-colors">
             {/* Hero */}
             <section className="text-center max-w-3xl mx-auto">
-                <div className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1 text-xs font-mono shadow-sm ${
-                    isOfflineMode
-                        ? "border-rose-500/30 bg-rose-500/10 text-rose-500"
-                        : "border-[var(--border)] bg-[var(--surface-card)] text-[var(--muted)]"
-                }`}>
+                <div className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface-card)] px-3.5 py-1 text-xs font-mono text-[var(--muted)] shadow-sm">
                     <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
-                    {isOfflineMode ? (
-                        <span>{toolsList.length} Local Tools Available (Offline)</span>
-                    ) : (
-                        <span>{toolsList.length} Document Utilities Online</span>
-                    )}
+                    <span>{toolsList.length} Document Utilities</span>
                 </div>
 
                 <h1 className="mt-6 text-3xl sm:text-5xl font-bold tracking-tight text-[var(--foreground)]">
@@ -68,9 +60,7 @@ export default function ToolsDirectory() {
                 </h1>
 
                 <p className="mx-auto mt-4 max-w-2xl text-sm sm:text-base text-[var(--muted)] leading-relaxed">
-                    {isOfflineMode
-                        ? "Process, merge, split, watermark, and organize PDF documents directly in your browser with zero data leaving your device."
-                        : "Comprehensive suite of precision document manipulation, conversion, and security tools."}
+                    Comprehensive suite of precision document manipulation, conversion, and security tools.
                 </p>
             </section>
 

@@ -1,51 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useTools } from "@/context/ToolContext";
 import Logo from "@/components/ui/Logo";
 
-interface BackendTool {
-    Title?: string;
-    title?: string;
-    Href?: string;
-    href?: string;
-    Category?: string;
-    category?: string;
-    IsNew?: boolean;
-    isNew?: boolean;
-}
-
 export default function Footer() {
-    const { displayTools: toolsList } = useTools();
-
-    const organizeTools = toolsList.filter(
-        (t: BackendTool) => (t.Category || t.category) === "organize"
-    );
-
-    const editTools = toolsList.filter(
-        (t: BackendTool) => (t.Category || t.category) === "edit"
-    );
-
-    const convertTools = toolsList.filter(
-        (t: BackendTool) => (t.Category || t.category) === "convert"
-    );
-
-    const createTools = toolsList.filter(
-        (t: BackendTool) => (t.Category || t.category) === "create"
-    );
-
-    const securityTools = toolsList.filter(
-        (t: BackendTool) => (t.Category || t.category) === "security"
-    );
-
-    const optimizeTools = toolsList.filter(
-        (t: BackendTool) => (t.Category || t.category) === "optimize"
-    );
-
-    const studioTools = toolsList.filter(
-        (t: BackendTool) => (t.Category || t.category) === "studio"
-    );
-
     return (
         <footer
             className="

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, useMemo } from "react";
+import { usePathname } from "next/navigation";
 import { backendHealth, BackendHealthState, BackendStatus } from "@/lib/health/backendHealth";
 
 interface BackendHealthContextType extends BackendHealthState {
@@ -13,6 +14,7 @@ const BackendHealthContext = createContext<BackendHealthContextType | undefined>
 
 export function BackendHealthProvider({ children }: { children: React.ReactNode }) {
     const [state, setState] = useState<BackendHealthState>(() => backendHealth.getState());
+    const pathname = usePathname();
 
     useEffect(() => {
         const unsubscribe = backendHealth.subscribe((newState) => {
@@ -25,6 +27,23 @@ export function BackendHealthProvider({ children }: { children: React.ReactNode 
         }
 
         return unsubscribe;
+    }, []);
+
+    // A user navigating after an outage is a useful, low-frequency recovery signal.
+    // The tracker enforces its recovery cooldown, so this is not background polling.
+    useEffect(() => {
+        void backendHealth.maybeRecover();
+    }, [pathname]);
+
+    useEffect(() => {
+        const onVisibilityChange = () => {
+            if (document.visibilityState === "visible") {
+                void backendHealth.maybeRecover();
+            }
+        };
+
+        document.addEventListener("visibilitychange", onVisibilityChange);
+        return () => document.removeEventListener("visibilitychange", onVisibilityChange);
     }, []);
 
     const value = useMemo<BackendHealthContextType>(

@@ -4,6 +4,8 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
+import { useBackendOnlyToolAvailability } from "@/components/pdf/BackendOnlyToolGuard";
+import BackendUnavailableNotice from "@/components/pdf/BackendUnavailableNotice";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 
 import PageNumbersWorkspace from "@/components/tools/PageNumbersWorkspace";
@@ -52,7 +54,8 @@ import { isOcrV2DevelopmentToolId } from "@/lib/ocrV2DevelopmentTools";
 
 export default function SharedWorkspacePage() {
     const router = useRouter();
-    const { toolId, file, isLoadingConfig } = useSharedTool();
+    const { toolId, toolConfig, file, isLoadingConfig } = useSharedTool();
+    const { isExecutable } = useBackendOnlyToolAvailability();
 
     useEffect(() => {
         if (!isLoadingConfig && !file && !isOcrV2DevelopmentToolId(toolId)) {
@@ -75,6 +78,16 @@ export default function SharedWorkspacePage() {
     }
 
     if (!file && !isOcrV2DevelopmentToolId(toolId)) return null;
+
+    if (!isExecutable) {
+        return (
+            <PdfToolLayout>
+                <div className="mx-auto max-w-5xl px-4 py-8">
+                    <BackendUnavailableNotice toolName={toolConfig.name} />
+                </div>
+            </PdfToolLayout>
+        );
+    }
 
     return (
         <PdfToolLayout>

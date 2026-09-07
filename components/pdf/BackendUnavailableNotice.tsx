@@ -33,7 +33,10 @@ export default function BackendUnavailableNotice({
     };
 
     return (
-        <div className="rounded-3xl border border-amber-500/30 bg-amber-500/5 p-6 sm:p-8 text-center space-y-4 my-6 animate-in fade-in">
+        <div
+            data-testid="backend-unavailable-execution-panel"
+            className="rounded-3xl border border-amber-500/30 bg-amber-500/5 p-6 sm:p-8 text-center space-y-4 my-6 animate-in fade-in"
+        >
             <div className="mx-auto w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500">
                 <CloudOff size={24} />
             </div>
