@@ -4,6 +4,7 @@ import { PRODUCTION_SITE_URL } from "../../lib/siteUrl";
 import { metadata as loginMetadata } from "../../app/(site)/login/layout";
 import { metadata as registerMetadata } from "../../app/(site)/register/layout";
 import { metadata as verifyEmailMetadata } from "../../app/(site)/verify-email/layout";
+import { metadata as billingMetadata } from "../../app/billing/page";
 
 assert.deepEqual(loginMetadata.robots, { index: false, follow: true });
 assert.equal(loginMetadata.alternates?.canonical, "/login");
@@ -26,5 +27,8 @@ assert.equal(privateMetadata.alternates, undefined);
 
 const workspaceMetadata = buildNoIndexMetadata({ canonical: null });
 assert.equal(workspaceMetadata.alternates?.canonical, null);
+
+assert.deepEqual(billingMetadata.robots, { index: false, follow: true });
+assert.equal(billingMetadata.alternates, undefined);
 
 console.log("SEO metadata policy tests passed.");

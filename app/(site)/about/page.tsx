@@ -6,7 +6,6 @@ import {
     ShieldCheck,
     Rocket,
     Flame,
-    Loader2,
     Mail,
     ArrowRight,
 } from "lucide-react";
@@ -39,7 +38,6 @@ interface AboutData {
 
 export default function AboutPage() {
     const [data, setData] = useState<AboutData | null>(null);
-    const [loading, setLoading] = useState(true);
 
     // Tools come from ToolContext — already seeded from the static registry,
     // never shows 0 when the backend is offline
@@ -52,19 +50,8 @@ export default function AboutPage() {
             })
             .catch((err) => {
                 console.error("Backend fetch error:", err);
-            })
-            .finally(() => {
-                setLoading(false);
             });
     }, []);
-
-    if (loading && !data) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-[color:var(--background)]">
-                <Loader2 className="animate-spin text-indigo-500" size={32} />
-            </div>
-        );
-    }
 
     const fallbackData: AboutData = {
         HeroTag: "Next-Gen PDF Architecture",
