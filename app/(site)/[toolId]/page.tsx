@@ -125,7 +125,10 @@ export default function SharedUploadPage() {
         router.push(`/${toolId}/workspace`);
     };
 
-    if (isLoadingConfig || shouldRestoreTransfer) {
+    // The static fallback config is available on the first render. Keep the
+    // public hero in the initial HTML so crawlers receive the existing,
+    // tool-specific H1 before client config hydration completes.
+    if (shouldRestoreTransfer) {
         return (
             <PdfToolLayout>
                 <div className="flex min-h-[60vh] items-center justify-center">
