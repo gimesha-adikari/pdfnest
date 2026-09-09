@@ -31,6 +31,7 @@ import {
 interface PageTileRendererProps {
   sessionId: string;
   versionId: string;
+  previewVersionId?: string;
   page: VDMPageDescriptorDTO;
   pageIndex: number;
   zoomScale: number;
@@ -113,6 +114,7 @@ function mapWorkerMarkupBoxToVisible(_page: VDMPageDescriptorDTO, box: StudioMar
 const PageTileRenderer: React.FC<PageTileRendererProps> = ({
   sessionId,
   versionId,
+  previewVersionId,
   page,
   pageIndex,
   zoomScale,
@@ -182,7 +184,8 @@ const PageTileRenderer: React.FC<PageTileRendererProps> = ({
   }, []);
 
   const loadTile = useCallback(async () => {
-    if (!sessionId || !versionId || !page.page_id) return;
+    const tileVersionId = previewVersionId || versionId;
+    if (!sessionId || !tileVersionId || !page.page_id) return;
 
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -198,7 +201,7 @@ const PageTileRenderer: React.FC<PageTileRendererProps> = ({
     try {
       // Calculate quality scale factor based on zoom (clamp between 1.0 and 2.5 for crisp DPI)
       const renderScale = Math.min(Math.max(zoomScale * 1.5, 1.0), 2.5);
-      const url = await fetchTileBlobUrl(sessionId, versionId, page.page_id, {
+      const url = await fetchTileBlobUrl(sessionId, tileVersionId, page.page_id, {
         scale: renderScale,
         signal: ac.signal,
       });
@@ -220,7 +223,7 @@ const PageTileRenderer: React.FC<PageTileRendererProps> = ({
       setHasError(true);
       setIsLoading(false);
     }
-  }, [sessionId, versionId, page.page_id, zoomScale]);
+  }, [previewVersionId, sessionId, versionId, page.page_id, zoomScale]);
 
   useEffect(() => {
     if (isVisible) {
@@ -638,6 +641,7 @@ const PageTileRenderer: React.FC<PageTileRendererProps> = ({
 interface StudioV2CanvasProps {
   sessionId?: string | null;
   versionId?: string | null;
+  previewVersionByPageId?: Record<string, string>;
   vdm?: StudioVDMDTO | null;
   selectedPageId?: string | null;
   zoomScale: number;
@@ -669,6 +673,7 @@ interface StudioV2CanvasProps {
 export const StudioV2Canvas: React.FC<StudioV2CanvasProps> = ({
   sessionId,
   versionId,
+  previewVersionByPageId,
   vdm,
   selectedPageId,
   zoomScale,
@@ -762,6 +767,7 @@ export const StudioV2Canvas: React.FC<StudioV2CanvasProps> = ({
             key={page.page_id}
             sessionId={sessionId || ""}
             versionId={versionId || ""}
+            previewVersionId={previewVersionByPageId?.[page.page_id]}
             page={page}
             pageIndex={index}
             zoomScale={zoomScale}

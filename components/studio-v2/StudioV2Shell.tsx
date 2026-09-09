@@ -55,6 +55,7 @@ import {
 } from "./studioV2Compress";
 import { useStudioV2SubmissionGuard } from "./studioV2SubmissionGuard";
 import { StudioV2ConfirmDialog, StudioV2Dialog } from "./StudioV2Dialog";
+import { buildStudioPreviewVersionByPageId } from "./studioV2PreviewLineage";
 
 function formatBytes(bytes: number): string {
   if (!bytes || bytes === 0) return "0 KB";
@@ -90,6 +91,7 @@ export const StudioV2Shell: React.FC = () => {
     activeVersion,
     vdm,
     history: backendHistory,
+    operations: backendOperations,
     syncStatus,
     lifecycle,
     isLoading,
@@ -970,6 +972,16 @@ export const StudioV2Shell: React.FC = () => {
     }));
   }, [backendHistory, activeVersion]);
 
+  const previewVersionByPageId = useMemo(
+    () => buildStudioPreviewVersionByPageId({
+      activeVersion,
+      versions: backendHistory,
+      operations: backendOperations,
+      pages: vdm?.pages ?? [],
+    }),
+    [activeVersion, backendHistory, backendOperations, vdm?.pages],
+  );
+
   // Zoom Handlers
   const handleZoomIn = useCallback(() => {
     setZoomScale((prev) => Math.min(prev + 0.1, 2.5));
@@ -1196,6 +1208,7 @@ export const StudioV2Shell: React.FC = () => {
         document={docInfo}
         sessionId={session?.id}
         versionId={activeVersion?.id}
+        previewVersionByPageId={previewVersionByPageId}
         vdm={vdm}
         selectedPageId={selectedPageId}
         activeTool={activeTool}

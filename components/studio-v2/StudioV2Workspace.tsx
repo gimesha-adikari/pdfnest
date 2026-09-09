@@ -11,6 +11,7 @@ interface StudioV2WorkspaceProps {
   document: DocumentInfo;
   sessionId?: string | null;
   versionId?: string | null;
+  previewVersionByPageId?: Record<string, string>;
   vdm?: StudioVDMDTO | null;
   selectedPageId?: string | null;
   activeTool: ToolCategory;
@@ -93,6 +94,7 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
   document,
   sessionId,
   versionId,
+  previewVersionByPageId,
   vdm,
   selectedPageId,
   activeTool,
@@ -191,6 +193,7 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
         <StudioV2Canvas
           sessionId={sessionId}
           versionId={versionId}
+          previewVersionByPageId={previewVersionByPageId}
           vdm={vdm}
           selectedPageId={selectedPageId}
           zoomScale={zoomScale}
