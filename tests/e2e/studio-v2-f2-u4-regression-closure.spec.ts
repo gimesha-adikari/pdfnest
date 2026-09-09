@@ -83,14 +83,34 @@ test.describe('Studio V2 F2 U4 regression closure', () => {
     }));
     const failed = page.waitForResponse((response) => response.url().endsWith('/jobs') && response.request().method() === 'POST');
     await apply.click();
-    expect((await failed).status()).toBe(500);
+    const failedResponse = await failed;
+    expect(failedResponse.status()).toBe(500);
+    expect(failedResponse.request().postDataJSON().parameters.mode).toBe('manual');
     expect(requests).toBe(1);
     await expect(apply).toBeEnabled();
     await page.unroute('**/studio/v1/sessions/*/jobs');
     const retried = page.waitForResponse((response) => response.url().endsWith('/jobs') && response.request().method() === 'POST');
     await apply.click();
-    expect((await retried).status()).toBe(202);
+    const retriedResponse = await retried;
+    expect(retriedResponse.status()).toBe(202);
+    expect(retriedResponse.request().postDataJSON().parameters.mode).toBe('manual');
     expect(requests).toBe(2);
     await expect(page.getByTestId('studio-markup-job-status')).toContainText('Markup applied', { timeout: 120_000 });
+  });
+
+  test('keeps an explicit mode when the markup action changes', async ({ page }) => {
+    await upload(page, await nativeTextPdf(), 'f2-markup-mode-preservation.pdf');
+    await page.getByRole('button', { name: 'Annotate', exact: true }).click();
+    await expect(page.getByTestId('studio-markup-mode-smart')).toHaveAttribute('aria-pressed', 'true');
+
+    await page.getByTestId('studio-markup-mode-manual').click();
+    await page.getByTestId('studio-markup-action-underline').click();
+    await page.getByTestId('studio-markup-action-strikeout').click();
+    await expect(page.getByTestId('studio-markup-mode-manual')).toHaveAttribute('aria-pressed', 'true');
+
+    await page.getByTestId('studio-markup-mode-ocr').click();
+    await page.getByTestId('studio-markup-action-highlight').click();
+    await page.getByTestId('studio-markup-action-underline').click();
+    await expect(page.getByTestId('studio-markup-mode-ocr')).toHaveAttribute('aria-pressed', 'true');
   });
 });

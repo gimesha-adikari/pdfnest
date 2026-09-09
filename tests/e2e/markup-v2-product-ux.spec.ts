@@ -129,6 +129,7 @@ test.describe.serial("OCR-aware markup V2 product UX", () => {
         for (const action of ACTIONS) {
             await uploadFromLanding(page, action, pdf, "markup-ux-native.pdf", 2);
             await expect(page.getByTestId(`markup-v2-${action}`)).toBeVisible();
+            await expect(page.getByTestId("markup-v2-mode")).toHaveValue("smart");
             if (action === "highlight") {
                 ensureEvidenceDirectories();
                 await page.screenshot({ path: path.join(SCREENSHOT_DIR, "uploaded-document-preview.png"), fullPage: true });

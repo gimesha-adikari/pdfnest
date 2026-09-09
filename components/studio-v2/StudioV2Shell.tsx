@@ -126,9 +126,8 @@ export const StudioV2Shell: React.FC = () => {
   const [compressionLevel, setCompressionLevel] = useState<StudioCompressionLevel>("medium");
   const [compressState, setCompressState] = useState<StudioCompressState>(() => createStudioCompressState());
   const [markupAction, setMarkupAction] = useState<StudioMarkupAction>("highlight");
-  // Preserve the established Studio rectangle behavior until a user opts into
-  // text-aware Smart or explicit OCR mode.
-  const [markupMode, setMarkupMode] = useState<StudioMarkupMode>("manual");
+  // Smart is the initial mode; explicit user selections remain in local state.
+  const [markupMode, setMarkupMode] = useState<StudioMarkupMode>("smart");
   const [markupColor, setMarkupColor] = useState("#FFFF00");
   const [markupBoxes, setMarkupBoxes] = useState<StudioMarkupBox[]>([]);
   const [markupHistory, setMarkupHistory] = useState(() => createStudioV2MarkupHistory());

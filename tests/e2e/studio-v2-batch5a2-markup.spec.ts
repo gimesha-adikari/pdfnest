@@ -50,6 +50,9 @@ async function uploadBlank(page: Page) {
 async function selectMarkupTool(page: Page, action: 'highlight' | 'underline' | 'strikeout') {
   await page.getByRole('button', { name: 'Annotate', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Markup tools' })).toBeVisible();
+  await expect(page.getByTestId('studio-markup-mode-smart')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('studio-markup-mode-manual')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByTestId('studio-markup-mode-ocr')).toHaveAttribute('aria-pressed', 'false');
   await page.getByTestId(`studio-markup-action-${action}`).click();
 }
 
@@ -84,7 +87,7 @@ async function applyMarkup(page: Page, pageId: string, action: 'highlight' | 'un
   const requestBody = request.postDataJSON() as Record<string, any>;
   const responseBody = await response.json();
   expect(requestBody.operation).toBe(`markup_${action}`);
-  expect(requestBody.parameters.mode).toBe('manual');
+  expect(requestBody.parameters.mode).toBe('smart');
   expect(requestBody.parameters.boxes).toHaveLength(1);
   expect(requestBody).not.toHaveProperty('new_virtual_model');
   expect(responseBody.job).not.toHaveProperty('result');
@@ -194,7 +197,7 @@ test.describe('Studio V2 Batch 5A2 Markup', () => {
     const applied = await applyMarkup(page, payload.vdm.pages[0].page_id, 'strikeout', 'Version 1', { name: 'Orange', hex: '#FF8800' });
     expect(applied.requestBody.parameters.boxes[0].color).toBe('#FF8800');
     expect(applied.responseBody.job.job_type).toBe('markup_strikeout');
-    expect(applied.requestBody.parameters.mode).toBe('manual');
+    expect(applied.requestBody.parameters.mode).toBe('smart');
     await expect(page.getByTestId('studio-markup-apply')).toBeDisabled();
     const exported = await exportPDF(page);
     expect(colorBounds(exported, 'r>180 and g>60 and g<190 and b<80').count).toBeGreaterThan(0);
