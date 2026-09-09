@@ -19,6 +19,21 @@ export interface TileMetricsDTO {
   render_errors: number;
 }
 
+const MAX_CONCURRENT_TILE_REQUESTS = 2;
+const MAX_BUSY_RETRIES = 1;
+
+export class StudioTileRequestError extends Error {
+  readonly status: number;
+  readonly retryAfterMs: number | null;
+
+  constructor(status: number, statusText: string, retryAfterMs: number | null) {
+    super(`Tile request failed: status=${status} ${statusText}`);
+    this.name = "StudioTileRequestError";
+    this.status = status;
+    this.retryAfterMs = retryAfterMs;
+  }
+}
+
 class TileBlobCache {
   private cache = new Map<string, string>();
   private maxEntries: number;
@@ -67,6 +82,124 @@ class TileBlobCache {
 
 export const globalTileCache = new TileBlobCache(250);
 
+interface SharedTileRequest {
+  controller: AbortController;
+  consumers: number;
+  promise: Promise<string>;
+}
+
+/**
+ * Keeps the Studio canvas from overwhelming the worker render limiter. The
+ * worker remains the authority on capacity; this client-side coordinator only
+ * makes the normal viewport demand bounded and coalesces identical tiles.
+ */
+class TileRequestCoordinator {
+  private active = 0;
+  private queue: Array<() => void> = [];
+  private inFlight = new Map<string, SharedTileRequest>();
+
+  private async schedule<T>(work: () => Promise<T>): Promise<T> {
+    if (this.active >= MAX_CONCURRENT_TILE_REQUESTS) {
+      await new Promise<void>((resolve) => this.queue.push(resolve));
+    }
+    this.active += 1;
+    try {
+      return await work();
+    } finally {
+      this.active -= 1;
+      this.queue.shift()?.();
+    }
+  }
+
+  get(
+    key: string,
+    work: (signal: AbortSignal) => Promise<string>,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    let shared = this.inFlight.get(key);
+    if (!shared) {
+      const controller = new AbortController();
+      const promise = this.schedule(() => work(controller.signal));
+      shared = { controller, consumers: 0, promise };
+      this.inFlight.set(key, shared);
+      void promise.then(
+        () => this.inFlight.delete(key),
+        () => this.inFlight.delete(key),
+      );
+    }
+
+    shared.consumers += 1;
+    return this.waitForConsumer(shared, signal);
+  }
+
+  private waitForConsumer(shared: SharedTileRequest, signal?: AbortSignal): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+      let settled = false;
+      const release = () => {
+        if (settled) return;
+        settled = true;
+        signal?.removeEventListener("abort", onAbort);
+        shared.consumers -= 1;
+        if (shared.consumers === 0) shared.controller.abort();
+      };
+      const onAbort = () => {
+        release();
+        reject(new DOMException("The operation was aborted", "AbortError"));
+      };
+      if (signal?.aborted) {
+        onAbort();
+        return;
+      }
+      signal?.addEventListener("abort", onAbort, { once: true });
+      shared.promise.then(
+        (value) => {
+          if (settled) return;
+          release();
+          resolve(value);
+        },
+        (error) => {
+          if (settled) return;
+          release();
+          reject(error);
+        },
+      );
+    });
+  }
+}
+
+const globalTileRequests = new TileRequestCoordinator();
+
+function tileCacheKey(
+  sessionId: string,
+  versionId: string,
+  pageId: string,
+  options?: TileOptions,
+): string {
+  return `${sessionId}:${versionId}:${pageId}:s${options?.scale || 1.5}:x${options?.tileX || 0}:y${options?.tileY || 0}:w${options?.tileW || 0}:h${options?.tileH || 0}`;
+}
+
+function retryAfterMs(response: Response): number | null {
+  const raw = response.headers.get("Retry-After");
+  if (!raw) return null;
+  const seconds = Number(raw);
+  if (!Number.isFinite(seconds) || seconds < 0) return null;
+  return Math.min(seconds * 1000, 5000);
+}
+
+function delay(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = globalThis.setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      globalThis.clearTimeout(timer);
+      reject(new DOMException("The operation was aborted", "AbortError"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 export function buildTileUrl(
   sessionId: string,
   versionId: string,
@@ -100,28 +233,33 @@ export async function fetchTileBlobUrl(
   pageId: string,
   options?: TileOptions
 ): Promise<string> {
-  const cacheKey = `${versionId}:${pageId}:s${options?.scale || 1.5}:x${options?.tileX || 0}:y${options?.tileY || 0}:w${options?.tileW || 0}:h${options?.tileH || 0}`;
+  const cacheKey = tileCacheKey(sessionId, versionId, pageId, options);
 
   const cached = globalTileCache.get(cacheKey);
   if (cached) {
     return cached;
   }
 
-  const url = buildTileUrl(sessionId, versionId, pageId, options);
-  const response = await fetch(url, {
-    method: "GET",
-    credentials: "include",
-    signal: options?.signal,
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `Tile request failed: status=${response.status} ${response.statusText}`
-    );
-  }
-
-  const blob = await response.blob();
-  const objectUrl = URL.createObjectURL(blob);
-  globalTileCache.set(cacheKey, objectUrl);
-  return objectUrl;
+  return globalTileRequests.get(cacheKey, async (requestSignal) => {
+    const url = buildTileUrl(sessionId, versionId, pageId, options);
+    for (let attempt = 0; ; attempt += 1) {
+      const response = await fetch(url, {
+        method: "GET",
+        credentials: "include",
+        signal: requestSignal,
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        globalTileCache.set(cacheKey, objectUrl);
+        return objectUrl;
+      }
+      const retryMs = retryAfterMs(response);
+      if (response.status === 429 && attempt < MAX_BUSY_RETRIES) {
+        await delay(retryMs ?? 2000, requestSignal);
+        continue;
+      }
+      throw new StudioTileRequestError(response.status, response.statusText, retryMs);
+    }
+  }, options?.signal);
 }

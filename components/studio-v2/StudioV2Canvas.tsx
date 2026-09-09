@@ -147,6 +147,8 @@ const PageTileRenderer: React.FC<PageTileRendererProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const imageUrlRef = useRef<string | null>(null);
+  const tileLoadEpochRef = useRef(0);
   const markupStartRef = useRef<{ x: number; y: number; id: string } | null>(null);
   const redactionStartRef = useRef<{ x: number; y: number; id: string } | null>(null);
   const redactionDraftRef = useRef<StudioV2RedactionDraftBox | null>(null);
@@ -170,7 +172,9 @@ const PageTileRenderer: React.FC<PageTileRendererProps> = ({
           setIsVisible(true);
         }
       },
-      { rootMargin: "250px 0px" } // Prefetch 250px before entering viewport
+      // The canvas has its own scroll container. Observing against the browser
+      // viewport causes every page in a tall canvas to be treated as visible.
+      { root: el.parentElement, rootMargin: "320px 0px", threshold: 0.01 }
     );
 
     observer.observe(el);
@@ -185,6 +189,8 @@ const PageTileRenderer: React.FC<PageTileRendererProps> = ({
     }
     const ac = new AbortController();
     abortControllerRef.current = ac;
+    const epoch = tileLoadEpochRef.current + 1;
+    tileLoadEpochRef.current = epoch;
 
     setIsLoading(true);
     setHasError(false);
@@ -196,10 +202,19 @@ const PageTileRenderer: React.FC<PageTileRendererProps> = ({
         scale: renderScale,
         signal: ac.signal,
       });
+      if (epoch !== tileLoadEpochRef.current) return;
+      imageUrlRef.current = url;
       setImageUrl(url);
       setIsLoading(false);
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === "AbortError") {
+        return;
+      }
+      if (epoch !== tileLoadEpochRef.current) return;
+      // A refresh failure must not discard an already rendered preview. A
+      // stale 429 used to replace a valid page with the error surface.
+      if (imageUrlRef.current) {
+        setIsLoading(false);
         return;
       }
       setHasError(true);
@@ -209,13 +224,15 @@ const PageTileRenderer: React.FC<PageTileRendererProps> = ({
 
   useEffect(() => {
     if (isVisible) {
-      loadTile();
+      // Coalesce rapid scale/version changes before asking the bounded client
+      // scheduler for work. Initial/selected pages remain responsive.
+      const timer = window.setTimeout(loadTile, 80);
+      return () => {
+        window.clearTimeout(timer);
+        tileLoadEpochRef.current += 1;
+        if (abortControllerRef.current) abortControllerRef.current.abort();
+      };
     }
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
   }, [isVisible, loadTile]);
 
   // Real pages, including server-created blanks, must provide authoritative
