@@ -55,6 +55,10 @@ interface SearchablePage {
     previewUrl: string;
 }
 
+interface FileWithInitialBatch extends File {
+    initialBatch?: File[];
+}
+
 interface StoredSearchableJob {
     jobId: string;
     fileNames: string[];
@@ -259,7 +263,8 @@ export default function SearchablePdfV2Workspace() {
     useEffect(() => {
         if (!file || seededFileRef.current === file) return;
         seededFileRef.current = file;
-        const initialBatch = initialBatchRef.current || [file];
+        const handoffBatch = (file as FileWithInitialBatch).initialBatch;
+        const initialBatch = initialBatchRef.current || handoffBatch || [file];
         initialBatchRef.current = null;
         const supported = initialBatch.filter((item) => isSupportedImage(item, selectedFormats));
         const nextPages = supported.map(makePage);
