@@ -197,7 +197,9 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
     return () => window.clearTimeout(timer);
   }, []);
   useEffect(() => {
-    if (contextRequest > 0) setDrawerOpen(true);
+    if (contextRequest <= 0) return;
+    const timer = window.setTimeout(() => setDrawerOpen(true), 0);
+    return () => window.clearTimeout(timer);
   }, [contextRequest]);
   useEffect(() => {
     const timer = window.setTimeout(() => setPageNavigatorOpen(activeTool === "pages"), 0);
@@ -378,13 +380,13 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
       <div className={`studio-v2-wide-inspector ${drawerOpen ? "" : "collapsed"}`}>{drawerOpen && renderInspector("desktop", () => setDrawerOpen(false))}</div>
       {drawerOpen && <div className="studio-v2-tablet-inspector"><button type="button" className="studio-v2-tablet-backdrop" onClick={() => setDrawerOpen(false)} aria-label="Close context inspector" />{renderInspector("drawer", () => setDrawerOpen(false))}</div>}
       <div className="studio-v2-page-navigator-surface">
-        {pageNavigatorOpen && <StudioV2PageNavigator pages={vdm?.pages ?? []} selectedPageId={selectedPageId} onSelectPage={navigateToPage} onClose={() => setPageNavigatorOpen(false)} onAddNewPage={onAddNewPage} />}
+        {pageNavigatorOpen && <StudioV2PageNavigator pages={vdm?.pages ?? []} selectedPageId={selectedPageId} onSelectPage={navigateToPage} onClose={() => setPageNavigatorOpen(false)} onAddNewPage={onAddNewPage} sessionId={sessionId} versionId={versionId} previewVersionByPageId={previewVersionByPageId} />}
       </div>
       <StudioV2BottomSheet isOpen={mobileSheetOpen && !pageNavigatorOpen} title={`${activeTool} tools & properties`} onClose={onCloseMobileSheet ?? (() => undefined)}>
         {renderInspector("sheet", onCloseMobileSheet)}
       </StudioV2BottomSheet>
       <StudioV2BottomSheet isOpen={pageNavigatorOpen} title="Pages" onClose={() => setPageNavigatorOpen(false)}>
-        <StudioV2PageNavigator pages={vdm?.pages ?? []} selectedPageId={selectedPageId} onSelectPage={navigateToPage} />
+        <StudioV2PageNavigator pages={vdm?.pages ?? []} selectedPageId={selectedPageId} onSelectPage={navigateToPage} sessionId={sessionId} versionId={versionId} previewVersionByPageId={previewVersionByPageId} />
       </StudioV2BottomSheet>
     </div>
   );
