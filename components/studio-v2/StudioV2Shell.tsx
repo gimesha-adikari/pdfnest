@@ -1150,6 +1150,8 @@ export const StudioV2Shell: React.FC = () => {
         sessionId={session.id}
         baseVersionId={activeVersion.id}
         documentName={docInfo.name}
+        documentVersion={docInfo.version}
+        documentSaved={docInfo.saved}
         vdm={vdm}
         selectedPageId={selectedPageId}
         newIdempotencyKey={newIdempotencyKey}
@@ -1164,6 +1166,9 @@ export const StudioV2Shell: React.FC = () => {
         onUndo={undo}
         onRedo={redo}
         onOpenCommandPalette={() => { if (shouldDismissStudioMobileSheet("command")) setMobileSheetOpen(false); setCommandPaletteOpen(true); }}
+        onOpenHistory={() => { setInspectorTab("history"); setContextRequest((current) => current + 1); if (typeof window !== "undefined" && window.innerWidth < 768) setMobileSheetOpen(true); }}
+        onOpenLayers={() => handleSelectTool("layers")}
+        onFitToScreen={handleFitToScreen}
         onMoreOpened={() => { if (shouldDismissStudioMobileSheet("more")) setMobileSheetOpen(false); setMobileMoreRequest((current) => current + 1); }}
         mobileMoreRequest={mobileMoreRequest}
         onOpenSettings={() => openLeaveConfirmation("/dashboard/settings")}
@@ -1324,6 +1329,7 @@ export const StudioV2Shell: React.FC = () => {
         onSelectWorkspace={handleSelectTool}
         onOpenHistory={() => { setInspectorTab("history"); setMobileSheetOpen(true); setContextRequest((current) => current + 1); }}
         onEnterEdit={enterEdit}
+        onOpenHelp={() => setHelpOpen(true)}
       />
 
       <StudioV2ConfirmDialog

@@ -45,7 +45,7 @@ export function StudioV2PageNavigator({ pages, selectedPageId, onSelectPage, com
     </div>
     <div className="studio-v2-page-list" ref={listRef}>{pages.map((page, index) => { const selected = page.page_id === selectedPageId; return <button key={page.page_id} type="button" onClick={() => onSelectPage?.(page.page_id)} aria-current={selected ? "page" : undefined} className={selected ? "active" : ""}>
       <PageThumbnail page={page} sessionId={sessionId} versionId={previewVersionByPageId?.[page.page_id] ?? versionId}/>
-      <span className="studio-v2-thumbnail-copy"><strong>Page {index + 1}</strong><small>{index + 1} of {pages.length}{page.is_blank ? " · Blank" : ""}</small>{selected && <em>Selected</em>}</span>
+      <span className="studio-v2-thumbnail-copy"><strong>Page {index + 1}</strong><small>{index + 1} of {pages.length} · {page.overlays.length} overlay{page.overlays.length === 1 ? "" : "s"} · {page.dimensions ? (page.dimensions.width > page.dimensions.height ? "Landscape" : "Portrait") : "Unknown size"}{page.is_blank ? " · Blank" : ""}</small>{selected && <em>Selected</em>}</span>
     </button>; })}</div>
     {onAddNewPage && <footer><button type="button" onClick={onAddNewPage}><Plus size={15}/>Add blank page</button></footer>}
   </aside>;

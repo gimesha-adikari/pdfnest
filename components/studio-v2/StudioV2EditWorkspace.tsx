@@ -1,6 +1,6 @@
 "use client";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Loader2, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Loader2, Save, X } from "lucide-react";
 import { SharedEditor } from "@/components/editor-v2/SharedEditor";
 import { DEFAULT_EDITOR_LANGUAGE, EditorLanguageChoice, EditorLayout } from "@/components/editor-v2/model";
 import { studioVisualResolution } from "@/components/editor-v2/visualResolution";
@@ -8,13 +8,13 @@ import { EditorLanguageControl } from "@/components/editor-v2/EditorLanguageCont
 import { studioV2Api, studioV2PageTileURL, StudioEditorStateDTO, StudioJobDTO, StudioVDMDTO } from "@/lib/studio-v2/api";
 import { editorCompileError, editorExtractionStartError, editorExtractionSubmissionFailure, editorExtractionView, shouldPollEditorExtraction } from "@/lib/studio-v2/editorExtractionState";
 
-interface Props { sessionId: string; baseVersionId: string; documentName: string; vdm: StudioVDMDTO; selectedPageId?: string | null; newIdempotencyKey: (operation: string) => string; onBack: () => void; onCompiled: () => Promise<void> | void; }
+interface Props { sessionId: string; baseVersionId: string; documentName: string; documentVersion?: string; documentSaved?: boolean; vdm: StudioVDMDTO; selectedPageId?: string | null; newIdempotencyKey: (operation: string) => string; onBack: () => void; onCompiled: () => Promise<void> | void; }
 const terminal = (job: StudioJobDTO) => ["succeeded", "failed", "cancelled"].includes(job.status);
 const languageKey = (choice: EditorLanguageChoice) => `${choice.mode}:${choice.languages.join("+")}`;
 const extractKey = (session: string, choice: EditorLanguageChoice) => `studio-v2-editor-extract:${session}:${languageKey(choice)}`;
 const compileKey = (session: string, state: string) => `studio-v2-editor-compile:${session}:${state}`;
 
-export const StudioV2EditWorkspace: React.FC<Props> = ({ sessionId, baseVersionId, documentName, vdm, selectedPageId, newIdempotencyKey, onBack, onCompiled }) => {
+export const StudioV2EditWorkspace: React.FC<Props> = ({ sessionId, baseVersionId, documentName, documentVersion, documentSaved = true, vdm, selectedPageId, newIdempotencyKey, onBack, onCompiled }) => {
   const [language, setLanguage] = useState<EditorLanguageChoice>(DEFAULT_EDITOR_LANGUAGE); const [job, setJob] = useState<StudioJobDTO | null>(null); const [state, setState] = useState<StudioEditorStateDTO | null>(null); const [busy, setBusy] = useState(true); const [error, setError] = useState<string | null>(null); const [compileJob, setCompileJob] = useState<StudioJobDTO | null>(null); const [compileSubmitting, setCompileSubmitting] = useState(false); const [cancelSubmitting, setCancelSubmitting] = useState(false); const [dirty, setDirty] = useState(false); const extractStartedRef = useRef(false); const compileInFlightRef = useRef(false); const cancelInFlightRef = useRef(false);
   const selectedPageIndex = Math.max(0, vdm.pages.findIndex((page) => page.page_id === selectedPageId));
   const changeLanguage = (next: EditorLanguageChoice) => { if (!dirty || window.confirm("Discard unsaved edits and extract again with this language?")) { setDirty(false); setLanguage(next); } };
@@ -28,5 +28,28 @@ export const StudioV2EditWorkspace: React.FC<Props> = ({ sessionId, baseVersionI
   useEffect(() => { if (!state || compileJob) return; const saved = window.localStorage.getItem(compileKey(sessionId, state.id)); if (!saved) return; let cancelled = false; void studioV2Api.getJob(sessionId, saved).then(async (response) => { if (cancelled) return; if (response.job.status === "succeeded") { window.localStorage.removeItem(compileKey(sessionId, state.id)); await onCompiled(); } else setCompileJob(response.job); }).catch(() => { if (!cancelled) setError(editorCompileError); }); return () => { cancelled = true; }; }, [compileJob, onCompiled, sessionId, state]);
   const cancelJob = async (target: StudioJobDTO | null) => { if (!target || terminal(target) || cancelInFlightRef.current) return; cancelInFlightRef.current = true; setCancelSubmitting(true); try { const response = await studioV2Api.cancelJob(sessionId, target.id); if (target.id === job?.id) setJob(response.job); else setCompileJob(response.job); } finally { cancelInFlightRef.current = false; setCancelSubmitting(false); } };
   const extractionView = editorExtractionView({ busy, hasJob: Boolean(job), hasState: Boolean(state), error }); const compileBusy = Boolean(compileJob && !terminal(compileJob));
-  return <main className="flex h-screen w-screen flex-col overflow-hidden bg-[#0B0C0F] text-[#F5F7FA]" data-testid="studio-edit-workspace"><header className="flex min-h-14 items-center justify-between border-b border-[#292D35] px-4"><div className="flex items-center gap-3"><button aria-label="Back to Studio" onClick={() => { if (!dirty || window.confirm("Discard unsaved edits?")) onBack(); }}><ArrowLeft/></button><div><h1 className="text-sm font-semibold">Edit PDF</h1><p className="text-[10px] text-[#9AA1AD]">{documentName} · shared Editor V2</p></div></div><div className="flex items-center gap-3"><EditorLanguageControl value={language} onChange={changeLanguage} disabled={Boolean(job && !terminal(job))}/><span role="status" aria-live="polite" className="text-xs text-[#9AA1AD]">{compileJob?.message || job?.message || (state ? "Ready to edit" : "Extracting…")}</span>{((job && !terminal(job)) || compileBusy) && <button aria-label="Cancel editor job" onClick={() => void cancelJob(compileBusy ? compileJob : job)} disabled={cancelSubmitting}><X className="inline"/>{cancelSubmitting ? "Cancelling…" : "Cancel"}</button>}</div></header>{error && <div role="alert" className="border-b border-red-400/30 bg-red-950/40 px-4 py-2 text-xs text-red-200">{error}</div>}{!state ? <section className="flex flex-1 flex-col items-center justify-center gap-3">{extractionView === "failure" ? <><p>{error || editorExtractionStartError}</p><button data-testid="studio-editor-extraction-retry" onClick={retryExtract}>Retry extraction</button></> : <><Loader2 className="animate-spin"/><p>Extracting editor layout… {job?.progress ?? 0}%</p></>}</section> : <section className="flex min-h-0 flex-1 p-4"><SharedEditor baseline={state.layout} initialPageIndex={selectedPageIndex} renderPageVisual={(index, visual) => { const descriptor = vdm.pages[index]; const page = state.layout.pages[index]; if (!descriptor || !page) return null; const resolution = studioVisualResolution({ pageWidthPt: page.width, zoom: visual.zoom, devicePixelRatio: visual.devicePixelRatio }); return <img src={studioV2PageTileURL(sessionId, baseVersionId, descriptor.page_id, resolution.scale)} alt={`Page ${index + 1}`} className="h-full w-full object-fill" draggable={false}/>; }} onCompile={compile} compiling={compileSubmitting || compileBusy} showPageSidebar onDirtyChange={setDirty}/></section>}</main>;
+  const statusLabel = compileJob?.message || job?.message || (state ? (dirty ? "Unsaved changes" : "Saved") : "Extracting…");
+  return <main className="studio-v2-editor-workspace" data-testid="studio-edit-workspace">
+    <header className="studio-v2-editor-appbar" aria-label="Studio Editor document bar">
+        <div className="studio-v2-editor-brand-group">
+        <button type="button" aria-label="Back to Studio" className="studio-v2-editor-back" onClick={() => { if (!dirty || window.confirm("Discard unsaved edits?")) onBack(); }}><ArrowLeft size={17}/></button>
+        <div className="studio-v2-editor-brand"><span className="studio-v2-editor-brand-mark">P</span><span><strong>PLATEN</strong><small>STUDIO · EDITOR V2</small></span></div>
+        <div className="studio-v2-editor-document"><strong>{documentName}</strong></div>
+        <span className="studio-v2-editor-version">{documentVersion ? `Version ${documentVersion.replace(/^Version\s*/i, "")}` : "Editor V2"}</span>
+        <span className={`studio-v2-editor-status ${dirty ? "processing" : ""}`} role="status" aria-live="polite">{!dirty && documentSaved && <CheckCircle2 size={13}/>} {dirty ? "Unsaved" : documentSaved ? "Saved" : "Not saved"}</span>
+      </div>
+      <div className="studio-v2-editor-actions">
+        <EditorLanguageControl value={language} onChange={changeLanguage} disabled={Boolean(job && !terminal(job))}/>
+        <span className="studio-v2-editor-job-status" role="status" aria-live="polite">{statusLabel}</span>
+        {((job && !terminal(job)) || compileBusy) && <button className="studio-v2-editor-cancel" aria-label="Cancel editor job" onClick={() => void cancelJob(compileBusy ? compileJob : job)} disabled={cancelSubmitting}><X size={14}/>{cancelSubmitting ? "Cancelling…" : "Cancel"}</button>}
+        <button type="button" className="studio-v2-editor-compile" onClick={() => state && void compile(state.layout)} disabled={!state || compileSubmitting || compileBusy}>{compileSubmitting || compileBusy ? <Loader2 size={14} className="animate-spin"/> : <Save size={14}/>} {compileSubmitting || compileBusy ? "Compiling…" : "Compile"}</button>
+      </div>
+    </header>
+    {error && <div role="alert" className="studio-v2-editor-error">{error}</div>}
+    {!state ? <section className="studio-v2-editor-status-view">
+      <div className={`studio-v2-editor-status-card ${extractionView === "failure" ? "error" : ""}`}>
+        {extractionView === "failure" ? <><div className="studio-v2-editor-status-icon"><X size={19}/></div><h1>Editor extraction unavailable</h1><p>{error || editorExtractionStartError}</p><button className="studio-v2-editor-retry" data-testid="studio-editor-extraction-retry" onClick={retryExtract}>Retry extraction</button></> : <><Loader2 className="studio-v2-editor-spinner"/><h1>Preparing Editor V2</h1><p>Extracting the editable layout… {job?.progress ?? 0}%</p></>}
+      </div>
+    </section> : <section className="studio-v2-editor-main"><SharedEditor baseline={state.layout} initialPageIndex={selectedPageIndex} renderPageVisual={(index, visual) => { const descriptor = vdm.pages[index]; const page = state.layout.pages[index]; if (!descriptor || !page) return null; const resolution = studioVisualResolution({ pageWidthPt: page.width, zoom: visual.zoom, devicePixelRatio: visual.devicePixelRatio }); return <img src={studioV2PageTileURL(sessionId, baseVersionId, descriptor.page_id, resolution.scale)} alt={`Page ${index + 1}`} className="h-full w-full object-fill" draggable={false}/>; }} onCompile={compile} compiling={compileSubmitting || compileBusy} showPageSidebar onDirtyChange={setDirty}/></section>}
+  </main>;
 };

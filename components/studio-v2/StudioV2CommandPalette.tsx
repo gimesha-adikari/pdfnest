@@ -7,6 +7,12 @@ import {
   Download,
   Maximize2,
   X,
+  LayoutGrid,
+  Layers3,
+  PenTool,
+  Type,
+  Clock3,
+  CircleHelp,
 } from "lucide-react";
 import type { ToolCategory } from "./types";
 import { normalizeStudioCommandQuery } from "./studioV2PresentationState";
@@ -17,6 +23,7 @@ interface CommandItem {
   searchTerms?: string;
   badge?: string;
   category: string;
+  hint: string;
   icon: React.ElementType;
   shortcut?: string;
   disabled?: boolean;
@@ -36,6 +43,7 @@ interface StudioV2CommandPaletteProps {
   onSelectWorkspace?: (tool: ToolCategory) => void;
   onOpenHistory?: () => void;
   onEnterEdit?: () => void;
+  onOpenHelp?: () => void;
 }
 
 export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
@@ -51,6 +59,7 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
   onSelectWorkspace,
   onOpenHistory,
   onEnterEdit,
+  onOpenHelp,
 }) => {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -61,24 +70,27 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
     ...(["pages", "organize", "annotate", "layers"] as const).map((tool) => ({
       id: `workspace_${tool}`,
       label: `Open ${tool[0].toUpperCase()}${tool.slice(1)} Workspace`,
-      category: "WORKSPACES",
-      icon: tool === "annotate" ? RotateCw : Maximize2,
+      category: "Go to workspace",
+      hint: tool === "pages" ? "Navigate the document" : tool === "organize" ? "Arrange the current page" : tool === "annotate" ? "Mark up the current page" : "Inspect page objects",
+      icon: tool === "pages" ? LayoutGrid : tool === "layers" ? Layers3 : tool === "annotate" ? PenTool : Maximize2,
       disabled: !onSelectWorkspace,
       action: () => { onSelectWorkspace?.(tool); onClose(); },
     })),
     {
       id: "workspace_edit",
       label: "Open Edit PDF Workspace",
-      category: "WORKSPACES",
-      icon: Maximize2,
+      category: "Go to workspace",
+      hint: "Open the real Editor V2 workspace",
+      icon: Type,
       disabled: !onEnterEdit,
       action: () => { onEnterEdit?.(); onClose(); },
     },
     {
       id: "history",
       label: "Open Version History",
-      category: "WORKSPACES",
-      icon: RotateCw,
+      category: "View",
+      hint: "Review and restore Studio versions",
+      icon: Clock3,
       disabled: !onOpenHistory,
       action: () => { onOpenHistory?.(); onClose(); },
     },
@@ -86,7 +98,8 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
       id: "fit_screen",
       label: "Fit Canvas to Screen",
       searchTerms: "Fit Width",
-      category: "VIEWPORT ACTIONS",
+      category: "View",
+      hint: "Fit the page to the available canvas",
       icon: Maximize2,
       shortcut: "0",
       action: () => {
@@ -98,7 +111,8 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
       id: "rotate",
       label: "Rotate Page Clockwise (90°)",
       badge: "Batch 2A",
-      category: "PAGE MUTATIONS",
+      category: "Page mutations",
+      hint: "Rotate the selected page",
       icon: RotateCw,
       shortcut: "R",
       disabled: !canRotatePage,
@@ -110,7 +124,8 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
     {
       id: "export",
       label: "Export Final PDF",
-      category: "FILE ACTIONS",
+      category: "Document",
+      hint: "Prepare the final PDF download",
       icon: Download,
       shortcut: "⇧⌘E",
       disabled: !onExport,
@@ -119,11 +134,20 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
         onClose();
       },
     },
+    {
+      id: "shortcuts",
+      label: "Keyboard shortcuts",
+      category: "Help",
+      hint: "Open Studio keyboard shortcuts",
+      icon: CircleHelp,
+      disabled: !onOpenHelp,
+      action: () => { onOpenHelp?.(); onClose(); },
+    },
   ];
 
   const normalizedQuery = normalizeStudioCommandQuery(query);
   const filteredCommands = commands.filter((cmd) =>
-    normalizeStudioCommandQuery(`${cmd.label} ${cmd.searchTerms ?? ""} ${cmd.category}`).includes(normalizedQuery)
+    normalizeStudioCommandQuery(`${cmd.label} ${cmd.searchTerms ?? ""} ${cmd.category} ${cmd.hint}`).includes(normalizedQuery)
   );
 
   useEffect(() => {
@@ -179,7 +203,10 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
         className="studio-v2-command-palette"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Search Header */}
+        <div className="studio-v2-command-heading">
+          <div><span className="studio-v2-command-kicker">Command center</span><strong>Search Studio</strong></div>
+          <button onClick={onClose} aria-label="Close command palette"><X className="w-4 h-4" /></button>
+        </div>
         <div className="studio-v2-command-search">
           <Search className="w-4 h-4 text-[#9AA1AD] mr-3 shrink-0" />
           <input
@@ -193,13 +220,6 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
             placeholder="Type a command or search action..."
             className="w-full bg-transparent text-sm text-[#F5F7FA] placeholder-[#717784] focus:outline-none"
           />
-          <button
-            onClick={onClose}
-            className="text-[#717784] hover:text-[#F5F7FA] p-1 rounded transition-colors ml-2"
-            aria-label="Close command palette"
-          >
-            <X className="w-4 h-4" />
-          </button>
         </div>
 
         {/* Command List */}
@@ -212,38 +232,21 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
             filteredCommands.map((cmd, index) => {
               const Icon = cmd.icon;
               const isSelected = index === selectedIndex;
-              return (
-                <button
-                  key={cmd.id}
-                  onClick={cmd.action}
-                  onMouseEnter={() => setSelectedIndex(index)}
-                  disabled={cmd.disabled}
-                  className={isSelected ? "selected" : ""}
-                >
-                  <div className="flex items-center gap-3">
-                    <Icon className="w-4 h-4 text-[#d2bbff]" />
-                    <span className="font-medium">{cmd.label}</span>
-                    {cmd.badge && (
-                      <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-[#101216] border border-[#292D35] text-[#9AA1AD]">
-                        {cmd.badge}
-                      </span>
-                    )}
-                  </div>
-                  {cmd.shortcut && (
-                    <kbd className="font-mono text-[10px] bg-[#101216] border border-[#292D35] rounded px-1.5 py-0.5 text-[#9AA1AD]">
-                      {cmd.shortcut}
-                    </kbd>
-                  )}
+              const showGroup = index === 0 || cmd.category !== filteredCommands[index - 1].category;
+              return <React.Fragment key={cmd.id}>
+                {showGroup && <div className="studio-v2-command-group-label">{cmd.category}</div>}
+                <button onClick={cmd.action} onMouseEnter={() => setSelectedIndex(index)} disabled={cmd.disabled} className={isSelected ? "selected" : ""}>
+                  <div className="studio-v2-command-row-copy"><Icon className="w-4 h-4" /><span><strong>{cmd.label}</strong><small>{cmd.hint}</small></span>{cmd.badge && <em>{cmd.badge}</em>}</div>
+                  <div className="studio-v2-command-row-end">{cmd.shortcut && <kbd>{cmd.shortcut}</kbd>}{isSelected && <span aria-hidden="true">›</span>}</div>
                 </button>
-              );
+              </React.Fragment>;
             })
           )}
         </div>
 
         {/* Footer */}
         <div className="studio-v2-command-footer">
-          <span>Use ↑↓ to navigate • ↵ to select</span>
-          <span>ESC to close</span>
+          <span>↑↓ Navigate</span><span>Enter Run</span><span>Esc Close</span>
         </div>
       </div>
     </div>

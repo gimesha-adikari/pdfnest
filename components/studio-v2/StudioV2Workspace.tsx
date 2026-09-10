@@ -239,12 +239,15 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
       metadata={metadata}
       onUpdateMetadata={onUpdateMetadata}
       selectedPage={vdm?.pages.find((page) => page.page_id === selectedPageId) ?? null}
+      onSelectPage={navigateToPage}
+      onOpenPageNavigator={() => { setPageNavigatorOpen(true); if (shouldDismissStudioMobileSheet("page-navigator")) onCloseMobileSheet?.(); }}
       onRotateClockwise={onRotateClockwise}
       onRotateCounterClockwise={onRotateCounterClockwise}
       onDeletePage={onDeletePage}
       onMovePageEarlier={onMovePageEarlier}
       onMovePageLater={onMovePageLater}
       onDuplicatePage={onDuplicatePage}
+      onAddNewPage={onAddNewPage}
       onCropPage={onCropPage}
       pages={vdm?.pages ?? []}
       cropDraft={cropDraft}

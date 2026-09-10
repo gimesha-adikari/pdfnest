@@ -35,6 +35,9 @@ interface StudioV2HeaderProps {
   onUndo?: () => void;
   onRedo?: () => void;
   onOpenCommandPalette?: () => void;
+  onOpenHistory?: () => void;
+  onOpenLayers?: () => void;
+  onFitToScreen?: () => void;
   onMoreOpened?: () => void;
   mobileMoreRequest?: number;
   onOpenSettings?: () => void;
@@ -82,6 +85,9 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
   onUndo,
   onRedo,
   onOpenCommandPalette,
+  onOpenHistory,
+  onOpenLayers,
+  onFitToScreen,
   onMoreOpened,
   mobileMoreRequest = 0,
   onOpenSettings,
@@ -541,15 +547,27 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
         />
       </StudioV2Popover>
       <StudioV2Popover open={activeToolbarPopover === "more"} onClose={() => setActiveToolbarPopover(null)} triggerRef={moreTriggerRef} label="More document tools" width={252} className="studio-v2-more-popover">
-        <div className="mb-2 text-xs font-semibold">Document tools</div>
+        <div className="studio-v2-more-group-label">Document tools</div>
         <div className="grid gap-1">
           <button type="button" onClick={() => openPopoverFromMore("compress")} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs">Compress</button>
+          <button type="button" onClick={() => { void submissionGuard.run("materialize:grayscale", async () => { await onGrayscale?.(); }); setActiveToolbarPopover(null); }} disabled={materializeDisabled || isMaterializing || submissionGuard.isPending("materialize:grayscale")} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs disabled:opacity-50">{submissionGuard.isPending("materialize:grayscale") ? "Applying…" : "Grayscale"}</button>
+          <button type="button" onClick={() => { void submissionGuard.run("materialize:repair", async () => { await onRepair?.(); }); setActiveToolbarPopover(null); }} disabled={materializeDisabled || isMaterializing || submissionGuard.isPending("materialize:repair")} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs disabled:opacity-50">{submissionGuard.isPending("materialize:repair") ? "Repairing…" : "Repair"}</button>
           <button type="button" onClick={() => { openPopoverFromMore("redact"); setRedactError(null); }} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs">Redact</button>
           <button type="button" onClick={() => { openPopoverFromMore("mergeSplit"); setMergeUploadError(null); setSplitError(null); }} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs">Merge / Split</button>
           <button type="button" onClick={() => { openPopoverFromMore("watermark"); setWatermarkError(null); }} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs">Watermark</button>
           <button type="button" onClick={() => { openPopoverFromMore("pageNumbers"); setPageNumbersError(null); }} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs">Page Numbers</button>
-          <button type="button" onClick={() => { void submissionGuard.run("materialize:grayscale", async () => { await onGrayscale?.(); }); setActiveToolbarPopover(null); }} disabled={materializeDisabled || isMaterializing || submissionGuard.isPending("materialize:grayscale")} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs disabled:opacity-50">{submissionGuard.isPending("materialize:grayscale") ? "Applying…" : "Grayscale"}</button>
-          <button type="button" onClick={() => { void submissionGuard.run("materialize:repair", async () => { await onRepair?.(); }); setActiveToolbarPopover(null); }} disabled={materializeDisabled || isMaterializing || submissionGuard.isPending("materialize:repair")} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs disabled:opacity-50">{submissionGuard.isPending("materialize:repair") ? "Repairing…" : "Repair"}</button>
+        </div>
+        <div className="studio-v2-more-group-label studio-v2-more-group-divider">View</div>
+        <div className="grid gap-1">
+          <button type="button" onClick={() => { onOpenHistory?.(); setActiveToolbarPopover(null); }} disabled={!onOpenHistory} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs disabled:opacity-50">Version history</button>
+          <button type="button" onClick={() => { onOpenLayers?.(); setActiveToolbarPopover(null); }} disabled={!onOpenLayers} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs disabled:opacity-50">Layers</button>
+          <button type="button" onClick={() => { onFitToScreen?.(); setActiveToolbarPopover(null); }} disabled={!onFitToScreen} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs disabled:opacity-50">Fit page</button>
+          <button type="button" onClick={() => { onFitToScreen?.(); setActiveToolbarPopover(null); }} disabled={!onFitToScreen} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs disabled:opacity-50">Fit width</button>
+        </div>
+        <div className="studio-v2-more-group-label studio-v2-more-group-divider">Help</div>
+        <div className="grid gap-1">
+          <button type="button" onClick={() => { onOpenCommandPalette?.(); setActiveToolbarPopover(null); }} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs">Command palette <span className="float-right font-mono text-[10px] text-[#717784]">⌘K</span></button>
+          <button type="button" onClick={() => { onOpenHelp?.(); setActiveToolbarPopover(null); }} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs">Keyboard shortcuts</button>
         </div>
       </StudioV2Popover>
       <StudioV2Popover open={activeToolbarPopover === "redact"} onClose={() => setActiveToolbarPopover(null)} triggerRef={getPopoverTriggerRef("redact")} label="Redact PDF" width={320} className="border-red-900/70" closeOnOutsidePointerDown={redactionMode !== "area"}>

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
-import { ChevronLeft, ChevronRight, Maximize2, Redo2, RotateCcw, Undo2, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronLeft, ChevronRight, Maximize2, Redo2, RotateCcw, Undo2, ZoomIn, ZoomOut, Type, Search } from "lucide-react";
 import { clampPageIndex, clampZoom, EditorElement, EditorElementStyle, EditorLayout, editorKeyboardIntent, editorMatches, fitWidthZoom } from "./model";
 import { createEditorState, editorReducer } from "./reducer";
 import {
@@ -297,6 +297,7 @@ export function SharedEditor({
   const [query, setQuery] = useState("");
   const [matchIndex, setMatchIndex] = useState(0);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const devicePixelRatio = useSyncExternalStore(
     (onChange) => {
@@ -576,29 +577,33 @@ export function SharedEditor({
   }, [selectedWordId]);
 
   return (
-    <div className={`grid min-h-0 flex-1 gap-4 overflow-hidden ${showPageSidebar ? "lg:grid-cols-[180px_minmax(0,1fr)_270px]" : "lg:grid-cols-[minmax(0,1fr)_270px]"}`} data-testid="shared-editor-v2">
+    <div className={`studio-v2-shared-editor grid min-h-0 flex-1 gap-4 overflow-hidden ${showPageSidebar ? "lg:grid-cols-[180px_minmax(0,1fr)_270px]" : "lg:grid-cols-[minmax(0,1fr)_270px]"}`} data-testid="shared-editor-v2">
       {showPageSidebar && (
-        <aside className="min-h-0 overflow-y-auto rounded-xl border border-current/15 p-3">
+        <aside className="studio-v2-editor-page-rail min-h-0 overflow-y-auto rounded-xl border border-current/15 p-3">
           <h2 className="mb-3 text-xs font-semibold">Pages</h2>
           {state.layout.pages.map((candidate, index) => (
             <button
               type="button"
               key={candidate.page_num}
               onClick={() => changePage(index)}
-              className={`mb-2 w-full rounded border p-2 text-left text-xs ${index === pageIndex ? "border-violet-500 bg-violet-500/15" : "border-current/15"}`}
+              className={`studio-v2-editor-page-row mb-2 w-full rounded border p-2 text-left text-xs ${index === pageIndex ? "selected border-violet-500 bg-violet-500/15" : "border-current/15"}`}
             >
-              Page {candidate.page_num}
-              <span className="block opacity-60">{candidate.elements.length} elements</span>
+              <span className="studio-v2-editor-page-number">{String(candidate.page_num).padStart(2, "0")}</span>
+              <span className="studio-v2-editor-page-copy">Page {candidate.page_num}<small>{candidate.elements.length} elements{candidate.is_ocr ? " · OCR" : ""}</small></span>
             </button>
           ))}
         </aside>
       )}
-      <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-current/15">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-current/15 p-2 text-xs">
+      <section className="studio-v2-editor-canvas-column flex min-h-0 flex-col overflow-hidden rounded-xl border border-current/15">
+        <div className="studio-v2-editor-toolbar flex flex-wrap items-center justify-between gap-2 border-b border-current/15 p-2 text-xs">
           <div className="flex items-center gap-2">
             <button aria-label="Undo" disabled={!state.undo.length} onClick={() => dispatch({ type: "UNDO" })}><Undo2 size={16}/></button>
             <button aria-label="Redo" disabled={!state.redo.length} onClick={() => dispatch({ type: "REDO" })}><Redo2 size={16}/></button>
             <button aria-label="Reset editor" disabled={!dirty} onClick={() => dispatch({ type: "RESET" })}><RotateCcw size={16}/></button>
+          </div>
+          <div className="studio-v2-editor-toolbar-group studio-v2-editor-toolbar-context">
+            <button type="button" aria-label="Text style" onClick={() => document.querySelector<HTMLElement>('[data-testid="editor-v2-properties"]')?.scrollIntoView({ block: "nearest" })}><Type size={15}/>Text style</button>
+            <button type="button" aria-label="Find in editor" onClick={() => searchInputRef.current?.focus()}><Search size={15}/>Find</button>
           </div>
           <div className="flex items-center gap-2">
             <button aria-label="Zoom out" onClick={() => setZoom((value) => clampZoom(value - .25))}><ZoomOut size={16}/></button>
@@ -614,10 +619,10 @@ export function SharedEditor({
             <button aria-label="Next page" disabled={pageIndex >= state.layout.pages.length - 1} onClick={() => changePage(pageIndex + 1)}><ChevronRight size={16}/></button>
           </div>
         </div>
-        <div ref={viewportRef} className="min-h-0 flex-1 overflow-auto p-6">
+        <div ref={viewportRef} className="studio-v2-editor-canvas-scroll min-h-0 flex-1 overflow-auto p-6">
           {page && (
             <div
-              className="relative mx-auto overflow-hidden bg-white shadow-2xl"
+              className="studio-v2-editor-page-frame relative mx-auto overflow-hidden bg-white shadow-2xl"
               style={{ width: page.width * zoom, height: page.height * zoom }}
               onClick={handlePageClick}
             >
@@ -629,10 +634,12 @@ export function SharedEditor({
           )}
         </div>
       </section>
-      <aside className="min-h-0 overflow-y-auto rounded-xl border border-current/15 p-3 text-xs">
+      <aside className="studio-v2-editor-properties min-h-0 overflow-y-auto rounded-xl border border-current/15 p-3 text-xs" data-testid="editor-v2-properties">
+        <div className="studio-v2-editor-properties-heading"><strong>Selection</strong><small>{selected ? "Text object" : "Select text on the page"}</small></div>
         <label>
           Search
           <input
+            ref={searchInputRef}
             data-testid="editor-v2-search"
             value={query}
             onChange={(event) => changeQuery(event.target.value)}
