@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { StudioV2Sidebar } from "./StudioV2Sidebar";
 import { StudioV2Canvas } from "./StudioV2Canvas";
 import { StudioV2Inspector } from "./StudioV2Inspector";
@@ -187,9 +187,26 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
 }) => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [pageNavigatorOpen, setPageNavigatorOpen] = useState(false);
+  const [scrollToPageId, setScrollToPageId] = useState<string | null>(() => selectedPageId ?? null);
+  const pendingScrollTargetRef = useRef<string | null>(selectedPageId ?? null);
   useEffect(() => {
     if (contextRequest > 0) setDrawerOpen(true);
   }, [contextRequest]);
+  useEffect(() => {
+    if (pendingScrollTargetRef.current && vdm?.pages.every((page) => page.page_id !== pendingScrollTargetRef.current)) {
+      pendingScrollTargetRef.current = null;
+      setScrollToPageId(null);
+    }
+  }, [vdm]);
+  const handleVisiblePageChange = useCallback((pageId: string) => {
+    const pendingTarget = pendingScrollTargetRef.current;
+    if (pendingTarget && pendingTarget !== pageId) return;
+    onSelectPage?.(pageId);
+  }, [onSelectPage]);
+  const handlePageScrollComplete = useCallback(() => {
+    pendingScrollTargetRef.current = null;
+    setScrollToPageId(null);
+  }, []);
   const renderInspector = (presentation: "desktop" | "drawer" | "sheet", onRequestClose?: () => void) => (
     <StudioV2Inspector
       presentation={presentation}
@@ -254,6 +271,13 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
     />
   );
 
+  const navigateToPage = (pageId: string) => {
+    pendingScrollTargetRef.current = pageId;
+    onSelectPage?.(pageId);
+    setScrollToPageId(pageId);
+    setPageNavigatorOpen(false);
+  };
+
   return (
     <div className="studio-v2-theme flex h-screen w-screen overflow-hidden bg-[#0B0C0F]">
       {/* Desktop Left Sidebar */}
@@ -278,9 +302,12 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
           previewVersionByPageId={previewVersionByPageId}
           vdm={vdm}
           selectedPageId={selectedPageId}
+          scrollToPageId={scrollToPageId}
+          onPageScrollComplete={handlePageScrollComplete}
+          onVisiblePageChange={handleVisiblePageChange}
           zoomScale={zoomScale}
           isPanning={isPanning}
-          onSelectPage={onSelectPage}
+          onSelectPage={handleVisiblePageChange}
           onZoomIn={onZoomIn}
           onZoomOut={onZoomOut}
           onFitToScreen={onFitToScreen}
@@ -319,13 +346,13 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
       <div className="hidden min-[1400px]:block fixed right-0 top-[48px] bottom-0 w-[320px] z-40">{renderInspector("desktop")}</div>
       {drawerOpen && <div className="hidden min-[768px]:block min-[1400px]:hidden">{renderInspector("drawer", () => setDrawerOpen(false))}</div>}
       <div className="hidden min-[768px]:block">
-        {pageNavigatorOpen && <aside className="fixed left-[72px] top-[48px] bottom-0 z-[60] w-[320px] border-r border-[#292D35] bg-[#101216] shadow-2xl"><StudioV2PageNavigator pages={vdm?.pages ?? []} selectedPageId={selectedPageId} onSelectPage={(pageId) => { onSelectPage?.(pageId); setPageNavigatorOpen(false); }} /></aside>}
+        {pageNavigatorOpen && <aside className="fixed left-[72px] top-[48px] bottom-0 z-[60] w-[320px] border-r border-[#292D35] bg-[#101216] shadow-2xl"><StudioV2PageNavigator pages={vdm?.pages ?? []} selectedPageId={selectedPageId} onSelectPage={navigateToPage} /></aside>}
       </div>
       <StudioV2BottomSheet isOpen={mobileSheetOpen && !pageNavigatorOpen} title={`${activeTool} tools & properties`} onClose={onCloseMobileSheet ?? (() => undefined)}>
         {renderInspector("sheet", onCloseMobileSheet)}
       </StudioV2BottomSheet>
       <StudioV2BottomSheet isOpen={pageNavigatorOpen} title="Pages" onClose={() => setPageNavigatorOpen(false)}>
-        <StudioV2PageNavigator pages={vdm?.pages ?? []} selectedPageId={selectedPageId} onSelectPage={(pageId) => { onSelectPage?.(pageId); setPageNavigatorOpen(false); }} />
+        <StudioV2PageNavigator pages={vdm?.pages ?? []} selectedPageId={selectedPageId} onSelectPage={navigateToPage} />
       </StudioV2BottomSheet>
     </div>
   );

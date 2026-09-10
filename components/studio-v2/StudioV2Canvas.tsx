@@ -644,6 +644,9 @@ interface StudioV2CanvasProps {
   previewVersionByPageId?: Record<string, string>;
   vdm?: StudioVDMDTO | null;
   selectedPageId?: string | null;
+  scrollToPageId?: string | null;
+  onPageScrollComplete?: () => void;
+  onVisiblePageChange?: (pageId: string) => void;
   zoomScale: number;
   isPanning: boolean;
   onSelectPage?: (pageId: string) => void;
@@ -676,6 +679,9 @@ export const StudioV2Canvas: React.FC<StudioV2CanvasProps> = ({
   previewVersionByPageId,
   vdm,
   selectedPageId,
+  scrollToPageId,
+  onPageScrollComplete,
+  onVisiblePageChange,
   zoomScale,
   isPanning,
   onSelectPage,
@@ -721,6 +727,69 @@ export const StudioV2Canvas: React.FC<StudioV2CanvasProps> = ({
   const isDraggingRef = useRef<boolean>(false);
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
+  const reportVisiblePage = useCallback(() => {
+    const viewport = viewportRef.current;
+    if (!viewport || !onVisiblePageChange) return;
+
+    const viewportBounds = viewport.getBoundingClientRect();
+    const viewportCenter = viewportBounds.top + viewportBounds.height / 2;
+    const visiblePages = Array.from(viewport.querySelectorAll<HTMLElement>("[data-page-id]"))
+      .map((element) => {
+        const bounds = element.getBoundingClientRect();
+        const overlap = Math.max(
+          0,
+          Math.min(bounds.bottom, viewportBounds.bottom) - Math.max(bounds.top, viewportBounds.top),
+        );
+        return {
+          pageId: element.dataset.pageId,
+          overlap,
+          centerDistance: Math.abs((bounds.top + bounds.bottom) / 2 - viewportCenter),
+        };
+      })
+      .filter((page): page is { pageId: string; overlap: number; centerDistance: number } => Boolean(page.pageId) && page.overlap > 0)
+      .sort((left, right) => right.overlap - left.overlap || left.centerDistance - right.centerDistance);
+
+    const pageId = visiblePages[0]?.pageId;
+    if (pageId) onVisiblePageChange(pageId);
+  }, [onVisiblePageChange]);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(reportVisiblePage);
+    const settleTimer = window.setTimeout(reportVisiblePage, 150);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(settleTimer);
+    };
+  }, [reportVisiblePage, vdm?.pages]);
+
+  useEffect(() => {
+    if (!scrollToPageId) return;
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const page = Array.from(viewport.querySelectorAll<HTMLElement>("[data-page-id]")).find(
+      (element) => element.dataset.pageId === scrollToPageId,
+    );
+    if (!page) return;
+
+    page.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+    const frame = window.requestAnimationFrame(() => {
+      reportVisiblePage();
+    });
+    const settleTimer = window.setTimeout(() => {
+      const settledPage = Array.from(viewport.querySelectorAll<HTMLElement>("[data-page-id]")).find(
+        (element) => element.dataset.pageId === scrollToPageId,
+      );
+      if (!settledPage) return;
+      settledPage.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+      reportVisiblePage();
+      onPageScrollComplete?.();
+    }, 180);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(settleTimer);
+    };
+  }, [onPageScrollComplete, pages, reportVisiblePage, scrollToPageId]);
+
   const handleMouseDown = (e: React.MouseEvent) => {
     if (isPanning || e.button === 1) {
       isDraggingRef.current = true;
@@ -758,6 +827,7 @@ export const StudioV2Canvas: React.FC<StudioV2CanvasProps> = ({
         className={`flex-1 overflow-auto p-12 relative z-10 flex flex-col items-center gap-16 ${
           isPanning ? "cursor-grab active:cursor-grabbing" : "cursor-default"
         }`}
+        onScroll={reportVisiblePage}
         style={{
           transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
         }}
