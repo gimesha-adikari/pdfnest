@@ -11,6 +11,7 @@ import { notify, notifyBackendError } from "@/lib/notify";
 
 export type TaskStatus =
     | "PENDING"
+    | "QUEUED"
     | "PROCESSING"
     | "COMPLETED"
     | "FAILED"
@@ -57,7 +58,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
     useEffect(() => {
         const stored = getStoredTasks();
         const existing = stored.find(
-            (t) => (t.tool === toolName || (t as any).toolName === toolName) && (t.status === "PENDING" || t.status === "PROCESSING")
+            (t) => (t.tool === toolName || (t as any).toolName === toolName) && (t.status === "PENDING" || t.status === "QUEUED" || t.status === "PROCESSING")
         );
 
         if (!existing) {
@@ -69,18 +70,19 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
 
         let isMounted = true;
 
-        fetch(`${getBaseApiUrl()}/api/v1/tasks/${existing.taskId}`)
+        fetch(`${getBaseApiUrl()}/api/v1/tasks/${existing.taskId}`, { credentials: "include" })
             .then((res) => {
                 if (res.status === 404 || res.status === 410) {
                     removeStoredTask(existing.taskId);
                     return null;
                 }
+                if (!res.ok) throw new Error(`Status request failed (${res.status})`);
                 return res.json();
             })
             .then((data: TaskStatusResponse | null) => {
                 if (!isMounted || !data) return;
 
-                if (data.status === "PENDING" || data.status === "PROCESSING") {
+                if (data.status === "PENDING" || data.status === "QUEUED" || data.status === "PROCESSING") {
                     setTaskId(existing.taskId);
                     setStatus(data.status);
                     setProgress(data.progress || 0);
@@ -99,7 +101,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
 
     useEffect(() => {
         if (!taskId) return;
-        if (status !== "PENDING" && status !== "PROCESSING") return;
+        if (status !== "PENDING" && status !== "QUEUED" && status !== "PROCESSING") return;
 
         let isMounted = true;
         let timeoutId: ReturnType<typeof setTimeout>;
@@ -111,7 +113,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
 
         const poll = async () => {
             try {
-                const res = await fetch(`${getBaseApiUrl()}/api/v1/tasks/${taskId}`);
+                const res = await fetch(`${getBaseApiUrl()}/api/v1/tasks/${taskId}`, { credentials: "include" });
                 if (!isMounted) return;
 
                 if (res.status === 404 || res.status === 410) {
@@ -310,7 +312,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
 
     const cancelTask = async (): Promise<void> => {
         if (!taskId || isCancelling) return;
-        if (status !== "PENDING" && status !== "PROCESSING") return;
+        if (status !== "PENDING" && status !== "QUEUED" && status !== "PROCESSING") return;
 
         console.log(`[FORENSIC ${new Date().toISOString()}] UI Cancel Clicked for taskId: ${taskId}`);
         setIsCancelling(true);
@@ -334,7 +336,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
                 updateStoredTask(taskId, { status: finalStatus, error: data.error });
             } else if (res.status === 409 || res.status === 404 || res.status === 410) {
                 // Cancellation races with completion; resolve the server's terminal state.
-                const checkRes = await fetch(`${getBaseApiUrl()}/api/v1/tasks/${taskId}`);
+                const checkRes = await fetch(`${getBaseApiUrl()}/api/v1/tasks/${taskId}`, { credentials: "include" });
                 if (checkRes.ok) {
                     const data: TaskStatusResponse = await checkRes.json();
                     setStatus(data.status);
