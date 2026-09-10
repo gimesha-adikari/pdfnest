@@ -1,50 +1,71 @@
 "use client";
 
-import React from "react";
-import {
-  X,
-  RotateCw,
-  Trash2,
-  Copy,
-  ArrowUp,
-  ArrowDown,
-} from "lucide-react";
-import { ToolCategory } from "./types";
+import React, { useEffect, useRef } from "react";
+import { X } from "lucide-react";
 
 interface StudioV2BottomSheetProps {
   isOpen: boolean;
-  activeTool: ToolCategory;
+  title: string;
   onClose: () => void;
-  onRotatePage?: () => void;
-  onDeletePage?: () => void;
-  onMovePageEarlier?: () => void;
-  onMovePageLater?: () => void;
-  onDuplicatePage?: () => void;
+  children: React.ReactNode;
 }
 
 export const StudioV2BottomSheet: React.FC<StudioV2BottomSheetProps> = ({
   isOpen,
-  activeTool,
+  title,
   onClose,
-  onRotatePage,
-  onDeletePage,
-  onMovePageEarlier,
-  onMovePageLater,
-  onDuplicatePage,
+  children,
 }) => {
+  const dialogRef = useRef<HTMLElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusTimer = window.setTimeout(() => dialogRef.current?.querySelector<HTMLElement>("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])")?.focus(), 0);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key === "Tab") {
+        const focusable = [...(dialogRef.current?.querySelectorAll<HTMLElement>("button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])") ?? [])]
+          .filter((element) => !element.hidden && element.getClientRects().length > 0);
+        if (focusable.length === 0) return;
+        const current = document.activeElement as HTMLElement | null;
+        const index = focusable.indexOf(current as HTMLElement);
+        if (event.shiftKey && (index <= 0 || !current)) {
+          event.preventDefault();
+          focusable[focusable.length - 1].focus();
+        } else if (!event.shiftKey && index === focusable.length - 1) {
+          event.preventDefault();
+          focusable[0].focus();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener("keydown", onKeyDown);
+      returnFocusRef.current?.focus?.({ preventScroll: true });
+    };
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="md:hidden fixed bottom-[56px] left-0 right-0 max-h-[42vh] bg-[#14171C] border-t border-[#292D35] rounded-t-xl shadow-2xl z-30 flex flex-col animate-in slide-in-from-bottom duration-200">
+    <div className="studio-v2-sheet-layer" role="presentation" onMouseDown={onClose}>
+      <section ref={dialogRef} className="studio-v2-sheet" role="dialog" aria-modal="true" aria-label={`${title} context`} onMouseDown={(event) => event.stopPropagation()}>
       {/* Draggable Handle Pill */}
-      <div className="flex justify-center pt-2.5 pb-1">
-        <div className="w-8 h-1 bg-[#3b3742] rounded-full" />
+      <div className="studio-v2-sheet-handle">
+        <div />
       </div>
 
       {/* Sheet Header */}
-      <div className="px-4 py-2 flex items-center justify-between border-b border-[#292D35]">
-        <h3 className="font-mono text-xs font-semibold text-[#F5F7FA] uppercase tracking-wider">
-          {activeTool} Tools & Properties
+      <div className="studio-v2-sheet-header">
+        <h3>
+          {title}
         </h3>
         <button
           onClick={onClose}
@@ -55,22 +76,8 @@ export const StudioV2BottomSheet: React.FC<StudioV2BottomSheetProps> = ({
         </button>
       </div>
 
-      {/* Category-scoped mobile content. Full editors remain in the desktop inspector. */}
-      <div className="p-4 overflow-y-auto space-y-4 text-xs" data-testid="studio-mobile-category-panel">
-        {activeTool === "pages" && <div className="grid grid-cols-3 gap-2">
-          <button type="button" onClick={onRotatePage} className="flex flex-col items-center justify-center rounded border border-[#292D35] bg-[#101216] p-3 text-[#F5F7FA] hover:border-[var(--studio-border-active)]"><RotateCw className="mb-1.5 h-5 w-5 text-[var(--studio-accent)]" /><span>Rotate</span></button>
-          <button type="button" onClick={onDuplicatePage} className="flex flex-col items-center justify-center rounded border border-[#292D35] bg-[#101216] p-3 text-[#F5F7FA] hover:border-[var(--studio-border-active)]"><Copy className="mb-1.5 h-5 w-5 text-[var(--studio-accent)]" /><span>Duplicate</span></button>
-          <button type="button" onClick={onDeletePage} className="flex flex-col items-center justify-center rounded border border-red-900/70 bg-[#101216] p-3 text-red-300 hover:border-red-500"><Trash2 className="mb-1.5 h-5 w-5" /><span>Delete</span></button>
-        </div>}
-        {activeTool === "organize" && <div className="grid grid-cols-3 gap-2">
-          <button type="button" onClick={onMovePageEarlier} className="flex flex-col items-center justify-center rounded border border-[#292D35] bg-[#101216] p-3 text-[#F5F7FA] hover:border-[var(--studio-border-active)]"><ArrowUp className="mb-1.5 h-5 w-5 text-[var(--studio-accent)]" /><span>Earlier</span></button>
-          <button type="button" onClick={onMovePageLater} className="flex flex-col items-center justify-center rounded border border-[#292D35] bg-[#101216] p-3 text-[#F5F7FA] hover:border-[var(--studio-border-active)]"><ArrowDown className="mb-1.5 h-5 w-5 text-[var(--studio-accent)]" /><span>Later</span></button>
-          <button type="button" onClick={onDuplicatePage} className="flex flex-col items-center justify-center rounded border border-[#292D35] bg-[#101216] p-3 text-[#F5F7FA] hover:border-[var(--studio-border-active)]"><Copy className="mb-1.5 h-5 w-5 text-[var(--studio-accent)]" /><span>Duplicate</span></button>
-        </div>}
-        {activeTool === "edit" && <p className="rounded border border-[#292D35] bg-[#101216] p-3 leading-5 text-[#B7BDC8]">Edit tools: Add Text, Sign, Metadata, and Crop. Open the desktop inspector for their full controls.</p>}
-        {activeTool === "annotate" && <p className="rounded border border-[#292D35] bg-[#101216] p-3 leading-5 text-[#B7BDC8]">Annotate tools: Smart, Manual, OCR, Highlight, Underline, and Strikeout with shared color controls.</p>}
-        {activeTool === "layers" && <p className="rounded border border-[#292D35] bg-[#101216] p-3 leading-5 text-[#B7BDC8]">Layers shows the text, signature, and watermark overlays for the selected page.</p>}
-      </div>
+      <div className="studio-v2-sheet-body" data-testid="studio-mobile-category-panel">{children}</div>
+      </section>
     </div>
   );
 };

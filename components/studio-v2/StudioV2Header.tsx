@@ -14,6 +14,7 @@ import {
   AlertCircle,
   ChevronDown,
   MoreHorizontal,
+  FileText,
 } from "lucide-react";
 import { DocumentInfo, StudioV2RedactionDraftBox } from "./types";
 import { StudioAssetDTO, StudioCompressionLevel, StudioMergeParameters, StudioPageNumberingParameters, StudioWatermarkParameters, VDMPageNumberingDTO, VDMPageDescriptorDTO } from "@/lib/studio-v2/api";
@@ -25,6 +26,7 @@ import { createMergeQueue, moveMergeQueueItem, removeMergeQueueItem, serializeMe
 import { StudioV2SplitSelector } from "./StudioV2SplitSelector";
 import { StudioV2CompressPanel } from "./StudioV2CompressPanel";
 import type { StudioCompressMetrics, StudioCompressStatus } from "./studioV2Compress";
+import Logo from "@/components/ui/Logo";
 import { pageIdsForSelection, parseStudioPageSelection, pruneStudioPageSelection, serializeStudioPageSelection, toggleStudioPageSelection } from "./studioV2PageSelection";
 
 interface StudioV2HeaderProps {
@@ -34,6 +36,11 @@ interface StudioV2HeaderProps {
   onUndo?: () => void;
   onRedo?: () => void;
   onOpenCommandPalette?: () => void;
+  onOpenHistory?: () => void;
+  onOpenLayers?: () => void;
+  onFitToScreen?: () => void;
+  onMoreOpened?: () => void;
+  mobileMoreRequest?: number;
   onOpenSettings?: () => void;
   onOpenHelp?: () => void;
   onNavigateHome?: () => void;
@@ -79,6 +86,11 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
   onUndo,
   onRedo,
   onOpenCommandPalette,
+  onOpenHistory,
+  onOpenLayers,
+  onFitToScreen,
+  onMoreOpened,
+  mobileMoreRequest = 0,
   onOpenSettings,
   onOpenHelp,
   onNavigateHome,
@@ -160,6 +172,13 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
     });
     setSplitAnchorId((current) => current && pages.some((page) => page.page_id === current) ? current : null);
   }, [pages]);
+
+  useEffect(() => {
+    if (mobileMoreRequest > 0) {
+      setPopoverTriggerSource("more");
+      setActiveToolbarPopover("more");
+    }
+  }, [mobileMoreRequest]);
 
   const togglePopover = (popover: Exclude<ActiveToolbarPopover, null>) => {
     setPopoverTriggerSource("toolbar");
@@ -364,21 +383,21 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
     switch (document.syncStatus) {
       case "saving":
         return (
-          <div className="h-[48px] flex items-center gap-1.5 px-3 text-[var(--studio-accent)] text-xs">
+          <div role="status" className="studio-v2-status processing">
             <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--studio-accent)]" />
             <span>Syncing...</span>
           </div>
         );
       case "error":
         return (
-          <div className="h-[48px] flex items-center gap-1.5 px-3 text-red-400 text-xs">
+          <div role="alert" className="studio-v2-status error">
             <AlertCircle className="w-3.5 h-3.5 text-red-400" />
             <span>Sync Error</span>
           </div>
         );
       case "loading":
         return (
-          <div className="h-[48px] flex items-center gap-1.5 px-3 text-[#9AA1AD] text-xs">
+          <div role="status" className="studio-v2-status processing">
             <Loader2 className="w-3.5 h-3.5 animate-spin text-[#9AA1AD]" />
             <span>Loading...</span>
           </div>
@@ -386,68 +405,66 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
       case "saved":
       default:
         return (
-          <div className="h-[48px] flex items-center gap-1.5 px-3 text-[#9AA1AD] text-xs">
+          <div role="status" className="studio-v2-status">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Status: Saved</span>
+            <span>Saved</span>
           </div>
         );
     }
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-[48px] bg-[#101216] border-b border-[var(--studio-border)] flex items-center justify-between gap-3 px-4 z-50 transition-colors duration-200">
+    <header className="studio-v2-appbar">
       {/* Brand & Left Navigation */}
-      <div className="flex items-center gap-6">
-        <button type="button" onClick={onNavigateHome} aria-label="Go to Platen home" className="flex items-baseline gap-2 rounded px-1 text-left hover:bg-[var(--studio-surface-raised)]">
-          <span className="font-bold text-[16px] text-white tracking-wide">
-            PLATEN
-          </span>
-          <span className="text-[11px] font-mono text-[#9AA1AD] tracking-wider uppercase">
-            PDF Studio
-          </span>
+      <div className="studio-v2-brand-and-document">
+        <button type="button" onClick={onNavigateHome} aria-label="Go to Platen home" className="studio-v2-brand">
+          <span className="studio-v2-brand-mark"><Logo /></span>
+          <span className="studio-v2-brand-copy"><strong>PLATEN</strong><small>PDF STUDIO</small></span>
         </button>
+        <div className="studio-v2-document-identity">
+          <span className="studio-v2-document-icon"><FileText size={16} /></span>
+          <span className="studio-v2-document-copy">
+            <strong>{document.name}</strong>
+            <small>{document.pageCount} pages <span aria-hidden="true">·</span> {document.version}</small>
+          </span>
+          {renderStatusBadge()}
+        </div>
 
         {/* Desktop Navigation Links */}
-        <nav className="hidden md:flex items-center h-[48px] space-x-1">
-          <div className="h-[48px] flex items-center px-3 text-[var(--studio-accent)] font-medium border-b-2 border-[var(--studio-border-active)] text-sm">
-            Document
-          </div>
-          {renderStatusBadge()}
+        <nav className="studio-v2-history-controls" aria-label="History controls">
           <button
             onClick={() => void submissionGuard.run("history:undo", async () => { await onUndo?.(); })}
             disabled={!canUndo || isMaterializing || submissionGuard.isPending("history:undo")}
-            className="h-[48px] flex items-center gap-1.5 px-3 text-[#9AA1AD] hover:text-white hover:bg-[#181B21] transition-colors text-sm disabled:opacity-40 disabled:hover:bg-transparent"
+            className="studio-v2-icon-button"
             aria-label="Undo"
             title={canUndo ? "Undo" : "Undo (no parent revision)"}
           >
             <Undo2 className="w-4 h-4" />
-            <span className="hidden lg:inline">Undo</span>
           </button>
           <button
             onClick={() => void submissionGuard.run("history:redo", async () => { await onRedo?.(); })}
             disabled={!canRedo || isMaterializing || submissionGuard.isPending("history:redo")}
-            className="h-[48px] flex items-center gap-1.5 px-3 text-[#9AA1AD] hover:text-white hover:bg-[#181B21] transition-colors text-sm disabled:opacity-40 disabled:hover:bg-transparent"
+            className="studio-v2-icon-button"
             aria-label="Redo"
             title={canRedo ? "Redo" : "Redo (no child branch)"}
           >
             <Redo2 className="w-4 h-4" />
-            <span className="hidden lg:inline">Redo</span>
           </button>
         </nav>
       </div>
 
       {/* Right Action Group */}
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="studio-v2-header-actions">
         {/* Search / Command Palette Trigger */}
         <button
           onClick={onOpenCommandPalette}
           type="button"
           data-testid="studio-header-search"
-          className="studio-v2-focus flex items-center gap-2 bg-[var(--studio-surface-raised)] border border-[var(--studio-border)] text-[var(--studio-muted)] hover:text-[var(--studio-text)] px-3 py-1 rounded text-xs transition-colors cursor-pointer"
+          className="studio-v2-search"
           aria-label="Search commands"
         >
           <Search className="w-3.5 h-3.5 text-[#9AA1AD]" />
-          <span>Search...</span>
+          <span>Search tools and pages</span>
           <kbd className="font-mono text-[10px] border border-[#292D35] rounded px-1 text-[#717784] ml-2">
             ⌘K
           </kbd>
@@ -476,7 +493,7 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
         <div className="w-px h-4 bg-[var(--studio-border)] mx-1" />
 
         {/* Authenticated Studio has no sign-in affordance. */}
-        <div className="hidden 2xl:flex items-center gap-1 rounded-md border border-[var(--studio-border)] bg-[var(--studio-surface)] p-1" aria-label="Optimization actions">
+        <div className="studio-v2-low-frequency-actions" aria-label="Optimization actions">
           <button
             ref={compressTriggerRef}
             type="button"
@@ -495,17 +512,17 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
           <button type="button" onClick={() => void submissionGuard.run("materialize:grayscale", async () => { await onGrayscale?.(); })} disabled={materializeDisabled || isMaterializing || submissionGuard.isPending("materialize:grayscale")} className="studio-v2-focus studio-v2-toolbar-control rounded px-2 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50" aria-label="Convert to Grayscale" title="Convert the current Studio version to grayscale">{submissionGuard.isPending("materialize:grayscale") ? "Applying…" : "Grayscale"}</button>
           <button type="button" onClick={() => void submissionGuard.run("materialize:repair", async () => { await onRepair?.(); })} disabled={materializeDisabled || isMaterializing || submissionGuard.isPending("materialize:repair")} className="studio-v2-focus studio-v2-toolbar-control rounded px-2 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50" aria-label="Repair PDF" title="Create a repaired Studio version">{submissionGuard.isPending("materialize:repair") ? "Repairing…" : "Repair"}</button>
         </div>
-        <div className="hidden lg:flex items-center gap-1 rounded-md border border-[var(--studio-border)] bg-[var(--studio-surface)] p-1" aria-label="Document tools">
+        <div className="studio-v2-low-frequency-actions" aria-label="Document tools">
           <button ref={redactTriggerRef} type="button" onClick={() => { setRedactError(null); togglePopover("redact"); }} disabled={materializeDisabled || isMaterializing} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-1.5 text-xs text-red-300/90 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Redact PDF" aria-expanded={activeToolbarPopover === "redact"} aria-haspopup="dialog" title="Permanently remove matching text in a new Studio version">Redact</button>
           <button ref={mergeSplitTriggerRef} type="button" onClick={() => { setMergeUploadError(null); setSplitError(null); togglePopover("mergeSplit"); }} disabled={materializeDisabled || isMaterializing} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50" aria-label="Merge and Split PDF" aria-expanded={activeToolbarPopover === "mergeSplit"} aria-haspopup="dialog" title="Merge a secondary PDF or trim the current pages">Merge / Split</button>
           <button ref={watermarkTriggerRef} type="button" onClick={() => { setWatermarkError(null); togglePopover("watermark"); }} disabled={materializeDisabled || isMaterializing} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50" aria-label="Watermark PDF" aria-expanded={activeToolbarPopover === "watermark"} aria-haspopup="dialog" title="Add a text or image watermark to all current pages">Watermark</button>
           <button ref={pageNumbersTriggerRef} type="button" onClick={() => { setPageNumbersError(null); togglePopover("pageNumbers"); }} disabled={materializeDisabled || isMaterializing} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50" aria-label="Page Numbers" aria-expanded={activeToolbarPopover === "pageNumbers"} aria-haspopup="dialog" title="Add or remove sequential page numbers" data-testid="studio-page-numbers-button">Page Numbers</button>
         </div>
-        <button ref={moreTriggerRef} type="button" onClick={() => togglePopover("more")} className="studio-v2-focus studio-v2-toolbar-control flex items-center gap-1 rounded border px-2.5 py-1.5 text-xs 2xl:hidden" aria-label="More document tools" aria-expanded={activeToolbarPopover === "more"} aria-haspopup="dialog"><MoreHorizontal className="w-3.5 h-3.5" /> More</button>
+        <button ref={moreTriggerRef} type="button" onClick={() => { onMoreOpened?.(); togglePopover("more"); }} className="studio-v2-more-button" aria-label="More document tools" aria-expanded={activeToolbarPopover === "more"} aria-haspopup="dialog"><MoreHorizontal className="w-3.5 h-3.5" /> <span>More</span></button>
         <button
           onClick={() => void submissionGuard.run("export", async () => { await onExport?.(); })}
           disabled={exportDisabled || isExporting || submissionGuard.isPending("export")}
-          className="studio-v2-focus studio-v2-primary text-white text-xs font-medium px-3.5 py-1.5 rounded transition-colors flex items-center gap-1.5 shadow-sm opacity-95 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
+          className="studio-v2-export-button"
           aria-label="Export PDF"
           title={isExporting ? "Preparing final PDF" : "Export final PDF"}
         >
@@ -513,7 +530,7 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
           <span>{isExporting || submissionGuard.isPending("export") ? "Exporting..." : "Export"}</span>
         </button>
 
-        <div className="w-7 h-7 rounded-full bg-[var(--studio-surface-raised)] border border-[var(--studio-border)] flex items-center justify-center text-[var(--studio-muted)]">
+        <div className="studio-v2-account-button">
           <User className="w-4 h-4" />
         </div>
       </div>
@@ -530,16 +547,28 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
           onClose={() => setActiveToolbarPopover(null)}
         />
       </StudioV2Popover>
-      <StudioV2Popover open={activeToolbarPopover === "more"} onClose={() => setActiveToolbarPopover(null)} triggerRef={moreTriggerRef} label="More document tools" width={240}>
-        <div className="mb-2 text-xs font-semibold">Document tools</div>
+      <StudioV2Popover open={activeToolbarPopover === "more"} onClose={() => setActiveToolbarPopover(null)} triggerRef={moreTriggerRef} label="More document tools" width={252} className="studio-v2-more-popover">
+        <div className="studio-v2-more-group-label">Document tools</div>
         <div className="grid gap-1">
           <button type="button" onClick={() => openPopoverFromMore("compress")} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs">Compress</button>
+          <button type="button" onClick={() => { void submissionGuard.run("materialize:grayscale", async () => { await onGrayscale?.(); }); setActiveToolbarPopover(null); }} disabled={materializeDisabled || isMaterializing || submissionGuard.isPending("materialize:grayscale")} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs disabled:opacity-50">{submissionGuard.isPending("materialize:grayscale") ? "Applying…" : "Grayscale"}</button>
+          <button type="button" onClick={() => { void submissionGuard.run("materialize:repair", async () => { await onRepair?.(); }); setActiveToolbarPopover(null); }} disabled={materializeDisabled || isMaterializing || submissionGuard.isPending("materialize:repair")} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs disabled:opacity-50">{submissionGuard.isPending("materialize:repair") ? "Repairing…" : "Repair"}</button>
           <button type="button" onClick={() => { openPopoverFromMore("redact"); setRedactError(null); }} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs">Redact</button>
           <button type="button" onClick={() => { openPopoverFromMore("mergeSplit"); setMergeUploadError(null); setSplitError(null); }} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs">Merge / Split</button>
           <button type="button" onClick={() => { openPopoverFromMore("watermark"); setWatermarkError(null); }} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs">Watermark</button>
           <button type="button" onClick={() => { openPopoverFromMore("pageNumbers"); setPageNumbersError(null); }} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs">Page Numbers</button>
-          <button type="button" onClick={() => { void submissionGuard.run("materialize:grayscale", async () => { await onGrayscale?.(); }); setActiveToolbarPopover(null); }} disabled={materializeDisabled || isMaterializing || submissionGuard.isPending("materialize:grayscale")} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs disabled:opacity-50">{submissionGuard.isPending("materialize:grayscale") ? "Applying…" : "Grayscale"}</button>
-          <button type="button" onClick={() => { void submissionGuard.run("materialize:repair", async () => { await onRepair?.(); }); setActiveToolbarPopover(null); }} disabled={materializeDisabled || isMaterializing || submissionGuard.isPending("materialize:repair")} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs disabled:opacity-50">{submissionGuard.isPending("materialize:repair") ? "Repairing…" : "Repair"}</button>
+        </div>
+        <div className="studio-v2-more-group-label studio-v2-more-group-divider">View</div>
+        <div className="grid gap-1">
+          <button type="button" onClick={() => { onOpenHistory?.(); setActiveToolbarPopover(null); }} disabled={!onOpenHistory} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs disabled:opacity-50">Version history</button>
+          <button type="button" onClick={() => { onOpenLayers?.(); setActiveToolbarPopover(null); }} disabled={!onOpenLayers} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs disabled:opacity-50">Layers</button>
+          <button type="button" onClick={() => { onFitToScreen?.(); setActiveToolbarPopover(null); }} disabled={!onFitToScreen} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs disabled:opacity-50">Fit page</button>
+          <button type="button" onClick={() => { onFitToScreen?.(); setActiveToolbarPopover(null); }} disabled={!onFitToScreen} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs disabled:opacity-50">Fit width</button>
+        </div>
+        <div className="studio-v2-more-group-label studio-v2-more-group-divider">Help</div>
+        <div className="grid gap-1">
+          <button type="button" onClick={() => { onOpenCommandPalette?.(); setActiveToolbarPopover(null); }} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs">Command palette <span className="float-right font-mono text-[10px] text-[#717784]">⌘K</span></button>
+          <button type="button" onClick={() => { onOpenHelp?.(); setActiveToolbarPopover(null); }} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-2 text-left text-xs">Keyboard shortcuts</button>
         </div>
       </StudioV2Popover>
       <StudioV2Popover open={activeToolbarPopover === "redact"} onClose={() => setActiveToolbarPopover(null)} triggerRef={getPopoverTriggerRef("redact")} label="Redact PDF" width={320} className="border-red-900/70" closeOnOutsidePointerDown={redactionMode !== "area"}>

@@ -396,6 +396,11 @@ export function useStudioSession(initialSessionId?: string | null) {
       activeVersion.preferred_child_id !== "00000000-0000-0000-0000-000000000000"
   );
 
+  const refetch = useCallback(() => {
+    if (session) return loadSession(session.id);
+    return undefined;
+  }, [session, loadSession]);
+
   return {
     session,
     document,
@@ -421,6 +426,6 @@ export function useStudioSession(initialSessionId?: string | null) {
     checkout,
     executeCommand,
     materialize,
-    refetch: () => session && loadSession(session.id),
+    refetch,
   };
 }

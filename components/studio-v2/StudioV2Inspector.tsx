@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { FileText, Clock, RotateCcw, RotateCw, Trash2, Info, Loader2, ArrowUp, ArrowDown, Copy, Crop, Type, Plus, PenTool } from "lucide-react";
+import { FileText, Clock, RotateCcw, RotateCw, Trash2, Info, Loader2, ArrowUp, ArrowDown, Copy, Crop, Type, Plus, PenTool, PanelRight, ChevronLeft, ChevronRight, LayoutGrid } from "lucide-react";
 import SignaturePad from "@/components/pdf/SignaturePad";
 import { StudioV2MarkupPanel } from "./StudioV2MarkupPanel";
 import { StudioV2ColorPicker, normalizeStudioV2Hex } from "./StudioV2ColorPicker";
@@ -11,6 +11,9 @@ import { studioV2CategoryHasSection } from "./studioV2ToolTaxonomy";
 import { StudioJobDTO, StudioMarkupAction, StudioMarkupAnalysis, StudioMarkupBox, StudioMarkupMode, StudioMetadataParameters, StudioSignatureOverlayParameters, StudioTextOverlayParameters, StudioUpdateSignatureOverlayParameters, StudioUpdateTextOverlayParameters, VDMPageDescriptorDTO } from "@/lib/studio-v2/api";
 
 interface StudioV2InspectorProps {
+  /** Presentation wrapper only. The inspector always receives the same Studio state. */
+  presentation?: "desktop" | "drawer" | "sheet";
+  onRequestClose?: () => void;
   document: DocumentInfo;
   activeTab: InspectorTab;
   history: HistoryItem[];
@@ -19,12 +22,15 @@ interface StudioV2InspectorProps {
   metadata?: Record<string, string> | null;
   onUpdateMetadata?: (metadata: StudioMetadataParameters) => void | Promise<void>;
   selectedPage?: VDMPageDescriptorDTO | null;
+  onSelectPage?: (pageId: string) => void;
+  onOpenPageNavigator?: () => void;
   onRotateClockwise?: () => void;
   onRotateCounterClockwise?: () => void;
   onDeletePage?: () => void;
   onMovePageEarlier?: () => void;
   onMovePageLater?: () => void;
   onDuplicatePage?: () => void;
+  onAddNewPage?: () => void;
   onCropPage?: (cropBox: number[], pageIds?: string[]) => void | Promise<void>;
   pages?: VDMPageDescriptorDTO[];
   cropDraft?: number[] | null;
@@ -70,7 +76,112 @@ interface StudioV2InspectorProps {
   onMarkupRedo?: () => void;
 }
 
+function StudioV2OrganizePanel({
+  pages,
+  selectedPage,
+  selectedPageIndex,
+  onSelectPage,
+  onMovePageEarlier,
+  onMovePageLater,
+  onRotateClockwise,
+  onDuplicatePage,
+  onDeletePage,
+  onAddNewPage,
+  isCommandLoading,
+}: {
+  pages: VDMPageDescriptorDTO[];
+  selectedPage?: VDMPageDescriptorDTO | null;
+  selectedPageIndex: number;
+  onSelectPage?: (pageId: string) => void;
+  onMovePageEarlier?: () => void;
+  onMovePageLater?: () => void;
+  onRotateClockwise?: () => void;
+  onDuplicatePage?: () => void;
+  onDeletePage?: () => void;
+  onAddNewPage?: () => void;
+  isCommandLoading: boolean;
+}) {
+  return (
+    <div className="studio-v2-organize-panel" data-testid="studio-inspector-section-organize">
+      <section className="studio-v2-organize-section">
+        <div className="studio-v2-organize-section-heading"><span><strong>Arrange pages</strong><small>Organize changes page order. Pages is for navigation.</small></span><em>{pages.length} pages</em></div>
+        <div className="studio-v2-organize-selection"><strong>{selectedPage ? "1 selected" : "0 selected"}</strong><span>Click a page to focus its real canvas context.</span></div>
+      </section>
+      <section className="studio-v2-organize-section">
+        <div className="studio-v2-organize-section-heading"><span><strong>Page arrangement</strong><small>Current VDM order · real PageIDs</small></span></div>
+        <div className="studio-v2-organize-grid" role="listbox" aria-label="Arrange document pages">
+          {pages.map((page, index) => {
+            const selected = page.page_id === selectedPage?.page_id;
+            return <button type="button" key={page.page_id} role="option" aria-selected={selected} className={`studio-v2-organize-page ${selected ? "selected" : ""}`} onClick={() => onSelectPage?.(page.page_id)}>
+              <span className="studio-v2-organize-paper">{String(index + 1).padStart(2, "0")}</span>
+              <strong>Page {index + 1}</strong>
+              <small>{page.rotation ? `${page.rotation}° · ` : ""}{page.overlays.length} objects</small>
+            </button>;
+          })}
+        </div>
+      </section>
+      <section className="studio-v2-organize-section">
+        <div className="studio-v2-organize-section-heading"><span><strong>Selection actions</strong><small>Actions are applied to the selected real page.</small></span></div>
+        <div className="studio-v2-organize-actions">
+          <button type="button" onClick={onMovePageEarlier} disabled={isCommandLoading || selectedPageIndex <= 0}><ArrowUp size={14}/>Earlier</button>
+          <button type="button" onClick={onMovePageLater} disabled={isCommandLoading || selectedPageIndex < 0 || selectedPageIndex >= pages.length - 1}><ArrowDown size={14}/>Later</button>
+          <button type="button" onClick={onRotateClockwise} disabled={isCommandLoading || !selectedPage}><RotateCw size={14}/>Rotate</button>
+          <button type="button" onClick={onDuplicatePage} disabled={isCommandLoading || !selectedPage}><Copy size={14}/>Duplicate</button>
+        </div>
+        <button type="button" className="studio-v2-organize-danger" onClick={onDeletePage} disabled={isCommandLoading || !selectedPage}><Trash2 size={14}/>Delete selected page</button>
+        <button type="button" className="studio-v2-organize-add" onClick={onAddNewPage} disabled={isCommandLoading || !onAddNewPage}><Plus size={14}/>Add blank page</button>
+      </section>
+    </div>
+  );
+}
+
+function StudioV2PagesPanel({
+  document,
+  pages,
+  selectedPage,
+  selectedPageIndex,
+  onSelectPage,
+  onOpenPageNavigator,
+  onAddNewPage,
+  onRotateClockwise,
+  onRotateCounterClockwise,
+  onDeletePage,
+  isCommandLoading,
+}: {
+  document: DocumentInfo;
+  pages: VDMPageDescriptorDTO[];
+  selectedPage?: VDMPageDescriptorDTO | null;
+  selectedPageIndex: number;
+  onSelectPage?: (pageId: string) => void;
+  onOpenPageNavigator?: () => void;
+  onAddNewPage?: () => void;
+  onRotateClockwise?: () => void;
+  onRotateCounterClockwise?: () => void;
+  onDeletePage?: () => void;
+  isCommandLoading: boolean;
+}) {
+  const orientation = selectedPage?.dimensions
+    ? selectedPage.dimensions.width > selectedPage.dimensions.height ? "Landscape" : "Portrait"
+    : "—";
+  return <div className="studio-v2-pages-properties">
+    <div data-testid="studio-inspector-section-document" className="studio-v2-pages-section">
+      <div className="studio-v2-pages-section-heading"><span><FileText size={14} />Document overview</span></div>
+      <div className="studio-v2-pages-overview-card"><div><span>PAGES</span><strong>{document.pageCount}</strong></div><div><span>SIZE</span><strong>{document.fileSize}</strong></div><div><span>VERSION</span><strong>{document.version}</strong></div><p>{document.name} · {document.saved ? "Saved" : "Unsaved"}</p></div>
+    </div>
+    <div data-testid="studio-inspector-section-pages-selection" className="studio-v2-pages-section">
+      <div className="studio-v2-pages-section-heading"><span><RotateCw size={14} />Selected Page</span><em>{selectedPage ? `Page ${selectedPageIndex + 1} of ${pages.length}` : "None"}</em></div>
+      {!selectedPage ? <p className="studio-v2-pages-empty">Select a page in the canvas to inspect its real context.</p> : <div className="studio-v2-pages-selected-card"><strong>Page {selectedPageIndex + 1}</strong><span>Page identity · {orientation}{selectedPage.rotation ? ` · ${selectedPage.rotation}°` : ""}</span><span>{selectedPage.overlays.length} real overlay{selectedPage.overlays.length === 1 ? "" : "s"}</span><div className="studio-v2-pages-action-row"><button type="button" onClick={onRotateCounterClockwise} disabled={isCommandLoading}><RotateCcw size={14}/>Left</button><button type="button" onClick={onRotateClockwise} disabled={isCommandLoading}><RotateCw size={14}/>Right</button></div><div className="studio-v2-pages-action-row"><button type="button" onClick={() => selectedPageIndex > 0 && onSelectPage?.(pages[selectedPageIndex - 1].page_id)} disabled={isCommandLoading || selectedPageIndex <= 0}><ChevronLeft size={14}/>Previous</button><button type="button" onClick={() => selectedPageIndex >= 0 && selectedPageIndex < pages.length - 1 && onSelectPage?.(pages[selectedPageIndex + 1].page_id)} disabled={isCommandLoading || selectedPageIndex >= pages.length - 1}>Next<ChevronRight size={14}/></button></div><button type="button" className="studio-v2-pages-danger" onClick={onDeletePage} disabled={isCommandLoading}><Trash2 size={14}/>Delete</button></div>}
+    </div>
+    <div className="studio-v2-pages-section">
+      <div className="studio-v2-pages-section-heading"><span><LayoutGrid size={14} />Page navigation</span></div>
+      <div className="studio-v2-pages-navigation-card"><p>Use the navigator or page jump to reach all {pages.length} pages.</p><button type="button" onClick={onOpenPageNavigator} disabled={!onOpenPageNavigator}><LayoutGrid size={14}/>Open Pages navigator</button><button type="button" onClick={onAddNewPage} disabled={!onAddNewPage || isCommandLoading}><Plus size={14}/>Add blank page</button></div>
+    </div>
+  </div>;
+}
+
 export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
+  presentation = "desktop",
+  onRequestClose,
   document,
   activeTab,
   history,
@@ -79,12 +190,15 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
   metadata,
   onUpdateMetadata,
   selectedPage,
+  onSelectPage,
+  onOpenPageNavigator,
   onRotateClockwise,
   onRotateCounterClockwise,
   onDeletePage,
   onMovePageEarlier,
   onMovePageLater,
   onDuplicatePage,
+  onAddNewPage,
   onCropPage,
   pages = [],
   cropDraft = null,
@@ -322,36 +436,34 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
     }
   };
 
+  const shellClass = `studio-v2-inspector studio-v2-inspector-${presentation}`;
+
   return (
-    <aside className="fixed right-0 top-[48px] bottom-0 w-[300px] bg-[#101216] border-l border-[#292D35] flex flex-col z-40">
+    <aside className={shellClass} aria-label="Studio context inspector">
+      <div className="studio-v2-inspector-header">
+        <span><strong>Context inspector</strong><small>{selectedPage ? `Page ${pages.findIndex((page) => page.page_id === selectedPage.page_id) + 1} · current context` : "Document context"}</small></span>
+        {onRequestClose && <button type="button" onClick={onRequestClose} aria-label="Collapse contextual inspector"><PanelRight size={16}/></button>}
+      </div>
       {/* Inspector Tabs */}
-      <div className="flex border-b border-[#292D35] bg-[#101216]">
+      <div className="studio-v2-inspector-tabs">
         <button
           onClick={() => onSelectTab("properties")}
-          className={`flex-1 py-2.5 text-xs font-mono tracking-wider transition-colors ${
-            activeTab === "properties"
-              ? "border-b-2 border-[var(--studio-border-active)] text-[var(--studio-accent)] bg-[#14171C] font-semibold"
-              : "text-[#9AA1AD] hover:text-white border-b-2 border-transparent"
-          }`}
+          className={activeTab === "properties" ? "active" : ""}
         >
           Properties
         </button>
         <button
           onClick={() => onSelectTab("history")}
-          className={`flex-1 py-2.5 text-xs font-mono tracking-wider transition-colors ${
-            activeTab === "history"
-              ? "border-b-2 border-[var(--studio-border-active)] text-[var(--studio-accent)] bg-[#14171C] font-semibold"
-              : "text-[#9AA1AD] hover:text-white border-b-2 border-transparent"
-          }`}
+          className={activeTab === "history" ? "active" : ""}
         >
           History
         </button>
       </div>
 
       {/* Tab Contents */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="studio-v2-inspector-content">
         {activeTab === "properties" ? (
-          <div className="p-4 space-y-6">
+          <div className="studio-v2-inspector-sections">
             {hasSection("markup") && onMarkupActionChange && onRemoveMarkupBox && onClearMarkup && onApplyMarkup && onCancelMarkup && onCancelMarkupJob && (
               <div data-testid="studio-inspector-section-markup">
                 <StudioV2MarkupPanel
@@ -380,8 +492,22 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                 />
               </div>
             )}
+            {category === "pages" && <StudioV2PagesPanel
+              document={document}
+              pages={pages}
+              selectedPage={selectedPage}
+              selectedPageIndex={selectedPage ? pages.findIndex((page) => page.page_id === selectedPage.page_id) : -1}
+              onSelectPage={onSelectPage}
+              onOpenPageNavigator={onOpenPageNavigator}
+              onAddNewPage={onAddNewPage}
+              onRotateClockwise={onRotateClockwise}
+              onRotateCounterClockwise={onRotateCounterClockwise}
+              onDeletePage={onDeletePage}
+              isCommandLoading={isCommandLoading}
+            />}
+
             {/* Document Properties */}
-            {hasSection("document") && <div data-testid="studio-inspector-section-document">
+            {hasSection("document") && category !== "pages" && <div data-testid="studio-inspector-section-document">
               <div className="flex items-center gap-2 mb-3">
                 <FileText className="w-4 h-4 text-[var(--studio-accent)]" />
                 <h3 className="text-xs font-semibold text-[#F5F7FA]">
@@ -412,10 +538,22 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
             </div>}
 
             {/* Selected page controls */}
-            {hasSection("page") && <div data-testid="studio-inspector-section-page">
+            {hasSection("page") && (category === "organize" ? <StudioV2OrganizePanel
+              pages={pages}
+              selectedPage={selectedPage}
+              selectedPageIndex={selectedPage ? pages.findIndex((page) => page.page_id === selectedPage.page_id) : -1}
+              onSelectPage={onSelectPage}
+              onMovePageEarlier={onMovePageEarlier}
+              onMovePageLater={onMovePageLater}
+              onRotateClockwise={onRotateClockwise}
+              onDuplicatePage={onDuplicatePage}
+              onDeletePage={onDeletePage}
+              onAddNewPage={onAddNewPage}
+              isCommandLoading={isCommandLoading}
+            /> : <div data-testid="studio-inspector-section-page">
               <div className="flex items-center gap-2 mb-3">
                 <RotateCw className="w-4 h-4 text-[var(--studio-accent)]" />
-                <h3 className="text-xs font-semibold text-[#F5F7FA]">{category === "organize" ? "Page Organization" : "Selected Page"}</h3>
+                <h3 className="text-xs font-semibold text-[#F5F7FA]">Selected Page</h3>
               </div>
               {!selectedPage ? (
                 <p className="text-xs text-[#9AA1AD] bg-[#14171C] p-3 rounded border border-[#292D35]">
@@ -498,7 +636,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                   </button>
                 </div>
               )}
-            </div>}
+            </div>)}
 
             {/* Add Text controls */}
             {hasSection("text") && <div data-testid="studio-inspector-section-text">
@@ -603,7 +741,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
             </div>}
 
             {/* Page Geometry */}
-            {hasSection("geometry") && <div data-testid="studio-inspector-section-geometry">
+            {hasSection("geometry") && category !== "pages" && <div data-testid="studio-inspector-section-geometry">
               <h3 className="text-xs font-semibold text-[#F5F7FA] mb-3">
                 Page Dimensions
               </h3>
@@ -741,29 +879,28 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
             </div>}
           </div>
         ) : (
-          <div className="p-4">
-            <div className="flex items-center justify-between mb-2">
+          <div className="studio-v2-inspector-sections">
+            <div className="studio-v2-history-header flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-[var(--studio-accent)]" />
                 <h3 className="text-xs font-semibold text-[#F5F7FA]">
-                  Editing History
+                  Version history
                 </h3>
               </div>
               <span className="text-[10px] font-mono text-[#9AA1AD]">
-                DAG LINEAGE
+                Current · V{history.find((item) => item.isActive)?.versionNumber ?? "—"}
               </span>
             </div>
 
-            {/* Explicit Notice of Shell Placeholder */}
-            <div className="mb-4 p-2 bg-[#14171C] rounded border border-[#292D35] flex items-start gap-2 text-[10px] text-[#9AA1AD]">
+            <div className="studio-v2-history-info mb-4 p-2 bg-[#14171C] rounded border border-[#292D35] flex items-start gap-2 text-[10px] text-[#9AA1AD]">
               <Info className="w-3.5 h-3.5 text-[var(--studio-accent)] shrink-0 mt-0.5" />
               <span>
-                Visual shell timeline. Live backend lineage & checkout connect in Phase 3B.
+                Versions are loaded from the current Studio session. Restoring a version updates the authoritative VDM and preview lineage.
               </span>
             </div>
 
             {/* Timeline */}
-            <div className="relative pl-6 space-y-4 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-px before:bg-[#292D35]">
+            <div className="studio-v2-history-list relative pl-6 space-y-4 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-px before:bg-[#292D35]">
               {history.map((item) => (
                 <div key={item.id} className="relative group">
                   {/* Timeline Bullet Node */}
@@ -780,7 +917,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                   </div>
 
                   <div
-                    className={`p-2.5 rounded text-xs transition-colors border ${
+                    className={`studio-v2-history-card p-2.5 rounded text-xs transition-colors border ${
                       item.isActive
                         ? "bg-[#181B21] border-[var(--studio-border-active)] text-white"
                         : "bg-[#14171C] border-[#292D35] text-[#9AA1AD] hover:text-[#F5F7FA] hover:border-[#3b3742]"
@@ -792,7 +929,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                         <button
                           onClick={() => onCheckoutVersion(item.id)}
                           className="studio-v2-focus opacity-0 group-hover:opacity-100 p-1 hover:text-[var(--studio-accent)] transition-opacity"
-                          title="Restore this version (Phase 3B)"
+                          title="Restore this version"
                           aria-label={`Restore version ${item.versionNumber}`}
                         >
                           <RotateCcw className="w-3 h-3" />

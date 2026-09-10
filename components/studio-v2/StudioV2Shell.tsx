@@ -6,7 +6,6 @@ import { StudioV2Header } from "./StudioV2Header";
 import { StudioV2Workspace } from "./StudioV2Workspace";
 import { StudioV2CommandPalette } from "./StudioV2CommandPalette";
 import { StudioV2MobileNav } from "./StudioV2MobileNav";
-import { StudioV2BottomSheet } from "./StudioV2BottomSheet";
 import { StudioV2Entry } from "./StudioV2Entry";
 import { StudioV2EditWorkspace } from "./StudioV2EditWorkspace";
 import { useStudioSession } from "@/hooks/studio-v2/useStudioSession";
@@ -56,6 +55,7 @@ import {
 import { useStudioV2SubmissionGuard } from "./studioV2SubmissionGuard";
 import { StudioV2ConfirmDialog, StudioV2Dialog } from "./StudioV2Dialog";
 import { buildStudioPreviewVersionByPageId } from "./studioV2PreviewLineage";
+import { nextStudioMobileSheetOpen, shouldDismissStudioMobileSheet } from "./studioV2PresentationState";
 
 function formatBytes(bytes: number): string {
   if (!bytes || bytes === 0) return "0 KB";
@@ -117,6 +117,8 @@ export const StudioV2Shell: React.FC = () => {
   const [isPanning, setIsPanning] = useState<boolean>(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState<boolean>(false);
   const [mobileSheetOpen, setMobileSheetOpen] = useState<boolean>(false);
+  const [mobileMoreRequest, setMobileMoreRequest] = useState(0);
+  const [contextRequest, setContextRequest] = useState(0);
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
   const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -1002,12 +1004,17 @@ export const StudioV2Shell: React.FC = () => {
   const handleSelectTool = useCallback((tool: ToolCategory) => {
     setActiveTool(tool);
     if (typeof window !== "undefined" && window.innerWidth < 768) {
-      setMobileSheetOpen(true);
+      // Annotate intentionally opens at a compact contextual peek. Other
+      // workspaces leave the canvas dominant until the user asks for context.
+      setMobileSheetOpen(nextStudioMobileSheetOpen(tool));
     }
   }, []);
 
   const enterEdit = useCallback(() => {
-    if (session && activeVersion) setEditMode(true);
+    if (session && activeVersion) {
+      if (shouldDismissStudioMobileSheet("editor")) setMobileSheetOpen(false);
+      setEditMode(true);
+    }
   }, [activeVersion, session]);
 
   const openLeaveConfirmation = useCallback((destination: "/" | "/dashboard/settings") => {
@@ -1052,8 +1059,13 @@ export const StudioV2Shell: React.FC = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        const target = e.target as HTMLElement | null;
+        if (target && isMarkupShortcutEditableTarget(target.tagName, target.isContentEditable)) return;
         e.preventDefault();
-        setCommandPaletteOpen((prev) => !prev);
+        setCommandPaletteOpen((prev) => {
+          if (!prev && shouldDismissStudioMobileSheet("command")) setMobileSheetOpen(false);
+          return !prev;
+        });
       }
       if (
         e.key === "0" &&
@@ -1138,7 +1150,10 @@ export const StudioV2Shell: React.FC = () => {
         sessionId={session.id}
         baseVersionId={activeVersion.id}
         documentName={docInfo.name}
+        documentVersion={docInfo.version}
+        documentSaved={docInfo.saved}
         vdm={vdm}
+        selectedPageId={selectedPageId}
         newIdempotencyKey={newIdempotencyKey}
         onBack={() => setEditMode(false)}
         onCompiled={async () => { await refetch(); setEditMode(false); }}
@@ -1150,7 +1165,12 @@ export const StudioV2Shell: React.FC = () => {
         canRedo={canRedo}
         onUndo={undo}
         onRedo={redo}
-        onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+        onOpenCommandPalette={() => { if (shouldDismissStudioMobileSheet("command")) setMobileSheetOpen(false); setCommandPaletteOpen(true); }}
+        onOpenHistory={() => { setInspectorTab("history"); setContextRequest((current) => current + 1); if (typeof window !== "undefined" && window.innerWidth < 768) setMobileSheetOpen(true); }}
+        onOpenLayers={() => handleSelectTool("layers")}
+        onFitToScreen={handleFitToScreen}
+        onMoreOpened={() => { if (shouldDismissStudioMobileSheet("more")) setMobileSheetOpen(false); setMobileMoreRequest((current) => current + 1); }}
+        mobileMoreRequest={mobileMoreRequest}
         onOpenSettings={() => openLeaveConfirmation("/dashboard/settings")}
         onOpenHelp={() => setHelpOpen(true)}
         onNavigateHome={() => openLeaveConfirmation("/")}
@@ -1284,24 +1304,18 @@ export const StudioV2Shell: React.FC = () => {
         markupCanRedo={markupHistory.future.length > 0}
         onMarkupUndo={undoMarkupDraft}
         onMarkupRedo={redoMarkupDraft}
+        mobileSheetOpen={mobileSheetOpen}
+        onCloseMobileSheet={() => setMobileSheetOpen(false)}
+        onOpenMobileSheet={() => setMobileSheetOpen(true)}
+        contextRequest={contextRequest}
+        surfaceDismissRequest={mobileMoreRequest}
       />
 
       {/* Mobile Bottom Docked Navigation */}
       <StudioV2MobileNav
         activeTool={activeTool}
         onSelectTool={handleSelectTool}
-      />
-
-      {/* Mobile Contextual Bottom Sheet */}
-      <StudioV2BottomSheet
-        isOpen={mobileSheetOpen}
-        activeTool={activeTool}
-        onClose={() => setMobileSheetOpen(false)}
-        onRotatePage={() => void handleRotate(90)}
-        onDeletePage={() => void handleDeletePage()}
-        onMovePageEarlier={() => void handleReorderPage(-1)}
-        onMovePageLater={() => void handleReorderPage(1)}
-        onDuplicatePage={() => void handleDuplicatePage()}
+        onOpenMore={() => { if (shouldDismissStudioMobileSheet("more")) setMobileSheetOpen(false); setMobileMoreRequest((current) => current + 1); }}
       />
 
       {/* Command Palette Modal (Cmd+K) */}
@@ -1312,6 +1326,10 @@ export const StudioV2Shell: React.FC = () => {
         onRotatePage={() => handleRotate(90)}
         canRotatePage={Boolean(selectedPage) && !isSaving}
         onExport={handleExport}
+        onSelectWorkspace={handleSelectTool}
+        onOpenHistory={() => { setInspectorTab("history"); setMobileSheetOpen(true); setContextRequest((current) => current + 1); }}
+        onEnterEdit={enterEdit}
+        onOpenHelp={() => setHelpOpen(true)}
       />
 
       <StudioV2ConfirmDialog
