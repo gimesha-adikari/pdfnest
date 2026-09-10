@@ -14,6 +14,7 @@ import { normalizeStudioCommandQuery } from "./studioV2PresentationState";
 interface CommandItem {
   id: string;
   label: string;
+  searchTerms?: string;
   badge?: string;
   category: string;
   icon: React.ElementType;
@@ -84,6 +85,7 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
     {
       id: "fit_screen",
       label: "Fit Canvas to Screen",
+      searchTerms: "Fit Width",
       category: "VIEWPORT ACTIONS",
       icon: Maximize2,
       shortcut: "0",
@@ -121,7 +123,7 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
 
   const normalizedQuery = normalizeStudioCommandQuery(query);
   const filteredCommands = commands.filter((cmd) =>
-    normalizeStudioCommandQuery(`${cmd.label} ${cmd.category}`).includes(normalizedQuery)
+    normalizeStudioCommandQuery(`${cmd.label} ${cmd.searchTerms ?? ""} ${cmd.category}`).includes(normalizedQuery)
   );
 
   useEffect(() => {
