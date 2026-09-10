@@ -26,6 +26,7 @@ import { createMergeQueue, moveMergeQueueItem, removeMergeQueueItem, serializeMe
 import { StudioV2SplitSelector } from "./StudioV2SplitSelector";
 import { StudioV2CompressPanel } from "./StudioV2CompressPanel";
 import type { StudioCompressMetrics, StudioCompressStatus } from "./studioV2Compress";
+import Logo from "@/components/ui/Logo";
 import { pageIdsForSelection, parseStudioPageSelection, pruneStudioPageSelection, serializeStudioPageSelection, toggleStudioPageSelection } from "./studioV2PageSelection";
 
 interface StudioV2HeaderProps {
@@ -417,7 +418,7 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
       {/* Brand & Left Navigation */}
       <div className="studio-v2-brand-and-document">
         <button type="button" onClick={onNavigateHome} aria-label="Go to Platen home" className="studio-v2-brand">
-          <span className="studio-v2-brand-mark">P</span>
+          <span className="studio-v2-brand-mark"><Logo /></span>
           <span className="studio-v2-brand-copy"><strong>PLATEN</strong><small>PDF STUDIO</small></span>
         </button>
         <div className="studio-v2-document-identity">

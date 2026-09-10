@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, CheckCircle2, Loader2, Save, X } from "lucide-react";
 import { SharedEditor } from "@/components/editor-v2/SharedEditor";
+import Logo from "@/components/ui/Logo";
 import { DEFAULT_EDITOR_LANGUAGE, EditorLanguageChoice, EditorLayout } from "@/components/editor-v2/model";
 import { studioVisualResolution } from "@/components/editor-v2/visualResolution";
 import { EditorLanguageControl } from "@/components/editor-v2/EditorLanguageControl";
@@ -33,7 +34,7 @@ export const StudioV2EditWorkspace: React.FC<Props> = ({ sessionId, baseVersionI
     <header className="studio-v2-editor-appbar" aria-label="Studio Editor document bar">
         <div className="studio-v2-editor-brand-group">
         <button type="button" aria-label="Back to Studio" className="studio-v2-editor-back" onClick={() => { if (!dirty || window.confirm("Discard unsaved edits?")) onBack(); }}><ArrowLeft size={17}/></button>
-        <div className="studio-v2-editor-brand"><span className="studio-v2-editor-brand-mark">P</span><span><strong>PLATEN</strong><small>STUDIO · EDITOR V2</small></span></div>
+        <div className="studio-v2-editor-brand"><span className="studio-v2-editor-brand-mark"><Logo /></span><span><strong>PLATEN</strong><small>STUDIO · EDITOR V2</small></span></div>
         <div className="studio-v2-editor-document"><strong>{documentName}</strong></div>
         <span className="studio-v2-editor-version">{documentVersion ? `Version ${documentVersion.replace(/^Version\s*/i, "")}` : "Editor V2"}</span>
         <span className={`studio-v2-editor-status ${dirty ? "processing" : ""}`} role="status" aria-live="polite">{!dirty && documentSaved && <CheckCircle2 size={13}/>} {dirty ? "Unsaved" : documentSaved ? "Saved" : "Not saved"}</span>
