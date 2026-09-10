@@ -35,6 +35,7 @@ interface StudioV2HeaderProps {
   onRedo?: () => void;
   onOpenCommandPalette?: () => void;
   onMoreOpened?: () => void;
+  mobileMoreRequest?: number;
   onOpenSettings?: () => void;
   onOpenHelp?: () => void;
   onNavigateHome?: () => void;
@@ -81,6 +82,7 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
   onRedo,
   onOpenCommandPalette,
   onMoreOpened,
+  mobileMoreRequest = 0,
   onOpenSettings,
   onOpenHelp,
   onNavigateHome,
@@ -162,6 +164,13 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
     });
     setSplitAnchorId((current) => current && pages.some((page) => page.page_id === current) ? current : null);
   }, [pages]);
+
+  useEffect(() => {
+    if (mobileMoreRequest > 0) {
+      setPopoverTriggerSource("more");
+      setActiveToolbarPopover("more");
+    }
+  }, [mobileMoreRequest]);
 
   const togglePopover = (popover: Exclude<ActiveToolbarPopover, null>) => {
     setPopoverTriggerSource("toolbar");

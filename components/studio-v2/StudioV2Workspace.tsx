@@ -1,11 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { StudioV2Sidebar } from "./StudioV2Sidebar";
 import { StudioV2Canvas } from "./StudioV2Canvas";
 import { StudioV2Inspector } from "./StudioV2Inspector";
 import { StudioV2BottomSheet } from "./StudioV2BottomSheet";
 import { SlidersHorizontal } from "lucide-react";
+import { StudioV2PageNavigator } from "./StudioV2PageNavigator";
+import { StudioV2ContextToolbar } from "./StudioV2ContextToolbar";
+import { shouldDismissStudioMobileSheet } from "./studioV2PresentationState";
 import { DocumentInfo, HistoryItem, InspectorTab, StudioV2OverlayDraft, StudioV2RedactionDraftBox, ToolCategory } from "./types";
 import { StudioJobDTO, StudioMarkupAction, StudioMarkupAnalysis, StudioMarkupBox, StudioMarkupMode, StudioMetadataParameters, StudioSignatureOverlayParameters, StudioTextOverlayParameters, StudioUpdateSignatureOverlayParameters, StudioUpdateTextOverlayParameters, StudioVDMDTO } from "@/lib/studio-v2/api";
 
@@ -92,6 +95,8 @@ interface StudioV2WorkspaceProps {
   isSessionActionDisabled?: boolean;
   mobileSheetOpen?: boolean;
   onCloseMobileSheet?: () => void;
+  onOpenMobileSheet?: () => void;
+  contextRequest?: number;
 }
 
 export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
@@ -177,8 +182,14 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
   isSessionActionDisabled,
   mobileSheetOpen = false,
   onCloseMobileSheet,
+  onOpenMobileSheet,
+  contextRequest = 0,
 }) => {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [pageNavigatorOpen, setPageNavigatorOpen] = useState(false);
+  useEffect(() => {
+    if (contextRequest > 0) setDrawerOpen(true);
+  }, [contextRequest]);
   const renderInspector = (presentation: "desktop" | "drawer" | "sheet", onRequestClose?: () => void) => (
     <StudioV2Inspector
       presentation={presentation}
@@ -292,6 +303,13 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
           onOverlayDraftChange={activeTool === "edit" || activeTool === "layers" ? onOverlayDraftChange : undefined}
           onOverlayCommit={activeTool === "edit" || activeTool === "layers" ? onOverlayCommit : undefined}
         />
+        <button type="button" onClick={() => { setPageNavigatorOpen(true); if (shouldDismissStudioMobileSheet("page-navigator")) onCloseMobileSheet?.(); }} className="studio-v2-focus absolute left-3 top-3 z-20 rounded border border-[var(--studio-border)] bg-[#101216]/95 px-3 py-2 shadow-lg hover:text-white" aria-label="Open page navigator">
+          <StudioV2PageNavigator pages={vdm?.pages ?? []} selectedPageId={selectedPageId} compact />
+        </button>
+        {activeTool === "annotate" && onMarkupActionChange && <StudioV2ContextToolbar action={markupAction ?? "highlight"} onActionChange={onMarkupActionChange} onOpenContext={() => {
+          if (typeof window !== "undefined" && window.innerWidth < 768) onOpenMobileSheet?.();
+          else setDrawerOpen(true);
+        }} />}
         <button type="button" onClick={() => setDrawerOpen(true)} className="studio-v2-focus absolute right-3 top-3 z-20 hidden min-[768px]:flex min-[1400px]:hidden items-center gap-2 rounded border border-[var(--studio-border)] bg-[#101216]/95 px-3 py-2 text-xs text-[#D8DCE3] shadow-lg hover:text-white" aria-label="Open context inspector">
           <SlidersHorizontal className="h-4 w-4" /> Context
         </button>
@@ -300,8 +318,14 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
       {/* A wide inspector is reserved for genuinely wide desktops. */}
       <div className="hidden min-[1400px]:block fixed right-0 top-[48px] bottom-0 w-[320px] z-40">{renderInspector("desktop")}</div>
       {drawerOpen && <div className="hidden min-[768px]:block min-[1400px]:hidden">{renderInspector("drawer", () => setDrawerOpen(false))}</div>}
-      <StudioV2BottomSheet isOpen={mobileSheetOpen} title={`${activeTool} tools & properties`} onClose={onCloseMobileSheet ?? (() => undefined)}>
+      <div className="hidden min-[768px]:block">
+        {pageNavigatorOpen && <aside className="fixed left-[72px] top-[48px] bottom-0 z-[60] w-[320px] border-r border-[#292D35] bg-[#101216] shadow-2xl"><StudioV2PageNavigator pages={vdm?.pages ?? []} selectedPageId={selectedPageId} onSelectPage={(pageId) => { onSelectPage?.(pageId); setPageNavigatorOpen(false); }} /></aside>}
+      </div>
+      <StudioV2BottomSheet isOpen={mobileSheetOpen && !pageNavigatorOpen} title={`${activeTool} tools & properties`} onClose={onCloseMobileSheet ?? (() => undefined)}>
         {renderInspector("sheet", onCloseMobileSheet)}
+      </StudioV2BottomSheet>
+      <StudioV2BottomSheet isOpen={pageNavigatorOpen} title="Pages" onClose={() => setPageNavigatorOpen(false)}>
+        <StudioV2PageNavigator pages={vdm?.pages ?? []} selectedPageId={selectedPageId} onSelectPage={(pageId) => { onSelectPage?.(pageId); setPageNavigatorOpen(false); }} />
       </StudioV2BottomSheet>
     </div>
   );

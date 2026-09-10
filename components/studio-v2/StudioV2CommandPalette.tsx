@@ -8,6 +8,8 @@ import {
   Maximize2,
   X,
 } from "lucide-react";
+import type { ToolCategory } from "./types";
+import { normalizeStudioCommandQuery } from "./studioV2PresentationState";
 
 interface CommandItem {
   id: string;
@@ -30,6 +32,9 @@ interface StudioV2CommandPaletteProps {
   onAddWatermark?: () => void;
   onExport?: () => void;
   onNewPage?: () => void;
+  onSelectWorkspace?: (tool: ToolCategory) => void;
+  onOpenHistory?: () => void;
+  onEnterEdit?: () => void;
 }
 
 export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
@@ -42,6 +47,9 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
   onAddWatermark,
   onExport,
   onNewPage,
+  onSelectWorkspace,
+  onOpenHistory,
+  onEnterEdit,
 }) => {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -49,6 +57,30 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
   const commands: CommandItem[] = [
+    ...(["pages", "organize", "annotate", "layers"] as const).map((tool) => ({
+      id: `workspace_${tool}`,
+      label: `Open ${tool[0].toUpperCase()}${tool.slice(1)} Workspace`,
+      category: "WORKSPACES",
+      icon: tool === "annotate" ? RotateCw : Maximize2,
+      disabled: !onSelectWorkspace,
+      action: () => { onSelectWorkspace?.(tool); onClose(); },
+    })),
+    {
+      id: "workspace_edit",
+      label: "Open Edit PDF Workspace",
+      category: "WORKSPACES",
+      icon: Maximize2,
+      disabled: !onEnterEdit,
+      action: () => { onEnterEdit?.(); onClose(); },
+    },
+    {
+      id: "history",
+      label: "Open Version History",
+      category: "WORKSPACES",
+      icon: RotateCw,
+      disabled: !onOpenHistory,
+      action: () => { onOpenHistory?.(); onClose(); },
+    },
     {
       id: "fit_screen",
       label: "Fit Canvas to Screen",
@@ -87,10 +119,9 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
     },
   ];
 
-  const normalizeQuery = (value: string) => value.toLocaleLowerCase().replace(/[\s/_\-.,:;!?()[\]{}]+/g, "");
-  const normalizedQuery = normalizeQuery(query);
+  const normalizedQuery = normalizeStudioCommandQuery(query);
   const filteredCommands = commands.filter((cmd) =>
-    normalizeQuery(`${cmd.label} ${cmd.category}`).includes(normalizedQuery)
+    normalizeStudioCommandQuery(`${cmd.label} ${cmd.category}`).includes(normalizedQuery)
   );
 
   useEffect(() => {

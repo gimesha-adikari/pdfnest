@@ -771,11 +771,10 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
               </span>
             </div>
 
-            {/* Explicit Notice of Shell Placeholder */}
             <div className="mb-4 p-2 bg-[#14171C] rounded border border-[#292D35] flex items-start gap-2 text-[10px] text-[#9AA1AD]">
               <Info className="w-3.5 h-3.5 text-[var(--studio-accent)] shrink-0 mt-0.5" />
               <span>
-                Visual shell timeline. Live backend lineage & checkout connect in Phase 3B.
+                Versions are loaded from the current Studio session. Restoring a version updates the authoritative VDM and preview lineage.
               </span>
             </div>
 
@@ -809,7 +808,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
                         <button
                           onClick={() => onCheckoutVersion(item.id)}
                           className="studio-v2-focus opacity-0 group-hover:opacity-100 p-1 hover:text-[var(--studio-accent)] transition-opacity"
-                          title="Restore this version (Phase 3B)"
+                          title="Restore this version"
                           aria-label={`Restore version ${item.versionNumber}`}
                         >
                           <RotateCcw className="w-3 h-3" />

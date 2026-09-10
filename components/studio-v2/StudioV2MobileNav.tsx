@@ -7,17 +7,20 @@ import {
   Edit3,
   PenTool,
   Copy,
+  MoreHorizontal,
 } from "lucide-react";
 import { ToolCategory } from "./types";
 
 interface StudioV2MobileNavProps {
   activeTool: ToolCategory;
   onSelectTool: (tool: ToolCategory) => void;
+  onOpenMore: () => void;
 }
 
 export const StudioV2MobileNav: React.FC<StudioV2MobileNavProps> = ({
   activeTool,
   onSelectTool,
+  onOpenMore,
 }) => {
   const items: { id: ToolCategory; label: string; icon: React.ElementType }[] = [
     { id: "pages", label: "Pages", icon: LayoutGrid },
@@ -51,6 +54,10 @@ export const StudioV2MobileNav: React.FC<StudioV2MobileNavProps> = ({
           </button>
         );
       })}
+      <button type="button" onClick={onOpenMore} className="flex-1 min-h-[44px] flex flex-col items-center justify-center py-1 rounded text-[var(--studio-muted)] hover:text-[var(--studio-text)]" aria-label="More document tools">
+        <MoreHorizontal className="mb-0.5 h-5 w-5" />
+        <span className="font-mono text-[9px] tracking-wider uppercase font-medium">More</span>
+      </button>
     </nav>
   );
 };
