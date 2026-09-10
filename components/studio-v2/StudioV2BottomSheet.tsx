@@ -55,16 +55,16 @@ export const StudioV2BottomSheet: React.FC<StudioV2BottomSheetProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="md:hidden fixed inset-0 z-[70] flex items-end bg-black/45" role="presentation" onMouseDown={onClose}>
-      <section ref={dialogRef} className="max-h-[min(76vh,680px)] w-full rounded-t-2xl border-t border-[#3b3742] bg-[#14171C] shadow-2xl flex flex-col animate-in slide-in-from-bottom duration-200" role="dialog" aria-modal="true" aria-label={`${title} context`} onMouseDown={(event) => event.stopPropagation()}>
+    <div className="studio-v2-sheet-layer" role="presentation" onMouseDown={onClose}>
+      <section ref={dialogRef} className="studio-v2-sheet" role="dialog" aria-modal="true" aria-label={`${title} context`} onMouseDown={(event) => event.stopPropagation()}>
       {/* Draggable Handle Pill */}
-      <div className="flex justify-center pt-2.5 pb-1">
-        <div className="w-8 h-1 bg-[#3b3742] rounded-full" />
+      <div className="studio-v2-sheet-handle">
+        <div />
       </div>
 
       {/* Sheet Header */}
-      <div className="px-4 py-2 flex items-center justify-between border-b border-[#292D35]">
-        <h3 className="font-mono text-xs font-semibold text-[#F5F7FA] uppercase tracking-wider">
+      <div className="studio-v2-sheet-header">
+        <h3>
           {title}
         </h3>
         <button
@@ -76,7 +76,7 @@ export const StudioV2BottomSheet: React.FC<StudioV2BottomSheetProps> = ({
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden" data-testid="studio-mobile-category-panel">{children}</div>
+      <div className="studio-v2-sheet-body" data-testid="studio-mobile-category-panel">{children}</div>
       </section>
     </div>
   );

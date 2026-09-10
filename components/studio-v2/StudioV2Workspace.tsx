@@ -97,6 +97,7 @@ interface StudioV2WorkspaceProps {
   onCloseMobileSheet?: () => void;
   onOpenMobileSheet?: () => void;
   contextRequest?: number;
+  surfaceDismissRequest?: number;
 }
 
 export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
@@ -184,14 +185,29 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
   onCloseMobileSheet,
   onOpenMobileSheet,
   contextRequest = 0,
+  surfaceDismissRequest = 0,
 }) => {
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(true);
   const [pageNavigatorOpen, setPageNavigatorOpen] = useState(false);
   const [scrollToPageId, setScrollToPageId] = useState<string | null>(() => selectedPageId ?? null);
   const pendingScrollTargetRef = useRef<string | null>(selectedPageId ?? null);
   useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia("(min-width: 768px) and (max-width: 1199.99px)").matches) return;
+    const timer = window.setTimeout(() => setDrawerOpen(false), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+  useEffect(() => {
     if (contextRequest > 0) setDrawerOpen(true);
   }, [contextRequest]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setPageNavigatorOpen(activeTool === "pages"), 0);
+    return () => window.clearTimeout(timer);
+  }, [activeTool]);
+  useEffect(() => {
+    if (surfaceDismissRequest <= 0) return;
+    const timer = window.setTimeout(() => setPageNavigatorOpen(false), 0);
+    return () => window.clearTimeout(timer);
+  }, [surfaceDismissRequest]);
   useEffect(() => {
     if (pendingScrollTargetRef.current && vdm?.pages.every((page) => page.page_id !== pendingScrollTargetRef.current)) {
       pendingScrollTargetRef.current = null;
@@ -207,6 +223,8 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
     pendingScrollTargetRef.current = null;
     setScrollToPageId(null);
   }, []);
+  const selectedPageIndex = vdm?.pages.findIndex((page) => page.page_id === selectedPageId) ?? -1;
+  const pageLabel = selectedPageIndex >= 0 ? `Page ${selectedPageIndex + 1}` : "No page";
   const renderInspector = (presentation: "desktop" | "drawer" | "sheet", onRequestClose?: () => void) => (
     <StudioV2Inspector
       presentation={presentation}
@@ -279,14 +297,12 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
   };
 
   return (
-    <div className="studio-v2-theme flex h-screen w-screen overflow-hidden bg-[#0B0C0F]">
+    <div className="studio-v2-theme studio-v2-presentation">
       {/* Desktop Left Sidebar */}
-      <div className="hidden md:block">
+      <div className="studio-v2-desktop-rail">
         <StudioV2Sidebar
-          document={document}
           activeTool={activeTool}
           onSelectTool={onSelectTool}
-          onAddNewPage={onAddNewPage}
           onEnterEdit={onEnterEdit}
           onTrash={onTrash}
           onHelp={onHelp}
@@ -295,7 +311,26 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
       </div>
 
       {/* Central Fluid Canvas Workspace */}
-      <main className="flex-1 md:ml-[72px] min-[1400px]:mr-[320px] mt-[48px] mb-[56px] md:mb-0 h-[calc(100vh-48px-56px)] md:h-[calc(100vh-48px)] relative flex bg-[#0B0C0F] overflow-hidden">
+      <main className="studio-v2-main-workspace">
+        <StudioV2ContextToolbar
+          activeTool={activeTool}
+          pageLabel={pageLabel}
+          pageCount={vdm?.pages.length ?? 0}
+          action={markupAction ?? "highlight"}
+          mode={markupMode ?? "smart"}
+          pendingCount={markupBoxes?.length ?? 0}
+          onActionChange={onMarkupActionChange ?? (() => undefined)}
+          onModeChange={onMarkupModeChange}
+          onOpenContext={() => { if (typeof window !== "undefined" && window.innerWidth < 768) onOpenMobileSheet?.(); else setDrawerOpen(true); }}
+          onOpenPages={() => { setPageNavigatorOpen(true); if (shouldDismissStudioMobileSheet("page-navigator")) onCloseMobileSheet?.(); }}
+          onAddNewPage={onAddNewPage}
+          onMoveEarlier={onMovePageEarlier}
+          onMoveLater={onMovePageLater}
+          onRotate={onRotateClockwise}
+          onDuplicate={onDuplicatePage}
+          onEnterEdit={onEnterEdit}
+        />
+        <div className="studio-v2-canvas-stage">
         <StudioV2Canvas
           sessionId={sessionId}
           versionId={versionId}
@@ -307,7 +342,7 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
           onVisiblePageChange={handleVisiblePageChange}
           zoomScale={zoomScale}
           isPanning={isPanning}
-          onSelectPage={handleVisiblePageChange}
+          onSelectPage={navigateToPage}
           onZoomIn={onZoomIn}
           onZoomOut={onZoomOut}
           onFitToScreen={onFitToScreen}
@@ -330,23 +365,20 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
           onOverlayDraftChange={activeTool === "edit" || activeTool === "layers" ? onOverlayDraftChange : undefined}
           onOverlayCommit={activeTool === "edit" || activeTool === "layers" ? onOverlayCommit : undefined}
         />
-        <button type="button" onClick={() => { setPageNavigatorOpen(true); if (shouldDismissStudioMobileSheet("page-navigator")) onCloseMobileSheet?.(); }} className="studio-v2-focus absolute left-3 top-3 z-20 rounded border border-[var(--studio-border)] bg-[#101216]/95 px-3 py-2 shadow-lg hover:text-white" aria-label="Open page navigator">
+        <button type="button" onClick={() => { setPageNavigatorOpen(true); if (shouldDismissStudioMobileSheet("page-navigator")) onCloseMobileSheet?.(); }} className="studio-v2-page-chip" aria-label="Open page navigator">
           <StudioV2PageNavigator pages={vdm?.pages ?? []} selectedPageId={selectedPageId} compact />
         </button>
-        {activeTool === "annotate" && onMarkupActionChange && <StudioV2ContextToolbar action={markupAction ?? "highlight"} onActionChange={onMarkupActionChange} onOpenContext={() => {
-          if (typeof window !== "undefined" && window.innerWidth < 768) onOpenMobileSheet?.();
-          else setDrawerOpen(true);
-        }} />}
-        <button type="button" onClick={() => setDrawerOpen(true)} className="studio-v2-focus absolute right-3 top-3 z-20 hidden min-[768px]:flex min-[1400px]:hidden items-center gap-2 rounded border border-[var(--studio-border)] bg-[#101216]/95 px-3 py-2 text-xs text-[#D8DCE3] shadow-lg hover:text-white" aria-label="Open context inspector">
+        {!drawerOpen && <button type="button" onClick={() => setDrawerOpen(true)} className="studio-v2-context-chip" aria-label="Open context inspector">
           <SlidersHorizontal className="h-4 w-4" /> Context
-        </button>
+        </button>}
+        </div>
       </main>
 
       {/* A wide inspector is reserved for genuinely wide desktops. */}
-      <div className="hidden min-[1400px]:block fixed right-0 top-[48px] bottom-0 w-[320px] z-40">{renderInspector("desktop")}</div>
-      {drawerOpen && <div className="hidden min-[768px]:block min-[1400px]:hidden">{renderInspector("drawer", () => setDrawerOpen(false))}</div>}
-      <div className="hidden min-[768px]:block">
-        {pageNavigatorOpen && <aside className="fixed left-[72px] top-[48px] bottom-0 z-[60] w-[320px] border-r border-[#292D35] bg-[#101216] shadow-2xl"><StudioV2PageNavigator pages={vdm?.pages ?? []} selectedPageId={selectedPageId} onSelectPage={navigateToPage} /></aside>}
+      <div className={`studio-v2-wide-inspector ${drawerOpen ? "" : "collapsed"}`}>{drawerOpen && renderInspector("desktop", () => setDrawerOpen(false))}</div>
+      {drawerOpen && <div className="studio-v2-tablet-inspector"><button type="button" className="studio-v2-tablet-backdrop" onClick={() => setDrawerOpen(false)} aria-label="Close context inspector" />{renderInspector("drawer", () => setDrawerOpen(false))}</div>}
+      <div className="studio-v2-page-navigator-surface">
+        {pageNavigatorOpen && <StudioV2PageNavigator pages={vdm?.pages ?? []} selectedPageId={selectedPageId} onSelectPage={navigateToPage} onClose={() => setPageNavigatorOpen(false)} onAddNewPage={onAddNewPage} />}
       </div>
       <StudioV2BottomSheet isOpen={mobileSheetOpen && !pageNavigatorOpen} title={`${activeTool} tools & properties`} onClose={onCloseMobileSheet ?? (() => undefined)}>
         {renderInspector("sheet", onCloseMobileSheet)}

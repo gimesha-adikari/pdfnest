@@ -31,7 +31,7 @@ export const StudioV2MobileNav: React.FC<StudioV2MobileNavProps> = ({
   ];
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 h-[56px] bg-[#101216] border-t border-[#292D35] flex items-center justify-around z-40 px-2 select-none">
+    <nav className="studio-v2-mobile-nav" aria-label="Mobile workspace navigation">
       {items.map((item) => {
         const Icon = item.icon;
         const isActive = activeTool === item.id;
@@ -39,24 +39,19 @@ export const StudioV2MobileNav: React.FC<StudioV2MobileNavProps> = ({
           <button
             key={item.id}
             onClick={() => onSelectTool(item.id)}
-            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center relative py-1 rounded transition-colors ${
-              isActive ? "text-[var(--studio-accent)]" : "text-[var(--studio-muted)] hover:text-[var(--studio-text)]"
-            }`}
+            className={isActive ? "active" : ""}
             aria-label={item.label}
           >
-            {isActive && (
-              <div className="absolute top-0 w-8 h-[2px] bg-[var(--studio-border-active)] rounded-b" />
-            )}
             <Icon className="w-5 h-5 mb-0.5" />
-            <span className="font-mono text-[9px] tracking-wider uppercase font-medium">
+            <span>
               {item.label}
             </span>
           </button>
         );
       })}
-      <button type="button" onClick={onOpenMore} className="flex-1 min-h-[44px] flex flex-col items-center justify-center py-1 rounded text-[var(--studio-muted)] hover:text-[var(--studio-text)]" aria-label="More document tools">
+      <button type="button" onClick={onOpenMore} className="more" aria-label="More document tools">
         <MoreHorizontal className="mb-0.5 h-5 w-5" />
-        <span className="font-mono text-[9px] tracking-wider uppercase font-medium">More</span>
+        <span>More</span>
       </button>
     </nav>
   );

@@ -1,37 +1,32 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
+import { ChevronLeft, ChevronRight, LayoutGrid, Plus, X } from "lucide-react";
 import type { VDMPageDescriptorDTO } from "@/lib/studio-v2/api";
 import { studioPageContext } from "./studioV2PresentationState";
 
 interface StudioV2PageNavigatorProps {
-  pages: readonly VDMPageDescriptorDTO[];
-  selectedPageId?: string | null;
-  onSelectPage?: (pageId: string) => void;
-  compact?: boolean;
+  pages: readonly VDMPageDescriptorDTO[]; selectedPageId?: string | null; onSelectPage?: (pageId: string) => void; compact?: boolean; onClose?: () => void; onAddNewPage?: () => void;
 }
 
-/** VDM-backed page navigation; display position is intentionally not a PageID. */
-export function StudioV2PageNavigator({ pages, selectedPageId, onSelectPage, compact = false }: StudioV2PageNavigatorProps) {
+/** VDM-backed prototype page navigator; durable PageIDs remain the selection keys. */
+export function StudioV2PageNavigator({ pages, selectedPageId, onSelectPage, compact = false, onClose, onAddNewPage }: StudioV2PageNavigatorProps) {
   const context = studioPageContext(pages, selectedPageId);
-  if (compact) {
-    return <span data-testid="studio-page-context" className="font-mono text-[11px] text-[#D8DCE3]">{context.label}</span>;
-  }
-  return (
-    <section aria-label="Document pages" className="flex min-h-0 flex-col">
-      <div className="flex items-center justify-between border-b border-[#292D35] px-3 py-2">
-        <strong className="text-xs text-white">Pages</strong>
-        <span data-testid="studio-page-context" className="font-mono text-[10px] text-[#9AA1AD]">{context.label}</span>
-      </div>
-      <div className="grid min-h-0 grid-cols-3 gap-2 overflow-y-auto p-3 sm:grid-cols-4">
-        {pages.map((page, index) => {
-          const selected = page.page_id === selectedPageId;
-          return <button key={page.page_id} type="button" onClick={() => onSelectPage?.(page.page_id)} aria-selected={selected} className={`studio-v2-focus min-h-[52px] rounded border px-2 py-2 text-left text-xs ${selected ? "border-[var(--studio-border-active)] bg-[var(--studio-cta)]/15 text-white" : "border-[var(--studio-border)] bg-[#101216] text-[#B7BDC8] hover:border-[var(--studio-border-hover)]"}`}>
-            <span className="block font-medium">Page {index + 1}</span>
-            <span className="mt-1 block font-mono text-[9px] text-[#9AA1AD]">{page.rotation ? `${page.rotation}°` : ""}</span>
-          </button>;
-        })}
-      </div>
-    </section>
-  );
+  const listRef = useRef<HTMLDivElement>(null);
+  const selectedIndex = pages.findIndex((page) => page.page_id === selectedPageId);
+  useEffect(() => { listRef.current?.querySelector<HTMLElement>("[aria-current='page']")?.scrollIntoView({ block: "nearest" }); }, [selectedPageId]);
+  if (compact) return <span data-testid="studio-page-context" className="studio-v2-page-context">{context.label}</span>;
+  return <aside className="studio-v2-page-navigator" aria-label="Document pages">
+    <header><LayoutGrid size={16}/><strong>Pages</strong><span>{pages.length} pages</span>{onClose && <button type="button" onClick={onClose} aria-label="Close Pages navigator"><X size={16}/></button>}</header>
+    <div className="studio-v2-page-jump">
+      <button type="button" onClick={() => selectedIndex > 0 && onSelectPage?.(pages[selectedIndex - 1].page_id)} disabled={selectedIndex <= 0} aria-label="Previous page"><ChevronLeft size={14}/></button>
+      <select value={selectedPageId ?? ""} onChange={(event) => onSelectPage?.(event.target.value)} aria-label="Jump to page">{pages.map((page, index) => <option key={page.page_id} value={page.page_id}>Page {index + 1} · {index + 1} of {pages.length}</option>)}</select>
+      <button type="button" onClick={() => selectedIndex >= 0 && selectedIndex < pages.length - 1 && onSelectPage?.(pages[selectedIndex + 1].page_id)} disabled={selectedIndex < 0 || selectedIndex >= pages.length - 1} aria-label="Next page"><ChevronRight size={14}/></button>
+    </div>
+    <div className="studio-v2-page-list" ref={listRef}>{pages.map((page, index) => { const selected = page.page_id === selectedPageId; return <button key={page.page_id} type="button" onClick={() => onSelectPage?.(page.page_id)} aria-current={selected ? "page" : undefined} className={selected ? "active" : ""}>
+      <span className="studio-v2-thumbnail-paper">{page.rotation ? <em>{page.rotation}°</em> : null}</span>
+      <span className="studio-v2-thumbnail-copy"><strong>Page {index + 1}</strong><small>{index + 1} of {pages.length}{page.is_blank ? " · Blank" : ""}</small>{selected && <em>Selected</em>}</span>
+    </button>; })}</div>
+    {onAddNewPage && <footer><button type="button" onClick={onAddNewPage}><Plus size={15}/>Add blank page</button></footer>}
+  </aside>;
 }

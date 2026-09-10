@@ -3,7 +3,7 @@ import type { ToolCategory } from "./types";
 
 /** Presentation-only helpers. They deliberately never create document state. */
 export function nextStudioMobileSheetOpen(tool: ToolCategory): boolean {
-  return tool === "annotate";
+  return tool !== "pages";
 }
 
 export function shouldDismissStudioMobileSheet(intent: "more" | "command" | "page-navigator" | "editor"): boolean {
@@ -25,4 +25,14 @@ export function studioPageContext(
     : -1;
   const current = selectedIndex >= 0 ? selectedIndex + 1 : pages.length ? 1 : 0;
   return { selectedIndex, label: `Page ${current} of ${pages.length}` };
+}
+
+export type StudioV2ResponsiveSurface = "mobile-sheet" | "tablet-bottom" | "laptop-overlay" | "desktop-docked";
+
+/** Mirrors the approved prototype breakpoints without branching business state. */
+export function studioResponsiveSurface(viewportWidth: number): StudioV2ResponsiveSurface {
+  if (viewportWidth < 768) return "mobile-sheet";
+  if (viewportWidth < 1024) return "tablet-bottom";
+  if (viewportWidth < 1400) return "laptop-overlay";
+  return "desktop-docked";
 }

@@ -1164,7 +1164,7 @@ export const StudioV2Shell: React.FC = () => {
         onUndo={undo}
         onRedo={redo}
         onOpenCommandPalette={() => { if (shouldDismissStudioMobileSheet("command")) setMobileSheetOpen(false); setCommandPaletteOpen(true); }}
-        onMoreOpened={() => { if (shouldDismissStudioMobileSheet("more")) setMobileSheetOpen(false); }}
+        onMoreOpened={() => { if (shouldDismissStudioMobileSheet("more")) setMobileSheetOpen(false); setMobileMoreRequest((current) => current + 1); }}
         mobileMoreRequest={mobileMoreRequest}
         onOpenSettings={() => openLeaveConfirmation("/dashboard/settings")}
         onOpenHelp={() => setHelpOpen(true)}
@@ -1303,6 +1303,7 @@ export const StudioV2Shell: React.FC = () => {
         onCloseMobileSheet={() => setMobileSheetOpen(false)}
         onOpenMobileSheet={() => setMobileSheetOpen(true)}
         contextRequest={contextRequest}
+        surfaceDismissRequest={mobileMoreRequest}
       />
 
       {/* Mobile Bottom Docked Navigation */}

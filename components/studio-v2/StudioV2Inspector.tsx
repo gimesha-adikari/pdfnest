@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { FileText, Clock, RotateCcw, RotateCw, Trash2, Info, Loader2, ArrowUp, ArrowDown, Copy, Crop, Type, Plus, PenTool } from "lucide-react";
+import { FileText, Clock, RotateCcw, RotateCw, Trash2, Info, Loader2, ArrowUp, ArrowDown, Copy, Crop, Type, Plus, PenTool, PanelRight } from "lucide-react";
 import SignaturePad from "@/components/pdf/SignaturePad";
 import { StudioV2MarkupPanel } from "./StudioV2MarkupPanel";
 import { StudioV2ColorPicker, normalizeStudioV2Hex } from "./StudioV2ColorPicker";
@@ -327,48 +327,34 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
     }
   };
 
-  const isSheet = presentation === "sheet";
-  const shellClass = isSheet
-    ? "h-full min-h-0 w-full bg-[#101216] flex flex-col"
-    : presentation === "drawer"
-      ? "fixed right-0 top-[48px] bottom-0 w-[min(380px,calc(100vw-72px))] bg-[#101216] border-l border-[#292D35] flex flex-col z-[60] shadow-2xl"
-      : "h-full w-full bg-[#101216] border-l border-[#292D35] flex flex-col";
+  const shellClass = `studio-v2-inspector studio-v2-inspector-${presentation}`;
 
   return (
     <aside className={shellClass} aria-label="Studio context inspector">
+      <div className="studio-v2-inspector-header">
+        <span><strong>Context inspector</strong><small>{selectedPage ? `Page ${pages.findIndex((page) => page.page_id === selectedPage.page_id) + 1} · current context` : "Document context"}</small></span>
+        {onRequestClose && <button type="button" onClick={onRequestClose} aria-label="Collapse contextual inspector"><PanelRight size={16}/></button>}
+      </div>
       {/* Inspector Tabs */}
-      <div className="flex border-b border-[#292D35] bg-[#101216]">
+      <div className="studio-v2-inspector-tabs">
         <button
           onClick={() => onSelectTab("properties")}
-          className={`flex-1 py-2.5 text-xs font-mono tracking-wider transition-colors ${
-            activeTab === "properties"
-              ? "border-b-2 border-[var(--studio-border-active)] text-[var(--studio-accent)] bg-[#14171C] font-semibold"
-              : "text-[#9AA1AD] hover:text-white border-b-2 border-transparent"
-          }`}
+          className={activeTab === "properties" ? "active" : ""}
         >
           Properties
         </button>
         <button
           onClick={() => onSelectTab("history")}
-          className={`flex-1 py-2.5 text-xs font-mono tracking-wider transition-colors ${
-            activeTab === "history"
-              ? "border-b-2 border-[var(--studio-border-active)] text-[var(--studio-accent)] bg-[#14171C] font-semibold"
-              : "text-[#9AA1AD] hover:text-white border-b-2 border-transparent"
-          }`}
+          className={activeTab === "history" ? "active" : ""}
         >
           History
         </button>
-        {onRequestClose && (
-          <button type="button" onClick={onRequestClose} className="px-3 text-xs text-[#9AA1AD] hover:text-white" aria-label="Close context inspector">
-            Close
-          </button>
-        )}
       </div>
 
       {/* Tab Contents */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="studio-v2-inspector-content">
         {activeTab === "properties" ? (
-          <div className="p-4 space-y-6">
+          <div className="studio-v2-inspector-sections">
             {hasSection("markup") && onMarkupActionChange && onRemoveMarkupBox && onClearMarkup && onApplyMarkup && onCancelMarkup && onCancelMarkupJob && (
               <div data-testid="studio-inspector-section-markup">
                 <StudioV2MarkupPanel
@@ -758,7 +744,7 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
             </div>}
           </div>
         ) : (
-          <div className="p-4">
+          <div className="studio-v2-inspector-sections">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-[var(--studio-accent)]" />

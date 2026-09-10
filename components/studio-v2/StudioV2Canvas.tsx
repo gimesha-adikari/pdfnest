@@ -9,6 +9,8 @@ import {
   Loader2,
   RefreshCw,
   AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { StudioV2OverlayDraft, StudioV2RedactionDraftBox } from "./types";
 import { StudioV2InteractiveOverlay } from "./StudioV2InteractiveOverlay";
@@ -367,7 +369,7 @@ const PageTileRenderer: React.FC<PageTileRendererProps> = ({
         width: hasDimensions ? `${pageWidth * zoomScale}px` : `min(70vw, 32rem)`,
         height: hasDimensions ? `${pageHeight * zoomScale}px` : `min(70vh, 45rem)`,
       }}
-      className={`relative bg-white shadow-2xl transition-all duration-150 select-none cursor-pointer flex flex-col rounded-[2px] ${
+      className={`studio-v2-page-frame ${
         isSelected
           ? "ring-2 ring-[var(--studio-border-active)] ring-offset-2 ring-offset-[#0B0C0F]"
           : "border border-[var(--studio-border)] hover:border-[var(--studio-border-hover)]"
@@ -472,7 +474,7 @@ const PageTileRenderer: React.FC<PageTileRendererProps> = ({
       onLostPointerCapture={() => { cropDragRef.current = null; redactionStartRef.current = null; redactionDraftRef.current = null; setRedactionDraft(null); }}
     >
       {/* Page Header Indicator */}
-      <div className="absolute -top-6 left-0 right-0 flex items-center justify-between text-[11px] font-mono text-[#9AA1AD] px-1 pointer-events-none">
+      <div className="studio-v2-page-label">
         <span>Page {pageIndex + 1}</span>
         {page.rotation > 0 && <span>{page.rotation}°</span>}
       </div>
@@ -815,7 +817,7 @@ export const StudioV2Canvas: React.FC<StudioV2CanvasProps> = ({
 
   return (
     <div
-      className="flex-1 h-full relative flex flex-col bg-[#0B0C0F] overflow-hidden select-none"
+      className="studio-v2-canvas-shell"
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
@@ -824,7 +826,7 @@ export const StudioV2Canvas: React.FC<StudioV2CanvasProps> = ({
       {/* Center Multi-Page Canvas Viewport */}
       <div
         ref={viewportRef}
-        className={`flex-1 overflow-auto p-12 relative z-10 flex flex-col items-center gap-16 ${
+        className={`studio-v2-canvas ${
           isPanning ? "cursor-grab active:cursor-grabbing" : "cursor-default"
         }`}
         onScroll={reportVisiblePage}
@@ -832,6 +834,15 @@ export const StudioV2Canvas: React.FC<StudioV2CanvasProps> = ({
           transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
         }}
       >
+        <div className="studio-v2-canvas-intro">
+          <span><strong>{pages.length}-page document</strong> · Select a page or overlay</span>
+          <span>Page {Math.max(1, pages.findIndex((page) => page.page_id === selectedPageId) + 1)} of {pages.length}</span>
+          <span className="studio-v2-canvas-page-jump">
+            <button type="button" aria-label="Previous page" disabled={pages.findIndex((page) => page.page_id === selectedPageId) <= 0} onClick={() => { const index = pages.findIndex((page) => page.page_id === selectedPageId); if (index > 0) onSelectPage?.(pages[index - 1].page_id); }}><ChevronLeft size={14}/></button>
+            <select aria-label="Jump to page" value={selectedPageId ?? ""} onChange={(event) => onSelectPage?.(event.target.value)}>{pages.map((page, index) => <option key={page.page_id} value={page.page_id}>Page {index + 1} · {index + 1} of {pages.length}</option>)}</select>
+            <button type="button" aria-label="Next page" disabled={pages.findIndex((page) => page.page_id === selectedPageId) >= pages.length - 1} onClick={() => { const index = pages.findIndex((page) => page.page_id === selectedPageId); if (index >= 0 && index < pages.length - 1) onSelectPage?.(pages[index + 1].page_id); }}><ChevronRight size={14}/></button>
+          </span>
+        </div>
         {pages.map((page, index) => (
           <PageTileRenderer
             key={page.page_id}
@@ -866,7 +877,7 @@ export const StudioV2Canvas: React.FC<StudioV2CanvasProps> = ({
       </div>
 
       {/* Bottom Floating Canvas Toolbar (Zoom & Navigation) */}
-      <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-[#14171C] border border-[#292D35] rounded-full px-3 py-1.5 z-30 shadow-xl flex items-center space-x-1 transition-colors">
+      <div className="studio-v2-zoom-dock">
         <button
           onClick={onTogglePan}
           className={`p-1.5 rounded-full transition-colors ${

@@ -172,15 +172,15 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-start justify-center pt-20 px-4"
+      className="studio-v2-command-backdrop"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-[500px] bg-[#14171C] border border-[#292D35] rounded-lg shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-100"
+        className="studio-v2-command-palette"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search Header */}
-        <div className="flex items-center px-4 py-3 border-b border-[#292D35] bg-[#101216]">
+        <div className="studio-v2-command-search">
           <Search className="w-4 h-4 text-[#9AA1AD] mr-3 shrink-0" />
           <input
             ref={inputRef}
@@ -203,7 +203,7 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
         </div>
 
         {/* Command List */}
-        <div className="max-h-[320px] overflow-y-auto p-2">
+        <div className="studio-v2-command-list">
           {filteredCommands.length === 0 ? (
             <div className="py-8 text-center text-xs text-[#717784]">
               No commands found for &ldquo;{query}&rdquo;
@@ -218,11 +218,7 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
                   onClick={cmd.action}
                   onMouseEnter={() => setSelectedIndex(index)}
                   disabled={cmd.disabled}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded text-xs transition-colors ${
-                    isSelected
-                      ? "bg-[#181B21] text-white border border-[#7c3aed]"
-                      : "text-[#9AA1AD] hover:bg-[#181B21] hover:text-white border border-transparent"
-                  }`}
+                  className={isSelected ? "selected" : ""}
                 >
                   <div className="flex items-center gap-3">
                     <Icon className="w-4 h-4 text-[#d2bbff]" />
@@ -245,7 +241,7 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-2 border-t border-[#292D35] bg-[#101216] flex items-center justify-between text-[10px] font-mono text-[#717784]">
+        <div className="studio-v2-command-footer">
           <span>Use ↑↓ to navigate • ↵ to select</span>
           <span>ESC to close</span>
         </div>
