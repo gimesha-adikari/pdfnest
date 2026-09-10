@@ -13,6 +13,7 @@ import {
 
 export interface SharedEditorProps {
   baseline: EditorLayout;
+  initialPageIndex?: number;
   renderPageVisual: (pageIndex: number, context: EditorVisualContext) => ReactNode;
   onCompile: (layout: EditorLayout) => void | Promise<void>;
   compiling?: boolean;
@@ -278,6 +279,7 @@ function WordInlineEditor({
 
 export function SharedEditor({
   baseline,
+  initialPageIndex,
   renderPageVisual,
   onCompile,
   compiling = false,
@@ -286,8 +288,9 @@ export function SharedEditor({
   onDirtyChange,
 }: SharedEditorProps) {
   const [state, dispatch] = useReducer(editorReducer, baseline, createEditorState);
-  const [pageIndex, setPageIndex] = useState(0);
-  const [selectedId, setSelectedId] = useState<string | null>(baseline.pages[0]?.elements[0]?.id ?? null);
+  const resolvedInitialPageIndex = clampPageIndex(initialPageIndex ?? 0, baseline.pages.length);
+  const [pageIndex, setPageIndex] = useState(resolvedInitialPageIndex);
+  const [selectedId, setSelectedId] = useState<string | null>(baseline.pages[resolvedInitialPageIndex]?.elements[0]?.id ?? null);
   const [selectedWordId, setSelectedWordId] = useState<string | null>(null);
   const [selection, setSelection] = useState<{ start: number; end: number; text: string }>();
   const [zoom, setZoom] = useState(1);

@@ -1151,6 +1151,7 @@ export const StudioV2Shell: React.FC = () => {
         baseVersionId={activeVersion.id}
         documentName={docInfo.name}
         vdm={vdm}
+        selectedPageId={selectedPageId}
         newIdempotencyKey={newIdempotencyKey}
         onBack={() => setEditMode(false)}
         onCompiled={async () => { await refetch(); setEditMode(false); }}
