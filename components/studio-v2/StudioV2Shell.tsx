@@ -6,7 +6,6 @@ import { StudioV2Header } from "./StudioV2Header";
 import { StudioV2Workspace } from "./StudioV2Workspace";
 import { StudioV2CommandPalette } from "./StudioV2CommandPalette";
 import { StudioV2MobileNav } from "./StudioV2MobileNav";
-import { StudioV2BottomSheet } from "./StudioV2BottomSheet";
 import { StudioV2Entry } from "./StudioV2Entry";
 import { StudioV2EditWorkspace } from "./StudioV2EditWorkspace";
 import { useStudioSession } from "@/hooks/studio-v2/useStudioSession";
@@ -1002,7 +1001,9 @@ export const StudioV2Shell: React.FC = () => {
   const handleSelectTool = useCallback((tool: ToolCategory) => {
     setActiveTool(tool);
     if (typeof window !== "undefined" && window.innerWidth < 768) {
-      setMobileSheetOpen(true);
+      // Annotate intentionally opens at a compact contextual peek. Other
+      // workspaces leave the canvas dominant until the user asks for context.
+      setMobileSheetOpen(tool === "annotate");
     }
   }, []);
 
@@ -1151,6 +1152,7 @@ export const StudioV2Shell: React.FC = () => {
         onUndo={undo}
         onRedo={redo}
         onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+        onMoreOpened={() => setMobileSheetOpen(false)}
         onOpenSettings={() => openLeaveConfirmation("/dashboard/settings")}
         onOpenHelp={() => setHelpOpen(true)}
         onNavigateHome={() => openLeaveConfirmation("/")}
@@ -1284,24 +1286,14 @@ export const StudioV2Shell: React.FC = () => {
         markupCanRedo={markupHistory.future.length > 0}
         onMarkupUndo={undoMarkupDraft}
         onMarkupRedo={redoMarkupDraft}
+        mobileSheetOpen={mobileSheetOpen}
+        onCloseMobileSheet={() => setMobileSheetOpen(false)}
       />
 
       {/* Mobile Bottom Docked Navigation */}
       <StudioV2MobileNav
         activeTool={activeTool}
         onSelectTool={handleSelectTool}
-      />
-
-      {/* Mobile Contextual Bottom Sheet */}
-      <StudioV2BottomSheet
-        isOpen={mobileSheetOpen}
-        activeTool={activeTool}
-        onClose={() => setMobileSheetOpen(false)}
-        onRotatePage={() => void handleRotate(90)}
-        onDeletePage={() => void handleDeletePage()}
-        onMovePageEarlier={() => void handleReorderPage(-1)}
-        onMovePageLater={() => void handleReorderPage(1)}
-        onDuplicatePage={() => void handleDuplicatePage()}
       />
 
       {/* Command Palette Modal (Cmd+K) */}

@@ -4,11 +4,8 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   Search,
   RotateCw,
-  Crop,
-  Droplets,
   Download,
   Maximize2,
-  FilePlus,
   X,
 } from "lucide-react";
 
@@ -77,49 +74,12 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
       },
     },
     {
-      id: "crop",
-      label: "Crop Selected Page Area",
-      badge: "Phase 3F",
-      category: "PAGE MUTATIONS",
-      icon: Crop,
-      disabled: true,
-      action: () => {
-        onCropPage?.();
-        onClose();
-      },
-    },
-    {
-      id: "watermark",
-      label: "Add Confidential Watermark",
-      badge: "Phase 3F",
-      category: "DOCUMENT TOOLS",
-      icon: Droplets,
-      disabled: true,
-      action: () => {
-        onAddWatermark?.();
-        onClose();
-      },
-    },
-    {
-      id: "new_page",
-      label: "Insert Blank Page",
-      badge: "Phase 3F",
-      category: "DOCUMENT TOOLS",
-      icon: FilePlus,
-      disabled: true,
-      action: () => {
-        onNewPage?.();
-        onClose();
-      },
-    },
-    {
       id: "export",
       label: "Export Final PDF",
-      badge: "Phase 3H",
       category: "FILE ACTIONS",
       icon: Download,
       shortcut: "⇧⌘E",
-      disabled: true,
+      disabled: !onExport,
       action: () => {
         onExport?.();
         onClose();
@@ -127,8 +87,10 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
     },
   ];
 
+  const normalizeQuery = (value: string) => value.toLocaleLowerCase().replace(/[\s/_\-.,:;!?()[\]{}]+/g, "");
+  const normalizedQuery = normalizeQuery(query);
   const filteredCommands = commands.filter((cmd) =>
-    cmd.label.toLowerCase().includes(query.toLowerCase())
+    normalizeQuery(`${cmd.label} ${cmd.category}`).includes(normalizedQuery)
   );
 
   useEffect(() => {

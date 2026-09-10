@@ -1,9 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { StudioV2Sidebar } from "./StudioV2Sidebar";
 import { StudioV2Canvas } from "./StudioV2Canvas";
 import { StudioV2Inspector } from "./StudioV2Inspector";
+import { StudioV2BottomSheet } from "./StudioV2BottomSheet";
+import { SlidersHorizontal } from "lucide-react";
 import { DocumentInfo, HistoryItem, InspectorTab, StudioV2OverlayDraft, StudioV2RedactionDraftBox, ToolCategory } from "./types";
 import { StudioJobDTO, StudioMarkupAction, StudioMarkupAnalysis, StudioMarkupBox, StudioMarkupMode, StudioMetadataParameters, StudioSignatureOverlayParameters, StudioTextOverlayParameters, StudioUpdateSignatureOverlayParameters, StudioUpdateTextOverlayParameters, StudioVDMDTO } from "@/lib/studio-v2/api";
 
@@ -88,6 +90,8 @@ interface StudioV2WorkspaceProps {
   onTrash?: () => void;
   onHelp?: () => void;
   isSessionActionDisabled?: boolean;
+  mobileSheetOpen?: boolean;
+  onCloseMobileSheet?: () => void;
 }
 
 export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
@@ -171,7 +175,74 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
   onTrash,
   onHelp,
   isSessionActionDisabled,
+  mobileSheetOpen = false,
+  onCloseMobileSheet,
 }) => {
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const renderInspector = (presentation: "desktop" | "drawer" | "sheet", onRequestClose?: () => void) => (
+    <StudioV2Inspector
+      presentation={presentation}
+      onRequestClose={onRequestClose}
+      document={document}
+      activeTab={inspectorTab}
+      history={history}
+      onSelectTab={onSelectInspectorTab}
+      onCheckoutVersion={onCheckoutVersion}
+      metadata={metadata}
+      onUpdateMetadata={onUpdateMetadata}
+      selectedPage={vdm?.pages.find((page) => page.page_id === selectedPageId) ?? null}
+      onRotateClockwise={onRotateClockwise}
+      onRotateCounterClockwise={onRotateCounterClockwise}
+      onDeletePage={onDeletePage}
+      onMovePageEarlier={onMovePageEarlier}
+      onMovePageLater={onMovePageLater}
+      onDuplicatePage={onDuplicatePage}
+      onCropPage={onCropPage}
+      pages={vdm?.pages ?? []}
+      cropDraft={cropDraft}
+      onCropDraftChange={onCropDraftChange}
+      cropTargetMode={cropTargetMode}
+      cropCustomPages={cropCustomPages}
+      onCropTargetModeChange={onCropTargetModeChange}
+      onCropCustomPagesChange={onCropCustomPagesChange}
+      selectedOverlayId={selectedOverlayId}
+      onSelectOverlay={onSelectOverlay}
+      onAddText={onAddText}
+      onUpdateText={onUpdateText}
+      onRemoveText={onRemoveText}
+      onAddSignature={onAddSignature}
+      onUpdateSignature={onUpdateSignature}
+      onRemoveSignature={onRemoveSignature}
+      overlayDraft={overlayDraft}
+      onOverlayDraftChange={onOverlayDraftChange}
+      canMovePageEarlier={canMovePageEarlier}
+      canMovePageLater={canMovePageLater}
+      isCommandLoading={isCommandLoading}
+      activeTool={activeTool}
+      markupAction={markupAction}
+      markupMode={markupMode}
+      markupAnalysis={markupAnalysis}
+      markupAnalysisLoading={markupAnalysisLoading}
+      markupAnalysisError={markupAnalysisError}
+      markupColor={markupColor}
+      markupBoxes={markupBoxes}
+      markupJob={markupJob}
+      markupError={markupError}
+      onMarkupActionChange={onMarkupActionChange}
+      onMarkupModeChange={onMarkupModeChange}
+      onMarkupColorChange={onMarkupColorChange}
+      onRemoveMarkupBox={onRemoveMarkupBox}
+      onClearMarkup={onClearMarkup}
+      onApplyMarkup={onApplyMarkup}
+      onCancelMarkup={onCancelMarkup}
+      onCancelMarkupJob={onCancelMarkupJob}
+      markupCanUndo={markupCanUndo}
+      markupCanRedo={markupCanRedo}
+      onMarkupUndo={onMarkupUndo}
+      onMarkupRedo={onMarkupRedo}
+    />
+  );
+
   return (
     <div className="studio-v2-theme flex h-screen w-screen overflow-hidden bg-[#0B0C0F]">
       {/* Desktop Left Sidebar */}
@@ -189,7 +260,7 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
       </div>
 
       {/* Central Fluid Canvas Workspace */}
-      <main className="flex-1 md:ml-[260px] md:mr-[300px] mt-[48px] mb-[56px] md:mb-0 h-[calc(100vh-48px-56px)] md:h-[calc(100vh-48px)] relative flex bg-[#0B0C0F] overflow-hidden">
+      <main className="flex-1 md:ml-[72px] min-[1400px]:mr-[320px] mt-[48px] mb-[56px] md:mb-0 h-[calc(100vh-48px-56px)] md:h-[calc(100vh-48px)] relative flex bg-[#0B0C0F] overflow-hidden">
         <StudioV2Canvas
           sessionId={sessionId}
           versionId={versionId}
@@ -221,70 +292,17 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
           onOverlayDraftChange={activeTool === "edit" || activeTool === "layers" ? onOverlayDraftChange : undefined}
           onOverlayCommit={activeTool === "edit" || activeTool === "layers" ? onOverlayCommit : undefined}
         />
+        <button type="button" onClick={() => setDrawerOpen(true)} className="studio-v2-focus absolute right-3 top-3 z-20 hidden min-[768px]:flex min-[1400px]:hidden items-center gap-2 rounded border border-[var(--studio-border)] bg-[#101216]/95 px-3 py-2 text-xs text-[#D8DCE3] shadow-lg hover:text-white" aria-label="Open context inspector">
+          <SlidersHorizontal className="h-4 w-4" /> Context
+        </button>
       </main>
 
-      {/* Desktop Right Inspector */}
-      <div className="hidden md:block">
-        <StudioV2Inspector
-          document={document}
-          activeTab={inspectorTab}
-          history={history}
-          onSelectTab={onSelectInspectorTab}
-          onCheckoutVersion={onCheckoutVersion}
-          metadata={metadata}
-          onUpdateMetadata={onUpdateMetadata}
-          selectedPage={vdm?.pages.find((page) => page.page_id === selectedPageId) ?? null}
-          onRotateClockwise={onRotateClockwise}
-          onRotateCounterClockwise={onRotateCounterClockwise}
-          onDeletePage={onDeletePage}
-          onMovePageEarlier={onMovePageEarlier}
-          onMovePageLater={onMovePageLater}
-          onDuplicatePage={onDuplicatePage}
-          onCropPage={onCropPage}
-          pages={vdm?.pages ?? []}
-          cropDraft={cropDraft}
-          onCropDraftChange={onCropDraftChange}
-          cropTargetMode={cropTargetMode}
-          cropCustomPages={cropCustomPages}
-          onCropTargetModeChange={onCropTargetModeChange}
-          onCropCustomPagesChange={onCropCustomPagesChange}
-          selectedOverlayId={selectedOverlayId}
-          onSelectOverlay={onSelectOverlay}
-          onAddText={onAddText}
-          onUpdateText={onUpdateText}
-          onRemoveText={onRemoveText}
-          onAddSignature={onAddSignature}
-          onUpdateSignature={onUpdateSignature}
-          onRemoveSignature={onRemoveSignature}
-          overlayDraft={overlayDraft}
-          onOverlayDraftChange={onOverlayDraftChange}
-          canMovePageEarlier={canMovePageEarlier}
-          canMovePageLater={canMovePageLater}
-          isCommandLoading={isCommandLoading}
-          activeTool={activeTool}
-          markupAction={markupAction}
-          markupMode={markupMode}
-          markupAnalysis={markupAnalysis}
-          markupAnalysisLoading={markupAnalysisLoading}
-          markupAnalysisError={markupAnalysisError}
-          markupColor={markupColor}
-          markupBoxes={markupBoxes}
-          markupJob={markupJob}
-          markupError={markupError}
-          onMarkupActionChange={onMarkupActionChange}
-          onMarkupModeChange={onMarkupModeChange}
-          onMarkupColorChange={onMarkupColorChange}
-          onRemoveMarkupBox={onRemoveMarkupBox}
-          onClearMarkup={onClearMarkup}
-          onApplyMarkup={onApplyMarkup}
-          onCancelMarkup={onCancelMarkup}
-          onCancelMarkupJob={onCancelMarkupJob}
-          markupCanUndo={markupCanUndo}
-          markupCanRedo={markupCanRedo}
-          onMarkupUndo={onMarkupUndo}
-          onMarkupRedo={onMarkupRedo}
-        />
-      </div>
+      {/* A wide inspector is reserved for genuinely wide desktops. */}
+      <div className="hidden min-[1400px]:block fixed right-0 top-[48px] bottom-0 w-[320px] z-40">{renderInspector("desktop")}</div>
+      {drawerOpen && <div className="hidden min-[768px]:block min-[1400px]:hidden">{renderInspector("drawer", () => setDrawerOpen(false))}</div>}
+      <StudioV2BottomSheet isOpen={mobileSheetOpen} title={`${activeTool} tools & properties`} onClose={onCloseMobileSheet ?? (() => undefined)}>
+        {renderInspector("sheet", onCloseMobileSheet)}
+      </StudioV2BottomSheet>
     </div>
   );
 };

@@ -11,6 +11,9 @@ import { studioV2CategoryHasSection } from "./studioV2ToolTaxonomy";
 import { StudioJobDTO, StudioMarkupAction, StudioMarkupAnalysis, StudioMarkupBox, StudioMarkupMode, StudioMetadataParameters, StudioSignatureOverlayParameters, StudioTextOverlayParameters, StudioUpdateSignatureOverlayParameters, StudioUpdateTextOverlayParameters, VDMPageDescriptorDTO } from "@/lib/studio-v2/api";
 
 interface StudioV2InspectorProps {
+  /** Presentation wrapper only. The inspector always receives the same Studio state. */
+  presentation?: "desktop" | "drawer" | "sheet";
+  onRequestClose?: () => void;
   document: DocumentInfo;
   activeTab: InspectorTab;
   history: HistoryItem[];
@@ -71,6 +74,8 @@ interface StudioV2InspectorProps {
 }
 
 export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
+  presentation = "desktop",
+  onRequestClose,
   document,
   activeTab,
   history,
@@ -322,8 +327,15 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
     }
   };
 
+  const isSheet = presentation === "sheet";
+  const shellClass = isSheet
+    ? "h-full min-h-0 w-full bg-[#101216] flex flex-col"
+    : presentation === "drawer"
+      ? "fixed right-0 top-[48px] bottom-0 w-[min(380px,calc(100vw-72px))] bg-[#101216] border-l border-[#292D35] flex flex-col z-[60] shadow-2xl"
+      : "h-full w-full bg-[#101216] border-l border-[#292D35] flex flex-col";
+
   return (
-    <aside className="fixed right-0 top-[48px] bottom-0 w-[300px] bg-[#101216] border-l border-[#292D35] flex flex-col z-40">
+    <aside className={shellClass} aria-label="Studio context inspector">
       {/* Inspector Tabs */}
       <div className="flex border-b border-[#292D35] bg-[#101216]">
         <button
@@ -346,6 +358,11 @@ export const StudioV2Inspector: React.FC<StudioV2InspectorProps> = ({
         >
           History
         </button>
+        {onRequestClose && (
+          <button type="button" onClick={onRequestClose} className="px-3 text-xs text-[#9AA1AD] hover:text-white" aria-label="Close context inspector">
+            Close
+          </button>
+        )}
       </div>
 
       {/* Tab Contents */}

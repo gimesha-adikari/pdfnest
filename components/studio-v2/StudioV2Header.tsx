@@ -34,6 +34,7 @@ interface StudioV2HeaderProps {
   onUndo?: () => void;
   onRedo?: () => void;
   onOpenCommandPalette?: () => void;
+  onMoreOpened?: () => void;
   onOpenSettings?: () => void;
   onOpenHelp?: () => void;
   onNavigateHome?: () => void;
@@ -79,6 +80,7 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
   onUndo,
   onRedo,
   onOpenCommandPalette,
+  onMoreOpened,
   onOpenSettings,
   onOpenHelp,
   onNavigateHome,
@@ -364,21 +366,21 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
     switch (document.syncStatus) {
       case "saving":
         return (
-          <div className="h-[48px] flex items-center gap-1.5 px-3 text-[var(--studio-accent)] text-xs">
+          <div role="status" className="h-[48px] flex items-center gap-1.5 px-3 text-[var(--studio-accent)] text-xs">
             <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--studio-accent)]" />
             <span>Syncing...</span>
           </div>
         );
       case "error":
         return (
-          <div className="h-[48px] flex items-center gap-1.5 px-3 text-red-400 text-xs">
+          <div role="alert" className="h-[48px] flex items-center gap-1.5 px-3 text-red-400 text-xs">
             <AlertCircle className="w-3.5 h-3.5 text-red-400" />
             <span>Sync Error</span>
           </div>
         );
       case "loading":
         return (
-          <div className="h-[48px] flex items-center gap-1.5 px-3 text-[#9AA1AD] text-xs">
+          <div role="status" className="h-[48px] flex items-center gap-1.5 px-3 text-[#9AA1AD] text-xs">
             <Loader2 className="w-3.5 h-3.5 animate-spin text-[#9AA1AD]" />
             <span>Loading...</span>
           </div>
@@ -386,7 +388,7 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
       case "saved":
       default:
         return (
-          <div className="h-[48px] flex items-center gap-1.5 px-3 text-[#9AA1AD] text-xs">
+          <div role="status" className="h-[48px] flex items-center gap-1.5 px-3 text-[#9AA1AD] text-xs">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
             <span>Status: Saved</span>
           </div>
@@ -397,7 +399,7 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
   return (
     <header className="fixed top-0 left-0 right-0 h-[48px] bg-[#101216] border-b border-[var(--studio-border)] flex items-center justify-between gap-3 px-4 z-50 transition-colors duration-200">
       {/* Brand & Left Navigation */}
-      <div className="flex items-center gap-6">
+      <div className="flex min-w-0 items-center gap-3">
         <button type="button" onClick={onNavigateHome} aria-label="Go to Platen home" className="flex items-baseline gap-2 rounded px-1 text-left hover:bg-[var(--studio-surface-raised)]">
           <span className="font-bold text-[16px] text-white tracking-wide">
             PLATEN
@@ -406,6 +408,10 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
             PDF Studio
           </span>
         </button>
+        <div className="hidden min-w-0 border-l border-[var(--studio-border)] pl-3 sm:block">
+          <div className="truncate text-xs font-medium text-[#F5F7FA]">{document.name}</div>
+          <div className="font-mono text-[10px] text-[#9AA1AD]">{document.pageCount} pages · {document.version}</div>
+        </div>
 
         {/* Desktop Navigation Links */}
         <nav className="hidden md:flex items-center h-[48px] space-x-1">
@@ -443,7 +449,7 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
           onClick={onOpenCommandPalette}
           type="button"
           data-testid="studio-header-search"
-          className="studio-v2-focus flex items-center gap-2 bg-[var(--studio-surface-raised)] border border-[var(--studio-border)] text-[var(--studio-muted)] hover:text-[var(--studio-text)] px-3 py-1 rounded text-xs transition-colors cursor-pointer"
+          className="studio-v2-focus hidden sm:flex items-center gap-2 bg-[var(--studio-surface-raised)] border border-[var(--studio-border)] text-[var(--studio-muted)] hover:text-[var(--studio-text)] px-3 py-1 rounded text-xs transition-colors cursor-pointer"
           aria-label="Search commands"
         >
           <Search className="w-3.5 h-3.5 text-[#9AA1AD]" />
@@ -501,7 +507,7 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
           <button ref={watermarkTriggerRef} type="button" onClick={() => { setWatermarkError(null); togglePopover("watermark"); }} disabled={materializeDisabled || isMaterializing} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50" aria-label="Watermark PDF" aria-expanded={activeToolbarPopover === "watermark"} aria-haspopup="dialog" title="Add a text or image watermark to all current pages">Watermark</button>
           <button ref={pageNumbersTriggerRef} type="button" onClick={() => { setPageNumbersError(null); togglePopover("pageNumbers"); }} disabled={materializeDisabled || isMaterializing} className="studio-v2-focus studio-v2-toolbar-control rounded px-2.5 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50" aria-label="Page Numbers" aria-expanded={activeToolbarPopover === "pageNumbers"} aria-haspopup="dialog" title="Add or remove sequential page numbers" data-testid="studio-page-numbers-button">Page Numbers</button>
         </div>
-        <button ref={moreTriggerRef} type="button" onClick={() => togglePopover("more")} className="studio-v2-focus studio-v2-toolbar-control flex items-center gap-1 rounded border px-2.5 py-1.5 text-xs 2xl:hidden" aria-label="More document tools" aria-expanded={activeToolbarPopover === "more"} aria-haspopup="dialog"><MoreHorizontal className="w-3.5 h-3.5" /> More</button>
+        <button ref={moreTriggerRef} type="button" onClick={() => { onMoreOpened?.(); togglePopover("more"); }} className="studio-v2-focus studio-v2-toolbar-control flex items-center gap-1 rounded border px-2.5 py-1.5 text-xs 2xl:hidden" aria-label="More document tools" aria-expanded={activeToolbarPopover === "more"} aria-haspopup="dialog"><MoreHorizontal className="w-3.5 h-3.5" /> More</button>
         <button
           onClick={() => void submissionGuard.run("export", async () => { await onExport?.(); })}
           disabled={exportDisabled || isExporting || submissionGuard.isPending("export")}
