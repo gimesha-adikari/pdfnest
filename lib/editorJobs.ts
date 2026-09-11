@@ -1,6 +1,7 @@
 "use client";
 
 import { getBaseUrl } from "@/lib/api";
+import { abortableDelay } from "@/lib/abortableDelay";
 
 export type EditorJobStatus =
     | "queued"
@@ -123,9 +124,6 @@ export async function waitForEditorJob(
             throw new Error("Job execution stalled without progress for more than 3 minutes.");
         }
 
-        await new Promise<void>((resolve, reject) => {
-            const timer = window.setTimeout(resolve, 1500);
-            signal?.addEventListener("abort", () => { window.clearTimeout(timer); reject(signal.reason); }, { once: true });
-        });
+        await abortableDelay(1500, signal);
     }
 }

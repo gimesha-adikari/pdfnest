@@ -64,6 +64,7 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
   const commands: CommandItem[] = [
@@ -173,8 +174,26 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
       if (!isOpen) return;
 
       if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
         onClose();
-      } else if (e.key === "ArrowDown") {
+        return;
+      }
+      if (e.key === "Tab" && dialogRef.current) {
+        const focusable = [...dialogRef.current.querySelectorAll<HTMLElement>(":is(button, input):not(:disabled)")];
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault(); last?.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault(); first?.focus();
+        }
+        return;
+      }
+      // Focused buttons retain their own Enter behavior. Search navigation
+      // must not dispatch a different highlighted command behind that focus.
+      if (e.target !== inputRef.current) return;
+      if (e.key === "ArrowDown") {
         e.preventDefault();
         setSelectedIndex((prev) => (prev + 1) % (filteredCommands.length || 1));
       } else if (e.key === "ArrowUp") {
@@ -184,7 +203,7 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
         );
       } else if (e.key === "Enter" && filteredCommands[selectedIndex]) {
         e.preventDefault();
-        filteredCommands[selectedIndex].action();
+        if (!filteredCommands[selectedIndex].disabled) filteredCommands[selectedIndex].action();
       }
     };
 
@@ -200,6 +219,10 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Search Studio commands"
         className="studio-v2-command-palette"
         onClick={(e) => e.stopPropagation()}
       >
@@ -211,6 +234,11 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
           <Search className="w-4 h-4 text-[#9AA1AD] mr-3 shrink-0" />
           <input
             ref={inputRef}
+            role="combobox"
+            aria-label="Search Studio commands"
+            aria-expanded="true"
+            aria-controls="studio-command-list"
+            aria-activedescendant={filteredCommands[selectedIndex] ? `studio-command-${filteredCommands[selectedIndex].id}` : undefined}
             type="text"
             value={query}
             onChange={(e) => {
@@ -223,7 +251,7 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
         </div>
 
         {/* Command List */}
-        <div className="studio-v2-command-list">
+        <div id="studio-command-list" role="listbox" aria-label="Studio commands" className="studio-v2-command-list">
           {filteredCommands.length === 0 ? (
             <div className="py-8 text-center text-xs text-[#717784]">
               No commands found for &ldquo;{query}&rdquo;
@@ -235,7 +263,7 @@ export const StudioV2CommandPalette: React.FC<StudioV2CommandPaletteProps> = ({
               const showGroup = index === 0 || cmd.category !== filteredCommands[index - 1].category;
               return <React.Fragment key={cmd.id}>
                 {showGroup && <div className="studio-v2-command-group-label">{cmd.category}</div>}
-                <button onClick={cmd.action} onMouseEnter={() => setSelectedIndex(index)} disabled={cmd.disabled} className={isSelected ? "selected" : ""}>
+                <button id={`studio-command-${cmd.id}`} role="option" aria-selected={isSelected} aria-disabled={cmd.disabled || undefined} onClick={cmd.action} onMouseEnter={() => setSelectedIndex(index)} disabled={cmd.disabled} className={isSelected ? "selected" : ""}>
                   <div className="studio-v2-command-row-copy"><Icon className="w-4 h-4" /><span><strong>{cmd.label}</strong><small>{cmd.hint}</small></span>{cmd.badge && <em>{cmd.badge}</em>}</div>
                   <div className="studio-v2-command-row-end">{cmd.shortcut && <kbd>{cmd.shortcut}</kbd>}{isSelected && <span aria-hidden="true">›</span>}</div>
                 </button>

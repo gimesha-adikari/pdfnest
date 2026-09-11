@@ -7,6 +7,7 @@
 import { spawnSync } from "child_process";
 import fs from "fs";
 import path from "path";
+import { runEsmUnitTest } from "./runEsmUnitTest";
 
 const UNIT_DIR = path.resolve(__dirname, "unit");
 
@@ -24,19 +25,20 @@ const EXCLUDED = new Set([
 function main() {
     const files = fs
         .readdirSync(UNIT_DIR)
-        .filter((file) => file.endsWith(".test.ts") && !EXCLUDED.has(file))
+        .filter((file) => /\.test\.(?:ts|mts)$/.test(file) && !EXCLUDED.has(file))
         .sort();
 
     const failed: string[] = [];
 
     for (const file of files) {
         console.log(`\n=== ${file} ===`);
-        const result = spawnSync("npx", ["tsx", path.join(UNIT_DIR, file)], {
+        const status = file.endsWith(".mts") ? runEsmUnitTest(path.join(UNIT_DIR, file)) : spawnSync("npx", ["tsx", path.join(UNIT_DIR, file)], {
             stdio: "inherit",
             cwd: path.resolve(__dirname, ".."),
-        });
+            timeout: 120_000,
+        }).status;
 
-        if (result.status !== 0) failed.push(file);
+        if (status !== 0) failed.push(file);
     }
 
     console.log(`\n=== UNIT SUITE: ${files.length - failed.length}/${files.length} files passed ===`);

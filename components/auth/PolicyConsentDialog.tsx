@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { X, ShieldCheck } from "lucide-react";
+import { useModalFocus } from "@/hooks/useModalFocus";
 
 type PolicyConsentDialogProps = {
     open: boolean;
@@ -16,6 +17,7 @@ export default function PolicyConsentDialog({
                                                 onAccept,
                                             }: PolicyConsentDialogProps) {
     const [checked, setChecked] = useState(false);
+    const dialogRef = useModalFocus(open, () => onOpenChange(false));
 
     useEffect(() => {
         if (!open) {
@@ -33,7 +35,7 @@ export default function PolicyConsentDialog({
 
     return (
         <div className="fixed inset-0 z-[130] flex items-center justify-center bg-[var(--background)]/80 backdrop-blur-sm p-4">
-            <div className="relative w-full max-w-lg rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-6 sm:p-8 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Accept account policies" tabIndex={-1} className="relative w-full max-w-lg rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-6 sm:p-8 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
                 <button
                     type="button"
                     onClick={() => onOpenChange(false)}

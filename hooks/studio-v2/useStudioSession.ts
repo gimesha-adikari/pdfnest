@@ -59,6 +59,7 @@ export function useStudioSession(initialSessionId?: string | null) {
 
   const isMountedRef = useRef<boolean>(true);
   const currentRequestIdRef = useRef<number>(0);
+  const historyRequestIdRef = useRef<number>(0);
   // Version mutations share one authoritative base version. This synchronous
   // boundary closes the same-tick race before syncStatus can rerender.
   const versionMutationGuardRef = useRef(new StudioV2SubmissionGuard());
@@ -70,18 +71,19 @@ export function useStudioSession(initialSessionId?: string | null) {
     };
   }, []);
 
-  const refreshHistory = useCallback(async (sessionId: string) => {
-    if (!isMountedRef.current) return;
+  const refreshHistory = useCallback(async (sessionId: string, requestId = currentRequestIdRef.current) => {
+    if (!isMountedRef.current || requestId !== currentRequestIdRef.current) return;
+    const historyId = ++historyRequestIdRef.current;
     setHistoryStatus("loading");
     try {
       const histData = await studioV2Api.getHistory(sessionId);
-      if (isMountedRef.current) {
+      if (isMountedRef.current && requestId === currentRequestIdRef.current && historyId === historyRequestIdRef.current) {
         setHistory(histData.versions || []);
         setOperations(histData.operations || []);
         setHistoryStatus("ready");
       }
     } catch {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && requestId === currentRequestIdRef.current && historyId === historyRequestIdRef.current) {
         setHistoryStatus("error");
       }
     }
@@ -103,7 +105,7 @@ export function useStudioSession(initialSessionId?: string | null) {
           setSyncStatus("saved");
           setLifecycle("ready");
         }
-        await refreshHistory(sessionId);
+        await refreshHistory(sessionId, requestId);
       } catch (err: unknown) {
         if (isMountedRef.current && requestId === currentRequestIdRef.current) {
           const msg =
@@ -144,7 +146,7 @@ export function useStudioSession(initialSessionId?: string | null) {
             window.history.replaceState(null, "", url.toString());
           }
         }
-        await refreshHistory(data.session.id);
+        await refreshHistory(data.session.id, requestId);
         return data;
       } catch (err: unknown) {
         if (isMountedRef.current && requestId === currentRequestIdRef.current) {
@@ -183,7 +185,7 @@ export function useStudioSession(initialSessionId?: string | null) {
             window.history.replaceState(null, "", url.toString());
           }
         }
-        await refreshHistory(data.session.id);
+        await refreshHistory(data.session.id, requestId);
         return data;
       } catch (err: unknown) {
         if (isMountedRef.current && requestId === currentRequestIdRef.current) {
@@ -223,8 +225,9 @@ export function useStudioSession(initialSessionId?: string | null) {
   const discardSession = useCallback(async () => {
     if (!session) return false;
     const sessionId = session.id;
+    const requestId = currentRequestIdRef.current;
     await studioV2Api.deleteSession(sessionId);
-    if (isMountedRef.current) {
+    if (isMountedRef.current && requestId === currentRequestIdRef.current) {
       currentRequestIdRef.current += 1;
       setSession(null);
       setDocument(null);
@@ -249,18 +252,19 @@ export function useStudioSession(initialSessionId?: string | null) {
   const undo = useCallback(async () => {
     if (!session || !activeVersion?.parent_version_id || syncStatus === "saving") return;
     if (!versionMutationGuardRef.current.acquire("version-mutation")) return;
+    const requestId = currentRequestIdRef.current;
     setSyncStatus("saving");
     setError(null);
     try {
       const res = await studioV2Api.undo(session.id);
-      if (isMountedRef.current) {
+      if (isMountedRef.current && requestId === currentRequestIdRef.current) {
         setActiveVersion(res.version);
         setVdm(res.vdm);
         setSyncStatus("saved");
       }
-      await refreshHistory(session.id);
+      await refreshHistory(session.id, requestId);
     } catch (err: unknown) {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && requestId === currentRequestIdRef.current) {
         setError(err instanceof Error ? err.message : "Undo failed");
         setSyncStatus("error");
       }
@@ -272,18 +276,19 @@ export function useStudioSession(initialSessionId?: string | null) {
   const redo = useCallback(async () => {
     if (!session || !activeVersion?.preferred_child_id || syncStatus === "saving") return;
     if (!versionMutationGuardRef.current.acquire("version-mutation")) return;
+    const requestId = currentRequestIdRef.current;
     setSyncStatus("saving");
     setError(null);
     try {
       const res = await studioV2Api.redo(session.id);
-      if (isMountedRef.current) {
+      if (isMountedRef.current && requestId === currentRequestIdRef.current) {
         setActiveVersion(res.version);
         setVdm(res.vdm);
         setSyncStatus("saved");
       }
-      await refreshHistory(session.id);
+      await refreshHistory(session.id, requestId);
     } catch (err: unknown) {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && requestId === currentRequestIdRef.current) {
         setError(err instanceof Error ? err.message : "Redo failed");
         setSyncStatus("error");
       }
@@ -296,18 +301,19 @@ export function useStudioSession(initialSessionId?: string | null) {
     async (versionId: string) => {
       if (!session || syncStatus === "saving") return;
       if (!versionMutationGuardRef.current.acquire("version-mutation")) return;
+      const requestId = currentRequestIdRef.current;
       setSyncStatus("saving");
       setError(null);
       try {
         const res = await studioV2Api.checkout(session.id, versionId);
-        if (isMountedRef.current) {
+        if (isMountedRef.current && requestId === currentRequestIdRef.current) {
           setActiveVersion(res.version);
           setVdm(res.vdm);
           setSyncStatus("saved");
         }
-        await refreshHistory(session.id);
+        await refreshHistory(session.id, requestId);
       } catch (err: unknown) {
-        if (isMountedRef.current) {
+        if (isMountedRef.current && requestId === currentRequestIdRef.current) {
           setError(err instanceof Error ? err.message : "Version checkout failed");
           setSyncStatus("error");
         }
@@ -322,21 +328,24 @@ export function useStudioSession(initialSessionId?: string | null) {
     async (command: StudioCommand): Promise<ApplyOperationResponse | null> => {
       if (!session || !activeVersion || syncStatus === "saving") return null;
       if (!versionMutationGuardRef.current.acquire("version-mutation")) return null;
+      const requestId = currentRequestIdRef.current;
       setSyncStatus("saving");
       setError(null);
       try {
         const res = await studioV2Api.executeCommand(session.id, command);
-        if (isMountedRef.current) {
+        if (isMountedRef.current && requestId === currentRequestIdRef.current) {
           setActiveVersion(res.version);
           setVdm(res.vdm);
           setSyncStatus("saved");
         }
-        await refreshHistory(session.id);
+        await refreshHistory(session.id, requestId);
         return res;
       } catch (err: unknown) {
-        if (isMountedRef.current) {
+        if (isMountedRef.current && requestId === currentRequestIdRef.current) {
           if (err instanceof StudioApiError && err.status === 409) {
+            const reloadId = currentRequestIdRef.current + 1;
             await loadSession(session.id);
+            if (!isMountedRef.current || currentRequestIdRef.current !== reloadId) return null;
             setError("Studio changed in another window. Refresh complete; please retry.");
           } else {
             setError(err instanceof Error ? err.message : "Studio command failed");
@@ -355,19 +364,20 @@ export function useStudioSession(initialSessionId?: string | null) {
     async (request: StudioMaterializationRequest): Promise<StudioMaterializationResponse | null> => {
       if (!session || !activeVersion || syncStatus === "saving") return null;
       if (!versionMutationGuardRef.current.acquire("version-mutation")) return null;
+      const requestId = currentRequestIdRef.current;
       setSyncStatus("saving");
       setError(null);
       try {
         const res = await studioV2Api.materialize(session.id, request);
-        if (isMountedRef.current) {
+        if (isMountedRef.current && requestId === currentRequestIdRef.current) {
           setActiveVersion(res.version);
           setVdm(res.vdm);
           setSyncStatus("saved");
         }
-        await refreshHistory(session.id);
+        await refreshHistory(session.id, requestId);
         return res;
       } catch (err: unknown) {
-        if (isMountedRef.current) {
+        if (isMountedRef.current && requestId === currentRequestIdRef.current) {
           setError(err instanceof Error ? err.message : "Studio materialization failed");
           setSyncStatus("error");
         }
