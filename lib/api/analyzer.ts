@@ -78,9 +78,9 @@ export const analyzerApi = {
     /**
      * GET /api/v1/analyzer/tasks/:id
      */
-    async getTaskStatus(taskId: string): Promise<TaskStatusResponse> {
+    async getTaskStatus(taskId: string, signal?: AbortSignal): Promise<TaskStatusResponse> {
         const base = getBaseUrl();
-        const resp = await client.get<TaskStatusResponse>(`${base}/api/v1/analyzer/tasks/${encodeURIComponent(taskId)}`);
+        const resp = await client.get<TaskStatusResponse>(`${base}/api/v1/analyzer/tasks/${encodeURIComponent(taskId)}`, { signal, timeout: 15_000 });
         return resp.data;
     },
 
@@ -94,10 +94,14 @@ export const analyzerApi = {
     ): () => void {
         let isClosed = false;
         let ws: WebSocket | null = null;
-        let pollTimer: ReturnType<typeof setInterval> | null = null;
+        let pollTimer: ReturnType<typeof setTimeout> | null = null;
+        let polling = false;
+        let failures = 0;
+        const controller = new AbortController();
 
         const cleanup = () => {
             isClosed = true;
+            controller.abort();
             if (ws) {
                 try {
                     ws.close();
@@ -107,25 +111,38 @@ export const analyzerApi = {
                 ws = null;
             }
             if (pollTimer) {
-                clearInterval(pollTimer);
+                clearTimeout(pollTimer);
                 pollTimer = null;
             }
         };
 
         const startPollingFallback = () => {
-            if (isClosed || pollTimer) return;
-            pollTimer = setInterval(async () => {
+            if (isClosed || polling) return;
+            polling = true;
+            if (ws) {
+                ws.onclose = ws.onerror = ws.onmessage = null;
+                ws.close();
+                ws = null;
+            }
+            const poll = async () => {
+                pollTimer = null;
                 if (isClosed) return;
                 try {
-                    const status = await analyzerApi.getTaskStatus(taskId);
+                    const status = await analyzerApi.getTaskStatus(taskId, controller.signal);
+                    if (isClosed) return;
+                    failures = 0;
                     onProgress(status);
-                    if (status.status === "COMPLETED" || status.status === "FAILED") {
-                        cleanup();
-                    }
-                } catch (e) {
-                    if (onError) onError(e);
+                    if (status.status === "COMPLETED" || status.status === "FAILED") cleanup();
+                } catch (error) {
+                    if (isClosed) return;
+                    failures += 1;
+                    onError?.(error);
+                    if (failures >= 5) cleanup();
+                } finally {
+                    if (!isClosed) pollTimer = setTimeout(poll, Math.min(8_000, 1_000 * 2 ** failures));
                 }
-            }, 1000);
+            };
+            pollTimer = setTimeout(poll, 1_000);
         };
 
         try {
