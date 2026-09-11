@@ -235,6 +235,29 @@ export interface StudioJobResponse {
   job: StudioJobDTO;
 }
 
+export type StudioJobFailurePhase = "submit" | "poll";
+export type StudioJobFailureCategory =
+  | "submit_network_error"
+  | "submit_bad_response"
+  | "submit_invalid_job_response"
+  | "poll_network_error"
+  | "poll_bad_response"
+  | "poll_invalid_job_response"
+  | "poll_failed_job"
+  | "poll_cancelled_job"
+  | "reconciliation_failed"
+  | "unknown_compile_error";
+
+const studioJobStatuses = new Set([
+  "queued",
+  "running",
+  "processing",
+  "cancel_requested",
+  "succeeded",
+  "failed",
+  "cancelled",
+]);
+
 export type StudioEditorLayoutDTO = EditorLayout;
 export interface StudioEditorStateDTO {
   id: string; document_id: string; session_id: string; base_version_id: string;
@@ -488,6 +511,54 @@ export class StudioApiError extends Error {
   }
 }
 
+export class StudioJobClientError extends StudioApiError {
+  readonly phase: StudioJobFailurePhase;
+  readonly category: StudioJobFailureCategory;
+  readonly code?: string;
+
+  constructor(message: string, phase: StudioJobFailurePhase, category: StudioJobFailureCategory, status = 500, code?: string) {
+    super(message, status);
+    this.name = "StudioJobClientError";
+    this.phase = phase;
+    this.category = category;
+    this.code = code;
+  }
+}
+
+export function validateStudioJobResponse(data: unknown, phase: StudioJobFailurePhase): StudioJobResponse {
+  const response = data as { job?: { id?: unknown; status?: unknown } } | null;
+  const id = response?.job?.id;
+  const status = response?.job?.status;
+  if (!response?.job || typeof id !== "string" || id.trim() === "" || typeof status !== "string" || !studioJobStatuses.has(status)) {
+    const category: StudioJobFailureCategory = phase === "submit" ? "submit_invalid_job_response" : "poll_invalid_job_response";
+    throw new StudioJobClientError("Studio job response was invalid.", phase, category, 502);
+  }
+  return data as StudioJobResponse;
+}
+
+function studioJobClientError(err: unknown, phase: StudioJobFailurePhase): StudioJobClientError {
+  if (err instanceof StudioJobClientError) return err;
+  if (axios.isAxiosError(err)) {
+    const axiosErr = err as AxiosError<{ error?: unknown }>;
+    const status = axiosErr.response?.status || 500;
+    const category: StudioJobFailureCategory = axiosErr.response
+      ? phase === "submit" ? "submit_bad_response" : "poll_bad_response"
+      : phase === "submit" ? "submit_network_error" : "poll_network_error";
+    const serverMessage = typeof axiosErr.response?.data?.error === "string" ? axiosErr.response.data.error.slice(0, 240) : undefined;
+    return new StudioJobClientError(serverMessage || "Studio job request failed.", phase, category, status, axiosErr.code);
+  }
+  if (err instanceof StudioApiError) {
+    return new StudioJobClientError(err.message.slice(0, 240), phase, phase === "submit" ? "submit_bad_response" : "poll_bad_response", err.status);
+  }
+  if (err instanceof Error) return new StudioJobClientError(err.message.slice(0, 240), phase, "unknown_compile_error");
+  return new StudioJobClientError("Studio job request failed.", phase, "unknown_compile_error");
+}
+
+export function studioJobErrorInfo(err: unknown, phase: StudioJobFailurePhase) {
+  const normalized = studioJobClientError(err, phase);
+  return { category: normalized.category, status: normalized.status, code: normalized.code };
+}
+
 function handleAxiosError(err: unknown): never {
   if (axios.isAxiosError(err)) {
     const axiosErr = err as AxiosError<{ error?: string }>;
@@ -632,9 +703,9 @@ export const studioV2Api = {
         `/sessions/${sessionId}/jobs`,
         request
       );
-      return res.data;
+      return validateStudioJobResponse(res.data, "submit");
     } catch (err) {
-      return handleAxiosError(err);
+      throw studioJobClientError(err, "submit");
     }
   },
 
@@ -643,9 +714,9 @@ export const studioV2Api = {
       const res = await studioV2Client.get<StudioJobResponse>(
         `/sessions/${sessionId}/jobs/${jobId}`
       );
-      return res.data;
+      return validateStudioJobResponse(res.data, "poll");
     } catch (err) {
-      return handleAxiosError(err);
+      throw studioJobClientError(err, "poll");
     }
   },
 
