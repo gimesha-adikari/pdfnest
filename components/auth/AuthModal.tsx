@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { fetchJson } from "@/lib/api";
 import GoogleLoginButton from "./GoogleLoginButton";
 import PolicyConsentDialog from "./PolicyConsentDialog";
+import { useModalFocus } from "@/hooks/useModalFocus";
 
 type PendingAction = "register" | "google" | null;
 
@@ -28,6 +29,7 @@ export default function AuthModal() {
 
     const [policyDialogOpen, setPolicyDialogOpen] = useState(false);
     const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+    const dialogRef = useModalFocus(isAuthModalOpen, closeAuthModal, policyDialogOpen);
 
     useEffect(() => {
         if (isAuthModalOpen) {
@@ -159,8 +161,9 @@ export default function AuthModal() {
     return (
         <>
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[var(--background)]/80 backdrop-blur-sm p-4">
-                <div className="relative w-full max-w-md bg-[var(--card)] border border-[color:var(--border)] rounded-3xl p-8 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+                <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={isLoginView ? "Sign in" : "Create account"} tabIndex={-1} className="relative w-full max-w-md bg-[var(--card)] border border-[color:var(--border)] rounded-3xl p-8 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
                     <button
+                        aria-label="Close account dialog"
                         onClick={closeAuthModal}
                         className="absolute top-4 right-4 p-2 rounded-full hover:bg-[color:var(--border)] transition-colors text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)]"
                     >
@@ -179,14 +182,14 @@ export default function AuthModal() {
                     </div>
 
                     {successMessage && (
-                        <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-sm font-medium flex items-start gap-2">
+                        <div role="status" className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-sm font-medium flex items-start gap-2">
                             <CheckCircle2 size={18} className="shrink-0 mt-0.5" />
                             <span>{successMessage}</span>
                         </div>
                     )}
 
                     {error && (
-                        <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm text-center font-medium">
+                        <div role="alert" className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm text-center font-medium">
                             {error}
                         </div>
                     )}
@@ -199,6 +202,7 @@ export default function AuthModal() {
                             />
                             <input
                                 type="email"
+                                aria-label="Email address"
                                 placeholder="Email address"
                                 required
                                 value={email}
@@ -214,6 +218,7 @@ export default function AuthModal() {
                             />
                             <input
                                 type="password"
+                                aria-label="Password"
                                 placeholder={isLoginView ? "Password" : "Create a password"}
                                 minLength={8}
                                 required
