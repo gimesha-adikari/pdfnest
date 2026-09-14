@@ -21,6 +21,7 @@ function LoginContent() {
 
     const callbackUrl = safeRedirectPath(searchParams.get("callbackUrl"));
     const verified = searchParams.get("verified");
+    const reset = searchParams.get("reset");
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -40,7 +41,11 @@ function LoginContent() {
         if (verified === "0") {
             setError("Verification link is invalid or has expired.");
         }
-    }, [verified]);
+
+        if (reset === "1") {
+            setSuccess("Password reset successfully. You can now sign in.");
+        }
+    }, [reset, verified]);
 
     useEffect(() => {
         if (!isAuthLoading && isLoggedIn) {
@@ -187,6 +192,15 @@ function LoginContent() {
                             >
                                 {isResending ? "Sending..." : "Resend verification email"}
                             </button>
+                        </div>
+
+                        <div className="text-center">
+                            <Link
+                                href="/forgot-password"
+                                className="text-sm font-medium text-[color:var(--muted-foreground)] hover:text-indigo-500 hover:underline"
+                            >
+                                Forgot your password?
+                            </Link>
                         </div>
                     </form>
 
