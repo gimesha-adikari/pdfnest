@@ -338,8 +338,9 @@ export async function fetchJson<T = unknown>(endpoint: string, options: RequestI
     let response: Response;
     try {
         response = await fetch(url, config);
-    } catch (networkError: any) {
-        backendHealth.markOffline(networkError?.message || "Failed to connect to backend");
+    } catch (networkError: unknown) {
+        const message = networkError instanceof Error ? networkError.message : "Failed to connect to backend";
+        backendHealth.markOffline(message);
         const clientErr = new Error("PDFNest processing service is currently unavailable.") as ClientError;
         clientErr.status = 0;
         clientErr.raw = networkError;
