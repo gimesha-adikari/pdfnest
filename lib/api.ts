@@ -424,8 +424,9 @@ export async function fetchBlob(endpoint: string, options: RequestInit = {}): Pr
     let response: Response;
     try {
         response = await fetch(url, config);
-    } catch (networkError: any) {
-        backendHealth.markOffline(networkError?.message || "Failed to connect to backend");
+    } catch (networkError: unknown) {
+        const message = networkError instanceof Error ? networkError.message : "Failed to connect to backend";
+        backendHealth.markOffline(message);
         const clientErr = new Error("PDFNest processing service is currently unavailable.") as ClientError;
         clientErr.status = 0;
         clientErr.raw = networkError;
