@@ -401,6 +401,87 @@ export async function fetchJson<T = unknown>(endpoint: string, options: RequestI
 
 }
 
+/**
+ * Fetch a binary API response through the same configured backend boundary as
+ * fetchJson.  Download-only endpoints must not use a relative /api URL: that
+ * URL resolves against the Next.js frontend origin rather than the backend.
+ */
+export async function fetchBlob(endpoint: string, options: RequestInit = {}): Promise<Blob> {
+    const API_URL = getBaseUrl() + "/api";
+    const url = endpoint.startsWith("http")
+        ? endpoint
+        : `${API_URL}${endpoint}`;
+
+    const config: RequestInit = {
+        ...options,
+        credentials: "include",
+        headers: {
+            ...(options.headers || {}),
+        },
+    };
+
+    let response: Response;
+    try {
+        response = await fetch(url, config);
+    } catch (networkError: any) {
+        backendHealth.markOffline(networkError?.message || "Failed to connect to backend");
+        const clientErr = new Error("PDFNest processing service is currently unavailable.") as ClientError;
+        clientErr.status = 0;
+        clientErr.raw = networkError;
+        throw clientErr;
+    }
+
+    if (response.status >= 502 && response.status <= 504) {
+        backendHealth.markOffline(`Service unavailable (HTTP ${response.status})`);
+    } else if (response.ok || response.status < 500) {
+        backendHealth.markOnline();
+    }
+
+    if (!response.ok) {
+        const isAuthEndpoint = endpoint.includes("/status") || endpoint.includes("/auth");
+
+        if (response.status === 401 && !isAuthEndpoint) {
+            if (typeof window !== "undefined") {
+                const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
+                window.location.href = `/login?callbackUrl=${currentPath}`;
+                return new Promise(() => {
+                }) as Promise<Blob>;
+            }
+        }
+
+        const text = await response.text().catch(() => "");
+        let parsed: unknown = null;
+        if (text) {
+            try {
+                parsed = JSON.parse(text);
+            } catch {
+                parsed = text;
+            }
+        }
+
+        const billing = parseBackendErrorPayload(parsed);
+        if (billing) {
+            const err = new Error(billing.message) as ClientError;
+            err.status = response.status;
+            err.billing = billing;
+            err.raw = parsed;
+            throw err;
+        }
+
+        if (isObjectLike(parsed)) {
+            throw new Error(
+                (typeof parsed.message === "string" && parsed.message) ||
+                (typeof parsed.error === "string" && parsed.error) ||
+                `Network error: ${response.status}`
+            );
+        }
+
+        throw new Error(text || `Network error: ${response.status}`);
+    }
+
+    return response.blob();
+}
+
 export async function submitContactTicket(formData: FormData): Promise<{ success: boolean; ticketNumber: string; message: string }> {
     const url = `${getBaseUrl()}/api/contact`;
 

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { fetchJson } from "@/lib/api";
+import { fetchBlob, fetchJson } from "@/lib/api";
 import { notify } from "@/lib/notify";
 import {
     Loader2,
@@ -157,17 +157,7 @@ export default function SettingsPage() {
     const handleExportData = async () => {
         setIsExporting(true);
         try {
-            const response = await fetch("/api/user/settings/export", {
-                method: "GET",
-                credentials: "include"
-            });
-
-            if (!response.ok) {
-                const data = await response.json().catch(() => null);
-                throw new Error(data?.error || "Failed to export data");
-            }
-
-            const blob = await response.blob();
+            const blob = await fetchBlob("/user/settings/export");
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.href = url;
