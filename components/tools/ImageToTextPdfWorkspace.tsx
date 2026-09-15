@@ -19,7 +19,7 @@ import {
     Check,
     XCircle,
 } from "lucide-react";
-import { getBaseUrl } from "@/lib/api";
+import { getBaseUrl, resolveDownloadUrl } from "@/lib/api";
 import { handleClientError } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
@@ -150,7 +150,7 @@ export default function ImageToTextPdfWorkspace() {
 
     const handleTaskComplete = async (downloadUrl: string) => {
         try {
-            const response = await fetch(`${getBaseUrl()}${downloadUrl}`, {
+            const response = await fetch(resolveDownloadUrl(downloadUrl), {
                 credentials: "include",
             });
             if (!response.ok) throw new Error("Could not download compiled async file payload.");

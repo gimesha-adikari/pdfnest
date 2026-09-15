@@ -227,6 +227,50 @@ export function getBaseUrl(): string {
     return process.env.NEXT_PUBLIC_API_URL || "https://api.platenpdf.com";
 }
 
+/**
+ * Resolve a task artifact against the configured API origin exactly once.
+ *
+ * Task APIs may return an absolute API URL, an API-relative path, or a
+ * root-relative path. Storage references (for example r2:// keys) and
+ * cross-origin/unsupported URLs are not browser download contracts and are
+ * rejected instead of being concatenated into an unusable or unsafe URL.
+ */
+export function resolveDownloadUrl(downloadUrl: string): string {
+    const value = String(downloadUrl ?? "").trim();
+    if (!value) throw new Error("Download URL is empty.");
+
+    const apiBase = getBaseUrl().replace(/\/+$/, "");
+    let apiOrigin: string;
+    try {
+        apiOrigin = new URL(apiBase).origin;
+    } catch {
+        throw new Error("Configured API URL is malformed.");
+    }
+
+    if (/^https?:\/\//i.test(value)) {
+        let absolute: URL;
+        try {
+            absolute = new URL(value);
+        } catch {
+            throw new Error("Download URL is malformed.");
+        }
+        if (absolute.origin !== apiOrigin) {
+            throw new Error("Download URL origin is not allowed.");
+        }
+        return absolute.toString();
+    }
+
+    if (value.startsWith("//") || /^[a-z][a-z\d+.-]*:/i.test(value)) {
+        throw new Error("Download URL must use the configured API origin.");
+    }
+
+    const resolved = new URL(`${apiBase}/${value.replace(/^\/+/, "")}`);
+    if (resolved.origin !== apiOrigin) {
+        throw new Error("Download URL origin is not allowed.");
+    }
+    return resolved.toString();
+}
+
 export async function uploadAndDownloadFile(
     endpoint: string,
     formData: FormData,

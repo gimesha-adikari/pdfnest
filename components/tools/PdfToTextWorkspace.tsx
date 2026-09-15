@@ -13,7 +13,7 @@ import {
     AlertTriangle,
     Lock,
 } from "lucide-react";
-import { getBaseUrl, uploadAndDownloadFile } from "@/lib/api";
+import { resolveDownloadUrl, uploadAndDownloadFile } from "@/lib/api";
 import { handleClientError } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
@@ -145,10 +145,7 @@ export default function PdfToTextWorkspace() {
             // The durable task contract may return either a backend-relative
             // path or the absolute authenticated download URL built by
             // useAsyncTask. Do not concatenate the base twice.
-            const resolvedDownloadUrl = /^https?:\/\//i.test(downloadUrl)
-                ? downloadUrl
-                : `${getBaseUrl()}${downloadUrl}`;
-            const response = await fetch(resolvedDownloadUrl, {
+            const response = await fetch(resolveDownloadUrl(downloadUrl), {
                 credentials: "include",
             });
             if (!response.ok) {

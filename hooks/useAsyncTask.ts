@@ -8,6 +8,7 @@ import {
     updateStoredTask,
 } from "@/lib/taskStorage";
 import { notify, notifyBackendError } from "@/lib/notify";
+import { getBaseUrl } from "@/lib/api";
 
 export type TaskStatus =
     | "PENDING"
@@ -27,7 +28,7 @@ export interface TaskStatusResponse {
 }
 
 function buildDownloadUrl(taskId: string, downloadToken?: string): string {
-    const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+    const base = getBaseUrl().replace(/\/+$/, "");
     if (downloadToken) {
         return `${base}/api/v1/download/${taskId}?token=${encodeURIComponent(downloadToken)}`;
     }

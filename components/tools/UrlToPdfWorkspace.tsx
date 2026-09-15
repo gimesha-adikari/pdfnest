@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, Globe, Loader2, ShieldCheck, Sliders } from "lucide-react";
-import { getBaseUrl, uploadAndDownloadFile } from "@/lib/api";
+import { getBaseUrl, resolveDownloadUrl, uploadAndDownloadFile } from "@/lib/api";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
@@ -42,7 +42,7 @@ export default function UrlToPdfWorkspace() {
 
     const handleTaskComplete = async (downloadUrl: string) => {
         try {
-            const response = await fetch(`${getBaseUrl()}${downloadUrl}`, {
+            const response = await fetch(resolveDownloadUrl(downloadUrl), {
                 credentials: "include",
             });
             if (!response.ok) throw new Error("Re-download framework pipeline error.");
