@@ -1,36 +1,20 @@
 "use client";
 
-import { initializePaddle, type Paddle } from "@paddle/paddle-js";
 import { useEffect, useRef } from "react";
+import { getPaddle } from "@/lib/paddle";
 
-let paddlePromise: Promise<Paddle | undefined> | null = null;
-
-function getPaddle() {
-    if (!paddlePromise) {
-        const token = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN;
-        const env =
-            process.env.NEXT_PUBLIC_PADDLE_ENV === "sandbox"
-                ? "sandbox"
-                : "production";
-
-        if (!token) {
-            throw new Error("NEXT_PUBLIC_PADDLE_CLIENT_TOKEN is missing");
-        }
-
-        paddlePromise = initializePaddle({
-            environment: env,
-            token,
-            checkout: {
-                settings: {
-                    successUrl: `${window.location.origin}/billing/complete`,
-                },
-            },
-        });
-    }
-
-    return paddlePromise;
-}
-
+/**
+ * PaddleTransactionBridge — mounts once inside the site layout.
+ *
+ * On each page load it checks for a `?_ptxn=…` query parameter and opens
+ * the Paddle checkout overlay for that transaction ID.  The parameter is
+ * removed from the URL before the overlay is shown so a page refresh does
+ * not re-open the checkout.
+ *
+ * The companion `openPaddleTransactionOverlay` helper in `lib/paddle.ts`
+ * allows imperative code (e.g. the dashboard credit-pack buttons) to trigger
+ * the same overlay without a full-page navigation.
+ */
 export default function PaddleTransactionBridge() {
     const openedTxnRef = useRef<string | null>(null);
 
@@ -51,9 +35,7 @@ export default function PaddleTransactionBridge() {
             const paddle = await getPaddle();
             if (!paddle) return;
 
-            paddle.Checkout.open({
-                transactionId,
-            });
+            paddle.Checkout.open({ transactionId });
         };
 
         void run();

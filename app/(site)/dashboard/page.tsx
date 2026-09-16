@@ -4,6 +4,7 @@ import React, {useEffect, useState} from "react";
 import Link from "next/link";
 import {useAuth} from "@/context/AuthContext";
 import {fetchJson} from "@/lib/api";
+import {openPaddleTransactionOverlay} from "@/lib/paddle";
 import {ArrowUpRight, CheckCircle2, Coins, History, Loader2, Sparkles, Zap, Settings} from "lucide-react";
 import {notify} from "@/lib/notify";
 import StudioSessions from "@/components/dashboard/StudioSessions";
@@ -62,10 +63,13 @@ export default function UserDashboard() {
                 throw new Error("Missing checkout URL.");
             }
 
-            window.location.assign(res.checkout_url);
+            // Open the Paddle checkout as an overlay (no full-page navigation).
+            // This prevents the BILL-001 regression where the hosted Paddle page
+            // would redirect to "/" on cancel because no return URL was configured.
+            await openPaddleTransactionOverlay(res.checkout_url);
         } catch (err) {
             console.error(err);
-            notify("Credit checkout failed.","error");
+            notify("Credit checkout failed. Please try again.", "error");
         } finally {
             setIsBuyingCredits(false);
         }

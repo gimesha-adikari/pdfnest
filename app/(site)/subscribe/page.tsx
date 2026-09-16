@@ -4,6 +4,7 @@ import React, {useEffect, useState} from "react";
 import Link from "next/link";
 import {useAuth} from "@/context/AuthContext";
 import {fetchJson} from "@/lib/api";
+import {openPaddleTransactionOverlay} from "@/lib/paddle";
 import {ArrowUpRight, CheckCircle2, ChevronDown, Cpu, HelpCircle, Layers, Sparkles, Zap} from "lucide-react";
 import {fallbackSubscribeContent, SubscribeContent} from "@/lib/contentSubscribe";
 import PlanButtons from "@/components/subscription/PlanButtons";
@@ -57,7 +58,10 @@ export default function SubscribePage() {
                     throw new Error("Missing checkout URL from server.");
                 }
 
-                window.location.assign(res.checkout_url);
+                // Open the Paddle checkout overlay instead of navigating away.
+                // Avoids the hosted-page redirect-to-root risk when no return URL
+                // is configured on the Paddle transaction.
+                await openPaddleTransactionOverlay(res.checkout_url);
             } catch (error) {
                 console.error("Checkout error:", error);
 
