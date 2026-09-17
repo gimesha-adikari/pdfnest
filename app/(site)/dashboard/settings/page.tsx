@@ -311,7 +311,7 @@ export default function SettingsPage() {
                     </div>
                 </div>
 
-                <div className="bg-[var(--card)] border border-[color:var(--border)] rounded-3xl p-8 space-y-6">
+                <div id="billing" className="bg-[var(--card)] border border-[color:var(--border)] rounded-3xl p-8 space-y-6">
                     <div className="flex items-center gap-3 border-b border-[color:var(--border)] pb-4">
                         <CreditCard className="text-indigo-500" size={24} />
                         <h2 className="text-xl font-bold text-[color:var(--foreground)]">Billing & Payment</h2>

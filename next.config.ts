@@ -30,6 +30,11 @@ const nextConfig: NextConfig = {
                 permanent: true,
             },
             {
+                source: "/account/subscription",
+                destination: "/dashboard/settings#billing",
+                permanent: false,
+            },
+            {
                 source: "/:path*",
                 has: [
                     {
