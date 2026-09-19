@@ -1,6 +1,7 @@
 "use client";
 
-import React, { ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
+import React, { ReactNode, useCallback, useEffect, useImperativeHandle, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
+import { flushSync } from "react-dom";
 import { ChevronLeft, ChevronRight, Maximize2, Redo2, RotateCcw, Undo2, ZoomIn, ZoomOut, Type, Search } from "lucide-react";
 import { clampPageIndex, clampZoom, EditorElement, EditorElementStyle, EditorLayout, editorKeyboardIntent, editorMatches, fitWidthZoom } from "./model";
 import { createEditorState, editorReducer } from "./reducer";
@@ -20,6 +21,10 @@ export interface SharedEditorProps {
   compileLabel?: string;
   showPageSidebar?: boolean;
   onDirtyChange?: (dirty: boolean) => void;
+}
+
+export interface SharedEditorHandle {
+  compile: () => void;
 }
 
 export interface EditorVisualContext {
@@ -168,7 +173,8 @@ function WordHitTarget({
 }
 
 // ---------------------------------------------------------------------------
-// WordInlineEditor — transient local edit buffer, single commit on blur/Enter
+// WordInlineEditor — local input buffer mirrored into canonical draft state;
+// history is committed as one operation on blur/Enter.
 // ---------------------------------------------------------------------------
 
 function WordInlineEditor({
@@ -176,12 +182,14 @@ function WordInlineEditor({
   element,
   zoom,
   onCommit,
+  onDraftChange,
   onCancel,
 }: {
   word: EditableWord;
   element: EditorElement;
   zoom: number;
   onCommit: (text: string) => void;
+  onDraftChange?: (text: string) => void;
   onCancel: () => void;
 }) {
   const [buffer, setBuffer] = useState(word.draftText);
@@ -213,7 +221,11 @@ function WordInlineEditor({
   const handleCommit = () => {
     if (committedRef.current) return;
     committedRef.current = true;
-    onCommit(buffer);
+    // The Studio appbar compile button can receive its click immediately after
+    // this input blurs. Flush the canonical reducer update before that click
+    // reads state.layout, otherwise the compile request can serialize the
+    // previous element text even though the input visibly contains `buffer`.
+    flushSync(() => onCommit(buffer));
   };
 
   const handleCancel = () => {
@@ -230,7 +242,11 @@ function WordInlineEditor({
       data-testid="word-inline-editor"
       data-word-id={word.id}
       value={buffer}
-      onChange={(e) => setBuffer(e.target.value)}
+      onChange={(e) => {
+        const nextText = e.target.value;
+        setBuffer(nextText);
+        onDraftChange?.(nextText);
+      }}
       onBlur={handleCommit}
       onKeyDown={(e) => {
         if (e.key === "Enter") {
@@ -277,7 +293,7 @@ function WordInlineEditor({
 // SharedEditor — main component
 // ---------------------------------------------------------------------------
 
-export function SharedEditor({
+export const SharedEditor = React.forwardRef<SharedEditorHandle, SharedEditorProps>(function SharedEditor({
   baseline,
   initialPageIndex,
   renderPageVisual,
@@ -286,7 +302,7 @@ export function SharedEditor({
   compileLabel = "Compile",
   showPageSidebar = false,
   onDirtyChange,
-}: SharedEditorProps) {
+}: SharedEditorProps, ref) {
   const [state, dispatch] = useReducer(editorReducer, baseline, createEditorState);
   const resolvedInitialPageIndex = clampPageIndex(initialPageIndex ?? 0, baseline.pages.length);
   const [pageIndex, setPageIndex] = useState(resolvedInitialPageIndex);
@@ -314,6 +330,10 @@ export function SharedEditor({
   const selected = page?.elements.find((element) => element.id === selectedId) ?? null;
   const matches = useMemo(() => editorMatches(state.layout, query), [state.layout, query]);
   const dirty = state.dirtyKeys.size > 0;
+
+  useImperativeHandle(ref, () => ({
+    compile: () => { void onCompile(state.layout); },
+  }), [onCompile, state.layout]);
 
   // Derive editable words for the currently selected element
   const selectedWords = useMemo(() => {
@@ -463,9 +483,14 @@ export function SharedEditor({
     dispatch({ type: "EDIT_WORD", pageIndex, elementId, wordId, text });
   }, [pageIndex]);
 
-  const cancelWord = useCallback(() => {
+  const draftWord = useCallback((elementId: string, wordId: string, text: string) => {
+    dispatch({ type: "EDIT_WORD_DRAFT", pageIndex, elementId, wordId, text });
+  }, [pageIndex]);
+
+  const cancelWord = useCallback((elementId: string) => {
+    dispatch({ type: "CANCEL_WORD", pageIndex, elementId });
     setSelectedWordId(null);
-  }, []);
+  }, [pageIndex]);
 
   const hasWordGeometry = useCallback((element: EditorElement) => {
     return Boolean(element.word_geometry?.length);
@@ -500,7 +525,8 @@ export function SharedEditor({
                     element={element}
                     zoom={zoom}
                     onCommit={(newText) => commitWord(element.id, word.id, newText)}
-                    onCancel={cancelWord}
+                    onDraftChange={(newText) => draftWord(element.id, word.id, newText)}
+                    onCancel={() => cancelWord(element.id)}
                   />
                 )}
 
@@ -560,6 +586,7 @@ export function SharedEditor({
     baselinePage,
     cancelWord,
     commitWord,
+    draftWord,
     hasWordGeometry,
     matchIndex,
     matches,
@@ -722,4 +749,4 @@ export function SharedEditor({
       </aside>
     </div>
   );
-}
+});
