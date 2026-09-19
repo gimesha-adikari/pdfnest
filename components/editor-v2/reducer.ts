@@ -21,11 +21,15 @@ export interface EditorState {
   revision: number;
   dirtyKeys: Set<string>;
   wordReplacements: Record<string, Record<string, string>>;
+  /** Current inline word drafts are canonical for compile, but commit as one undo operation on blur/Enter. */
+  pendingWordEdits: Record<string, ElementDraft>;
 }
 
 export type EditorAction =
   | { type: "EDIT_TEXT"; pageIndex: number; elementId: string; text: string }
+  | { type: "EDIT_WORD_DRAFT"; pageIndex: number; elementId: string; wordId: string; text: string }
   | { type: "EDIT_WORD"; pageIndex: number; elementId: string; wordId: string; text: string }
+  | { type: "CANCEL_WORD"; pageIndex: number; elementId: string }
   | { type: "EDIT_STYLE"; pageIndex: number; elementId: string; patch: Partial<EditorElementStyle>; range?: TextRange }
   | { type: "UNDO" }
   | { type: "REDO" }
@@ -58,6 +62,7 @@ export function createEditorState(baseline: EditorLayout): EditorState {
     revision: 0,
     dirtyKeys: new Set(),
     wordReplacements: {},
+    pendingWordEdits: {},
   };
 }
 
@@ -186,6 +191,7 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       revision: state.revision + 1,
       dirtyKeys: new Set(),
       wordReplacements: {},
+      pendingWordEdits: {},
     };
   }
 
@@ -194,7 +200,38 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
 
   const key = keyFor(action.pageIndex, action.elementId);
 
-  if (action.type === "EDIT_WORD") {
+  if (action.type === "CANCEL_WORD") {
+    const pending = state.pendingWordEdits[key];
+    if (!pending) return state;
+
+    const current = draftOf(currentElement, state.wordReplacements[key]);
+    const patch: ElementPatch = {
+      pageIndex: action.pageIndex,
+      elementId: action.elementId,
+      before: current,
+      after: pending,
+    };
+    const layout = applyElementPatch(state.layout, patch, true);
+    const nextWordReplacements = { ...state.wordReplacements };
+    if (pending.wordReplacements && Object.keys(pending.wordReplacements).length > 0) {
+      nextWordReplacements[key] = { ...pending.wordReplacements };
+    } else {
+      delete nextWordReplacements[key];
+    }
+    const nextPendingWordEdits = { ...state.pendingWordEdits };
+    delete nextPendingWordEdits[key];
+
+    return {
+      ...state,
+      layout,
+      revision: state.revision + 1,
+      dirtyKeys: dirtyAfter(state, layout, { kind: "edit", patch }),
+      wordReplacements: nextWordReplacements,
+      pendingWordEdits: nextPendingWordEdits,
+    };
+  }
+
+  if (action.type === "EDIT_WORD_DRAFT" || action.type === "EDIT_WORD") {
     const baselineElement = findElement(state.baseline, action.pageIndex, action.elementId);
     if (!baselineElement || !baselineElement.word_geometry?.length) return state;
 
@@ -219,14 +256,24 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       nextReplacements,
     );
 
-    const before = draftOf(currentElement, prevReplacements);
+    const currentDraft = draftOf(currentElement, prevReplacements);
+    const before = state.pendingWordEdits[key] ?? currentDraft;
     const after: ElementDraft = {
-      ...before,
+      ...currentDraft,
       text: reconstructedText,
       wordReplacements: Object.keys(nextReplacements).length > 0 ? nextReplacements : undefined,
     };
 
-    if (sameDraft(before, after)) return state;
+    if (action.type === "EDIT_WORD_DRAFT" && sameDraft(currentDraft, after)) return state;
+
+    if (action.type === "EDIT_WORD" && sameDraft(before, after)) {
+      if (state.pendingWordEdits[key]) {
+        const nextPendingWordEdits = { ...state.pendingWordEdits };
+        delete nextPendingWordEdits[key];
+        return { ...state, pendingWordEdits: nextPendingWordEdits };
+      }
+      return state;
+    }
 
     const operation: EditorOperation = {
       kind: "edit",
@@ -241,14 +288,22 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       delete nextWordReplacements[key];
     }
 
+    const nextPendingWordEdits = { ...state.pendingWordEdits };
+    if (action.type === "EDIT_WORD_DRAFT") {
+      nextPendingWordEdits[key] = before;
+    } else {
+      delete nextPendingWordEdits[key];
+    }
+
     return {
       ...state,
       layout,
-      undo: bounded(state.undo, operation),
-      redo: [],
+      undo: action.type === "EDIT_WORD_DRAFT" ? state.undo : bounded(state.undo, operation),
+      redo: action.type === "EDIT_WORD_DRAFT" ? state.redo : [],
       revision: state.revision + 1,
       dirtyKeys: dirtyAfter(state, layout, operation),
       wordReplacements: nextWordReplacements,
+      pendingWordEdits: nextPendingWordEdits,
     };
   }
 
@@ -280,5 +335,6 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
     revision: state.revision + 1,
     dirtyKeys: dirtyAfter(state, layout, operation),
     wordReplacements: nextWordReplacements,
+    pendingWordEdits: state.pendingWordEdits,
   };
 }

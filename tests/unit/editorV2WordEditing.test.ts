@@ -205,6 +205,54 @@ check("committing identical text as original is a no-op / removes dirty state", 
   assert.equal(state.dirtyKeys.size, 0);
 });
 
+check("live word drafts reach the canonical compile layout without creating per-keystroke history", () => {
+  let state = createEditorState(baseline);
+  for (const text of ["f", "fo", "formally"]) {
+    state = editorReducer(state, {
+      type: "EDIT_WORD_DRAFT",
+      pageIndex: 0,
+      elementId: "e1",
+      wordId: "w4",
+      text,
+    });
+  }
+
+  const submitted = structuredClone(state.layout);
+  const element = submitted.pages[0].elements[0];
+  assert.equal(element.id, "e1");
+  assert.equal(element.original_text, "This is to officially certify");
+  assert.equal(element.text, "This is to formally certify");
+  assert.equal(state.undo.length, 0, "the transient typing sequence remains one eventual undo operation");
+
+  state = editorReducer(state, {
+    type: "EDIT_WORD",
+    pageIndex: 0,
+    elementId: "e1",
+    wordId: "w4",
+    text: "formally",
+  });
+  assert.equal(state.undo.length, 1);
+  assert.equal(state.layout.pages[0].elements[0].text, "This is to formally certify");
+});
+
+check("cancelling a live word draft restores the pre-edit canonical layout", () => {
+  let state = createEditorState(baseline);
+  state = editorReducer(state, {
+    type: "EDIT_WORD_DRAFT",
+    pageIndex: 0,
+    elementId: "e1",
+    wordId: "w4",
+    text: "formally",
+  });
+  state = editorReducer(state, { type: "CANCEL_WORD", pageIndex: 0, elementId: "e1" });
+
+  const element = state.layout.pages[0].elements[0];
+  assert.equal(element.text, "This is to officially certify");
+  assert.equal(element.original_text, "This is to officially certify");
+  assert.equal(state.undo.length, 0);
+  assert.equal(state.dirtyKeys.size, 0);
+});
+
 // ---------------------------------------------------------------------------
 // 3. PERSISTENT DIRTY VISUAL STATE & DESELECTION
 // ---------------------------------------------------------------------------
