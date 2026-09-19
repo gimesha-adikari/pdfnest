@@ -14,11 +14,17 @@ import {
     Area,
     CartesianGrid
 } from "recharts";
-import React, {useEffect, useState} from "react";
+import React, {useEffect, useRef, useState} from "react";
 import {useRouter} from "next/navigation";
 import Link from "next/link";
 import {useAuth} from "@/context/AuthContext";
 import {fetchJson} from "@/lib/api";
+import {
+    beginAdminSubscriptionSave,
+    createAdminSubscriptionSaveState,
+    finishAdminSubscriptionSave,
+} from "@/lib/adminSubscriptionMutation";
+import type {AdminSubscriptionSaveState} from "@/lib/adminSubscriptionMutation";
 import {
     Ban,
     BarChart3,
@@ -54,6 +60,8 @@ export default function AdminPage() {
     const [editStatus, setEditStatus] = useState("");
     const [editCredits, setEditCredits] = useState<number>(0);
     const [editDays, setEditDays] = useState(0);
+    const [isSavingSubscription, setIsSavingSubscription] = useState(false);
+    const subscriptionSaveStateRef = useRef<AdminSubscriptionSaveState>(createAdminSubscriptionSaveState());
 
     const [selectedUserDetail, setSelectedUserDetail] = useState<any | null>(null);
     const [isInspecting, setIsInspecting] = useState(false);
@@ -109,7 +117,7 @@ export default function AdminPage() {
             if (data.subscription) {
                 setEditTier(data.subscription.Tier || "free");
                 setEditStatus(data.subscription.Status || "active");
-                setEditCredits(data.subscription.CustomCredits || 0);
+                setEditCredits(0);
             } else {
                 setEditTier("free");
                 setEditStatus("active");
@@ -172,17 +180,36 @@ export default function AdminPage() {
             notify("Action Prevented: Master admin subscriptions are unalterable.", "warning");
             return;
         }
+
+        // This synchronous ref-backed state closes the same-tick double-click
+        // window before React can commit the disabled-button state. The
+        // operation key stays attached to the payload so a safe retry replays
+        // the same mutation.
+        const payload = {
+            tier: editTier,
+            status: editStatus,
+            custom_credits: Number(editCredits),
+            days_to_plus: Number(editDays),
+        };
+        const operation = beginAdminSubscriptionSave(subscriptionSaveStateRef.current, {
+            userId,
+            tier: payload.tier,
+            status: payload.status,
+            customCredits: payload.custom_credits,
+            daysToPlus: payload.days_to_plus,
+        });
+        if (!operation) return;
+        setIsSavingSubscription(true);
+
+        let succeeded = false;
         try {
             await fetchJson(`/admin/users/${userId}/tier`, {
                 method: "PATCH",
-                body: JSON.stringify({
-                    tier: editTier,
-                    status: editStatus,
-                    custom_credits: Number(editCredits),
-                    days_to_plus: Number(editDays)
-                })
+                headers: {"Idempotency-Key": operation.key},
+                body: JSON.stringify(payload),
             });
             notify("Subscription parameter updates deployed successfully.", "success");
+            succeeded = true;
             setEditingSubId(null);
             fetchData();
             if (selectedUserDetail && selectedUserDetail.user.ID === userId) {
@@ -190,6 +217,9 @@ export default function AdminPage() {
             }
         } catch (err) {
             notify("Failed saving package configuration changes.", "error");
+        } finally {
+            finishAdminSubscriptionSave(subscriptionSaveStateRef.current, succeeded);
+            setIsSavingSubscription(false);
         }
     };
 
@@ -387,9 +417,10 @@ export default function AdminPage() {
                                                 <div className="flex justify-end gap-1.5">
                                                     <button
                                                         onClick={() => handleSaveSubscription(sub.UserID, associatedUser?.Email || "")}
+                                                        disabled={isSavingSubscription}
                                                         className="p-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition"
                                                     >
-                                                        <Save size={14}/>
+                                                        {isSavingSubscription ? <Loader2 size={14} className="animate-spin"/> : <Save size={14}/>}
                                                     </button>
                                                     <button onClick={() => setEditingSubId(null)}
                                                             className="p-1.5 bg-neutral-800 border border-[color:var(--border)] text-xs font-bold rounded-lg">Cancel
@@ -401,9 +432,10 @@ export default function AdminPage() {
                                                         setEditingSubId(sub.ID);
                                                         setEditTier(sub.Tier);
                                                         setEditStatus(sub.Status);
-                                                        setEditCredits(sub.CustomCredits || 0);
+                                                        setEditCredits(0);
                                                         setEditDays(0);
                                                     }}
+                                                    disabled={isSavingSubscription}
                                                     className="p-1.5 bg-[color:var(--background)] border border-[color:var(--border)] rounded-lg hover:text-indigo-500 transition-colors"
                                                 >
                                                     <Edit3 size={14}/>
@@ -650,6 +682,7 @@ export default function AdminPage() {
                                             <select
                                                 value={editTier}
                                                 onChange={(e) => setEditTier(e.target.value)}
+                                                disabled={isSavingSubscription}
                                                 className="w-full bg-[color:var(--background)] border border-[color:var(--border)] rounded-xl p-2 outline-none text-xs text-[color:var(--foreground)]"
                                             >
                                                 <option value="free">Free Plan (5/Day)</option>
@@ -663,6 +696,7 @@ export default function AdminPage() {
                                             <select
                                                 value={editStatus}
                                                 onChange={(e) => setEditStatus(e.target.value)}
+                                                disabled={isSavingSubscription}
                                                 className="w-full bg-[color:var(--background)] border border-[color:var(--border)] rounded-xl p-2 outline-none text-xs text-[color:var(--foreground)]"
                                             >
                                                 <option value="active">Active</option>
@@ -672,12 +706,13 @@ export default function AdminPage() {
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="text-[color:var(--muted-foreground)] block mb-1">Custom
-                                                Credits</label>
+                                            <label className="text-[color:var(--muted-foreground)] block mb-1">Grant
+                                                Additional Credits</label>
                                             <input
                                                 type="number"
                                                 value={editCredits}
                                                 onChange={(e) => setEditCredits(Number(e.target.value))}
+                                                disabled={isSavingSubscription}
                                                 className="w-full bg-[color:var(--background)] border border-[color:var(--border)] rounded-xl p-2 outline-none text-xs font-bold text-[color:var(--foreground)]"
                                             />
                                         </div>
@@ -688,15 +723,19 @@ export default function AdminPage() {
                                                 type="number"
                                                 placeholder="Days"
                                                 onChange={(e) => setEditDays(Number(e.target.value))}
+                                                disabled={isSavingSubscription}
                                                 className="w-full bg-[color:var(--background)] border border-[color:var(--border)] rounded-xl p-2 outline-none text-xs text-[color:var(--foreground)]"
                                             />
                                         </div>
                                     </div>
                                     <button
                                         onClick={() => handleSaveSubscription(selectedUserDetail.user.ID, selectedUserDetail.user.Email)}
+                                        disabled={isSavingSubscription}
+                                        aria-busy={isSavingSubscription}
                                         className="w-full py-2.5 bg-indigo-500 text-white font-bold rounded-xl hover:bg-indigo-600 transition flex items-center justify-center gap-2 shadow-sm text-xs"
                                     >
-                                        <Save size={14}/> Save Subscription Modifications
+                                        {isSavingSubscription ? <Loader2 size={14} className="animate-spin"/> : <Save size={14}/>}
+                                        {isSavingSubscription ? "Saving Subscription Modifications…" : "Save Subscription Modifications"}
                                     </button>
                                 </div>
                             ) : (
