@@ -21,13 +21,13 @@ export default async function SiteLayout({
             <div className="min-h-screen flex flex-col relative isolation-auto">
                 <BackendStatusBanner />
                 <Header />
-                <main className="flex-1 w-full relative z-10 pb-20 md:pb-0">
+                <div className="flex-1 w-full relative z-10 pb-20 md:pb-0">
                     <GlobalNotifications />
                     <AuthModal />
                     <PaddleTransactionBridge />
                     {children}
                     <CommandSystem />
-                </main>
+                </div>
                 <MobileNav />
                 <Footer />
             </div>

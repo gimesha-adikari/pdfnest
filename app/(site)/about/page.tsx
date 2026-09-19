@@ -127,7 +127,7 @@ export default function AboutPage() {
         heroParts.length > 2 ? heroParts.slice(-2).join(" ") : heroParts.slice(1).join(" ");
 
     return (
-        <div className="min-h-screen bg-[color:var(--background)] text-[color:var(--foreground)] px-4 py-16 sm:px-6 lg:px-8">
+        <main className="min-h-screen bg-[color:var(--background)] text-[color:var(--foreground)] px-4 py-16 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-6xl">
                 <header className="text-center">
                     <div className="inline-flex items-center gap-2 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-400">
@@ -317,6 +317,6 @@ export default function AboutPage() {
                     </div>
                 </section>
             </div>
-        </div>
+        </main>
     );
 }
