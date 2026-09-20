@@ -231,10 +231,10 @@ export default function CookiePolicyPage() {
                     </p>
 
                     <Link
-                        href="mailto:support@yourdomain.com"
+                        href="mailto:support@platenpdf.com"
                         className="mt-6 inline-flex rounded-xl bg-indigo-500 px-5 py-3 font-semibold text-white transition hover:bg-indigo-600"
                     >
-                        support@yourdomain.com
+                        support@platenpdf.com
                     </Link>
                 </section>
 
