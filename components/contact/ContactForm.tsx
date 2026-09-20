@@ -156,9 +156,12 @@ export default function ContactForm() {
                     <form className="space-y-6" onSubmit={handleSubmit}>
                         <div className="grid gap-6 md:grid-cols-2">
                             <div>
-                                <label className="mb-2 block text-sm font-medium">Name</label>
+                                <label htmlFor="contact-name" className="mb-2 block text-sm font-medium">
+                                    Name
+                                </label>
                                 <input
                                     type="text"
+                                    id="contact-name"
                                     name="name"
                                     value={formData.name}
                                     onChange={handleChange}
@@ -168,9 +171,12 @@ export default function ContactForm() {
                                 />
                             </div>
                             <div>
-                                <label className="mb-2 block text-sm font-medium">Email *</label>
+                                <label htmlFor="contact-email" className="mb-2 block text-sm font-medium">
+                                    Email *
+                                </label>
                                 <input
                                     type="email"
+                                    id="contact-email"
                                     name="email"
                                     required
                                     value={formData.email}
@@ -183,8 +189,11 @@ export default function ContactForm() {
                         </div>
 
                         <div>
-                            <label className="mb-2 block text-sm font-medium">Category *</label>
+                            <label htmlFor="contact-category" className="mb-2 block text-sm font-medium">
+                                Category *
+                            </label>
                             <select
+                                id="contact-category"
                                 name="category"
                                 required
                                 value={formData.category}
@@ -202,9 +211,12 @@ export default function ContactForm() {
                         </div>
 
                         <div>
-                            <label className="mb-2 block text-sm font-medium">Subject *</label>
+                            <label htmlFor="contact-subject" className="mb-2 block text-sm font-medium">
+                                Subject *
+                            </label>
                             <input
                                 type="text"
+                                id="contact-subject"
                                 name="subject"
                                 required
                                 value={formData.subject}
@@ -216,9 +228,12 @@ export default function ContactForm() {
                         </div>
 
                         <div>
-                            <label className="mb-2 block text-sm font-medium">Message *</label>
+                            <label htmlFor="contact-message" className="mb-2 block text-sm font-medium">
+                                Message *
+                            </label>
                             <textarea
                                 rows={8}
+                                id="contact-message"
                                 name="message"
                                 required
                                 value={formData.message}
@@ -232,6 +247,7 @@ export default function ContactForm() {
                         <div className="relative rounded-2xl border border-dashed border-[color:var(--border)] bg-[var(--background)] p-5 transition-colors hover:border-indigo-500">
                             <input
                                 type="file"
+                                id="contact-attachments"
                                 multiple
                                 onChange={handleFileChange}
                                 disabled={status === "submitting"}
@@ -241,11 +257,11 @@ export default function ContactForm() {
                             <div className="flex items-center gap-3">
                                 <Paperclip className="h-5 w-5 text-indigo-500" />
                                 <div>
-                                    <p className="font-medium">
+                                    <label htmlFor="contact-attachments" className="block font-medium">
                                         {files.length > 0
                                             ? `${files.length} file(s) attached`
                                             : "Add Attachments (Max 10MB)"}
-                                    </p>
+                                    </label>
                                     <p className="text-sm text-[color:var(--muted-foreground)]">
                                         {files.length > 0
                                             ? files.map(f => f.name).join(", ")
