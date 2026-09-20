@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { Info, Sparkles, Shield, Rocket, Plus, Trash2, Heart } from "lucide-react";
+import { updateAboutHighlightTitle } from "@/lib/adminAboutContentPayload";
 
 interface AboutPageContextsProps {
     aboutData: Record<string, string>;
@@ -159,7 +160,25 @@ export default function AboutPageContexts({
                             >
                                 <Trash2 size={13} />
                             </button>
-                            <h5 className="text-xs font-bold text-[color:var(--foreground)]">{item.title}</h5>
+                            <label className="sr-only" htmlFor={`about-highlight-title-${idx}`}>
+                                Highlight {idx + 1} title
+                            </label>
+                            <input
+                                id={`about-highlight-title-${idx}`}
+                                type="text"
+                                value={item.title || ""}
+                                onChange={(e) =>
+                                    updateField(
+                                        "HighlightsJson",
+                                        updateAboutHighlightTitle(
+                                            aboutData.HighlightsJson,
+                                            idx,
+                                            e.target.value
+                                        )
+                                    )
+                                }
+                                className="w-full rounded-lg border border-transparent bg-transparent px-1 py-0.5 text-xs font-bold text-[color:var(--foreground)] outline-none transition-colors focus:border-[var(--primary)] focus:bg-[var(--card)]"
+                            />
                             <p className="mt-1 text-[11px] leading-relaxed text-[color:var(--muted-foreground)]">
                                 {item.description}
                             </p>

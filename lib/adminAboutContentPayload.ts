@@ -37,3 +37,35 @@ export function serializeAboutContentPayload(
 
     return payload;
 }
+
+/** Update one existing About highlight without changing its other fields. */
+export function updateAboutHighlightTitle(
+    highlightsJson: string,
+    index: number,
+    title: string
+): string {
+    let parsed: unknown;
+
+    try {
+        parsed = highlightsJson ? JSON.parse(highlightsJson) : [];
+    } catch {
+        return highlightsJson;
+    }
+
+    if (!Array.isArray(parsed)) return highlightsJson;
+
+    const next = parsed.map((item, itemIndex) => {
+        if (
+            itemIndex !== index ||
+            typeof item !== "object" ||
+            item === null ||
+            Array.isArray(item)
+        ) {
+            return item;
+        }
+
+        return { ...item, title };
+    });
+
+    return JSON.stringify(next);
+}
