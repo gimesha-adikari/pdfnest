@@ -11,7 +11,10 @@ import {
 } from "lucide-react";
 import { fetchJson } from "@/lib/api";
 import { useTools } from "@/context/ToolContext";
-import { TOTAL_TOOL_COUNT } from "@/lib/toolsData";
+import {
+    resolveAboutHighlightTitle,
+    resolveAboutToolCount,
+} from "@/lib/aboutToolCount";
 
 interface AboutData {
     HeroTag: string;
@@ -98,9 +101,10 @@ export default function AboutPage() {
             : ["organize", "edit", "convert", "create", "security", "optimize", "studio"]
     );
     const workspaceCount = uniqueCategories.size;
+    const resolvedToolCount = resolveAboutToolCount(totalCount);
 
     const stats = [
-        { value: `${totalCount || TOTAL_TOOL_COUNT}+`, label: "PDF Tools Available" },
+        { value: resolvedToolCount + "+", label: "PDF Tools Available" },
         { value: String(workspaceCount), label: "Workspace Modules" },
         { value: "Free", label: "Plan Available" },
         { value: "Pro", label: "High-Capacity Plans" },
@@ -198,7 +202,7 @@ export default function AboutPage() {
                                 className="rounded-3xl border border-[color:var(--border)] bg-[var(--card)]/30 p-8 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
                             >
                                 <h3 className="text-xl font-bold mb-3">
-                                    {item.title}
+                                    {resolveAboutHighlightTitle(item, resolvedToolCount)}
                                 </h3>
                                 <p className="text-sm leading-7 text-[color:var(--muted)]">
                                     {item.description}
