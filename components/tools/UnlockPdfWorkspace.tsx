@@ -13,6 +13,7 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
+import PasswordField from "@/components/ui/PasswordField";
 
 function formatMB(bytes: number) {
     return (bytes / 1024 / 1024).toFixed(2);
@@ -114,13 +115,13 @@ export default function UnlockPdfWorkspace() {
                             <label className="text-sm font-medium text-[color:var(--muted)]">
                                 Current Document Password
                             </label>
-                            <input
-                                type="password"
+                            <PasswordField
                                 value={password}
                                 onChange={(e) => {
                                     setPassword(e.target.value);
                                     if (errorMessage) setErrorMessage(null);
                                 }}
+                                autoComplete="off"
                                 placeholder="Enter the password to decrypt the file"
                                 className="mt-2 w-full rounded-xl border border-[color:var(--border)] bg-transparent p-3 text-sm outline-none transition focus:border-indigo-500 text-[color:var(--foreground)]"
                             />

@@ -20,6 +20,7 @@ import {
     Wallet,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import PasswordField from "@/components/ui/PasswordField";
 
 type Preferences = {
     email_notifications: boolean;
@@ -421,8 +422,8 @@ export default function SettingsPage() {
                                 <label className="text-xs font-bold text-[color:var(--muted-foreground)] uppercase tracking-wider block mb-2">
                                     Current Password
                                 </label>
-                                <input
-                                    type="password"
+                                <PasswordField
+                                    autoComplete="current-password"
                                     required
                                     value={passwords.current}
                                     onChange={(e) => setPasswords({ ...passwords, current: e.target.value })}
@@ -434,8 +435,8 @@ export default function SettingsPage() {
                                 <label className="text-xs font-bold text-[color:var(--muted-foreground)] uppercase tracking-wider block mb-2">
                                     New Password
                                 </label>
-                                <input
-                                    type="password"
+                                <PasswordField
+                                    autoComplete="new-password"
                                     required
                                     minLength={8}
                                     value={passwords.new}
@@ -448,8 +449,8 @@ export default function SettingsPage() {
                                 <label className="text-xs font-bold text-[color:var(--muted-foreground)] uppercase tracking-wider block mb-2">
                                     Confirm New Password
                                 </label>
-                                <input
-                                    type="password"
+                                <PasswordField
+                                    autoComplete="new-password"
                                     required
                                     minLength={8}
                                     value={passwords.confirm}

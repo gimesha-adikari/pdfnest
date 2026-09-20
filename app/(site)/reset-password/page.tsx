@@ -5,6 +5,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, KeyRound, Loader2 } from "lucide-react";
 import { fetchJson } from "@/lib/api";
+import PasswordField from "@/components/ui/PasswordField";
 
 function ResetPasswordContent() {
     const searchParams = useSearchParams();
@@ -83,10 +84,9 @@ function ResetPasswordContent() {
                     <label className="block text-sm font-semibold text-[color:var(--foreground)]" htmlFor="reset-password">
                         New password
                     </label>
-                    <input
+                    <PasswordField
                         id="reset-password"
                         name="new-password"
-                        type="password"
                         autoComplete="new-password"
                         minLength={8}
                         required
@@ -97,10 +97,9 @@ function ResetPasswordContent() {
                     <label className="block text-sm font-semibold text-[color:var(--foreground)]" htmlFor="reset-password-confirm">
                         Confirm new password
                     </label>
-                    <input
+                    <PasswordField
                         id="reset-password-confirm"
                         name="confirm-password"
-                        type="password"
                         autoComplete="new-password"
                         minLength={8}
                         required

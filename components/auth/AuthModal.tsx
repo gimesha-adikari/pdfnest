@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { fetchJson } from "@/lib/api";
 import GoogleLoginButton from "./GoogleLoginButton";
 import PolicyConsentDialog from "./PolicyConsentDialog";
+import PasswordField from "@/components/ui/PasswordField";
 import { useModalFocus } from "@/hooks/useModalFocus";
 
 type PendingAction = "register" | "google" | null;
@@ -216,10 +217,10 @@ export default function AuthModal() {
                                 className="absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--muted-foreground)]"
                                 size={18}
                             />
-                            <input
-                                type="password"
+                            <PasswordField
                                 aria-label="Password"
                                 placeholder={isLoginView ? "Password" : "Create a password"}
+                                autoComplete={isLoginView ? "current-password" : "new-password"}
                                 minLength={8}
                                 required
                                 value={password}
