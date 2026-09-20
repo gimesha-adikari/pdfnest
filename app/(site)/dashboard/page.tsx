@@ -22,12 +22,12 @@ export default function UserDashboard() {
 
 
     const creditPacks = [
-        {credits: 10, price: 0.30},
-        {credits: 20, price: 0.50},
-        {credits: 50, price: 1.00},
-        {credits: 100, price: 2.00},
-        {credits: 200, price: 4.00},
-        {credits: 500, price: 8.00},
+        {credits: 10, price: 0.70},
+        {credits: 20, price: 1.40},
+        {credits: 50, price: 2.00},
+        {credits: 100, price: 4.00},
+        {credits: 200, price: 6.00},
+        {credits: 500, price: 10.00},
     ];
 
     useEffect(() => {
