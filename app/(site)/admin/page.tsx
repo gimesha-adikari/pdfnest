@@ -293,7 +293,8 @@ export default function AdminPage() {
                 {activeTab === "users" && (
                     <div
                         className="bg-[var(--card)] border border-[color:var(--border)] rounded-2xl overflow-hidden shadow-sm">
-                        <table className="w-full text-left text-sm">
+                        <div className="overflow-x-auto">
+                        <table className="min-w-[760px] w-full text-left text-sm">
                             <thead className="bg-[color:var(--background)]/50 border-b border-[color:var(--border)]">
                             <tr>
                                 <th className="p-4 font-semibold">Email Target Address</th>
@@ -342,6 +343,7 @@ export default function AdminPage() {
                             ))}
                             </tbody>
                         </table>
+                        </div>
                     </div>
                 )}
 

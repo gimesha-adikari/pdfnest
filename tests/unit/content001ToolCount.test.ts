@@ -90,6 +90,22 @@ async function main() {
     );
     assert.equal(
         resolveAboutHighlightTitle(
+            { title: "PDF Tools", icon_type: "file" },
+            39
+        ),
+        "39+ PDF Tools",
+        "the semantic CMS title must still render the canonical count"
+    );
+    assert.equal(
+        resolveAboutHighlightTitle(
+            { title: "PDF Tools", icon_type: "file" },
+            40
+        ),
+        "40+ PDF Tools",
+        "the semantic CMS title must continue to follow future catalog drift"
+    );
+    assert.equal(
+        resolveAboutHighlightTitle(
             { title: "Virtual Document Studio", icon_type: "layers" },
             39
         ),

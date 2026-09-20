@@ -398,7 +398,10 @@ export async function fetchJson<T = unknown>(endpoint: string, options: RequestI
     }
 
     if (!response.ok) {
-        const isAuthEndpoint = endpoint.includes("/status") || endpoint.includes("/auth");
+        const isAuthEndpoint =
+            endpoint.includes("/status") ||
+            endpoint.includes("/auth") ||
+            endpoint === "/user/settings/password";
 
         if (response.status === 401 && !isAuthEndpoint) {
             if (typeof window !== "undefined") {

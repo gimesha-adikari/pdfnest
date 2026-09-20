@@ -7,6 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { fetchJson } from "@/lib/api";
 import { ArrowLeft, Loader2, Save, FileText } from "lucide-react";
 import { NAV_TOOLS_FALLBACK } from "@/lib/toolsData";
+import { serializeAboutContentPayload } from "@/lib/adminAboutContentPayload";
 
 import LandingPageContexts from "@/components/admin/LandingPageContexts";
 import PricingSubscriptionMatrices from "@/components/admin/PricingSubscriptionMatrices";
@@ -136,7 +137,7 @@ export default function AdminContentEditor() {
             } else if (activeSection === "about") {
                 await fetchJson("/admin/site-content/about", {
                     method: "PUT",
-                    body: JSON.stringify(aboutData),
+                    body: JSON.stringify(serializeAboutContentPayload(aboutData)),
                 });
                 notify("About Page content properties published live successfully.", "success");
             } else if (activeSection === "tools") {
