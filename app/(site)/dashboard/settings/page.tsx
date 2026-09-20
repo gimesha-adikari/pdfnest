@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { fetchBlob, fetchJson } from "@/lib/api";
 import { notify } from "@/lib/notify";
+import { getPasswordUpdateErrorMessage } from "@/lib/settingsPasswordError";
 import {
     Loader2,
     Shield,
@@ -48,6 +49,7 @@ export default function SettingsPage() {
     const router = useRouter();
 
     const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+    const [passwordError, setPasswordError] = useState<string | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isSavingPreferences, setIsSavingPreferences] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
@@ -118,6 +120,7 @@ export default function SettingsPage() {
             return;
         }
 
+        setPasswordError(null);
         setIsUpdatingPassword(true);
         try {
             await fetchJson("/user/settings/password", {
@@ -130,9 +133,12 @@ export default function SettingsPage() {
 
             notify("Password updated successfully!", "success");
             setPasswords({ current: "", new: "", confirm: "" });
-        } catch (err: any) {
+            setPasswordError(null);
+        } catch (err: unknown) {
             console.error(err);
-            notify(err.message || "Failed to update password", "error");
+            const message = getPasswordUpdateErrorMessage(err);
+            setPasswordError(message);
+            notify(message, "error");
         } finally {
             setIsUpdatingPassword(false);
         }
@@ -451,6 +457,16 @@ export default function SettingsPage() {
                                     className="w-full p-3 rounded-xl bg-[color:var(--background)] border border-[color:var(--border)] focus:border-indigo-500 outline-none transition"
                                 />
                             </div>
+
+                            {passwordError ? (
+                                <p
+                                    role="alert"
+                                    aria-live="assertive"
+                                    className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-500"
+                                >
+                                    {passwordError}
+                                </p>
+                            ) : null}
 
                             <button
                                 type="submit"
