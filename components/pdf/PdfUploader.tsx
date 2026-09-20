@@ -2,6 +2,7 @@
 import React, { useState, useCallback } from "react";
 import { UploadCloud, Lock, Loader2 } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
+import PasswordField from "@/components/ui/PasswordField";
 const checkEncryption = async (file: File): Promise<boolean> => {
     let loadingTask: any = null;
     let pdfDoc: any = null;
@@ -179,11 +180,11 @@ export default function PdfUploader({
                 </p>
 
                 <div className="w-full max-w-xs flex flex-col gap-2.5 pointer-events-auto">
-                    <input
-                        type="password"
+                    <PasswordField
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Enter PDF Password"
+                        autoComplete="off"
                         className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-card)] px-4 py-2.5 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:border-[var(--accent)] focus:outline-none text-center shadow-sm"
                         onKeyDown={(e) => {
                             if (e.key === "Enter" && password && !isUnlocking) {

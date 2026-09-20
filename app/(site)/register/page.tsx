@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import GoogleLoginButton from "@/components/auth/GoogleLoginButton";
 import PolicyConsentDialog from "@/components/auth/PolicyConsentDialog";
+import PasswordField from "@/components/ui/PasswordField";
 import { ArrowLeft, CheckCircle2, Mail, Lock, Loader2 } from "lucide-react";
 import { fetchJson } from "@/lib/api";
 import { safeRedirectPath } from "@/lib/safeRedirect";
@@ -275,9 +276,9 @@ function RegisterContent() {
                                             className="absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--muted-foreground)]"
                                             size={18}
                                         />
-                                        <input
-                                            type="password"
+                                        <PasswordField
                                             placeholder="Create a password"
+                                            autoComplete="new-password"
                                             minLength={8}
                                             required
                                             value={password}

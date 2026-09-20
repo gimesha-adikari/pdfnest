@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import GoogleLoginButton from "@/components/auth/GoogleLoginButton";
 import PolicyConsentDialog from "@/components/auth/PolicyConsentDialog";
+import PasswordField from "@/components/ui/PasswordField";
 import { ArrowLeft, Mail, Lock, Loader2 } from "lucide-react";
 import { fetchJson } from "@/lib/api";
 import { safeRedirectPath } from "@/lib/safeRedirect";
@@ -165,9 +166,9 @@ function LoginContent() {
 
                         <div className="relative">
                             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--muted-foreground)]" size={18} />
-                            <input
-                                type="password"
+                            <PasswordField
                                 placeholder="Password"
+                                autoComplete="current-password"
                                 required
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
