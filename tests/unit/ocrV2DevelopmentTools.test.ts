@@ -32,7 +32,7 @@ const expectedDedicatedHrefs: Record<string, string> = {
 
 assert.deepEqual([...OCR_V2_DEDICATED_TOOL_IDS], expectedDedicatedIds);
 assert.equal(new Set(OCR_V2_DEVELOPMENT_TOOLS.map((surface) => surface.id)).size, OCR_V2_DEVELOPMENT_TOOLS.length, "development surface IDs must be unique");
-assert.equal(OCR_V2_DEVELOPMENT_TOOLS.length, 10, "the hub inventory must include all current OCR V2-related user-facing surfaces");
+assert.equal(OCR_V2_DEVELOPMENT_TOOLS.length, 10, "the registry must include all current OCR V2-related user-facing surfaces");
 
 for (const id of expectedDedicatedIds) {
     assert.equal(isOcrV2DevelopmentToolId(id), true, `${id} must remain a direct development route`);
@@ -42,11 +42,13 @@ for (const id of expectedDedicatedIds) {
     assert.equal(surface?.href, expectedDedicatedHrefs[id], `${id} must enter through its base route`);
     assert.equal(surface?.publicHref, expectedDedicatedHrefs[id], `${id} public route must remain its base route`);
     assert.equal(surface?.href.endsWith("/workspace"), false, `${id} hub destination must not enter the workspace directly`);
-    assert.equal(isHiddenOcrV2PublicHref(surface?.publicHref || ""), true, `${id} must be hidden from public discovery`);
+    assert.equal(surface?.discovery, "public-main-catalog", `${id} must be promoted to the main catalog`);
+    assert.equal(isHiddenOcrV2PublicHref(surface?.publicHref || ""), false, `${id} must not remain hidden from public discovery`);
+    assert.equal(NAV_TOOLS_FALLBACK.filter((tool) => tool.href === surface?.publicHref).length, 1, `${id} must appear once in the main catalog`);
 }
 
 for (const href of Object.values(expectedDedicatedHrefs)) {
-    assert.equal(NAV_TOOLS_FALLBACK.some((tool) => tool.href === href), false, `${href} must remain commented out of the public fallback registry`);
+    assert.equal(NAV_TOOLS_FALLBACK.filter((tool) => tool.href === href).length, 1, `${href} must appear once in the public fallback registry`);
 }
 
 for (const href of [
@@ -64,12 +66,12 @@ for (const href of [
     assert.equal(NAV_TOOLS_FALLBACK.some((tool) => tool.href === href), true, `${href} must remain in the public fallback registry`);
 }
 
-assert.equal(isHiddenOcrV2PublicHref("/highlight-pdf-v2?preview=1"), true);
-assert.equal(isHiddenOcrV2PublicHref("highlight-pdf-v2/"), true);
+assert.equal(isHiddenOcrV2PublicHref("/highlight-pdf-v2?preview=1"), false);
+assert.equal(isHiddenOcrV2PublicHref("highlight-pdf-v2/"), false);
 
 const related = normalizeTool({ title: "Temporary tool", href: "/temporary", related: ["/highlight-pdf-v2", "/highlight-pdf"] });
 assert.ok(related);
-assert.deepEqual(related?.related, ["/highlight-pdf"]);
+assert.deepEqual(related?.related, ["/highlight-pdf-v2", "/highlight-pdf"]);
 
 const merged = mergeToolCatalog(
     [
@@ -78,7 +80,7 @@ const merged = mergeToolCatalog(
     ],
     [{ title: "Hidden static OCR", description: "hidden", href: "/strikeout-pdf-v2", category: "edit" }],
 );
-assert.deepEqual(merged.map((tool) => tool.href), ["/highlight-pdf"]);
+assert.deepEqual(merged.map((tool) => tool.href), ["/ocr-text-v2", "/highlight-pdf", "/strikeout-pdf-v2"]);
 
 const shared = OCR_V2_DEVELOPMENT_TOOLS.find((surface) => surface.id === "general-editor-ocr-v2");
 assert.ok(shared);

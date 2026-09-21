@@ -17,13 +17,19 @@ for (const privatePath of [
     "/billing/complete",
     "/studio-v2",
     "/developing-tools",
-    "/ocr-text-v2",
-    "/strikeout-pdf-v2",
 ]) {
     assert.equal(isIndexableSitemapPath(privatePath), false, privatePath);
 }
 
-for (const publicPath of ["/", "/about", "/image-to-searchable-pdf", "/word-to-pdf", "/reorder-pages"]) {
+for (const publicPath of [
+    "/",
+    "/about",
+    "/image-to-searchable-pdf",
+    "/word-to-pdf",
+    "/reorder-pages",
+    "/ocr-text-v2",
+    "/strikeout-pdf-v2",
+]) {
     assert.equal(isIndexableSitemapPath(publicPath), true, publicPath);
 }
 

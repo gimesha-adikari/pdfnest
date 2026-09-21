@@ -1,10 +1,10 @@
 /**
  * Temporary inventory for the OCR V2 development surface.
  *
- * The dedicated OCR V2 landing entries are intentionally kept out of the
- * public tool catalog while their direct routes remain functional. This list
- * is the single source for the private developing-tools page and for the
- * route metadata fallback used by those direct routes.
+ * This registry is the single metadata source for OCR V2 route fallbacks and
+ * the internal development-surface directory. Dedicated entries that are
+ * ready for normal discovery are classified as public-main-catalog and are
+ * composed into the public fallback catalog by lib/toolsData.ts.
  */
 
 export type OcrV2DevelopmentSurface = {
@@ -20,7 +20,7 @@ export type OcrV2DevelopmentSurface = {
     toolPolicy: "BACKEND_ONLY" | "CLIENT_PREFERRED";
     kind: "dedicated" | "shared" | "stable" | "hybrid";
     classification: string;
-    discovery: "hidden-from-public-catalog" | "public-shared-route" | "public-stable-route" | "public-hybrid-route";
+    discovery: "hidden-from-public-catalog" | "public-main-catalog" | "public-shared-route" | "public-stable-route" | "public-hybrid-route";
     notes: string;
 };
 
@@ -48,8 +48,8 @@ export const OCR_V2_DEVELOPMENT_TOOLS: readonly OcrV2DevelopmentSurface[] = [
         toolPolicy: "BACKEND_ONLY",
         kind: "dedicated",
         classification: "MIGRATED_SDK_CONSUMER",
-        discovery: "hidden-from-public-catalog",
-        notes: "Dedicated OCR V2 route; public catalog entry is temporarily hidden.",
+        discovery: "public-main-catalog",
+        notes: "Dedicated OCR V2 route promoted to the normal public catalog.",
     },
     {
         id: "searchable-pdf-v2",
@@ -64,8 +64,8 @@ export const OCR_V2_DEVELOPMENT_TOOLS: readonly OcrV2DevelopmentSurface[] = [
         toolPolicy: "BACKEND_ONLY",
         kind: "dedicated",
         classification: "MIGRATED_SDK_CONSUMER",
-        discovery: "hidden-from-public-catalog",
-        notes: "Dedicated OCR V2 route; public catalog entry is temporarily hidden.",
+        discovery: "public-main-catalog",
+        notes: "Dedicated OCR V2 route promoted to the normal public catalog.",
     },
     {
         id: "document-extraction-v2",
@@ -80,8 +80,8 @@ export const OCR_V2_DEVELOPMENT_TOOLS: readonly OcrV2DevelopmentSurface[] = [
         toolPolicy: "BACKEND_ONLY",
         kind: "dedicated",
         classification: "MIGRATED_SDK_CONSUMER",
-        discovery: "hidden-from-public-catalog",
-        notes: "Dedicated structured OCR V2 route; public catalog entry is temporarily hidden.",
+        discovery: "public-main-catalog",
+        notes: "Dedicated structured OCR V2 route promoted to the normal public catalog.",
     },
     {
         id: "pdf-to-markdown-v2",
@@ -96,8 +96,8 @@ export const OCR_V2_DEVELOPMENT_TOOLS: readonly OcrV2DevelopmentSurface[] = [
         toolPolicy: "BACKEND_ONLY",
         kind: "dedicated",
         classification: "MIGRATED_SDK_CONSUMER",
-        discovery: "hidden-from-public-catalog",
-        notes: "Dedicated structured OCR V2 route; public catalog entry is temporarily hidden.",
+        discovery: "public-main-catalog",
+        notes: "Dedicated structured OCR V2 route promoted to the normal public catalog.",
     },
     {
         id: "highlight-pdf-v2",
@@ -112,8 +112,8 @@ export const OCR_V2_DEVELOPMENT_TOOLS: readonly OcrV2DevelopmentSurface[] = [
         toolPolicy: "BACKEND_ONLY",
         kind: "dedicated",
         classification: "MIGRATED_SDK_CONSUMER",
-        discovery: "hidden-from-public-catalog",
-        notes: "Dedicated OCR-aware markup V2 route; public catalog entry is temporarily hidden.",
+        discovery: "public-main-catalog",
+        notes: "Dedicated OCR-aware markup V2 route promoted to the normal public catalog.",
     },
     {
         id: "underline-pdf-v2",
@@ -128,8 +128,8 @@ export const OCR_V2_DEVELOPMENT_TOOLS: readonly OcrV2DevelopmentSurface[] = [
         toolPolicy: "BACKEND_ONLY",
         kind: "dedicated",
         classification: "MIGRATED_SDK_CONSUMER",
-        discovery: "hidden-from-public-catalog",
-        notes: "Dedicated OCR-aware markup V2 route; public catalog entry is temporarily hidden.",
+        discovery: "public-main-catalog",
+        notes: "Dedicated OCR-aware markup V2 route promoted to the normal public catalog.",
     },
     {
         id: "strikeout-pdf-v2",
@@ -144,8 +144,8 @@ export const OCR_V2_DEVELOPMENT_TOOLS: readonly OcrV2DevelopmentSurface[] = [
         toolPolicy: "BACKEND_ONLY",
         kind: "dedicated",
         classification: "MIGRATED_SDK_CONSUMER",
-        discovery: "hidden-from-public-catalog",
-        notes: "Dedicated OCR-aware markup V2 route; public catalog entry is temporarily hidden.",
+        discovery: "public-main-catalog",
+        notes: "Dedicated OCR-aware markup V2 route promoted to the normal public catalog.",
     },
     {
         id: "general-editor-ocr-v2",
@@ -197,7 +197,11 @@ export const OCR_V2_DEVELOPMENT_TOOLS: readonly OcrV2DevelopmentSurface[] = [
     },
 ] as const;
 
-const hiddenHrefSet = new Set<string>(OCR_V2_DEDICATED_TOOL_IDS.map((id) => `/${id}`));
+const hiddenHrefSet = new Set<string>(
+    OCR_V2_DEVELOPMENT_TOOLS
+        .filter((surface) => surface.discovery === "hidden-from-public-catalog")
+        .map((surface) => surface.publicHref),
+);
 
 function normalizeHref(href: string): string {
     const clean = href.startsWith("/") ? href : `/${href}`;

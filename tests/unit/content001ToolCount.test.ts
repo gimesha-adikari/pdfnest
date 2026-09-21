@@ -21,8 +21,8 @@ async function main() {
     );
     assert.match(
         toolsDataSource,
-        /export const TOTAL_TOOL_COUNT\s*=\s*39\b/,
-        "the qualified catalog fallback count must remain 39"
+        /export const TOTAL_TOOL_COUNT\s*=\s*NAV_TOOLS_FALLBACK\.length/,
+        "the catalog fallback count must derive from the canonical active list"
     );
     assert.match(
         aboutSource,
@@ -59,7 +59,7 @@ async function main() {
         "the count helper must not retain the stale CMS number"
     );
 
-    const { NAV_TOOLS_FALLBACK } = await import("../../lib/toolsData");
+    const { NAV_TOOLS_FALLBACK, TOTAL_TOOL_COUNT } = await import("../../lib/toolsData");
     const {
         resolveAboutHighlightTitle,
         resolveAboutToolCount,
@@ -67,47 +67,48 @@ async function main() {
 
     assert.equal(
         NAV_TOOLS_FALLBACK.length,
-        39,
-        "the active fallback catalog must contain 39 tools"
+        TOTAL_TOOL_COUNT,
+        "the active fallback catalog length must equal its canonical count"
     );
-    assert.equal(resolveAboutToolCount(39), 39);
-    assert.equal(resolveAboutToolCount(40), 40);
+    assert.equal(TOTAL_TOOL_COUNT, 46, "the seven promoted OCR V2 tools must expand the catalog from 39 to 46");
+    assert.equal(resolveAboutToolCount(TOTAL_TOOL_COUNT), TOTAL_TOOL_COUNT);
+    assert.equal(resolveAboutToolCount(TOTAL_TOOL_COUNT + 1), TOTAL_TOOL_COUNT + 1);
     assert.equal(
         resolveAboutHighlightTitle(
             { title: "37+ PDF Tools", icon_type: "file" },
-            39
+            TOTAL_TOOL_COUNT
         ),
-        "39+ PDF Tools",
+        `${TOTAL_TOOL_COUNT}+ PDF Tools`,
         "stale CMS text must not override the canonical count"
     );
     assert.equal(
         resolveAboutHighlightTitle(
             { title: "37+ PDF Tools", icon_type: "file" },
-            40
+            TOTAL_TOOL_COUNT + 1
         ),
-        "40+ PDF Tools",
+        `${TOTAL_TOOL_COUNT + 1}+ PDF Tools`,
         "future catalog drift must update the rendered count"
     );
     assert.equal(
         resolveAboutHighlightTitle(
             { title: "PDF Tools", icon_type: "file" },
-            39
+            TOTAL_TOOL_COUNT
         ),
-        "39+ PDF Tools",
+        `${TOTAL_TOOL_COUNT}+ PDF Tools`,
         "the semantic CMS title must still render the canonical count"
     );
     assert.equal(
         resolveAboutHighlightTitle(
             { title: "PDF Tools", icon_type: "file" },
-            40
+            TOTAL_TOOL_COUNT + 1
         ),
-        "40+ PDF Tools",
+        `${TOTAL_TOOL_COUNT + 1}+ PDF Tools`,
         "the semantic CMS title must continue to follow future catalog drift"
     );
     assert.equal(
         resolveAboutHighlightTitle(
             { title: "Virtual Document Studio", icon_type: "layers" },
-            39
+            TOTAL_TOOL_COUNT
         ),
         "Virtual Document Studio",
         "unrelated CMS highlight titles must remain unchanged"

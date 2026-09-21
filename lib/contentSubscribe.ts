@@ -1,3 +1,5 @@
+import { TOTAL_TOOL_COUNT } from "@/lib/toolsData";
+
 export interface SubscribeContent {
     heroBadge: string;
     heroTitle: string;
@@ -95,7 +97,7 @@ export const fallbackSubscribeContent: SubscribeContent = {
     freeSubtitle: "For everyday, occasional document tasks",
 
     freeBulletPoints:
-        "Access to all 39+ PDF tools,Studio workspace access,20 processing units per day,8 units per 3-hour window,80 units per month allowance",
+        `Access to all ${TOTAL_TOOL_COUNT}+ PDF tools,Studio workspace access,20 processing units per day,8 units per 3-hour window,80 units per month allowance`,
 
     plusTitle: "Plus",
 
@@ -155,7 +157,7 @@ export const fallbackSubscribeContent: SubscribeContent = {
     faqsJson: `[
         {
             "q":"Is Platen PDF free?",
-            "a":"Yes. The Free plan includes all 39+ PDF tools and the Studio workspace with 20 processing units per day."
+            "a":"Yes. The Free plan includes all ${TOTAL_TOOL_COUNT}+ PDF tools and the Studio workspace with 20 processing units per day."
         },
         {
             "q":"How do processing units work?",
