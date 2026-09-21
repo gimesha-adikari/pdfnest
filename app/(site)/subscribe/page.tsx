@@ -9,6 +9,8 @@ import {ArrowUpRight, CheckCircle2, ChevronDown, Cpu, HelpCircle, Layers, Sparkl
 import {fallbackSubscribeContent, SubscribeContent} from "@/lib/contentSubscribe";
 import PlanButtons from "@/components/subscription/PlanButtons";
 import {notify} from "@/lib/notify";
+import { useTools } from "@/context/ToolContext";
+import { TOTAL_TOOL_COUNT } from "@/lib/toolsData";
 
 type BillingInterval = "monthly" | "yearly";
 
@@ -23,6 +25,8 @@ export default function SubscribePage() {
         subscription,
         requireAuth,
     } = useAuth();
+    const { totalCount } = useTools();
+    const resolvedToolCount = totalCount || TOTAL_TOOL_COUNT;
     const [isProcessing, setIsProcessing] = useState(false);
     const [activeFaq, setActiveFaq] = useState<number | null>(null);
     const [content, setContent] = useState<SubscribeContent>(fallbackSubscribeContent);
@@ -78,11 +82,28 @@ export default function SubscribePage() {
 
     const getBullets = (str: string) => (str ? str.split(",") : []);
 
+    const normalizeToolCountCopy = (value: string) =>
+        value.replace(/\b\d+\+\s+PDF tools\b/gi, `${resolvedToolCount}+ PDF tools`);
+
+    const freeBulletPoints = normalizeToolCountCopy(content.freeBulletPoints);
+
     const dynamicFaqs = (() => {
         try {
-            return JSON.parse(content.faqsJson);
+            const parsed = JSON.parse(content.faqsJson);
+            return Array.isArray(parsed)
+                ? parsed.map((faq) => ({
+                    ...faq,
+                    a: typeof faq?.a === "string" ? normalizeToolCountCopy(faq.a) : faq?.a,
+                }))
+                : [];
         } catch {
-            return JSON.parse(fallbackSubscribeContent.faqsJson);
+            const parsed = JSON.parse(fallbackSubscribeContent.faqsJson);
+            return Array.isArray(parsed)
+                ? parsed.map((faq) => ({
+                    ...faq,
+                    a: typeof faq?.a === "string" ? normalizeToolCountCopy(faq.a) : faq?.a,
+                }))
+                : [];
         }
     })();
 
@@ -199,12 +220,12 @@ export default function SubscribePage() {
                             <p className="text-xs text-[color:var(--muted)] font-medium mb-6">{content.freeSubtitle}</p>
                             <hr className="border-[color:var(--border)] my-4"/>
                             <ul className="space-y-3 mb-8">
-                                {getBullets(content.freeBulletPoints).map((pt, i) => (
+                                {getBullets(freeBulletPoints).map((pt, i) => (
                                     <li
                                         key={i}
-                                        className={`flex items-start gap-2 text-xs ${i === getBullets(content.freeBulletPoints).length - 1 ? "font-bold text-[color:var(--foreground)] mt-4" : "font-medium text-[color:var(--muted)]"}`}
+                                        className={`flex items-start gap-2 text-xs ${i === getBullets(freeBulletPoints).length - 1 ? "font-bold text-[color:var(--foreground)] mt-4" : "font-medium text-[color:var(--muted)]"}`}
                                     >
-                                        {i < getBullets(content.freeBulletPoints).length - 1 && (
+                                        {i < getBullets(freeBulletPoints).length - 1 && (
                                             <CheckCircle2 size={14} className="text-indigo-500 mt-0.5 shrink-0"/>
                                         )}
                                         {pt}

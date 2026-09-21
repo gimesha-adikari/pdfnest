@@ -27,6 +27,7 @@ import { useTools } from "@/context/ToolContext";
 import {useAuth} from "@/context/AuthContext";
 import {fetchJson} from "@/lib/api";
 import {fallbackHomeContent, HomeContent} from "@/lib/contentHome";
+import { TOTAL_TOOL_COUNT } from "@/lib/toolsData";
 
 export default function Home() {
     const {
@@ -36,6 +37,7 @@ export default function Home() {
         isLoading,
     } = useAuth();
     const { tools: toolsList } = useTools();
+    const resolvedToolCount = toolsList.length || TOTAL_TOOL_COUNT;
 
     const [search, setSearch] = useState("");
     const [content, setContent] = useState<HomeContent>(fallbackHomeContent);
@@ -546,11 +548,11 @@ export default function Home() {
                                         Free Plan Included
                                     </h3>
                                     <p className="text-xs text-[var(--muted)] mb-6">
-                                        Access all 39+ PDF tools and Studio workspace with a daily processing allowance at zero cost.
+                                        Access all {resolvedToolCount}+ PDF tools and Studio workspace with a daily processing allowance at zero cost.
                                     </p>
                                     <ul className="space-y-3 text-xs text-[var(--muted)] mb-8">
                                         <li className="flex items-center gap-2.5">
-                                            <Check size={14} className="text-[var(--foreground)]" /> Access to all 39+ PDF tools & Studio
+                                            <Check size={14} className="text-[var(--foreground)]" /> Access to all {resolvedToolCount}+ PDF tools & Studio
                                         </li>
                                         <li className="flex items-center gap-2.5">
                                             <Check size={14} className="text-[var(--foreground)]" /> 20 processing units per day allowance

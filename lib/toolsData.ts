@@ -1,4 +1,5 @@
 import type { ToolPolicy } from "@/lib/execution/types";
+import { OCR_V2_DEVELOPMENT_TOOLS } from "@/lib/ocrV2DevelopmentTools";
 
 export type ToolCategory =
     | "organize"
@@ -70,16 +71,13 @@ export function isToolAvailableOffline(tool: ToolItem): boolean {
     return tool.clientCapable === true;
 }
 
-/** Number of tools currently exposed by the normal public fallback catalog. */
-export const TOTAL_TOOL_COUNT = 39;
-
 /**
  * Number of truly offline-capable tools (16 fully offline standalone + 1 metadata + 1 studio suite + Wave 8 sign/repair + Wave 9 code/markdown + repository-analyzer).
  */
 export const OFFLINE_TOOL_COUNT = 27;
 export const CLIENT_CAPABLE_TOOL_COUNT = 27;
 
-export const NAV_TOOLS_FALLBACK: ToolItem[] = [
+const BASE_NAV_TOOLS_FALLBACK: ToolItem[] = [
     {
         title: "Merge PDF",
         description: "Combine multiple PDF files into one document quickly and easily.",
@@ -561,11 +559,11 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         ]
     },
     /*
-     * TEMPORARILY HIDDEN FROM NORMAL PUBLIC DISCOVERY
+     * Historical OCR V2 catalog definitions.
      *
-     * These dedicated OCR V2 routes remain available through the developing
-     * tools hub and their direct URLs. Keep the registry objects here as
-     * source history instead of deleting their product definitions.
+     * Runtime entries for these routes are composed from
+     * OCR_V2_DEVELOPMENT_TOOLS below so the promotion registry remains the
+     * single source of truth for their public metadata.
      */
     /* {
         title: "Extract Text from PDF",
@@ -1907,3 +1905,32 @@ export const NAV_TOOLS_FALLBACK: ToolItem[] = [
         ]
     },
 ];
+
+const PROMOTED_OCR_V2_TOOLS: ToolItem[] = OCR_V2_DEVELOPMENT_TOOLS
+    .filter((surface) => surface.discovery === "public-main-catalog")
+    .map((surface) => ({
+        title: surface.title,
+        description: surface.description,
+        href: surface.publicHref,
+        category: surface.category,
+        accept: surface.accept,
+        multiple: surface.multiple,
+        iconName: surface.iconName,
+        capability: {
+            clientExecutable: false,
+            workspaceOffline: false,
+            requiresBackend: surface.toolPolicy === "BACKEND_ONLY",
+            offlineReason: "Requires server-side OCR V2 processing",
+        },
+        clientCapable: false,
+        toolPolicy: surface.toolPolicy,
+    }));
+
+/** Canonical public fallback catalog, including every promoted ready tool. */
+export const NAV_TOOLS_FALLBACK: ToolItem[] = [
+    ...BASE_NAV_TOOLS_FALLBACK,
+    ...PROMOTED_OCR_V2_TOOLS,
+];
+
+/** Number of tools currently exposed by the normal public fallback catalog. */
+export const TOTAL_TOOL_COUNT = NAV_TOOLS_FALLBACK.length;

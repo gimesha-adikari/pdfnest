@@ -8,8 +8,8 @@ import {
 } from "@/lib/ocrV2DevelopmentTools";
 
 export const metadata: Metadata = {
-    title: "OCR V2 Developing Tools",
-    description: "Temporary internal directory for the current OCR V2 development surfaces.",
+    title: "OCR V2 Development Surfaces",
+    description: "Temporary internal directory for OCR V2 surfaces that are not normal catalog entries.",
     robots: {
         index: false,
         follow: false,
@@ -60,8 +60,9 @@ function SurfaceCard({ surface }: { surface: OcrV2DevelopmentSurface }) {
 }
 
 export default function DevelopingToolsPage() {
-    const dedicated = OCR_V2_DEVELOPMENT_TOOLS.filter((surface) => surface.kind === "dedicated");
-    const preserved = OCR_V2_DEVELOPMENT_TOOLS.filter((surface) => surface.kind !== "dedicated");
+    const developmentSurfaces = OCR_V2_DEVELOPMENT_TOOLS.filter((surface) => surface.discovery !== "public-main-catalog");
+    const dedicated = developmentSurfaces.filter((surface) => surface.kind === "dedicated");
+    const preserved = developmentSurfaces.filter((surface) => surface.kind !== "dedicated");
 
     return (
         <main className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-8" data-testid="developing-tools-page">
@@ -73,39 +74,42 @@ export default function DevelopingToolsPage() {
                     Temporary development directory
                 </p>
                 <h1 className="mt-3 text-3xl font-bold tracking-tight text-[var(--foreground)] sm:text-4xl">
-                    OCR V2 developing tools
+                    OCR V2 development surfaces
                 </h1>
                 <p className="mt-4 text-sm leading-relaxed text-[var(--muted)] sm:text-base">
-                    These are the current OCR V2 work surfaces. Dedicated V2 entries are intentionally hidden from the normal public catalog while their direct routes remain available here.
+                    Dedicated OCR V2 tools that are ready for normal discovery are listed in the main catalog. This page retains only shared, fallback, and other internal OCR V2 surfaces.
                 </p>
                 <p className="mt-3 text-xs text-[var(--muted-foreground)]">
                     This page is not part of normal navigation, search, related tools, or the sitemap.
                 </p>
             </section>
 
-            <section className="mt-12" aria-labelledby="dedicated-ocr-v2-heading">
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                    <div>
-                        <h2 id="dedicated-ocr-v2-heading" className="text-xl font-semibold text-[var(--foreground)]">Dedicated OCR V2 surfaces</h2>
-                        <p className="mt-1 text-sm text-[var(--muted)]">Migrated consumer-specific routes retained for development and validation.</p>
+            {dedicated.length > 0 && (
+                <section className="mt-12" aria-labelledby="dedicated-ocr-v2-heading">
+                    <div className="flex flex-wrap items-end justify-between gap-3">
+                        <div>
+                            <h2 id="dedicated-ocr-v2-heading" className="text-xl font-semibold text-[var(--foreground)]">Dedicated OCR V2 surfaces</h2>
+                            <p className="mt-1 text-sm text-[var(--muted)]">Migrated consumer-specific routes retained for development and validation.</p>
+                        </div>
+                        <span className="font-mono text-xs text-[var(--muted-foreground)]">{dedicated.length} surfaces</span>
                     </div>
-                    <span className="font-mono text-xs text-[var(--muted-foreground)]">{dedicated.length} surfaces</span>
-                </div>
-                <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {dedicated.map((surface) => <SurfaceCard key={surface.id} surface={surface} />)}
-                </div>
-            </section>
+                    <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {dedicated.map((surface) => <SurfaceCard key={surface.id} surface={surface} />)}
+                    </div>
+                </section>
+            )}
 
-            <section className="mt-12" aria-labelledby="preserved-ocr-v2-heading">
-                <div>
-                    <h2 id="preserved-ocr-v2-heading" className="text-xl font-semibold text-[var(--foreground)]">Shared and preserved product surfaces</h2>
-                    <p className="mt-1 text-sm text-[var(--muted)]">These public routes remain discoverable and are listed here to make their OCR V2 or fallback status explicit.</p>
-                </div>
-                <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {preserved.map((surface) => <SurfaceCard key={surface.id} surface={surface} />)}
-                </div>
-            </section>
+            {preserved.length > 0 && (
+                <section className="mt-12" aria-labelledby="preserved-ocr-v2-heading">
+                    <div>
+                        <h2 id="preserved-ocr-v2-heading" className="text-xl font-semibold text-[var(--foreground)]">Shared and preserved product surfaces</h2>
+                        <p className="mt-1 text-sm text-[var(--muted)]">These public routes remain discoverable and are listed here to make their OCR V2 or fallback status explicit.</p>
+                    </div>
+                    <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {preserved.map((surface) => <SurfaceCard key={surface.id} surface={surface} />)}
+                    </div>
+                </section>
+            )}
         </main>
     );
 }
-

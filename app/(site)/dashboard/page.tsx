@@ -8,6 +8,8 @@ import {openPaddleTransactionOverlay} from "@/lib/paddle";
 import {ArrowUpRight, CheckCircle2, Coins, History, Loader2, Sparkles, Zap, Settings} from "lucide-react";
 import {notify} from "@/lib/notify";
 import StudioSessions from "@/components/dashboard/StudioSessions";
+import { useTools } from "@/context/ToolContext";
+import { TOTAL_TOOL_COUNT } from "@/lib/toolsData";
 
 export default function UserDashboard() {
     const {
@@ -16,6 +18,8 @@ export default function UserDashboard() {
         subscription,
         refreshSession,
     } = useAuth();
+    const { totalCount } = useTools();
+    const resolvedToolCount = totalCount || TOTAL_TOOL_COUNT;
     const [transactions, setTransactions] = useState<any[]>([]);
     const [isFetching, setIsFetching] = useState(true);
     const [isBuyingCredits, setIsBuyingCredits] = useState(false);
@@ -138,7 +142,7 @@ export default function UserDashboard() {
                             <p className="text-sm mt-3 text-[color:var(--muted-foreground)]">
                                 {hasActiveSubscription
                                     ? `Your subscription is active. Renews on ${new Date(subscription.current_period_end).toLocaleDateString()}.`
-                                    : "Standard daily account allocation: 20 processing units per day across all 39+ tools."}
+                                    : `Standard daily account allocation: 20 processing units per day across all ${resolvedToolCount}+ tools.`}
                             </p>
 
                             {hasActiveSubscription && (subscription.update_url || subscription.cancel_url) && (

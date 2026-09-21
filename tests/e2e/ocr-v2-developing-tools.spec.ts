@@ -18,7 +18,8 @@ const EXPECTED_HUB_HREFS: Record<string, string> = {
     "studio-v2": "/studio-v2",
 };
 
-const dedicatedSurfaces = OCR_V2_DEVELOPMENT_TOOLS.filter((surface) => surface.kind === "dedicated");
+const promotedSurfaces = OCR_V2_DEVELOPMENT_TOOLS.filter((surface) => surface.discovery === "public-main-catalog");
+const developmentSurfaces = OCR_V2_DEVELOPMENT_TOOLS.filter((surface) => surface.discovery !== "public-main-catalog");
 
 function escapeRegExp(value: string): string {
     return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -29,10 +30,10 @@ test.describe("OCR V2 developing tools and public discovery", () => {
         await page.goto("/developing-tools");
 
         await expect(page.getByTestId("developing-tools-page")).toBeVisible();
-        await expect(page.getByRole("heading", { name: "OCR V2 developing tools" })).toBeVisible();
-        await expect(page.locator('[data-testid^="developing-tool-"]')).toHaveCount(OCR_V2_DEVELOPMENT_TOOLS.length);
+        await expect(page.getByRole("heading", { name: "OCR V2 development surfaces" })).toBeVisible();
+        await expect(page.locator('[data-testid^="developing-tool-"]')).toHaveCount(developmentSurfaces.length);
 
-        for (const surface of OCR_V2_DEVELOPMENT_TOOLS) {
+        for (const surface of developmentSurfaces) {
             const card = page.getByTestId(`developing-tool-${surface.id}`);
             await expect(card).toBeVisible();
             const expectedHref = EXPECTED_HUB_HREFS[surface.id];
@@ -50,11 +51,11 @@ test.describe("OCR V2 developing tools and public discovery", () => {
         }
     });
 
-    test("hides dedicated V2 entries from public directory and search", async ({ page }) => {
+    test("promotes dedicated V2 entries into public directory, search, and sitemap", async ({ page }) => {
         await page.goto("/tools");
 
         for (const toolId of OCR_V2_DEDICATED_TOOL_IDS) {
-            await expect(page.locator(`a[href="/${toolId}"]`)).toHaveCount(0);
+            await expect(page.locator(`a[href="/${toolId}"]`)).toHaveCount(1);
         }
 
         for (const publicHref of ["/highlight-pdf", "/underline-pdf", "/strikeout-pdf", "/image-to-searchable-pdf", "/pdf-to-markdown", "/pdf-to-text", "/pdf-to-word", "/edit-pdf", "/studio-v2"]) {
@@ -62,38 +63,40 @@ test.describe("OCR V2 developing tools and public discovery", () => {
         }
 
         const directorySearch = page.getByPlaceholder("Search tools by name, action or category...");
-        for (const surface of dedicatedSurfaces) {
+        for (const surface of promotedSurfaces) {
             await directorySearch.fill(surface.title);
-            await expect(page.getByText("No tools found")).toBeVisible();
-            await expect(page.locator(`a[href="${EXPECTED_HUB_HREFS[surface.id]}"]`)).toHaveCount(0);
+            await expect(page.getByText("No tools found")).toHaveCount(0);
+            await expect(page.locator(`a[href="${EXPECTED_HUB_HREFS[surface.id]}"]`)).toHaveCount(1);
         }
 
         await page.goto("/");
         const headerSearch = page.getByPlaceholder("Search tools...");
-        for (const surface of dedicatedSurfaces) {
+        const headerSearchResults = headerSearch.locator("xpath=..");
+        for (const surface of promotedSurfaces) {
             await headerSearch.fill(surface.title);
-            await expect(page.locator(`a[href="${EXPECTED_HUB_HREFS[surface.id]}"]`)).toHaveCount(0);
+            await expect(headerSearchResults.locator(`a[href="${EXPECTED_HUB_HREFS[surface.id]}"]`)).toHaveCount(1);
         }
 
         const sitemapResponse = await page.request.get("/sitemap.xml");
         expect(sitemapResponse.status()).toBe(200);
         const sitemap = await sitemapResponse.text();
         expect(sitemap).not.toContain("/developing-tools");
-        for (const surface of dedicatedSurfaces) {
-            expect(sitemap).not.toContain(EXPECTED_HUB_HREFS[surface.id]);
+        for (const surface of promotedSurfaces) {
+            expect(sitemap).toContain(EXPECTED_HUB_HREFS[surface.id]);
         }
     });
 
-    test("opens dedicated cards at base routes and keeps workspace routes functional", async ({ page }) => {
-        for (const surface of dedicatedSurfaces) {
+    test("keeps public development cards and promoted workspace routes functional", async ({ page }) => {
+        for (const surface of developmentSurfaces) {
             await page.goto("/developing-tools");
             const expectedHref = EXPECTED_HUB_HREFS[surface.id];
             const card = page.getByTestId(`developing-tool-${surface.id}`);
             await expect(card).toHaveAttribute("href", expectedHref);
             await card.click();
             await expect(page).toHaveURL(new RegExp(`${escapeRegExp(expectedHref)}$`));
-            expect(new URL(page.url()).pathname).toBe(expectedHref);
-            expect(new URL(page.url()).pathname).not.toMatch(/\/workspace$/);
+            const resolvedUrl = new URL(page.url());
+            expect(`${resolvedUrl.pathname}${resolvedUrl.search}`).toBe(expectedHref);
+            expect(resolvedUrl.pathname).not.toMatch(/\/workspace$/);
         }
     });
 
@@ -104,13 +107,9 @@ test.describe("OCR V2 developing tools and public discovery", () => {
             expect(response?.status(), expectedHref).toBe(200);
             await expect(page).not.toHaveTitle(/404|not found/i);
 
-            if (surface.kind === "dedicated") {
-                await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/i);
-                await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /nofollow/i);
-            }
         }
 
-        for (const surface of dedicatedSurfaces) {
+        for (const surface of promotedSurfaces) {
             const workspaceHref = `/${surface.id}/workspace`;
             const response = await page.goto(workspaceHref);
             expect(response?.status(), workspaceHref).toBe(200);
