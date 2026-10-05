@@ -37,6 +37,11 @@ type PlatenSession = {
     tier?: "guest" | "free" | "plus" | "pro";
     isGuest?: boolean;
     isLoggedIn?: boolean;
+    billingPolicy?: {
+        mode: "normal" | "free";
+        processing_unit_limits_enforced: boolean;
+        purchases_enabled: boolean;
+    } | null;
 };
 
 declare global {
@@ -79,8 +84,16 @@ function isUsageLimitCode(code: string): boolean {
 function resolveBillingAction(error: BackendError): ToastAction | undefined {
     const session = getPlatenSession();
 
+    if (
+        error.code === "PURCHASES_DISABLED" ||
+        (session?.billingPolicy?.mode === "free" && isUsageLimitCode(error.code))
+    ) {
+        return undefined;
+    }
+
     const isGuest = session?.isGuest === true || session?.tier === "guest";
     const tier = session?.tier;
+    const purchasesEnabled = session?.billingPolicy?.purchases_enabled === true;
 
     if (
         !isUsageLimitCode(error.code) &&
@@ -98,6 +111,7 @@ function resolveBillingAction(error: BackendError): ToastAction | undefined {
             };
 
         case "upgrade":
+            if (!purchasesEnabled) return undefined;
             return {
                 label: "Upgrade plan",
                 onClick: () => {
@@ -134,6 +148,7 @@ function resolveBillingAction(error: BackendError): ToastAction | undefined {
     }
 
     if (tier === "free" || tier === "plus") {
+        if (!purchasesEnabled) return undefined;
         return {
             label: "Upgrade plan",
             onClick: () => {
@@ -180,10 +195,17 @@ export function notifyBackendError(error: BackendError | null | undefined) {
         session?.type === "guest" ||
         session?.isGuest === true ||
         session?.tier === "guest";
+    const freeBillingQuotaError =
+        session?.billingPolicy?.mode === "free" && isUsageLimitCode(error.code);
+    const purchaseDisabled = error.code === "PURCHASES_DISABLED";
 
     const title =
         error.title ||
-        (error.code === "DAILY_LIMIT_REACHED"
+        (purchaseDisabled
+            ? "Purchases unavailable"
+            : freeBillingQuotaError
+                ? "Processing is currently free"
+                : error.code === "DAILY_LIMIT_REACHED"
             ? "Daily limit reached"
             : error.code === "HOURLY_LIMIT_REACHED"
                 ? "Usage limit reached"
@@ -195,15 +217,19 @@ export function notifyBackendError(error: BackendError | null | undefined) {
                             ? "Subscription required"
                             : "Request failed");
 
-    const action = resolveBillingAction(error);
+    const action = purchaseDisabled ? undefined : resolveBillingAction(error);
 
     const description =
         error.description ||
-        (isGuest
+        (purchaseDisabled || freeBillingQuotaError
+            ? "Processing is currently free for everyone. No purchase is needed."
+            : isGuest
             ? "Create a free account to continue with higher usage."
             : session?.tier === "pro"
                 ? "You are already on the highest plan. Contact support or wait for the limit reset."
-                : "Upgrade your plan to continue.");
+                : session?.billingPolicy?.purchases_enabled === true
+                    ? "Upgrade your plan to continue."
+                    : "Purchase availability is unknown. Refresh your account and try again.");
 
     notify(error.message || "Request failed.", "error", {
         title,

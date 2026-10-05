@@ -3,14 +3,15 @@
 import React, {useEffect, useState} from "react";
 import Link from "next/link";
 import {useAuth} from "@/context/AuthContext";
-import {fetchJson} from "@/lib/api";
+import {fetchJson, type ClientError} from "@/lib/api";
 import {openPaddleTransactionOverlay} from "@/lib/paddle";
 import {ArrowUpRight, CheckCircle2, ChevronDown, Cpu, HelpCircle, Layers, Sparkles, Zap} from "lucide-react";
 import {fallbackSubscribeContent, SubscribeContent} from "@/lib/contentSubscribe";
 import PlanButtons from "@/components/subscription/PlanButtons";
-import {notify} from "@/lib/notify";
+import {notify, notifyBackendError} from "@/lib/notify";
 import { useTools } from "@/context/ToolContext";
 import { TOTAL_TOOL_COUNT } from "@/lib/toolsData";
+import {canStartPurchase} from "@/lib/billingPolicyUi";
 
 type BillingInterval = "monthly" | "yearly";
 
@@ -23,7 +24,9 @@ export default function SubscribePage() {
         isGuest,
         isLoggedIn,
         subscription,
+        billingPolicy,
         requireAuth,
+        refreshSession,
     } = useAuth();
     const { totalCount } = useTools();
     const resolvedToolCount = totalCount || TOTAL_TOOL_COUNT;
@@ -34,6 +37,9 @@ export default function SubscribePage() {
     const currentTier = isLoggedIn
         ? (subscription?.tier ?? "free")
         : "guest";
+    const purchasesEnabled = canStartPurchase(billingPolicy);
+    const isFreeOperatingMode = billingPolicy?.mode === "free";
+    const isBillingPolicyUnknown = !billingPolicy;
 
     useEffect(() => {
         fetchJson("/site-content/subscribe")
@@ -46,6 +52,8 @@ export default function SubscribePage() {
     }, []);
 
     const handlePlanUpgrade = async (tierName: "plus" | "pro", interval: BillingInterval) => {
+        if (!purchasesEnabled) return;
+
         requireAuth(async () => {
             setIsProcessing(true);
 
@@ -65,9 +73,16 @@ export default function SubscribePage() {
                 // Open the Paddle checkout overlay instead of navigating away.
                 // Avoids the hosted-page redirect-to-root risk when no return URL
                 // is configured on the Paddle transaction.
-                await openPaddleTransactionOverlay(res.checkout_url);
+                await openPaddleTransactionOverlay(res.checkout_url, billingPolicy);
             } catch (error) {
                 console.error("Checkout error:", error);
+
+                const backendError = (error as ClientError)?.billing;
+                if (backendError?.code === "PURCHASES_DISABLED") {
+                    await refreshSession();
+                    notifyBackendError(backendError);
+                    return;
+                }
 
                 if (error instanceof Error) {
                     notify(error.message,"error");
@@ -81,6 +96,22 @@ export default function SubscribePage() {
     };
 
     const getBullets = (str: string) => (str ? str.split(",") : []);
+
+    const planBullets = (str: string, plan: string) => {
+        const bullets = getBullets(str);
+        if (!isFreeOperatingMode) return bullets;
+
+        const featuresNotTiedToProcessingQuota = bullets.filter(
+            (bullet) => !/processing unit|daily|per 3-hour|per month|allowance|capacity|credit|trial|duplication limit/i.test(bullet),
+        );
+
+        return [
+            ...featuresNotTiedToProcessingQuota,
+            `${plan} membership details remain separate from effective processing access.`,
+            "Processing-unit billing limits are not enforced while processing is free.",
+            "Technical and safety limits continue to apply.",
+        ];
+    };
 
     const normalizeToolCountCopy = (value: string) =>
         value.replace(/\b\d+\+\s+PDF tools\b/gi, `${resolvedToolCount}+ PDF tools`);
@@ -106,6 +137,14 @@ export default function SubscribePage() {
                 : [];
         }
     })();
+
+    const displayedFaqs = isFreeOperatingMode
+        ? [
+            {q: "Is cloud processing free right now?", a: "Yes. Cloud processing is currently free for everyone while this operating mode is active. Technical and safety limits still apply."},
+            {q: "Do I need a Plus or Pro subscription to process documents?", a: "No subscription is needed for supported processing while free mode is active. Subscription records and billing management remain separate from processing access."},
+            {q: "What happens to my existing subscription or credits?", a: "Existing subscriptions, purchased credits, and billing history remain associated with the account. Existing paid subscribers can still manage or cancel their subscription."},
+        ]
+        : dynamicFaqs;
 
 
     const plusMonthlyPrice = content.plusMonthlyPrice || "4.99";
@@ -140,8 +179,24 @@ export default function SubscribePage() {
                     </h1>
 
                     <p className="mt-6 text-sm sm:text-base max-w-xl leading-relaxed text-[color:var(--muted)] font-medium">
-                        {content.heroSubtitle}
+                        {isFreeOperatingMode
+                            ? "Cloud processing is currently free for everyone. Existing subscriptions remain active and manageable."
+                            : isBillingPolicyUnknown
+                                ? "Plan information is available, but purchase availability could not be confirmed. New checkout stays disabled until billing policy is known."
+                            : content.heroSubtitle}
                     </p>
+
+                    {isFreeOperatingMode && (
+                        <p role="status" className="mt-5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-5 py-3 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                            Processing is currently free for everyone. New subscription purchases are temporarily unavailable.
+                        </p>
+                    )}
+
+                    {isBillingPolicyUnknown && (
+                        <p role="status" className="mt-5 rounded-xl border border-amber-500/20 bg-amber-500/5 px-5 py-3 text-sm font-semibold text-amber-700 dark:text-amber-300">
+                            Purchase availability is currently unknown. Refresh your account before starting checkout.
+                        </p>
+                    )}
 
                     <div className="mt-8 flex items-center justify-center gap-4">
                         <a
@@ -161,7 +216,9 @@ export default function SubscribePage() {
 
                 <div id="features" className="mt-24 max-w-5xl mx-auto">
                     <div className="text-center mb-12">
-                        <h2 className="text-2xl font-black tracking-tight">{content.premiumSectionTitle}</h2>
+                        <h2 className="text-2xl font-black tracking-tight">
+                            {isFreeOperatingMode ? "Document tools for every workflow" : content.premiumSectionTitle}
+                        </h2>
                     </div>
 
                     <div className="grid gap-6 md:grid-cols-3">
@@ -171,9 +228,15 @@ export default function SubscribePage() {
                                 <Layers size={20}/>
                             </div>
                             <h3 className="font-extrabold text-md text-[color:var(--foreground)]">{content.studioTitle}</h3>
-                            <p className="text-xs text-[color:var(--muted)] mt-2 leading-relaxed">{content.studioDescription}</p>
+                            <p className="text-xs text-[color:var(--muted)] mt-2 leading-relaxed">
+                                {isFreeOperatingMode
+                                    ? "Processing is currently free for everyone. Existing subscriptions remain active and manageable."
+                                    : content.studioDescription}
+                            </p>
                             <ul className="mt-4 space-y-2 text-xs font-semibold text-[color:var(--muted-foreground)]">
-                                {getBullets(content.studioBulletPoints).map((pt, i) => (
+                                {(isFreeOperatingMode
+                                    ? ["Account and subscription records stay separate from processing access.", "Technical and safety limits still apply."]
+                                    : getBullets(content.studioBulletPoints)).map((pt, i) => (
                                     <li key={i} className="flex items-center gap-2">✓ {pt}</li>
                                 ))}
                             </ul>
@@ -185,9 +248,15 @@ export default function SubscribePage() {
                                 <Cpu size={20}/>
                             </div>
                             <h3 className="font-extrabold text-md text-[color:var(--foreground)]">{content.canvasTitle}</h3>
-                            <p className="text-xs text-[color:var(--muted)] mt-2 leading-relaxed">{content.canvasDescription}</p>
+                            <p className="text-xs text-[color:var(--muted)] mt-2 leading-relaxed">
+                                {isFreeOperatingMode
+                                    ? "Document complexity and technical resource safeguards continue to apply."
+                                    : content.canvasDescription}
+                            </p>
                             <ul className="mt-4 space-y-2 text-xs font-semibold text-[color:var(--muted-foreground)]">
-                                {getBullets(content.canvasBulletPoints).map((pt, i) => (
+                                {(isFreeOperatingMode
+                                    ? ["Page and file validation remains in place.", "Resource and safety controls remain active."]
+                                    : getBullets(content.canvasBulletPoints)).map((pt, i) => (
                                     <li key={i} className="flex items-center gap-2">✓ {pt}</li>
                                 ))}
                             </ul>
@@ -199,9 +268,15 @@ export default function SubscribePage() {
                                 <Zap size={20}/>
                             </div>
                             <h3 className="font-extrabold text-md text-[color:var(--foreground)]">{content.speedTitle}</h3>
-                            <p className="text-xs text-[color:var(--muted)] mt-2 leading-relaxed">{content.speedDescription}</p>
+                            <p className="text-xs text-[color:var(--muted)] mt-2 leading-relaxed">
+                                {isFreeOperatingMode
+                                    ? "Supported cloud processing is available under the current free operating policy."
+                                    : content.speedDescription}
+                            </p>
                             <ul className="mt-4 space-y-2 text-xs font-semibold text-[color:var(--muted-foreground)]">
-                                {getBullets(content.speedBulletPoints).map((pt, i) => (
+                                {(isFreeOperatingMode
+                                    ? ["Processing-unit billing limits are not enforced during free mode.", "Technical limits are not removed."]
+                                    : getBullets(content.speedBulletPoints)).map((pt, i) => (
                                     <li key={i} className="flex items-center gap-2">✓ {pt}</li>
                                 ))}
                             </ul>
@@ -220,7 +295,7 @@ export default function SubscribePage() {
                             <p className="text-xs text-[color:var(--muted)] font-medium mb-6">{content.freeSubtitle}</p>
                             <hr className="border-[color:var(--border)] my-4"/>
                             <ul className="space-y-3 mb-8">
-                                {getBullets(freeBulletPoints).map((pt, i) => (
+                                {planBullets(freeBulletPoints, "Free").map((pt, i) => (
                                     <li
                                         key={i}
                                         className={`flex items-start gap-2 text-xs ${i === getBullets(freeBulletPoints).length - 1 ? "font-bold text-[color:var(--foreground)] mt-4" : "font-medium text-[color:var(--muted)]"}`}
@@ -252,10 +327,14 @@ export default function SubscribePage() {
                                 <span className="text-4xl font-black">${plusMonthlyPrice}</span>
                                 <span className="text-xs text-[color:var(--muted)]">/month</span>
                             </div>
-                            <p className="text-xs text-[color:var(--muted)] font-medium mb-6">{content.plusSubtitle}</p>
+                            <p className="text-xs text-[color:var(--muted)] font-medium mb-6">
+                                {isFreeOperatingMode
+                                    ? "Existing Plus subscriptions remain active and manageable. Processing is currently free for everyone."
+                                    : content.plusSubtitle}
+                            </p>
                             <hr className="border-[color:var(--border)] my-4"/>
                             <ul className="space-y-3 mb-8">
-                                {getBullets(content.plusBulletPoints).map((pt, i) => (
+                                {planBullets(content.plusBulletPoints, "Plus").map((pt, i) => (
                                     <li key={i}
                                         className="flex items-start gap-2 text-xs font-medium text-[color:var(--muted)]">
                                         <CheckCircle2 size={14} className="text-indigo-500 mt-0.5 shrink-0"/> {pt}
@@ -269,6 +348,7 @@ export default function SubscribePage() {
                             monthlyPrice={plusMonthlyPrice}
                             yearlyPrice={plusYearlyPrice}
                             currentTier={currentTier}
+                            billingPolicy={billingPolicy}
                             isProcessing={isProcessing}
                             trialText={content.trialText}
                             onUpgrade={handlePlanUpgrade}
@@ -279,7 +359,7 @@ export default function SubscribePage() {
                         className="rounded-3xl border-2 border-indigo-500 bg-[var(--card)] backdrop-blur-xl p-8 flex flex-col justify-between transition-all shadow-2xl relative scale-105 md:-translate-y-2 z-10">
                         <span
                             className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-[10px] font-black tracking-widest px-4 py-1 rounded-full uppercase shadow-md">
-                            RECOMMENDED
+                            {purchasesEnabled ? "RECOMMENDED" : isFreeOperatingMode ? "PLAN INFORMATION" : "PLAN DETAILS"}
                         </span>
 
                         <div>
@@ -287,17 +367,21 @@ export default function SubscribePage() {
                                 <h3 className="text-xl font-extrabold capitalize text-[color:var(--foreground)]">{content.proTitle}</h3>
                                 <span
                                     className="bg-indigo-500/10 text-indigo-500 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase border border-indigo-500/20">
-                                    MOST POWERFUL
+                                    {purchasesEnabled ? "MOST POWERFUL" : isFreeOperatingMode ? "STORED TIER" : "PLAN DETAILS"}
                                 </span>
                             </div>
                             <div className="flex items-baseline gap-1 my-4">
                                 <span className="text-4xl font-black">${proMonthlyPrice}</span>
                                 <span className="text-xs text-[color:var(--muted)]">/month</span>
                             </div>
-                            <p className="text-xs text-[color:var(--muted)] font-medium mb-6">{content.proSubtitle}</p>
+                            <p className="text-xs text-[color:var(--muted)] font-medium mb-6">
+                                {isFreeOperatingMode
+                                    ? "Existing Pro subscriptions remain active and manageable. Processing is currently free for everyone."
+                                    : content.proSubtitle}
+                            </p>
                             <hr className="border-[color:var(--border)] my-4"/>
                             <ul className="space-y-3 mb-8">
-                                {getBullets(content.proBulletPoints).map((pt, i) => (
+                                {planBullets(content.proBulletPoints, "Pro").map((pt, i) => (
                                     <li key={i}
                                         className="flex items-start gap-2 text-xs font-medium text-[color:var(--muted)]">
                                         <CheckCircle2 size={14} className="text-emerald-500 mt-0.5 shrink-0"/> {pt}
@@ -311,6 +395,7 @@ export default function SubscribePage() {
                             monthlyPrice={proMonthlyPrice}
                             yearlyPrice={proYearlyPrice}
                             currentTier={currentTier}
+                            billingPolicy={billingPolicy}
                             isProcessing={isProcessing}
                             trialText={content.trialText}
                             onUpgrade={handlePlanUpgrade}
@@ -318,12 +403,14 @@ export default function SubscribePage() {
                     </div>
                 </div>
 
-                <div className="mt-8 text-center text-xs text-[color:var(--muted)] font-medium max-w-xl mx-auto">
-                    <p>
-                        Subscriptions auto-renew automatically at the end of each billing cycle (monthly or yearly) until canceled.
-                        You may cancel anytime from your account dashboard or by contacting support before your renewal date.
-                    </p>
-                </div>
+                {purchasesEnabled && (
+                    <div className="mt-8 text-center text-xs text-[color:var(--muted)] font-medium max-w-xl mx-auto">
+                        <p>
+                            Subscriptions auto-renew automatically at the end of each billing cycle (monthly or yearly) until canceled.
+                            You may cancel anytime from your account dashboard or by contacting support before your renewal date.
+                        </p>
+                    </div>
+                )}
 
                 <div className="mt-28 border-t border-[color:var(--border)] pt-20 max-w-4xl mx-auto text-center">
                     <h3 className="text-xl font-black tracking-tight mb-2">{content.securityTitle}</h3>
@@ -345,7 +432,7 @@ export default function SubscribePage() {
                     </h3>
 
                     <div className="space-y-4">
-                        {dynamicFaqs.map((faq: any, index: number) => {
+                        {displayedFaqs.map((faq: any, index: number) => {
                             const isOpen = activeFaq === index;
                             return (
                                 <div key={index}
@@ -387,7 +474,7 @@ export default function SubscribePage() {
                         </>
                     )}
 
-                    {!isGuest && currentTier === "free" && (
+                    {!isGuest && currentTier === "free" && purchasesEnabled && (
                         <>
                             <h3 className="text-xl font-black text-[color:var(--foreground)]">{content.ctaFreeTitle}</h3>
                             <p className="text-xs text-[color:var(--muted)] mt-1 font-medium">{content.ctaFreeSubtitle}</p>
@@ -400,7 +487,21 @@ export default function SubscribePage() {
                         </>
                     )}
 
-                    {!isGuest && currentTier === "plus" && (
+                    {!isGuest && currentTier === "free" && !purchasesEnabled && (
+                        <>
+                            <h3 className="text-xl font-black text-[color:var(--foreground)]">
+                                {isFreeOperatingMode ? "Processing is currently free for everyone." : "Purchase availability is being checked."}
+                            </h3>
+                            <p className="text-xs text-[color:var(--muted)] mt-1 font-medium">
+                                {isFreeOperatingMode
+                                    ? "No subscription is needed for supported processing. You can still manage your account from the dashboard."
+                                    : "Refresh your account before starting a new purchase."}
+                            </p>
+                            {isLoggedIn && <Link href="/dashboard/settings#billing" className="mt-6 inline-flex items-center gap-2 rounded-xl border border-[color:var(--border)] px-6 py-3 text-xs font-bold">Account billing settings</Link>}
+                        </>
+                    )}
+
+                    {!isGuest && currentTier === "plus" && purchasesEnabled && (
                         <>
                             <h3 className="text-xl font-black text-[color:var(--foreground)]">{content.ctaPlusTitle}</h3>
                             <p className="text-xs text-[color:var(--muted)] mt-1 font-medium">{content.ctaPlusSubtitle}</p>
@@ -410,6 +511,20 @@ export default function SubscribePage() {
                             >
                                 Upgrade to Pro Capacity
                             </button>
+                        </>
+                    )}
+
+                    {!isGuest && currentTier === "plus" && !purchasesEnabled && (
+                        <>
+                            <h3 className="text-xl font-black text-[color:var(--foreground)]">
+                                {isFreeOperatingMode ? "Your Plus subscription remains active." : "Purchase availability is being checked."}
+                            </h3>
+                            <p className="text-xs text-[color:var(--muted)] mt-1 font-medium">
+                                {isFreeOperatingMode
+                                    ? "Processing is currently free for everyone; existing subscription management remains available."
+                                    : "Refresh your account before starting a new purchase."}
+                            </p>
+                            <Link href="/dashboard/settings#billing" className="mt-6 inline-flex items-center gap-2 rounded-xl border border-[color:var(--border)] px-6 py-3 text-xs font-bold">Manage billing</Link>
                         </>
                     )}
 

@@ -23,6 +23,7 @@ import Logo from "@/components/ui/Logo";
 export default function Header() {
     const {
         subscription,
+        billingPolicy,
         isLoggedIn,
         isGuest,
         logout,
@@ -211,6 +212,11 @@ export default function Header() {
                                     "
                                 >
                                     <div className="flex items-center gap-2">
+                                        {billingPolicy?.mode === "free" && (
+                                            <span role="status" className="hidden lg:inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/5 px-2.5 py-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                                Processing is free
+                                            </span>
+                                        )}
                                         <div
                                             className="h-2 w-2 rounded-full bg-[var(--accent)]"
                                         />

@@ -60,6 +60,7 @@ type WindowWithPlaten = Window & {
         isLoggedIn: boolean;
         userId?: string;
         guestId?: string;
+        billingPolicy: BillingPolicy | null;
     };
     __PLATEN_OPEN_AUTH_MODAL__?: (mode?: AuthModalView) => void;
 };
@@ -103,6 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             authenticated: true,
             type: "guest",
             tier: "guest",
+            billingPolicy: session.billing_policy ?? null,
             isGuest: true,
             isLoggedIn: false,
             guestId: guestData.id,
@@ -121,6 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             authenticated: true,
             type: "user",
             tier: session.subscription?.tier ?? "free",
+            billingPolicy: session.billing_policy ?? null,
             isGuest: false,
             isLoggedIn: true,
             userId: session.user?.id,

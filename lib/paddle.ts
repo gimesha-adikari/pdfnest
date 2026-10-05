@@ -9,6 +9,8 @@
  */
 
 import { initializePaddle, type Paddle } from "@paddle/paddle-js";
+import type {BillingPolicy} from "@/context/authSessionState";
+import {canStartPurchase} from "@/lib/billingPolicyUi";
 
 let paddlePromise: Promise<Paddle | undefined> | null = null;
 
@@ -56,7 +58,14 @@ export function getPaddle(): Promise<Paddle | undefined> {
  * @throws if the URL does not contain a recognisable `_ptxn` parameter or
  *   if Paddle initialisation fails.
  */
-export async function openPaddleTransactionOverlay(checkoutUrl: string): Promise<void> {
+export async function openPaddleTransactionOverlay(
+    checkoutUrl: string,
+    billingPolicy: BillingPolicy | null
+): Promise<void> {
+    if (!canStartPurchase(billingPolicy)) {
+        throw new Error("New purchases are unavailable until the backend confirms purchase access.");
+    }
+
     const transactionId = extractPaddleTxn(checkoutUrl);
     if (!transactionId) {
         throw new Error(

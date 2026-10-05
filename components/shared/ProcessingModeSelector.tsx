@@ -3,6 +3,7 @@
 import { Cpu, HardDrive, Zap, CloudOff } from "lucide-react";
 import { ProcessingMode, ToolPolicy } from "@/lib/execution/types";
 import { useBackendHealth } from "@/context/BackendHealthContext";
+import {useAuth} from "@/context/AuthContext";
 
 interface ProcessingModeSelectorProps {
     mode: ProcessingMode;
@@ -18,6 +19,7 @@ export function ProcessingModeSelector({
     disabled = false,
 }: ProcessingModeSelectorProps) {
     const { status } = useBackendHealth();
+    const {billingPolicy} = useAuth();
     const isCloudOffline = status === "offline";
     const isCloudOnly = toolPolicy === "BACKEND_ONLY" || toolPolicy === "SECURITY_CRITICAL_BACKEND";
 
@@ -129,7 +131,11 @@ export function ProcessingModeSelector({
                 <p className="text-xs text-[color:var(--muted)]">
                     {mode === "auto" && "Runs locally on your device for free when safe; automatically uses cloud for large files."}
                     {mode === "device" && "Runs 100% locally in your browser. Uses 0 server credits and keeps data private."}
-                    {mode === "cloud" && "Executes on Platen high-performance cloud engine. Consumes account plan credits."}
+                    {mode === "cloud" && (billingPolicy?.mode === "free"
+                        ? "Executes on Platen cloud processing. Processing is currently free; technical limits still apply."
+                        : billingPolicy?.processing_unit_limits_enforced
+                            ? "Executes on Platen high-performance cloud engine. Consumes account plan credits."
+                            : "Executes on Platen cloud processing. Billing policy is currently unavailable.")}
                 </p>
             )}
         </div>

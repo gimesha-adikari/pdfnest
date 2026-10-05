@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { getPaddle } from "@/lib/paddle";
+import {useAuth} from "@/context/AuthContext";
+import {paddleTransactionPolicyDecision} from "@/lib/billingPolicyUi";
 
 /**
  * PaddleTransactionBridge — mounts once inside the site layout.
@@ -17,13 +19,17 @@ import { getPaddle } from "@/lib/paddle";
  */
 export default function PaddleTransactionBridge() {
     const openedTxnRef = useRef<string | null>(null);
+    const {billingPolicy} = useAuth();
+    const policyDecision = paddleTransactionPolicyDecision(billingPolicy);
 
     useEffect(() => {
+        let active = true;
         const run = async () => {
             const params = new URLSearchParams(window.location.search);
             const transactionId = params.get("_ptxn");
 
             if (!transactionId) return;
+            if (policyDecision === "wait") return;
             if (openedTxnRef.current === transactionId) return;
 
             openedTxnRef.current = transactionId;
@@ -32,14 +38,19 @@ export default function PaddleTransactionBridge() {
             cleanUrl.searchParams.delete("_ptxn");
             window.history.replaceState({}, "", cleanUrl.toString());
 
+            if (policyDecision === "discard") return;
+
             const paddle = await getPaddle();
-            if (!paddle) return;
+            if (!active || policyDecision !== "open" || !paddle) return;
 
             paddle.Checkout.open({ transactionId });
         };
 
         void run();
-    }, []);
+        return () => {
+            active = false;
+        };
+    }, [policyDecision]);
 
     return null;
 }
