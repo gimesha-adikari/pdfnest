@@ -267,8 +267,8 @@ assert.match(
 );
 assert.match(
     dashboardSrc,
-    /await\s+openPaddleTransactionOverlay\(res\.checkout_url\)/,
-    "dashboard/page.tsx must call openPaddleTransactionOverlay with checkout_url"
+    /await\s+openPaddleTransactionOverlay\(res\.checkout_url,\s*billingPolicy\)/,
+    "dashboard/page.tsx must pass the backend billing policy to the checkout guard"
 );
 assert.doesNotMatch(
     dashboardSrc,
@@ -288,8 +288,8 @@ assert.match(
 );
 assert.match(
     subscribeSrc,
-    /await\s+openPaddleTransactionOverlay\(res\.checkout_url\)/,
-    "subscribe/page.tsx must call openPaddleTransactionOverlay with checkout_url"
+    /await\s+openPaddleTransactionOverlay\(res\.checkout_url,\s*billingPolicy\)/,
+    "subscribe/page.tsx must pass the backend billing policy to the checkout guard"
 );
 assert.doesNotMatch(
     subscribeSrc,

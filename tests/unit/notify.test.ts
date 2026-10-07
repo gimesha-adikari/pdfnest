@@ -164,7 +164,7 @@ const tests: Array<[string, () => void]> = [
     ["notifyBackendError offers an upgrade to free and plus tiers", () => {
         for (const tier of ["free", "plus"]) {
             reset();
-            installWindow({ tier });
+            installWindow({ tier, billingPolicy: { mode: "normal", processing_unit_limits_enforced: true, purchases_enabled: true } });
 
             notifyBackendError(backendError({ code: "CREDITS_EXHAUSTED" }));
 
@@ -182,9 +182,49 @@ const tests: Array<[string, () => void]> = [
         assert.equal(toasts[0].action, undefined);
     }],
 
+    ["PURCHASES_DISABLED is explained without offering a purchase action", () => {
+        reset();
+        installWindow({ type: "user", tier: "pro", billingPolicy: { mode: "free", processing_unit_limits_enforced: false, purchases_enabled: false } });
+
+        notifyBackendError(backendError({ code: "PURCHASES_DISABLED", message: "New purchases are currently unavailable." }));
+
+        assert.equal(toasts[0].title, "Purchases unavailable");
+        assert.equal(toasts[0].description, "Processing is currently free for everyone. No purchase is needed.");
+        assert.equal(toasts[0].action, undefined);
+    }],
+
+    ["stale billing quota errors in free mode do not recommend buying or upgrading", () => {
+        reset();
+        installWindow({ type: "guest", tier: "guest", isGuest: true, billingPolicy: { mode: "free", processing_unit_limits_enforced: false, purchases_enabled: false } });
+
+        notifyBackendError(backendError({ code: "CREDITS_EXHAUSTED", message: "Old quota response" }));
+
+        assert.equal(toasts[0].description, "Processing is currently free for everyone. No purchase is needed.");
+        assert.equal(toasts[0].action, undefined);
+    }],
+
+    ["resource capacity 429 under free policy retains its non-billing error", () => {
+        reset();
+        installWindow({ type: "guest", tier: "guest", isGuest: true, billingPolicy: { mode: "free", processing_unit_limits_enforced: false, purchases_enabled: false } });
+
+        notifyBackendError(backendError({ code: "RESOURCE_CAPACITY", message: "Processing capacity is busy. Retry shortly." }));
+
+        assert.equal(toasts[0].message, "Processing capacity is busy. Retry shortly.");
+        assert.equal(toasts[0].action, undefined);
+    }],
+
+    ["unknown policy does not turn a usage error into a new-purchase action", () => {
+        reset();
+        installWindow({ type: "user", tier: "free" });
+
+        notifyBackendError(backendError({ code: "DAILY_LIMIT_REACHED", upgradeRecommended: true }));
+
+        assert.equal(toasts[0].action, undefined);
+    }],
+
     ["notifyBackendError adds an action when only upgradeRecommended is set", () => {
         reset();
-        installWindow({ tier: "free" });
+        installWindow({ tier: "free", billingPolicy: { mode: "normal", processing_unit_limits_enforced: true, purchases_enabled: true } });
 
         notifyBackendError(backendError({ code: "COMPRESSION_ENGINE_FAILED", upgradeRecommended: true }));
 
@@ -202,7 +242,7 @@ const tests: Array<[string, () => void]> = [
 
         for (const [suggestedAction, label] of cases) {
             reset();
-            installWindow({ tier: "pro" });
+            installWindow({ tier: "pro", billingPolicy: { mode: "normal", processing_unit_limits_enforced: true, purchases_enabled: true } });
 
             notifyBackendError(backendError({ code: "DAILY_LIMIT_REACHED", suggestedAction }));
 
@@ -229,7 +269,7 @@ const tests: Array<[string, () => void]> = [
 
         for (const [suggestedAction, href] of cases) {
             reset();
-            const stub = installWindow({ tier: "free" });
+            const stub = installWindow({ tier: "free", billingPolicy: { mode: "normal", processing_unit_limits_enforced: true, purchases_enabled: true } });
 
             notifyBackendError(backendError({ code: "DAILY_LIMIT_REACHED", suggestedAction }));
             toasts[0].action?.onClick();

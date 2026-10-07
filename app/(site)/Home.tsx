@@ -28,12 +28,14 @@ import {useAuth} from "@/context/AuthContext";
 import {fetchJson} from "@/lib/api";
 import {fallbackHomeContent, HomeContent} from "@/lib/contentHome";
 import { TOTAL_TOOL_COUNT } from "@/lib/toolsData";
+import {canStartPurchase} from "@/lib/billingPolicyUi";
 
 export default function Home() {
     const {
         isLoggedIn,
         isGuest,
         subscription,
+        billingPolicy,
         isLoading,
     } = useAuth();
     const { tools: toolsList } = useTools();
@@ -51,6 +53,9 @@ export default function Home() {
     const isFreeUser =
         isLoggedIn &&
         (!subscription || subscription.tier === "free");
+    const isFreeOperatingMode = billingPolicy?.mode === "free";
+    const isBillingPolicyUnknown = !billingPolicy;
+    const purchasesEnabled = canStartPurchase(billingPolicy);
 
     useEffect(() => {
         fetchJson("/site-content/home")
@@ -173,13 +178,17 @@ export default function Home() {
 
                         {/* Hero Subtitle */}
                         <p className="mt-6 text-base sm:text-lg text-[var(--muted)] max-w-2xl leading-relaxed">
-                            {!isLoading && isLoggedIn ? (
+                            {isFreeOperatingMode ? (
+                                "Cloud processing is currently free for everyone. Technical file and safety limits still apply."
+                            ) : isBillingPolicyUnknown && !isLoading ? (
+                                "Explore document tools and account features. Purchase availability is currently unknown."
+                            ) : !isLoading && isLoggedIn ? (
                                 isProUser || isPlusUser
                                     ? "High-capacity processing allowance for demanding document workflows and multi-page batch operations."
                                     : "Access baseline document utilities and local tools with 20 daily units. Upgrade for higher capacity."
                             ) : (
                                 content.heroSubtitleGuest ||
-                                "Edit, convert, organize, and secure your documents with professional-grade tools. Start for free today."
+                                    "Edit, convert, organize, and secure your documents with professional-grade tools. Start for free today."
                             )}
                         </p>
 
@@ -191,12 +200,12 @@ export default function Home() {
                                     href="/register"
                                     className="w-full sm:w-auto bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] px-8 py-3 rounded-lg text-sm font-medium transition-colors shadow-sm text-center"
                                 >
-                                    Start for Free
+                                    {isFreeOperatingMode ? "Create an account" : "Start for Free"}
                                 </Link>
                             )}
 
                             {/* Logged-in Free user CTA */}
-                            {isLoggedIn && isFreeUser && (
+                            {isLoggedIn && isFreeUser && purchasesEnabled && (
                                 <Link
                                     href="/subscribe"
                                     className="w-full sm:w-auto bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] px-8 py-3 rounded-lg text-sm font-medium transition-colors shadow-sm text-center"
@@ -206,7 +215,7 @@ export default function Home() {
                             )}
 
                             {/* Logged-in Plus or Pro user CTA */}
-                            {isLoggedIn && (isPlusUser || isProUser) && (
+                            {isLoggedIn && ((isPlusUser || isProUser) || (isFreeUser && !purchasesEnabled)) && (
                                 <Link
                                     href="/dashboard"
                                     className="w-full sm:w-auto bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] px-8 py-3 rounded-lg text-sm font-medium transition-colors shadow-sm text-center"
@@ -234,12 +243,16 @@ export default function Home() {
                                         <Zap className="text-[var(--accent)]" size={16} />
                                     )}
                                     <span>
-                                        {isProUser || isPlusUser
-                                            ? content.authBannerProAccess || "Capacity: High-allowance unit allocation for intensive processing"
-                                            : content.authBannerFreeUsage || "Usage: 20 daily units • 8 per 3-hour window • 80 per month"}
+                                        {isFreeOperatingMode
+                                            ? `${isProUser ? "Pro membership" : isPlusUser ? "Plus membership" : "Account"} · processing is currently free for everyone`
+                                            : isBillingPolicyUnknown
+                                                ? `${isProUser ? "Pro membership" : isPlusUser ? "Plus membership" : "Account"} · billing policy is currently unavailable`
+                                                : isProUser || isPlusUser
+                                                    ? content.authBannerProAccess || "Capacity: High-allowance unit allocation for intensive processing"
+                                                    : content.authBannerFreeUsage || "Usage: 20 daily units • 8 per 3-hour window • 80 per month"}
                                     </span>
                                 </div>
-                                {isFreeUser && (
+                                {isFreeUser && purchasesEnabled && (
                                     <Link
                                         href="/subscribe"
                                         className="font-mono text-[var(--accent-muted)] hover:underline flex items-center gap-1 font-semibold"
@@ -533,10 +546,14 @@ export default function Home() {
                     <section className="py-16 border-t border-[var(--border)]">
                         <div className="text-center mb-12">
                             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--foreground)]">
-                                Built for everyone. Scaled for power users.
+                                {isFreeOperatingMode ? "Processing is currently free for everyone." : isBillingPolicyUnknown ? "Explore Platen PDF" : "Built for everyone. Scaled for power users."}
                             </h2>
                             <p className="text-sm text-[var(--muted)] mt-2">
-                                Transparent computing tiers for your daily document workflows.
+                                {isFreeOperatingMode
+                                    ? "Membership and billing records remain separate. Technical and safety limits still apply."
+                                    : isBillingPolicyUnknown
+                                        ? "Processing allowance details are unavailable until billing policy is confirmed."
+                                        : "Transparent computing tiers for your daily document workflows."}
                             </p>
                         </div>
 
@@ -548,18 +565,34 @@ export default function Home() {
                                         Free Plan Included
                                     </h3>
                                     <p className="text-xs text-[var(--muted)] mb-6">
-                                        Access all {resolvedToolCount}+ PDF tools and Studio workspace with a daily processing allowance at zero cost.
+                                        {isFreeOperatingMode
+                                            ? `Access all ${resolvedToolCount}+ PDF tools and Studio workspace. Cloud processing is currently free for everyone.`
+                                            : isBillingPolicyUnknown
+                                                ? `Access all ${resolvedToolCount}+ PDF tools and Studio workspace. Processing allowance details are unavailable until policy is confirmed.`
+                                                : `Access all ${resolvedToolCount}+ PDF tools and Studio workspace with a daily processing allowance at zero cost.`}
                                     </p>
                                     <ul className="space-y-3 text-xs text-[var(--muted)] mb-8">
                                         <li className="flex items-center gap-2.5">
                                             <Check size={14} className="text-[var(--foreground)]" /> Access to all {resolvedToolCount}+ PDF tools & Studio
                                         </li>
-                                        <li className="flex items-center gap-2.5">
-                                            <Check size={14} className="text-[var(--foreground)]" /> 20 processing units per day allowance
-                                        </li>
-                                        <li className="flex items-center gap-2.5">
-                                            <Check size={14} className="text-[var(--foreground)]" /> 8 units / 3-hour window • 80 units / month
-                                        </li>
+                                        {isFreeOperatingMode ? (
+                                            <li className="flex items-center gap-2.5">
+                                                <Check size={14} className="text-[var(--foreground)]" /> Technical file and safety limits still apply
+                                            </li>
+                                        ) : isBillingPolicyUnknown ? (
+                                            <li className="flex items-center gap-2.5" role="status">
+                                                Processing limits are unavailable until policy is confirmed
+                                            </li>
+                                        ) : (
+                                            <>
+                                                <li className="flex items-center gap-2.5">
+                                                    <Check size={14} className="text-[var(--foreground)]" /> 20 processing units per day allowance
+                                                </li>
+                                                <li className="flex items-center gap-2.5">
+                                                    <Check size={14} className="text-[var(--foreground)]" /> 8 units / 3-hour window • 80 units / month
+                                                </li>
+                                            </>
+                                        )}
                                     </ul>
                                 </div>
                                 <Link
@@ -573,33 +606,62 @@ export default function Home() {
                             {/* Pro */}
                             <div className="bg-[var(--surface-card)] border-2 border-[var(--accent)] rounded-xl p-7 relative flex flex-col justify-between shadow-lg">
                                 <div className="absolute top-0 right-0 bg-[var(--accent)] text-white font-mono text-[10px] uppercase tracking-wider px-3 py-1 rounded-bl-lg rounded-tr-lg font-bold">
-                                    HIGH CAPACITY
+                                    {isFreeOperatingMode ? "PRO SUBSCRIPTION" : isBillingPolicyUnknown ? "PLAN DETAILS" : "HIGH CAPACITY"}
                                 </div>
                                 <div>
                                     <h3 className="text-base font-bold text-[var(--foreground)] mb-1 flex items-center gap-2">
-                                        Pro High-Capacity <Zap size={15} className="text-[var(--accent)] fill-[var(--accent)]" />
+                                        {isFreeOperatingMode ? "Pro subscription" : isBillingPolicyUnknown ? "Pro plan" : "Pro High-Capacity"}
+                                        {!isFreeOperatingMode && !isBillingPolicyUnknown && <Zap size={15} className="text-[var(--accent)] fill-[var(--accent)]" />}
                                     </h3>
                                     <p className="text-xs text-[var(--muted)] mb-6">
-                                        Maximum unit allowance for high-volume document workflows, multi-page batch conversions, and heavy OCR.
+                                        {isFreeOperatingMode
+                                            ? "Existing Pro subscriptions remain active and manageable. Processing is currently free for everyone."
+                                            : isBillingPolicyUnknown
+                                                ? "Pro membership details remain separate from the current processing policy."
+                                                : "Maximum unit allowance for high-volume document workflows, multi-page batch conversions, and heavy OCR."}
                                     </p>
                                     <ul className="space-y-3 text-xs text-[var(--muted)] mb-8">
-                                        <li className="flex items-center gap-2.5">
-                                            <Check size={14} className="text-[var(--accent)]" /> 400 processing units per day allowance
-                                        </li>
-                                        <li className="flex items-center gap-2.5">
-                                            <Check size={14} className="text-[var(--accent)]" /> 150 units / 3-hour window • 2,000 units / month
-                                        </li>
-                                        <li className="flex items-center gap-2.5">
-                                            <Check size={14} className="text-[var(--accent)]" /> Extended page duplication batch limits
-                                        </li>
+                                        {isFreeOperatingMode ? (
+                                            <>
+                                                <li className="flex items-center gap-2.5">
+                                                    <Check size={14} className="text-[var(--accent)]" /> Processing-unit billing limits are not enforced
+                                                </li>
+                                                <li className="flex items-center gap-2.5">
+                                                    <Check size={14} className="text-[var(--accent)]" /> Technical and safety limits still apply
+                                                </li>
+                                            </>
+                                        ) : isBillingPolicyUnknown ? (
+                                            <li className="flex items-center gap-2.5" role="status">
+                                                Current processing limits are unavailable until policy is confirmed
+                                            </li>
+                                        ) : (
+                                            <>
+                                                <li className="flex items-center gap-2.5">
+                                                    <Check size={14} className="text-[var(--accent)]" /> 400 processing units per day allowance
+                                                </li>
+                                                <li className="flex items-center gap-2.5">
+                                                    <Check size={14} className="text-[var(--accent)]" /> 150 units / 3-hour window • 2,000 units / month
+                                                </li>
+                                                <li className="flex items-center gap-2.5">
+                                                    <Check size={14} className="text-[var(--accent)]" /> Extended page duplication batch limits
+                                                </li>
+                                            </>
+                                        )}
                                     </ul>
                                 </div>
-                                <Link
-                                    href={isProUser ? "/dashboard" : "/subscribe"}
-                                    className="block w-full text-center bg-[var(--accent)] text-white py-2.5 rounded-lg text-xs font-medium hover:bg-[var(--accent-hover)] transition-colors shadow-sm"
-                                >
-                                    {isProUser ? "Current Plan (Dashboard)" : "Upgrade Anytime"}
-                                </Link>
+                                {isProUser ? (
+                                    <Link href="/dashboard" className="block w-full text-center bg-[var(--accent)] text-white py-2.5 rounded-lg text-xs font-medium hover:bg-[var(--accent-hover)] transition-colors shadow-sm">
+                                        Current Plan (Dashboard)
+                                    </Link>
+                                ) : purchasesEnabled ? (
+                                    <Link href="/subscribe" className="block w-full text-center bg-[var(--accent)] text-white py-2.5 rounded-lg text-xs font-medium hover:bg-[var(--accent-hover)] transition-colors shadow-sm">
+                                        Upgrade Anytime
+                                    </Link>
+                                ) : (
+                                    <p role="status" className="text-center text-xs text-[var(--muted)]">
+                                        {isFreeOperatingMode ? "Processing is currently free for everyone." : "Purchase availability is being checked."}
+                                    </p>
+                                )}
                             </div>
                         </div>
                     </section>

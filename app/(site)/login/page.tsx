@@ -15,6 +15,7 @@ function LoginContent() {
     const {
         isLoggedIn,
         isLoading: isAuthLoading,
+        billingPolicy,
         refreshSession,
     } = useAuth();
     const router = useRouter();
@@ -135,7 +136,9 @@ function LoginContent() {
                             Welcome back
                         </h1>
                         <p className="text-sm text-[color:var(--muted-foreground)] mt-1">
-                            Sign in to lift your daily PDF limits.
+                            {billingPolicy?.mode === "free"
+                                ? "Sign in to access your saved account, dashboard, and protected workflows."
+                                : "Sign in to lift your daily PDF limits."}
                         </p>
                     </div>
 

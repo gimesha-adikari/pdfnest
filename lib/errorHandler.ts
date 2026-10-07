@@ -34,6 +34,9 @@ export function getFriendlyErrorMessage(error: unknown): string {
                 const backendErr: BackendError = JSON.parse(err.message);
 
                 switch (backendErr.code) {
+                    case "PURCHASES_DISABLED":
+                        return "New purchases are currently unavailable while processing is free.";
+
                     case "COMPRESSION_ENGINE_FAILED":
                         return "The optimization processor encountered an issue resizing this PDF. Ensure the file is not corrupted.";
 

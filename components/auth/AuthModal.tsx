@@ -18,6 +18,7 @@ export default function AuthModal() {
         closeAuthModal,
         handleAuthModalSuccess,
         refreshSession,
+        billingPolicy,
     } = useAuth();
 
     const [isLoginView, setIsLoginView] = useState(authModalView === "login");
@@ -178,7 +179,9 @@ export default function AuthModal() {
                         <p className="text-sm text-[color:var(--muted-foreground)] mt-1">
                             {isLoginView
                                 ? "Sign in to continue."
-                                : "Create a free account to keep going and get higher usage."}
+                                : billingPolicy?.mode === "free"
+                                    ? "Create an account to save your workflows and manage your documents. Processing is currently free."
+                                    : "Create a free account to keep going and get higher usage."}
                         </p>
                     </div>
 

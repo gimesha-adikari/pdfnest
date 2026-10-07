@@ -7,49 +7,19 @@ import React, {
     useEffect,
     useMemo,
     useRef,
+    useReducer,
     useState,
 } from "react";
 import { fetchJson } from "@/lib/api";
-
-interface SubscriptionStatus {
-    role: string;
-    tier: "free" | "plus" | "pro";
-    status: string;
-    billing_interval: "monthly" | "yearly";
-    current_period_end: string;
-    custom_credits: number;
-    used_units_3h: number;
-    used_units_daily: number;
-    used_units_monthly: number;
-    update_url?: string;
-    cancel_url?: string;
-}
-
-interface User {
-    id: string;
-    email: string;
-    role: string;
-    status?: string;
-    google_id?: string | null;
-    email_verified?: boolean;
-    created_at?: string;
-    updated_at?: string;
-}
-
-interface Guest {
-    id: string;
-    trust: number;
-    created_at?: string;
-    last_seen_at?: string;
-}
-
-interface SessionResponse {
-    authenticated: boolean;
-    type: "guest" | "user";
-    user?: User | null;
-    guest?: Guest | null;
-    subscription?: SubscriptionStatus | null;
-}
+import {
+    authSessionReducer,
+    initialAuthSessionState,
+    type BillingPolicy,
+    type Guest,
+    type SessionResponse,
+    type SubscriptionStatus,
+    type User,
+} from "./authSessionState";
 
 type AuthModalView = "login" | "register";
 export type AuthAvailability = "available" | "unavailable" | "unknown";
@@ -58,6 +28,7 @@ interface AuthContextType {
     user: User | null;
     guest: Guest | null;
     subscription: SubscriptionStatus | null;
+    billingPolicy: BillingPolicy | null;
 
     isAuthenticated: boolean;
     isLoggedIn: boolean;
@@ -89,6 +60,7 @@ type WindowWithPlaten = Window & {
         isLoggedIn: boolean;
         userId?: string;
         guestId?: string;
+        billingPolicy: BillingPolicy | null;
     };
     __PLATEN_OPEN_AUTH_MODAL__?: (mode?: AuthModalView) => void;
 };
@@ -105,9 +77,8 @@ function syncWindowSession(session: WindowWithPlaten["__PLATEN_SESSION__"] | nul
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-    const [user, setUser] = useState<User | null>(null);
-    const [guest, setGuest] = useState<Guest | null>(null);
-    const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
+    const [sessionState, dispatchSession] = useReducer(authSessionReducer, initialAuthSessionState);
+    const { user, guest, subscription, billingPolicy } = sessionState;
 
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -120,10 +91,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const pendingAction = useRef<(() => void) | null>(null);
 
-    const applyGuest = useCallback((guestData: Guest) => {
-        setGuest(guestData);
-        setUser(null);
-        setSubscription(null);
+    const applyGuest = useCallback((session: SessionResponse) => {
+        dispatchSession({ type: "apply", session });
+        const guestData = session.guest ?? { id: "guest", trust: 1 };
 
         setIsAuthenticated(true);
         setIsLoggedIn(false);
@@ -134,6 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             authenticated: true,
             type: "guest",
             tier: "guest",
+            billingPolicy: session.billing_policy ?? null,
             isGuest: true,
             isLoggedIn: false,
             guestId: guestData.id,
@@ -141,9 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const applyUser = useCallback((session: SessionResponse) => {
-        setUser(session.user ?? null);
-        setGuest(null);
-        setSubscription(session.subscription ?? null);
+        dispatchSession({ type: "apply", session });
 
         setIsAuthenticated(true);
         setIsLoggedIn(true);
@@ -154,6 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             authenticated: true,
             type: "user",
             tier: session.subscription?.tier ?? "free",
+            billingPolicy: session.billing_policy ?? null,
             isGuest: false,
             isLoggedIn: true,
             userId: session.user?.id,
@@ -174,21 +144,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (session.type === "user" && session.user) {
                 applyUser(session);
             } else {
-                applyGuest(
-                    session.guest ?? {
-                        id: "guest",
-                        trust: 1,
-                    }
-                );
+                applyGuest(session);
             }
             setAuthAvailability("available");
         } catch (err) {
             console.warn("Session refresh failed; backend or auth service unavailable:", err);
 
             setAuthAvailability("unavailable");
-            setUser(null);
-            setGuest(null);
-            setSubscription(null);
+            dispatchSession({ type: "clear" });
 
             setIsAuthenticated(false);
             setIsLoggedIn(false);
@@ -222,9 +185,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 console.warn("Logout request failed; clearing the local session anyway:", err);
             });
         } finally {
-            setUser(null);
-            setGuest(null);
-            setSubscription(null);
+            dispatchSession({ type: "clear" });
 
             setIsAuthenticated(false);
             setIsLoggedIn(false);
@@ -301,6 +262,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             user,
             guest,
             subscription,
+            billingPolicy,
             isAuthenticated,
             isLoggedIn,
             isGuest,
@@ -334,6 +296,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             requireAuth,
             requireLogin,
             subscription,
+            billingPolicy,
             user,
             guest,
         ]

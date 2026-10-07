@@ -62,6 +62,7 @@ const tests: Array<[string, () => void]> = [
             ["DECRYPTION_METADATA_FAILED", "Incorrect PDF password."],
             ["INVALID_MULTIPART_FORM", "File upload failed. Please upload the file again."],
             ["INSUFFICIENT_FILES", "Please select at least two PDF files to merge."],
+            ["PURCHASES_DISABLED", "New purchases are currently unavailable while processing is free."],
         ];
 
         for (const [code, expected] of cases) {

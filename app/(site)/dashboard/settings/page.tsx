@@ -45,6 +45,7 @@ export default function SettingsPage() {
         isLoading,
         user,
         subscription,
+        billingPolicy,
         logout,
     } = useAuth();
     const router = useRouter();
@@ -185,7 +186,14 @@ export default function SettingsPage() {
 
     const openBillingPortal = async (mode: "overview" | "payment" | "cancel") => {
         if (subscription?.tier === "free") {
-            notify("Billing portal is available after upgrading to a paid plan.", "error");
+            notify(
+                billingPolicy?.mode === "free"
+                    ? "This account has no paid subscription to manage. Processing is currently free."
+                    : billingPolicy?.purchases_enabled === true
+                        ? "Billing portal is available after upgrading to a paid plan."
+                        : "This account has no paid billing relationship to manage.",
+                "error"
+            );
             return;
         }
 
@@ -376,36 +384,47 @@ export default function SettingsPage() {
 
                     {subscription?.tier === "free" ? (
                         <p className="text-sm text-[color:var(--muted-foreground)]">
-                            Billing management becomes available after you upgrade to a paid Paddle plan.
+                            {billingPolicy?.mode === "free"
+                                ? "Processing is currently free for everyone. This account has no paid subscription to manage."
+                                : billingPolicy?.purchases_enabled === true
+                                    ? "Billing management becomes available when this account has a paid Paddle subscription."
+                                    : "Billing policy is unavailable. This account has no current paid billing relationship."}
                         </p>
                     ) : (
-                        <div className="flex flex-wrap gap-3">
-                            <button
-                                onClick={() => openBillingPortal("payment")}
-                                disabled={isOpeningBillingPortal}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[color:var(--border)] bg-[var(--background)] hover:border-indigo-500 transition text-sm font-bold disabled:opacity-50"
-                            >
-                                {isOpeningBillingPortal ? <Loader2 size={16} className="animate-spin" /> : <Wallet size={16} />}
-                                Update Payment Method
-                            </button>
+                        <div className="space-y-4">
+                            {billingPolicy?.mode === "free" && (
+                                <p role="status" className="text-sm text-[color:var(--muted-foreground)]">
+                                    Your {subscription?.tier} subscription remains active. Processing is currently free for everyone; you can still manage or cancel your subscription below.
+                                </p>
+                            )}
+                            <div className="flex flex-wrap gap-3">
+                                <button
+                                    onClick={() => openBillingPortal("payment")}
+                                    disabled={isOpeningBillingPortal}
+                                    className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[color:var(--border)] bg-[var(--background)] hover:border-indigo-500 transition text-sm font-bold disabled:opacity-50"
+                                >
+                                    {isOpeningBillingPortal ? <Loader2 size={16} className="animate-spin" /> : <Wallet size={16} />}
+                                    Update Payment Method
+                                </button>
 
-                            <button
-                                onClick={() => openBillingPortal("overview")}
-                                disabled={isOpeningBillingPortal}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[color:var(--border)] bg-[var(--background)] hover:border-indigo-500 transition text-sm font-bold disabled:opacity-50"
-                            >
-                                {isOpeningBillingPortal ? <Loader2 size={16} className="animate-spin" /> : <ExternalLink size={16} />}
-                                View Billing Portal
-                            </button>
+                                <button
+                                    onClick={() => openBillingPortal("overview")}
+                                    disabled={isOpeningBillingPortal}
+                                    className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[color:var(--border)] bg-[var(--background)] hover:border-indigo-500 transition text-sm font-bold disabled:opacity-50"
+                                >
+                                    {isOpeningBillingPortal ? <Loader2 size={16} className="animate-spin" /> : <ExternalLink size={16} />}
+                                    View Billing Portal
+                                </button>
 
-                            <button
-                                onClick={() => openBillingPortal("cancel")}
-                                disabled={isOpeningBillingPortal}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[color:var(--border)] bg-[var(--background)] hover:border-red-500 hover:text-red-500 transition text-sm font-bold disabled:opacity-50"
-                            >
-                                {isOpeningBillingPortal ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
-                                Manage Subscription
-                            </button>
+                                <button
+                                    onClick={() => openBillingPortal("cancel")}
+                                    disabled={isOpeningBillingPortal}
+                                    className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[color:var(--border)] bg-[var(--background)] hover:border-red-500 hover:text-red-500 transition text-sm font-bold disabled:opacity-50"
+                                >
+                                    {isOpeningBillingPortal ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
+                                    Manage Subscription
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>

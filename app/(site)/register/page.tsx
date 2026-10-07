@@ -17,6 +17,7 @@ function RegisterContent() {
     const {
         isLoggedIn,
         isLoading: isAuthLoading,
+        billingPolicy,
     } = useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -158,7 +159,7 @@ function RegisterContent() {
                         <ul className="space-y-4">
                             <li className="flex items-center gap-3 text-[color:var(--muted-foreground)]">
                                 <CheckCircle2 className="text-indigo-500" size={20} />
-                                <span>Process up to 5 files daily for free</span>
+                                <span>{billingPolicy?.mode === "free" ? "Processing-unit billing is currently disabled" : "Process up to 5 files daily for free"}</span>
                             </li>
                             <li className="flex items-center gap-3 text-[color:var(--muted-foreground)]">
                                 <CheckCircle2 className="text-indigo-500" size={20} />
@@ -182,7 +183,9 @@ function RegisterContent() {
                                 Create your account
                             </h2>
                             <p className="text-sm text-[color:var(--muted-foreground)]">
-                                Join Platen PDF to unlock your daily quota.
+                                {billingPolicy?.mode === "free"
+                                    ? "Create an account to save your workflows and manage your documents. Processing is currently free."
+                                    : "Join Platen PDF to unlock your daily quota."}
                             </p>
                         </div>
 

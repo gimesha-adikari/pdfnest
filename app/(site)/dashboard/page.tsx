@@ -3,19 +3,21 @@
 import React, {useEffect, useState} from "react";
 import Link from "next/link";
 import {useAuth} from "@/context/AuthContext";
-import {fetchJson} from "@/lib/api";
+import {fetchJson, type ClientError} from "@/lib/api";
 import {openPaddleTransactionOverlay} from "@/lib/paddle";
 import {ArrowUpRight, CheckCircle2, Coins, History, Loader2, Sparkles, Zap, Settings} from "lucide-react";
-import {notify} from "@/lib/notify";
+import {notify, notifyBackendError} from "@/lib/notify";
 import StudioSessions from "@/components/dashboard/StudioSessions";
 import { useTools } from "@/context/ToolContext";
 import { TOTAL_TOOL_COUNT } from "@/lib/toolsData";
+import {canStartPurchase} from "@/lib/billingPolicyUi";
 
 export default function UserDashboard() {
     const {
         isLoggedIn,
         isLoading,
         subscription,
+        billingPolicy,
         refreshSession,
     } = useAuth();
     const { totalCount } = useTools();
@@ -23,6 +25,8 @@ export default function UserDashboard() {
     const [transactions, setTransactions] = useState<any[]>([]);
     const [isFetching, setIsFetching] = useState(true);
     const [isBuyingCredits, setIsBuyingCredits] = useState(false);
+    const purchasesEnabled = canStartPurchase(billingPolicy);
+    const isFreeOperatingMode = billingPolicy?.mode === "free";
 
 
     const creditPacks = [
@@ -55,6 +59,7 @@ export default function UserDashboard() {
     };
 
     const handleBuyCredits = async (amount: number) => {
+        if (!purchasesEnabled) return;
         setIsBuyingCredits(true);
 
         try {
@@ -70,9 +75,15 @@ export default function UserDashboard() {
             // Open the Paddle checkout as an overlay (no full-page navigation).
             // This prevents the BILL-001 regression where the hosted Paddle page
             // would redirect to "/" on cancel because no return URL was configured.
-            await openPaddleTransactionOverlay(res.checkout_url);
+            await openPaddleTransactionOverlay(res.checkout_url, billingPolicy);
         } catch (err) {
             console.error(err);
+            const backendError = (err as ClientError)?.billing;
+            if (backendError?.code === "PURCHASES_DISABLED") {
+                await refreshSession();
+                notifyBackendError(backendError);
+                return;
+            }
             notify("Credit checkout failed. Please try again.", "error");
         } finally {
             setIsBuyingCredits(false);
@@ -109,7 +120,11 @@ export default function UserDashboard() {
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
                         <h1 className="text-3xl font-black text-[color:var(--foreground)]">Account & Billing</h1>
-                        <p className="text-[color:var(--muted-foreground)] mt-2">Manage your subscription capacity plan and add standalone credit buckets.</p>
+                        <p className="text-[color:var(--muted-foreground)] mt-2">
+                            {isFreeOperatingMode
+                                ? "Your stored subscription and billing history remain available. Processing is currently free for everyone."
+                                : "Manage your subscription capacity plan and add standalone credit buckets."}
+                        </p>
                     </div>
                     <Link
                         href="/dashboard/settings"
@@ -142,7 +157,9 @@ export default function UserDashboard() {
                             <p className="text-sm mt-3 text-[color:var(--muted-foreground)]">
                                 {hasActiveSubscription
                                     ? `Your subscription is active. Renews on ${new Date(subscription.current_period_end).toLocaleDateString()}.`
-                                    : `Standard daily account allocation: 20 processing units per day across all ${resolvedToolCount}+ tools.`}
+                                    : isFreeOperatingMode
+                                        ? "Cloud processing is currently free for everyone. Technical and safety limits still apply."
+                                        : `Standard daily account allocation: 20 processing units per day across all ${resolvedToolCount}+ tools.`}
                             </p>
 
                             {hasActiveSubscription && (subscription.update_url || subscription.cancel_url) && (
@@ -168,7 +185,13 @@ export default function UserDashboard() {
                         className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-[color:var(--border)] pt-8">
                         <div className="flex items-center gap-3">
                             <CheckCircle2 className="text-emerald-500" size={20}/>
-                            <span className="text-sm">{getDailyLimitText()}</span>
+                            <span className="text-sm">
+                                {isFreeOperatingMode
+                                    ? "Cloud processing is currently free for everyone."
+                                    : billingPolicy?.processing_unit_limits_enforced
+                                        ? getDailyLimitText()
+                                        : "Processing allowance is unavailable until billing policy is confirmed."}
+                            </span>
                         </div>
                         <div className="flex items-center gap-3">
                             <CheckCircle2 className="text-emerald-500" size={20}/>
@@ -185,17 +208,25 @@ export default function UserDashboard() {
                             className="inline-flex items-center gap-1 text-[10px] font-black tracking-widest bg-indigo-500 text-white px-2.5 py-1 rounded-md uppercase">
                             <Sparkles size={10}/> Plans Comparison
                         </span>
-                        <h3 className="text-xl font-extrabold text-[color:var(--foreground)] pt-1">Looking for higher processing capacity?</h3>
+                        <h3 className="text-xl font-extrabold text-[color:var(--foreground)] pt-1">
+                            {isFreeOperatingMode ? "Processing is currently free for everyone." : "Looking for higher processing capacity?"}
+                        </h3>
                         <p className="text-xs text-[color:var(--muted-foreground)] leading-relaxed max-w-xl">
-                            Upgrade your plan for higher 3-hour burst and daily unit allowances to process multi-page documents, batch OCR, and high-volume workflows without interruptions.
+                            {isFreeOperatingMode
+                                ? "Existing subscriptions remain active and manageable from account settings."
+                                : billingPolicy
+                                    ? "Upgrade your plan for higher 3-hour burst and daily unit allowances to process multi-page documents, batch OCR, and high-volume workflows without interruptions."
+                                    : "Purchase options are unavailable until the current billing policy is confirmed."}
                         </p>
                     </div>
-                    <Link
-                        href="/subscribe"
-                        className="w-full sm:w-auto inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-5 py-3 text-xs font-bold text-white shadow-md hover:opacity-95 transition-all shrink-0 text-center"
-                    >
-                        View Tier Plans & Pricing
-                    </Link>
+                    {purchasesEnabled && (
+                        <Link
+                            href="/subscribe"
+                            className="w-full sm:w-auto inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-5 py-3 text-xs font-bold text-white shadow-md hover:opacity-95 transition-all shrink-0 text-center"
+                        >
+                            View Tier Plans & Pricing
+                        </Link>
+                    )}
                 </div>
 
                 {/* Standalone Extra Credit Buying Module */}
@@ -208,8 +239,11 @@ export default function UserDashboard() {
                             <div>
                                 <h3 className="text-lg font-black text-[color:var(--foreground)]">Custom Package
                                     Credits</h3>
-                                <p className="text-sm text-[color:var(--muted-foreground)] mt-0.5">Purchased tokens used
-                                    automatically if your daily tier quota gets exceeded.</p>
+                                <p className="text-sm text-[color:var(--muted-foreground)] mt-0.5">
+                                    {isFreeOperatingMode
+                                        ? "Your stored credit balance remains in your account. Processing is currently free."
+                                        : "Purchased tokens are used automatically if your daily tier quota gets exceeded."}
+                                </p>
                             </div>
                         </div>
                         <div className="text-left sm:text-right">
@@ -221,11 +255,12 @@ export default function UserDashboard() {
                     </div>
 
                     <div className="border-t border-[color:var(--border)] pt-4">
-                        <p className="text-xs font-bold text-[color:var(--muted-foreground)] uppercase tracking-wider mb-3">
-                            Top Up Document Credits
-                        </p>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {purchasesEnabled ? (
+                            <>
+                                <p className="text-xs font-bold text-[color:var(--muted-foreground)] uppercase tracking-wider mb-3">
+                                    Top Up Document Credits
+                                </p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                             {creditPacks.map((pack) => (
                                 <button
                                     key={pack.credits}
@@ -249,7 +284,15 @@ export default function UserDashboard() {
                                     />
                                 </button>
                             ))}
-                        </div>
+                                </div>
+                            </>
+                        ) : (
+                            <p role="status" className="border-t border-[color:var(--border)] pt-4 text-sm text-[color:var(--muted-foreground)]">
+                                {isFreeOperatingMode
+                                    ? "Credit top-ups are temporarily unavailable. No purchase is needed for supported processing."
+                                    : "Credit purchases are unavailable until billing policy is confirmed."}
+                            </p>
+                        )}
                     </div>
                 </div>
 

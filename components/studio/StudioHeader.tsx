@@ -70,6 +70,7 @@ export default function StudioHeader({
     const pathname = usePathname();
     const {
         subscription,
+        billingPolicy,
         isLoggedIn,
         isGuest,
         logout,
@@ -167,7 +168,7 @@ export default function StudioHeader({
                     </div>
 
                     <div className="flex items-center gap-2">
-                        {isLoggedIn && !isPro && (
+                        {isLoggedIn && !isPro && billingPolicy?.purchases_enabled === true && (
                             <Link
                                 href="/subscribe"
                                 className="hidden sm:inline-flex items-center gap-1 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-1.5 text-xs font-bold text-amber-500 hover:bg-amber-500/10 transition"
