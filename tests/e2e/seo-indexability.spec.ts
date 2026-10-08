@@ -19,6 +19,10 @@ test.describe("public SEO route responses", () => {
         expect(aboutBody).toMatch(/<h1[^>]*>[\s\S]*Built for Performance, Security, and[\s\S]*<\/h1>/i);
         expect(aboutBody).toContain("Local-First Reliability");
 
+        const pricing = await request.get("/pricing");
+        expect(pricing.status()).toBe(200);
+        expect(await pricing.text()).toMatch(/<meta[^>]+name=["\x27]robots["\x27][^>]+content=["\x27][^"\x27]*noindex/i);
+
         const billing = await request.get("/billing");
         expect(billing.status()).toBe(200);
         const billingBody = await billing.text();

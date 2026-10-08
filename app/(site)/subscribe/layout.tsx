@@ -3,8 +3,8 @@ import { buildNoIndexMetadata } from "@/lib/seoMetadata";
 
 export const metadata: Metadata = {
     ...buildNoIndexMetadata(),
-    title: "Pricing | Platen PDF",
-    description: "Compare Platen PDF plans.",
+    title: "PDF Tools | Platen PDF",
+    description: "Access Platen PDF tools for editing, converting and organizing documents.",
 };
 
 export default function SubscribeLayout({

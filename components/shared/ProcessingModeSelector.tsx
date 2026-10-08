@@ -53,7 +53,7 @@ export function ProcessingModeSelector({
                     Execution Venue
                 </label>
                 <span className="text-xs text-indigo-500 font-medium px-2 py-0.5 rounded-full bg-indigo-500/10">
-                    {mode === "auto" ? "Auto (Recommended)" : mode === "device" ? "My Device (Free)" : "Cloud Server"}
+                    {mode === "auto" ? "Auto (Recommended)" : mode === "device" ? "My Device (Free)" : billingPolicy?.mode === "free" ? "Cloud Server (Free)" : "Cloud Server"}
                 </span>
             </div>
 
@@ -130,7 +130,9 @@ export function ProcessingModeSelector({
             ) : (
                 <p className="text-xs text-[color:var(--muted)]">
                     {mode === "auto" && "Runs locally on your device for free when safe; automatically uses cloud for large files."}
-                    {mode === "device" && "Runs 100% locally in your browser. Uses 0 server credits and keeps data private."}
+                    {mode === "device" && (billingPolicy?.mode === "free"
+                        ? "Runs entirely in your browser. Your file stays on your device."
+                        : "Runs 100% locally in your browser. Uses 0 server credits and keeps data private.")}
                     {mode === "cloud" && (billingPolicy?.mode === "free"
                         ? "Executes on Platen cloud processing. Processing is currently free; technical limits still apply."
                         : billingPolicy?.processing_unit_limits_enforced

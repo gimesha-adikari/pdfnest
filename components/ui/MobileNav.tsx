@@ -19,8 +19,10 @@ import {
 
 import { MobileLink, ToolGroup } from "@/components/MobileComponents";
 import CommandSystem from "@/components/CommandSystem";
+import {useAuth} from "@/context/AuthContext";
 
 export default function MobileNav() {
+    const {billingPolicy} = useAuth();
     const [open, setOpen] = useState(false);
     const [mounted, setMounted] = useState(false);
     const [commandOpen, setCommandOpen] = useState(false);
@@ -211,7 +213,7 @@ export default function MobileNav() {
                             />
                             <MobileLink href="/studio-v2" icon={<Sparkles size={16} />} text="PDF Studio" close={closeSidebar} />
                             <MobileLink href="/dashboard/studio-sessions" icon={<FolderKanban size={16} />} text="Studio Sessions" close={closeSidebar} />
-                            <MobileLink href="/pricing" icon={<Zap size={16} />} text="Pricing" close={closeSidebar} />
+                            {billingPolicy?.mode === "normal" && <MobileLink href="/pricing" icon={<Zap size={16} />} text="Pricing" close={closeSidebar} />}
                             <MobileLink href="/about" icon={<Info size={16} />} text="About" close={closeSidebar} />
                         </div>
 

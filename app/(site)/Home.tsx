@@ -145,7 +145,9 @@ export default function Home() {
                         <div className="inline-flex items-center gap-2 border border-[var(--border)] bg-[var(--surface-card)] px-3.5 py-1 rounded-full mb-8 shadow-sm">
                             <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
                             <span className="font-mono text-xs text-[var(--muted-foreground)] font-medium">
-                                {!isLoading && isLoggedIn
+                                {isFreeOperatingMode
+                                    ? "FREE PDF PROCESSING"
+                                    : !isLoading && isLoggedIn
                                     ? isProUser
                                         ? content.heroBadgePro || "PLATEN_CORE_v2.0 • PRO_ACTIVE"
                                         : isPlusUser
@@ -161,8 +163,10 @@ export default function Home() {
                                 <>
                                     {content.heroWelcomeBack},{" "}
                                     <span className="text-[var(--accent-muted)]">
-                                        {isProUser
-                                            ? content.heroTitlePro || "Pro Workspace"
+                                        {isFreeOperatingMode
+                                            ? "Your Workspace"
+                                            : isProUser
+                                                ? content.heroTitlePro || "Pro Workspace"
                                             : isPlusUser
                                                 ? content.heroTitlePlus || "Plus Workspace"
                                                 : content.heroTitleGuest || "Document Platform"}
@@ -244,7 +248,7 @@ export default function Home() {
                                     )}
                                     <span>
                                         {isFreeOperatingMode
-                                            ? `${isProUser ? "Pro membership" : isPlusUser ? "Plus membership" : "Account"} · processing is currently free for everyone`
+                                            ? "Cloud processing is currently free for everyone"
                                             : isBillingPolicyUnknown
                                                 ? `${isProUser ? "Pro membership" : isPlusUser ? "Plus membership" : "Account"} · billing policy is currently unavailable`
                                                 : isProUser || isPlusUser
@@ -542,7 +546,8 @@ export default function Home() {
                         </div>
                     </section>
 
-                    {/* Transparent Scaling / Free vs Pro */}
+                    {/* Pricing comparisons are only displayed in normal mode. */}
+                    {billingPolicy?.mode === "normal" && (
                     <section className="py-16 border-t border-[var(--border)]">
                         <div className="text-center mb-12">
                             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--foreground)]">
@@ -665,6 +670,8 @@ export default function Home() {
                             </div>
                         </div>
                     </section>
+
+                    )}
 
                     {/* Tool Search & Categorized Tool Matrix */}
                     <section className="py-16 border-t border-[var(--border)]">

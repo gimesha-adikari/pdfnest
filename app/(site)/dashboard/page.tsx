@@ -40,10 +40,15 @@ export default function UserDashboard() {
 
     useEffect(() => {
         if (!isLoading && isLoggedIn) {
-            // eslint-disable-next-line react-hooks/immutability
-            fetchTransactions();
+            if (isFreeOperatingMode) {
+                // No payment history request is needed for the free-first dashboard.
+                setIsFetching(false);
+            } else {
+                // eslint-disable-next-line react-hooks/immutability
+                fetchTransactions();
+            }
         }
-    }, [isLoading, isLoggedIn]);
+    }, [isLoading, isLoggedIn, isFreeOperatingMode]);
 
     const fetchTransactions = async () => {
         try {
@@ -96,6 +101,36 @@ export default function UserDashboard() {
     }
 
     if (!isLoggedIn || !subscription) return null;
+
+    if (isFreeOperatingMode) {
+        return (
+            <main className="min-h-screen bg-[var(--background)] p-6 md:p-8 text-[var(--foreground)]">
+                <div className="mx-auto max-w-4xl space-y-8">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div>
+                            <h1 className="text-3xl font-black">Your PDF workspace</h1>
+                            <p className="mt-2 text-sm text-[var(--muted)]">Everything you need to work with PDFs, in one place.</p>
+                        </div>
+                        <Link href="/dashboard/settings" className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-2.5 text-sm font-bold hover:border-indigo-500">
+                            <Settings size={18} /> Account Settings
+                        </Link>
+                    </div>
+                    <section className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-6 md:p-8">
+                        <div className="flex items-center gap-3">
+                            <CheckCircle2 size={24} className="text-emerald-500" />
+                            <h2 className="text-xl font-extrabold">Free PDF processing</h2>
+                        </div>
+                        <p role="status" className="mt-3 text-sm text-[var(--muted)]">Cloud processing is currently free for everyone. No subscription or purchased credits are needed for supported tools. Technical and safety limits still apply.</p>
+                        <Link href="/tools" className="mt-5 inline-flex rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-700">Explore free tools</Link>
+                    </section>
+                    {subscription.tier !== "free" && (
+                        <p className="text-sm text-[var(--muted)]">Have an existing paid subscription? You can manage or cancel it in <Link href="/dashboard/settings#billing" className="font-semibold underline">Account Settings</Link>.</p>
+                    )}
+                    <StudioSessions compact />
+                </div>
+            </main>
+        );
+    }
 
     const currentTier = subscription.tier;
     const hasActiveSubscription = currentTier === "plus" || currentTier === "pro";
