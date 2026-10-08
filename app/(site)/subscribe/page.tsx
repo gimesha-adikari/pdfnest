@@ -2,6 +2,7 @@
 
 import React, {useEffect, useState} from "react";
 import Link from "next/link";
+import {useRouter} from "next/navigation";
 import {useAuth} from "@/context/AuthContext";
 import {fetchJson, type ClientError} from "@/lib/api";
 import {openPaddleTransactionOverlay} from "@/lib/paddle";
@@ -20,6 +21,7 @@ interface CheckoutResponse {
 }
 
 export default function SubscribePage() {
+    const router = useRouter();
     const {
         isGuest,
         isLoggedIn,
@@ -40,6 +42,10 @@ export default function SubscribePage() {
     const purchasesEnabled = canStartPurchase(billingPolicy);
     const isFreeOperatingMode = billingPolicy?.mode === "free";
     const isBillingPolicyUnknown = !billingPolicy;
+
+    useEffect(() => {
+        if (isFreeOperatingMode) router.replace("/tools");
+    }, [isFreeOperatingMode, router]);
 
     useEffect(() => {
         fetchJson("/site-content/subscribe")
@@ -151,6 +157,19 @@ export default function SubscribePage() {
     const plusYearlyPrice = content.plusYearlyPrice || "49.99";
     const proMonthlyPrice = content.proMonthlyPrice || "9.99";
     const proYearlyPrice = content.proYearlyPrice || "99.99";
+
+    // Do not flash paid content while the session policy is loading.
+    if (billingPolicy?.mode !== "normal") {
+        return (
+            <main className="min-h-screen flex items-center justify-center bg-[var(--background)] px-6 text-[var(--foreground)]">
+                <p role="status" className="text-center text-sm text-[var(--muted)]">
+                    {isFreeOperatingMode
+                        ? "Opening the free PDF tools…"
+                        : "Pricing is unavailable until your account policy is confirmed."}
+                </p>
+            </main>
+        );
+    }
 
     return (
         <main className="relative min-h-screen overflow-hidden bg-[var(--background)] text-[var(--foreground)] pb-24">

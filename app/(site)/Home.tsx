@@ -161,8 +161,10 @@ export default function Home() {
                                 <>
                                     {content.heroWelcomeBack},{" "}
                                     <span className="text-[var(--accent-muted)]">
-                                        {isProUser
-                                            ? content.heroTitlePro || "Pro Workspace"
+                                        {isFreeOperatingMode
+                                            ? "Your Workspace"
+                                            : isProUser
+                                                ? content.heroTitlePro || "Pro Workspace"
                                             : isPlusUser
                                                 ? content.heroTitlePlus || "Plus Workspace"
                                                 : content.heroTitleGuest || "Document Platform"}
@@ -244,7 +246,7 @@ export default function Home() {
                                     )}
                                     <span>
                                         {isFreeOperatingMode
-                                            ? `${isProUser ? "Pro membership" : isPlusUser ? "Plus membership" : "Account"} · processing is currently free for everyone`
+                                            ? "Cloud processing is currently free for everyone"
                                             : isBillingPolicyUnknown
                                                 ? `${isProUser ? "Pro membership" : isPlusUser ? "Plus membership" : "Account"} · billing policy is currently unavailable`
                                                 : isProUser || isPlusUser
@@ -542,6 +544,8 @@ export default function Home() {
                         </div>
                     </section>
 
+                    {/* Pricing comparisons are only displayed in normal mode. */}
+                    {billingPolicy?.mode === "normal" && (
                     {/* Transparent Scaling / Free vs Pro */}
                     <section className="py-16 border-t border-[var(--border)]">
                         <div className="text-center mb-12">
@@ -665,6 +669,8 @@ export default function Home() {
                             </div>
                         </div>
                     </section>
+
+                    )}
 
                     {/* Tool Search & Categorized Tool Matrix */}
                     <section className="py-16 border-t border-[var(--border)]">

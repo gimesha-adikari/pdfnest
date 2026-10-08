@@ -587,7 +587,8 @@ export default function Header() {
                             </div>
                         </div>
 
-                        {/* Pricing */}
+                        {/* Pricing is only shown after normal policy is confirmed. */}
+                        {billingPolicy?.mode === "normal" && (
                         <Link
                             href="/pricing"
                             className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
@@ -598,6 +599,7 @@ export default function Header() {
                         >
                             Pricing
                         </Link>
+                        )}
 
                         {/* About */}
                         <Link
@@ -652,7 +654,7 @@ export default function Header() {
                                 <Link
                                     href="/dashboard"
                                     className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 font-mono text-xs transition-all ${
-                                        subscription.tier === "pro"
+                                        billingPolicy?.mode === "normal" && subscription.tier === "pro"
                                             ? "border-[var(--accent)]/40 bg-[var(--accent-subtle)] text-[var(--accent-muted)] hover:bg-[var(--accent)]/25"
                                             : "border-[var(--border)] bg-[var(--surface-secondary)] text-[var(--muted)] hover:border-[var(--muted)] hover:text-[var(--foreground)]"
                                     }`}
@@ -660,14 +662,14 @@ export default function Header() {
                                     <Zap
                                         size={12}
                                         className={
-                                            subscription.tier === "pro"
+                                            billingPolicy?.mode === "normal" && subscription.tier === "pro"
                                                 ? "animate-pulse text-[var(--accent)]"
                                                 : "text-[var(--muted-foreground)]"
                                         }
                                     />
 
                                     <span className="font-semibold uppercase tracking-wider">
-                                        {subscription.tier}
+                                        {billingPolicy?.mode === "free" ? "Account" : subscription.tier}
                                     </span>
                                 </Link>
 

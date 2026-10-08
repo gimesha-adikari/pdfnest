@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import Logo from "@/components/ui/Logo";
+import {useAuth} from "@/context/AuthContext";
 
 export default function Footer() {
+    const {billingPolicy} = useAuth();
     return (
         <footer
             className="
@@ -243,12 +245,14 @@ export default function Footer() {
                                 </span>
                             </Link>
 
+                            {billingPolicy?.mode === "normal" && (
                             <Link
                                 href="/pricing"
                                 className="transition-colors hover:text-[var(--foreground)]"
                             >
                                 Pricing & Compute
                             </Link>
+                            )}
 
                             <Link
                                 href="/about"
