@@ -50,6 +50,7 @@ async function mockSession(page: Page, session: ReturnType<typeof guestSession> 
   await page.route("**/auth/session", (route: Route) => route.fulfill({ json: session }));
   await page.route("**/site-content/subscribe", (route: Route) => route.fulfill({ json: {} }));
   await page.route("**/tools", async (route: Route) => {
+    if (route.request().isNavigationRequest()) return route.continue();
     if (route.request().method() === "GET") return route.fulfill({ json: [] });
     return route.continue();
   });
