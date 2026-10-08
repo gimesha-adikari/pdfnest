@@ -56,7 +56,7 @@ async function validPdf(bytes:Buffer,pages:number,words:string[]) {
   const items=await (await doc.getPage(n)).getTextContent();
   text+=items.items.map(item=>("str" in item? item.str:"")).join(" ")+"\n";
  }
- await doc.destroy();
+ // PDF.js uses the document proxy only for this tiny synthetic fixture.
  for(const word of words)expect(text).toContain(word);
  return {pages,textValidated:true};
 }
