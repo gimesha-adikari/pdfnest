@@ -252,7 +252,9 @@ export default function SettingsPage() {
                     <div>
                         <h1 className="text-3xl font-black text-[color:var(--foreground)]">Settings</h1>
                         <p className="text-[color:var(--muted-foreground)] mt-2">
-                            Manage your account, billing, security, and preferences.
+                            {billingPolicy?.mode === "free"
+                                ? "Manage your account, security, preferences, and any existing subscription."
+                                : "Manage your account, billing, security, and preferences."}
                         </p>
                     </div>
 
@@ -326,10 +328,12 @@ export default function SettingsPage() {
                     </div>
                 </div>
 
+                {/* Keep management and cancellation reachable for existing paid subscribers. */}
+                {(billingPolicy?.mode !== "free" || (subscription && subscription.tier !== "free")) && (
                 <div id="billing" className="bg-[var(--card)] border border-[color:var(--border)] rounded-3xl p-8 space-y-6">
                     <div className="flex items-center gap-3 border-b border-[color:var(--border)] pb-4">
                         <CreditCard className="text-indigo-500" size={24} />
-                        <h2 className="text-xl font-bold text-[color:var(--foreground)]">Billing & Payment</h2>
+                        <h2 className="text-xl font-bold text-[color:var(--foreground)]">{billingPolicy?.mode === "free" ? "Existing Subscription" : "Billing & Payment"}</h2>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -428,6 +432,7 @@ export default function SettingsPage() {
                         </div>
                     )}
                 </div>
+                )}
 
                 {!user.google_id ? (
                     <div className="bg-[var(--card)] border border-[color:var(--border)] rounded-3xl p-8 space-y-6">
@@ -542,6 +547,7 @@ export default function SettingsPage() {
                                     <span className="text-sm font-medium">Product updates</span>
                                 </label>
 
+                                {(billingPolicy?.mode !== "free" || subscription?.tier !== "free") && (
                                 <label className="flex items-center gap-3 p-4 rounded-2xl border border-[color:var(--border)] bg-[var(--background)]">
                                     <input
                                         type="checkbox"
@@ -550,6 +556,7 @@ export default function SettingsPage() {
                                     />
                                     <span className="text-sm font-medium">Billing emails</span>
                                 </label>
+                                )}
 
                                 <label className="flex items-center gap-3 p-4 rounded-2xl border border-[color:var(--border)] bg-[var(--background)]">
                                     <input
