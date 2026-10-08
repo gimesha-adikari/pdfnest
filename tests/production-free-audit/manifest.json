@@ -1,0 +1,801 @@
+{
+  "schemaVersion": 1,
+  "frontendSourceCommit": "0f4323f5bd95263b6cb8fcd97e017e75e10c3b4b",
+  "backendSourceCommit": "296838852195f96ca5590b3466a33ec5ae3e39d9",
+  "registry": "Bundled public fallback, NOT YET reconciled with live CMS-merged catalog",
+  "fallbackToolCount": 44,
+  "tools": [
+    {
+      "id": "PFA-001",
+      "title": "Merge PDF",
+      "href": "/merge-pdf",
+      "category": "organize",
+      "executionPolicy": "CLIENT_PREFERRED",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-002",
+      "title": "Split PDF",
+      "href": "/split-pdf",
+      "category": "organize",
+      "executionPolicy": "CLIENT_PREFERRED",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-003",
+      "title": "Rotate PDF",
+      "href": "/rotate-pdf",
+      "category": "organize",
+      "executionPolicy": "CLIENT_PREFERRED",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-004",
+      "title": "Delete Pages",
+      "href": "/delete-pages",
+      "category": "organize",
+      "executionPolicy": "CLIENT_PREFERRED",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-005",
+      "title": "Reorder Pages",
+      "href": "/reorder-pages",
+      "category": "organize",
+      "executionPolicy": "CLIENT_PREFERRED",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-006",
+      "title": "Watermark PDF",
+      "href": "/watermark-pdf",
+      "category": "edit",
+      "executionPolicy": "HYBRID",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-007",
+      "title": "Compress PDF",
+      "href": "/compress-pdf",
+      "category": "optimize",
+      "executionPolicy": "CLIENT_PREFERRED",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-008",
+      "title": "Add Page Numbers",
+      "href": "/add-page-numbers",
+      "category": "edit",
+      "executionPolicy": "HYBRID",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-009",
+      "title": "Edit PDF Metadata",
+      "href": "/edit-metadata",
+      "category": "edit",
+      "executionPolicy": "CLIENT_PREFERRED",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-010",
+      "title": "Protect PDF",
+      "href": "/lock-pdf",
+      "category": "security",
+      "executionPolicy": "CLIENT_PREFERRED",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-011",
+      "title": "Unlock PDF",
+      "href": "/unlock-pdf",
+      "category": "security",
+      "executionPolicy": "CLIENT_PREFERRED",
+      "accept": ".pdf",
+      "fixture": "synthetic-encrypted-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-012",
+      "title": "Images to PDF",
+      "href": "/images-to-pdf",
+      "category": "create",
+      "executionPolicy": "HYBRID",
+      "accept": ".pdf",
+      "fixture": "synthetic-png",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-013",
+      "title": "Image to Searchable PDF",
+      "href": "/image-to-searchable-pdf",
+      "category": "create",
+      "executionPolicy": "BACKEND_ONLY",
+      "accept": ".pdf",
+      "fixture": "synthetic-png",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-014",
+      "title": "PDF Studio",
+      "href": "/studio-v2",
+      "category": "studio",
+      "executionPolicy": "CLIENT_PREFERRED",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-015",
+      "title": "Word to PDF",
+      "href": "/word-to-pdf",
+      "category": "create",
+      "executionPolicy": "BACKEND_ONLY",
+      "accept": ".doc, .docx, application/msword, application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "fixture": "synthetic-docx",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-016",
+      "title": "Excel to PDF",
+      "href": "/excel-to-pdf",
+      "category": "create",
+      "executionPolicy": "BACKEND_ONLY",
+      "accept": ".xls, .xlsx, application/vnd.ms-excel, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "fixture": "synthetic-xlsx",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-017",
+      "title": "PowerPoint to PDF",
+      "href": "/powerpoint-to-pdf",
+      "category": "create",
+      "executionPolicy": "BACKEND_ONLY",
+      "accept": ".ppt, .pptx, application/vnd.ms-powerpoint, application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "fixture": "synthetic-pptx",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-018",
+      "title": "URL to PDF Website Capture",
+      "href": "/url-to-pdf",
+      "category": "create",
+      "executionPolicy": "BACKEND_ONLY",
+      "accept": "text/html",
+      "fixture": "owned-site-url",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-019",
+      "title": "Markdown to PDF",
+      "href": "/markdown-to-pdf",
+      "category": "create",
+      "executionPolicy": "CLIENT_PREFERRED",
+      "accept": ".md, text/markdown",
+      "fixture": "synthetic-md",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-020",
+      "title": "Source Code to PDF",
+      "href": "/code-to-pdf",
+      "category": "create",
+      "executionPolicy": "CLIENT_PREFERRED",
+      "accept": "text/*, .js, .ts, .jsx, .tsx, .py, .java, .c, .cpp, .h, .hpp, .cs, .php, .rb, .go, .rs, .swift, .kt, .kts, .sh, .bat, .ps1, .pl, .pm, .sql, .json, .yaml, .yml, .ini, .conf, .toml, .xml, .md, .csv, .cfg, .log",
+      "fixture": "synthetic-js",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-021",
+      "title": "Secure Redaction",
+      "href": "/redact-pdf",
+      "category": "security",
+      "executionPolicy": "SECURITY_CRITICAL_BACKEND",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-022",
+      "title": "PDF Editor",
+      "href": "/edit-pdf",
+      "category": "edit",
+      "executionPolicy": "BACKEND_ONLY",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-023",
+      "title": "PDF to Excel",
+      "href": "/pdf-to-excel",
+      "category": "convert",
+      "executionPolicy": "BACKEND_ONLY",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-024",
+      "title": "PDF to Word",
+      "href": "/pdf-to-word",
+      "category": "convert",
+      "executionPolicy": "BACKEND_ONLY",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-025",
+      "title": "PDF to PowerPoint",
+      "href": "/pdf-to-powerpoint",
+      "category": "convert",
+      "executionPolicy": "BACKEND_ONLY",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-026",
+      "title": "PDF to Markdown",
+      "href": "/pdf-to-markdown",
+      "category": "convert",
+      "executionPolicy": "BACKEND_ONLY",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-027",
+      "title": "Grayscale PDF",
+      "href": "/grayscale-pdf",
+      "category": "optimize",
+      "executionPolicy": "BACKEND_ONLY",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-028",
+      "title": "Repair PDF",
+      "href": "/repair-pdf",
+      "category": "optimize",
+      "executionPolicy": "CLIENT_PREFERRED",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-029",
+      "title": "Sign On PDF",
+      "href": "/sign-pdf",
+      "category": "edit",
+      "executionPolicy": "CLIENT_PREFERRED",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-030",
+      "title": "Crop PDF",
+      "href": "/crop-pdf",
+      "category": "organize",
+      "executionPolicy": "CLIENT_PREFERRED",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-031",
+      "title": "Duplicate PDF Pages",
+      "href": "/duplicate-pages",
+      "category": "organize",
+      "executionPolicy": "CLIENT_PREFERRED",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-032",
+      "title": "Insert Blank PDF Pages",
+      "href": "/insert-blank-pages",
+      "category": "organize",
+      "executionPolicy": "CLIENT_PREFERRED",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-033",
+      "title": "Add Text to PDF",
+      "href": "/add-text",
+      "category": "edit",
+      "executionPolicy": "HYBRID",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-034",
+      "title": "Highlight PDF",
+      "href": "/highlight-pdf",
+      "category": "edit",
+      "executionPolicy": "CLIENT_PREFERRED",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-035",
+      "title": "Underline PDF",
+      "href": "/underline-pdf",
+      "category": "edit",
+      "executionPolicy": "CLIENT_PREFERRED",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-036",
+      "title": "Strikeout PDF",
+      "href": "/strikeout-pdf",
+      "category": "edit",
+      "executionPolicy": "CLIENT_PREFERRED",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-037",
+      "title": "Repository Analyzer",
+      "href": "/repository-analyzer",
+      "category": "studio",
+      "executionPolicy": "CLIENT_PREFERRED",
+      "accept": ".zip",
+      "fixture": "synthetic-repository-zip",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-038",
+      "title": "OCR Text V2",
+      "href": "/ocr-text-v2",
+      "category": "convert",
+      "executionPolicy": "BACKEND_ONLY",
+      "accept": ".pdf",
+      "fixture": "synthetic-scanned-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-039",
+      "title": "Searchable PDF V2",
+      "href": "/searchable-pdf-v2",
+      "category": "create",
+      "executionPolicy": "BACKEND_ONLY",
+      "accept": "image/jpeg, image/png, image/webp",
+      "fixture": "synthetic-png",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-040",
+      "title": "Document Extraction V2",
+      "href": "/document-extraction-v2",
+      "category": "convert",
+      "executionPolicy": "BACKEND_ONLY",
+      "accept": ".pdf",
+      "fixture": "synthetic-scanned-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-041",
+      "title": "PDF to Markdown V2",
+      "href": "/pdf-to-markdown-v2",
+      "category": "convert",
+      "executionPolicy": "BACKEND_ONLY",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-042",
+      "title": "Highlight PDF V2",
+      "href": "/highlight-pdf-v2",
+      "category": "edit",
+      "executionPolicy": "BACKEND_ONLY",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-043",
+      "title": "Underline PDF V2",
+      "href": "/underline-pdf-v2",
+      "category": "edit",
+      "executionPolicy": "BACKEND_ONLY",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "PFA-044",
+      "title": "Strikeout PDF V2",
+      "href": "/strikeout-pdf-v2",
+      "category": "edit",
+      "executionPolicy": "BACKEND_ONLY",
+      "accept": ".pdf",
+      "fixture": "synthetic-text-pdf",
+      "identities": [
+        "guest",
+        "free-account",
+        "existing-paid-account"
+      ],
+      "status": "NOT_TESTED",
+      "outputValidation": "PENDING",
+      "billingValidation": "PENDING",
+      "evidence": []
+    }
+  ]
+}
