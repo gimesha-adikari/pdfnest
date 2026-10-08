@@ -145,7 +145,9 @@ export default function Home() {
                         <div className="inline-flex items-center gap-2 border border-[var(--border)] bg-[var(--surface-card)] px-3.5 py-1 rounded-full mb-8 shadow-sm">
                             <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
                             <span className="font-mono text-xs text-[var(--muted-foreground)] font-medium">
-                                {!isLoading && isLoggedIn
+                                {isFreeOperatingMode
+                                    ? "FREE PDF PROCESSING"
+                                    : !isLoading && isLoggedIn
                                     ? isProUser
                                         ? content.heroBadgePro || "PLATEN_CORE_v2.0 • PRO_ACTIVE"
                                         : isPlusUser

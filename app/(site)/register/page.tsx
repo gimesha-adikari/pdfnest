@@ -154,12 +154,12 @@ function RegisterContent() {
                             <span className="text-xl font-black text-white">PN</span>
                         </div>
                         <h1 className="text-4xl font-black tracking-tight text-[color:var(--foreground)] mb-6">
-                            Start managing your PDFs like a pro.
+                            {billingPolicy?.mode === "free" ? "Work with your PDFs for free." : "Start managing your PDFs like a pro."}
                         </h1>
                         <ul className="space-y-4">
                             <li className="flex items-center gap-3 text-[color:var(--muted-foreground)]">
                                 <CheckCircle2 className="text-indigo-500" size={20} />
-                                <span>{billingPolicy?.mode === "free" ? "Processing-unit billing is currently disabled" : "Process up to 5 files daily for free"}</span>
+                                <span>{billingPolicy?.mode === "free" ? "Supported PDF processing is free for everyone" : "Process up to 5 files daily for free"}</span>
                             </li>
                             <li className="flex items-center gap-3 text-[color:var(--muted-foreground)]">
                                 <CheckCircle2 className="text-indigo-500" size={20} />
