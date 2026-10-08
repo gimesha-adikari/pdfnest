@@ -1,0 +1,39 @@
+{
+  "schema": "platen.gim33.production-guest-pilot.v1",
+  "date": "2026-10-08",
+  "provenance": "Isolated live Chrome pilot via Vercel sandbox, production platenpdf.com; evidence recorded before harness commit; no mocks; new guest context per tool.",
+  "frontendCommit": "0f4323f5bd95263b6cb8fcd97e017e75e10c3b4b",
+  "backendCommit": "296838852195f96ca5590b3466a33ec5ae3e39d9",
+  "policy": {
+    "mode": "free",
+    "processing_unit_limits_enforced": false,
+    "purchases_enabled": false
+  },
+  "scenarios": [
+    {
+      "tool": "/merge-pdf",
+      "guest": "PASS",
+      "execution": "real local browser",
+      "validatedOutput": "pdf-lib parse succeeded, 2 pages",
+      "bytes": 1232,
+      "sha256Prefix": "768599af14ced9dc",
+      "checkoutAttempts": 0,
+      "observedPOSTs": [],
+      "billingUnitsDelta": "NOT_OBSERVABLE_FOR_GUEST"
+    },
+    {
+      "tool": "/pdf-to-word",
+      "guest": "PASS",
+      "execution": "real production POST /api/conversion/pdf-to-word",
+      "validatedOutput": "DOCX ZIP contains word/document.xml and audit text",
+      "bytes": 36812,
+      "sha256Prefix": "a93461e3b35ff8d5",
+      "checkoutAttempts": 0,
+      "observedPOSTs": [
+        "/api/conversion/pdf-to-word"
+      ],
+      "billingUnitsDelta": "NOT_OBSERVABLE_FOR_GUEST"
+    }
+  ],
+  "notes": "Only these two guest processing flows are evidenced; all other tool scenarios remain untested or blocked. Do not infer paid-account credit balances from guest results."
+}
