@@ -546,7 +546,6 @@ export default function Home() {
 
                     {/* Pricing comparisons are only displayed in normal mode. */}
                     {billingPolicy?.mode === "normal" && (
-                    {/* Transparent Scaling / Free vs Pro */}
                     <section className="py-16 border-t border-[var(--border)]">
                         <div className="text-center mb-12">
                             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--foreground)]">
