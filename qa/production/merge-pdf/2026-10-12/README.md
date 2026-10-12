@@ -32,3 +32,12 @@ No screenshots, HAR, downloaded PDFs or original Codex artifacts were committed:
 5. [CASES/M-01.md](CASES/M-01.md) and [CASES/M-02.md](CASES/M-02.md) — inherited Codex outcomes.
 
 **Review gate:** no new production functional testing or merge submissions until the initial draft PR has been independently reviewed. Do not merge without authorization.
+
+---
+## Update addressing independent review #5487101320 (2026-10-12)
+
+The corrected ledger is [TEST_MATRIX.md](TEST_MATRIX.md): M-03–M-19 are **NOT EXECUTED**, not technically blocked; M-20 remains **DEFERRED**. M-03 is **Authenticated Cloud Merge**. Historical Codex M-01/M-02 remain owner-confirmed PASS from independently validated downloads in that prior environment, but **their underlying artifacts have not been audited in this GitHub PR**.
+
+The historical separate Browser Use Cloud Merge had a **reported FAIL outcome (error/no output)**, while the **root cause remains INCONCLUSIVE**. The failing original Browser Use run ID, HAR and screenshots were not accessible. The later read-only preflight run ID must not be substituted.
+
+See [REVIEW_RESPONSE.md](REVIEW_RESPONSE.md) for all five reviewer findings and unresolved evidence gaps. **The full authoritative M-01–M-20 plan is still missing and must be attached by the owner before exact per-case definitions can be restored.** This PR is still draft. No additional processing requests are authorized.

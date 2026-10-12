@@ -13,3 +13,10 @@
 - No merge submitted, no file selected, no production data changed, no visible runtime error during visit.
 
 **Do not claim full Browser Use E2E capability merely from exposed methods.** A future approved single-case merge must independently prove actual upload, output bytes and validation.
+
+---
+## Provenance clarification from PR review
+
+**The run ID 2a7a6056-1ced-4b5b-a567-d552733204ef refers ONLY to the later read-only preflight at ~05:54 UTC. It is NOT the original 05:31 UTC failed Browser Use Cloud Merge run.** The original run/session ID could not be recovered.
+
+This preflight **did not test actual file upload or download bytes**, so those are **NOT EXECUTED**, not functional failures and not a technical BLOCKED classification. Future actual testing must use separately authorized **Codex integrated Computer Use**, not this third-party Browser Use plugin.
