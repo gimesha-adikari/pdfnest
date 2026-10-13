@@ -9,6 +9,7 @@ import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import OcrLanguagePicker from "@/components/tools/OcrLanguagePicker";
+import { assertCloudProcessingAuthorized } from "@/lib/security/pdfInputPreparation";
 import {
     cancelStructuredOcrV2Job, createStructuredOcrV2Job, getStructuredOcrV2Job, getStructuredOcrV2Result,
     getStructuredCapabilities, normalizeStructuredState, safeStructuredMessage, structuredDownloadName,
@@ -150,12 +151,13 @@ export default function StructuredDocumentV2Workspace({ profile }: Props) {
         setState("SUBMITTING"); setError(null); setErrorCodeValue(null); setResult(null); setJob(null); loadedResultRef.current = null;
         const requestId = crypto.randomUUID(); const idempotencyKey = crypto.randomUUID();
         try {
+            assertCloudProcessingAuthorized(file, toolId);
             const created = await createStructuredOcrV2Job(file, profile, language, routingPolicy, idempotencyKey, requestId);
             if (!isJobId(created.job_id)) throw new StructuredOcrV2ApiError("STRUCTURED_OUTPUT_INVALID", "The service returned an invalid job reference.", 502);
             setJobId(created.job_id); setJob(created); setState(normalizeStructuredState(created.status));
             window.localStorage.setItem(keyFor(profile), JSON.stringify({ jobId: created.job_id, fileName: file.name, language, routingPolicy }));
         } catch (submitError) { setState("FAILED"); setErrorCodeValue(errorCode(submitError)); setError(safeError(submitError)); }
-    }, [canSubmit, file, language, profile, routingPolicy]);
+    }, [canSubmit, file, language, profile, routingPolicy, toolId]);
 
     const reset = useCallback(() => {
         try { window.localStorage.removeItem(keyFor(profile)); } catch { /* optional */ }

@@ -229,9 +229,10 @@ export async function runWatermarkExecutionTests(): Promise<{ passed: number; fa
 
         // Test 10: Explicit Device Mode Execution
         cloudCallCount = 0;
+        const deviceFile = await createDummyPdf(2, "DEVICE MODE");
         const deviceResult = await ExecutionManager.run({
             tool: "watermark",
-            files: [fileA],
+            files: [deviceFile],
             params: { watermarkType: "text", text: "DEVICE MODE" },
             mode: "device",
         });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
@@ -51,21 +51,26 @@ import SearchablePdfV2Workspace from "@/components/tools/SearchablePdfV2Workspac
 import StructuredDocumentV2Workspace from "@/components/tools/StructuredDocumentV2Workspace";
 import OcrAwareMarkupV2Workspace from "@/components/tools/OcrAwareMarkupV2Workspace";
 import { isOcrV2DevelopmentToolId } from "@/lib/ocrV2DevelopmentTools";
+import { getProtectedPdfRoutePolicy } from "@/lib/security/protectedPdfRoutePolicy";
+import {
+    authorizeCloudProcessing,
+    hasCloudTransmissionOccurred,
+    isCloudProcessingAuthorized,
+    requiresCloudProcessingAuthorization,
+} from "@/lib/security/pdfInputPreparation";
 
 export default function SharedWorkspacePage() {
     const router = useRouter();
-    const { toolId, toolConfig, file, isLoadingConfig } = useSharedTool();
+    const { toolId, toolConfig, file, setFile, isLoadingConfig } = useSharedTool();
     const { isExecutable } = useBackendOnlyToolAvailability();
+    const [authorizedFile, setAuthorizedFile] = useState<File | null>(null);
+    const protectedPdfPolicy = getProtectedPdfRoutePolicy(toolId);
 
     useEffect(() => {
         if (!isLoadingConfig && !file && !isOcrV2DevelopmentToolId(toolId)) {
             router.replace(`/${toolId}`);
         }
     }, [file, toolId, router, isLoadingConfig]);
-
-    useEffect(() => {
-        console.log("[workspace]", { toolId, hasFile: !!file, isLoadingConfig });
-    }, [toolId, file, isLoadingConfig]);
 
     if (isLoadingConfig) {
         return (
@@ -89,8 +94,58 @@ export default function SharedWorkspacePage() {
         );
     }
 
+    const inputRequiresAuthorization = file && requiresCloudProcessingAuthorization(file);
+    const hasScopedAuthorization = file && (
+        authorizedFile === file || isCloudProcessingAuthorized(file, toolId)
+    );
+
+    if (
+        file &&
+        protectedPdfPolicy === "unqualified" &&
+        inputRequiresAuthorization
+    ) {
+        return (
+            <PdfToolLayout>
+                <section role="dialog" aria-labelledby="protected-route-block-title" className="mx-auto mt-12 max-w-xl rounded-2xl border border-rose-500/40 bg-rose-500/5 p-6 text-center">
+                    <h2 id="protected-route-block-title" className="text-lg font-semibold text-[color:var(--foreground)]">Protected input is not supported by this route</h2>
+                    <p className="mt-3 text-sm text-[color:var(--muted-foreground)]">This route has no qualified protected-PDF execution policy. No processing request was made. Return to the upload page and choose a supported workflow.</p>
+                    <button type="button" onClick={() => { setFile(null); router.replace(`/${toolId}`); }} className="mt-5 rounded-xl border border-[color:var(--border)] px-4 py-2 text-sm font-semibold">Choose another workflow</button>
+                </section>
+            </PdfToolLayout>
+        );
+    }
+
+    if (
+        file &&
+        (protectedPdfPolicy === "cloud-only" || protectedPdfPolicy === "cloud-consent") &&
+        inputRequiresAuthorization &&
+        !hasScopedAuthorization
+    ) {
+        return (
+            <PdfToolLayout>
+                <section role="dialog" aria-labelledby="cloud-processing-authorization-title" className="mx-auto mt-12 max-w-xl rounded-2xl border border-amber-500/40 bg-amber-500/5 p-6 text-center">
+                    <h2 id="cloud-processing-authorization-title" className="text-lg font-semibold text-[color:var(--foreground)]">Cloud processing authorization</h2>
+                    <p className="mt-3 text-sm text-[color:var(--muted-foreground)]">
+                        {protectedPdfPolicy === "cloud-only"
+                            ? `${toolConfig.name} requires Cloud processing for protected input.`
+                            : `${toolConfig.name} can send protected input to Platen Cloud for some processing modes.`}
+                        {" "}This input is associated with protected or unverified source data. This approval authorizes this tool to send its current input to Platen Cloud. Cloud-unlock consent, if used, does not authorize this processing request.
+                    </p>
+                    {hasCloudTransmissionOccurred(file) && <p role="status" className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">This input or its protected source was already transmitted to Cloud. That transmission cannot be undone.</p>}
+                    <div className="mt-5 flex justify-center gap-3">
+                        <button type="button" onClick={() => { setFile(null); router.replace(`/${toolId}`); }} className="rounded-xl border border-[color:var(--border)] px-4 py-2 text-sm font-semibold">Cancel</button>
+                        <button type="button" onClick={() => { authorizeCloudProcessing(file, toolId); setAuthorizedFile(file); }} className="rounded-xl bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white">Authorize Cloud processing</button>
+                    </div>
+                </section>
+            </PdfToolLayout>
+        );
+    }
+
     return (
         <PdfToolLayout>
+            {file && (protectedPdfPolicy === "cloud-only" || protectedPdfPolicy === "cloud-consent") && inputRequiresAuthorization && hasScopedAuthorization && (
+                <p role="status" className="mx-auto mt-5 max-w-5xl rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-[color:var(--muted-foreground)]">Cloud is required for this tool. Cloud processing was authorized for this input and route.</p>
+            )}
             {toolId === "add-page-numbers" && <PageNumbersWorkspace />}
             {toolId === "code-to-pdf" && <CodeToPdfWorkspace />}
             {toolId === "compress-pdf" && <CompressPdfWorkspace />}

@@ -4,6 +4,11 @@ import { CloudExecutor } from "../../lib/execution/CloudExecutor";
 import { ExecutionManager } from "../../lib/execution/ExecutionManager";
 import { ExecutionError } from "../../lib/execution/types";
 import { telemetry } from "../../lib/execution/telemetry";
+import {
+    hasCloudTransmissionOccurred,
+    markCloudTransmissionOccurred,
+    markPdfInputPreparation,
+} from "../../lib/security/pdfInputPreparation";
 
 async function runTests() {
     const originalClientExecute = ClientExecutor.execute;
@@ -84,6 +89,29 @@ async function runTests() {
         assert.equal(deviceSuccessEvent?.success, true);
         assert.equal(deviceSuccessEvent?.fallbackOccurred, false);
 
+        const alreadyTransmitted = new File([new Uint8Array([1, 2, 3])], "cloud-transmitted.pdf", {
+            type: "application/pdf",
+        });
+        markPdfInputPreparation(alreadyTransmitted, {
+            sourceProtected: true,
+            bytesState: "decrypted",
+            preparedOn: "device",
+            processingMode: "device",
+            cloudTransmissionOccurred: false,
+        });
+        markCloudTransmissionOccurred([alreadyTransmitted]);
+        cloudCalls = 0;
+        localCalls = 0;
+        telemetry.clearEvents();
+        await assert.rejects(
+            ExecutionManager.run({ tool: "rotate", files: [alreadyTransmitted], mode: "device", allowFallback: true }),
+            (error: unknown) => error instanceof ExecutionError && error.code === "UNSUPPORTED_CLIENT_OP"
+        );
+        assert.equal(cloudCalls, 0, "a Cloud-transmitted input cannot be forced into Device or fallback to another venue");
+        assert.equal(localCalls, 0, "a Cloud-transmitted input is rejected before Device processing");
+        assert.equal(telemetry.getLastEvent()?.actualMode, undefined);
+        assert.equal(telemetry.getLastEvent()?.fallbackOccurred, false);
+
         const passwordProtectedFile = new File([new Uint8Array([1, 2, 3])], "locked.pdf", {
             type: "application/pdf",
         }) as File & { originalPassword: string };
@@ -138,6 +166,14 @@ async function runTests() {
         assert.equal(safetyRejectionEvent?.success, false);
         assert.equal(safetyRejectionEvent?.fallbackOccurred, false);
         assert.equal(safetyRejectionEvent?.errorCode, "SAFETY_REJECTION");
+
+        cloudCalls = 0;
+        localCalls = 0;
+        const autoSafetyResult = await ExecutionManager.run({ tool: "rotate", files: [oversizedFile], mode: "auto" });
+        assert.equal(autoSafetyResult.executionMode, "cloud", "Auto preserves Cloud routing after a safety rejection");
+        assert.equal(cloudCalls, 1, "Auto safety rejection invokes CloudExecutor once");
+        assert.equal(localCalls, 0, "Auto safety rejection does not invoke ClientExecutor");
+        assert.equal(hasCloudTransmissionOccurred(oversizedFile), true, "safety-rejected input records its Cloud transmission");
 
         ClientExecutor.execute = async () => {
             localCalls += 1;

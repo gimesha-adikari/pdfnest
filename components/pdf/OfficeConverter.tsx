@@ -13,6 +13,7 @@ import {FileWithPassword} from "@/lib/types";
 import {useAuth} from "@/context/AuthContext";
 import {useBackendHealth} from "@/context/BackendHealthContext";
 import BackendUnavailableNotice from "@/components/pdf/BackendUnavailableNotice";
+import { assertCloudProcessingAuthorized } from "@/lib/security/pdfInputPreparation";
 
 interface OfficeConverterProps {
     targetFormat: "docx" | "xlsx" | "pptx";
@@ -57,6 +58,7 @@ export default function OfficeConverter({targetFormat, title, description, icon}
             if (!file) return;
 
             try {
+                assertCloudProcessingAuthorized(file, toolId);
                 setIsProcessing(true);
                 setSuccess(false);
 

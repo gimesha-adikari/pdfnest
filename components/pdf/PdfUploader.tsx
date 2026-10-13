@@ -6,8 +6,10 @@ import { uploadAndDownloadFile } from "@/lib/api";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ExecutionError, type ProcessingMode } from "@/lib/execution/types";
 import {
+    hasCloudTransmissionOccurred,
     getPdfInputPreparation,
     markPdfInputPreparation,
+    orderPreparedPdfInputs,
     setTransientOriginalPassword,
 } from "@/lib/security/pdfInputPreparation";
 import PasswordField from "@/components/ui/PasswordField";
@@ -16,6 +18,8 @@ type ProtectedFileHandling =
     | "fail-closed"
     | "choose-mode"
     | "current-mode"
+    | "cloud-only"
+    | "cloud-consent"
     | "explicit-unlock"
     | "cloud-session-consent";
 
@@ -83,11 +87,13 @@ interface PdfUploaderProps {
     processingMode?: ProcessingMode;
     inputRef?: React.Ref<HTMLInputElement>;
     showDropZone?: boolean;
+    initialFiles?: File[];
 }
 
 interface UploadQueue {
     remaining: File[];
-    processed: File[];
+    originalFiles: File[];
+    preparedByOriginal: Map<File, File>;
     processingMode: ProcessingMode;
     cloudTransmissionOccurred: boolean;
 }
@@ -103,16 +109,19 @@ export default function PdfUploader({
     processingMode = "auto",
     inputRef,
     showDropZone = true,
+    initialFiles,
 }: PdfUploaderProps) {
     const [queue, setQueue] = useState<UploadQueue | null>(null);
     const [sessionConsentFiles, setSessionConsentFiles] = useState<File[] | null>(null);
     const [password, setPassword] = useState("");
     const [isInspecting, setIsInspecting] = useState(false);
     const [isPreparing, setIsPreparing] = useState(false);
+    const [activePreparationMode, setActivePreparationMode] = useState<ProcessingMode | null>(null);
     const [error, setError] = useState<string | null>(null);
     const operationIdRef = useRef(0);
     const preparingRef = useRef(false);
     const activeAbortRef = useRef<AbortController | null>(null);
+    const handledInitialFilesRef = useRef<File[] | null>(null);
 
     useEffect(() => () => {
         operationIdRef.current += 1;
@@ -135,13 +144,18 @@ export default function PdfUploader({
 
         if (bypassEncryptionCheck) {
             if (protectedFileHandling === "explicit-unlock") {
-                const accepted = files.map((file) => markPdfInputPreparation(file, {
-                    sourceProtected: "unchecked",
-                    bytesState: "unchecked",
-                    preparedOn: "none",
-                    processingMode: selectedMode,
-                    cloudTransmissionOccurred: false,
-                }));
+                const accepted = files.map((file) => {
+                    const previous = getPdfInputPreparation(file);
+                    return markPdfInputPreparation(file, {
+                        sourceProtected: "unchecked",
+                        bytesState: "unchecked",
+                        preparedOn: "none",
+                        processingMode: selectedMode,
+                        cloudTransmissionOccurred: previous?.cloudTransmissionOccurred ?? false,
+                        derivedFromProtectedInput: previous?.derivedFromProtectedInput,
+                        transferredFromTool: previous?.transferredFromTool,
+                    });
+                });
                 await onFilesAccepted(accepted, { processingMode: selectedMode });
                 return;
             }
@@ -187,34 +201,59 @@ export default function PdfUploader({
         if (operationId !== operationIdRef.current) return;
 
         if (protectedFiles.length > 0) {
+            const cloudTransmissionOccurred = hasCloudTransmissionOccurred(files);
             if (protectedFileHandling !== "choose-mode" && protectedFileHandling !== "current-mode") {
                 setQueue({
                     remaining: protectedFiles,
-                    processed: plain,
-                    processingMode: selectedMode,
-                    cloudTransmissionOccurred: false,
+                    originalFiles: files,
+                    preparedByOriginal: new Map(plain.map((file) => [file, file])),
+                    processingMode: cloudTransmissionOccurred
+                        ? "cloud"
+                        : protectedFileHandling === "cloud-only" ? "device" : selectedMode,
+                    cloudTransmissionOccurred,
                 });
                 return;
             }
 
             setQueue({
                 remaining: protectedFiles,
-                processed: plain,
-                processingMode: protectedFileHandling === "choose-mode" ? "auto" : selectedMode,
-                cloudTransmissionOccurred: false,
+                originalFiles: files,
+                preparedByOriginal: new Map(plain.map((file) => [file, file])),
+                processingMode: cloudTransmissionOccurred
+                    ? "cloud"
+                    : protectedFileHandling === "choose-mode" ? "auto" : selectedMode,
+                cloudTransmissionOccurred,
             });
             return;
         }
 
-        const accepted = plain.map((file) => markPdfInputPreparation(file, {
-            sourceProtected: false,
-            bytesState: "plain",
-            preparedOn: "none",
-            processingMode: selectedMode,
-            cloudTransmissionOccurred: false,
-        }));
+        const accepted = plain.map((file) => {
+            const previous = getPdfInputPreparation(file);
+            return markPdfInputPreparation(file, {
+                sourceProtected: false,
+                bytesState: "plain",
+                preparedOn: "none",
+                processingMode: selectedMode,
+                cloudTransmissionOccurred: previous?.cloudTransmissionOccurred ?? false,
+                derivedFromProtectedInput: previous?.derivedFromProtectedInput,
+                transferredFromTool: false,
+            });
+        });
         await onFilesAccepted(accepted, { processingMode: selectedMode });
     }, [bypassEncryptionCheck, onFilesAccepted, processingMode, protectedFileHandling]);
+
+    useEffect(() => {
+        if (!initialFiles?.length || handledInitialFilesRef.current === initialFiles) return;
+        let active = true;
+        void Promise.resolve().then(() => {
+            if (!active || handledInitialFilesRef.current === initialFiles) return;
+            handledInitialFilesRef.current = initialFiles;
+            void handleFiles(initialFiles);
+        });
+        return () => {
+            active = false;
+        };
+    }, [handleFiles, initialFiles]);
 
     const handleChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(event.target.files || []);
@@ -238,13 +277,18 @@ export default function PdfUploader({
         const operationId = ++operationIdRef.current;
         preparingRef.current = true;
         setIsPreparing(true);
-        const accepted = sessionConsentFiles.map((file) => markPdfInputPreparation(file, {
-            sourceProtected: "unchecked",
-            bytesState: "unchecked",
-            preparedOn: "cloud",
-            processingMode: "cloud",
-            cloudTransmissionOccurred: true,
-        }));
+        const accepted = sessionConsentFiles.map((file) => {
+            const previous = getPdfInputPreparation(file);
+            return markPdfInputPreparation(file, {
+                sourceProtected: previous?.sourceProtected ?? "unchecked",
+                bytesState: previous?.bytesState ?? "unchecked",
+                preparedOn: "cloud",
+                processingMode: "cloud",
+                cloudTransmissionOccurred: true,
+                derivedFromProtectedInput: previous?.derivedFromProtectedInput,
+                transferredFromTool: previous?.transferredFromTool,
+            });
+        });
         setSessionConsentFiles(null);
         setError(null);
         try {
@@ -262,6 +306,7 @@ export default function PdfUploader({
         activeAbortRef.current?.abort();
         activeAbortRef.current = null;
         preparingRef.current = false;
+        setActivePreparationMode(null);
         setIsPreparing(false);
         setQueue(null);
         setSessionConsentFiles(null);
@@ -269,16 +314,17 @@ export default function PdfUploader({
         setError(message || null);
     }, []);
 
-    const handleProtectedFile = useCallback(async () => {
+    const handleProtectedFile = useCallback(async (preparationMode?: ProcessingMode) => {
         if (!queue || queue.remaining.length === 0 || !password || preparingRef.current) return;
 
         const operationId = operationIdRef.current;
         const currentLockedFile = queue.remaining[0];
-        const mode = queue.processingMode;
+        const mode = preparationMode ?? queue.processingMode;
         const controller = new AbortController();
         activeAbortRef.current = controller;
         preparingRef.current = true;
         setIsPreparing(true);
+        setActivePreparationMode(mode);
         setError(null);
 
         try {
@@ -340,32 +386,38 @@ export default function PdfUploader({
             }
             if (operationId !== operationIdRef.current || controller.signal.aborted) return;
             setTransientOriginalPassword(unlockedFile, password);
+            const sourcePreparation = getPdfInputPreparation(currentLockedFile);
             markPdfInputPreparation(unlockedFile, {
                 sourceProtected: true,
                 bytesState: "decrypted",
                 preparedOn,
                 processingMode: mode,
                 cloudTransmissionOccurred: currentFileCloudTransmissionOccurred,
+                derivedFromProtectedInput: sourcePreparation?.derivedFromProtectedInput,
+                transferredFromTool: sourcePreparation?.transferredFromTool,
             });
 
-            const nextProcessed = [...queue.processed, unlockedFile];
+            const nextPreparedByOriginal = new Map(queue.preparedByOriginal);
+            nextPreparedByOriginal.set(currentLockedFile, unlockedFile);
             const nextRemaining = queue.remaining.slice(1);
             setPassword("");
 
             if (nextRemaining.length === 0) {
-                const accepted = nextProcessed.map((file) => {
+                const acceptedMode = protectedFileHandling === "cloud-only" ? "cloud" : mode;
+                const ordered = orderPreparedPdfInputs(queue.originalFiles, nextPreparedByOriginal);
+                const accepted = ordered.map((file) => {
                     const existing = getPdfInputPreparation(file);
                     return markPdfInputPreparation(file, existing
-                        ? { ...existing, processingMode: mode }
+                        ? { ...existing, processingMode: acceptedMode }
                         : {
                             sourceProtected: false,
                             bytesState: "plain",
                             preparedOn: "none",
-                            processingMode: mode,
+                            processingMode: acceptedMode,
                             cloudTransmissionOccurred: false,
                         });
                 });
-                await onFilesAccepted(accepted, { processingMode: mode });
+                await onFilesAccepted(accepted, { processingMode: acceptedMode });
                 if (operationId === operationIdRef.current && !controller.signal.aborted) {
                     setQueue(null);
                 }
@@ -373,7 +425,7 @@ export default function PdfUploader({
                 setQueue({
                     ...queue,
                     remaining: nextRemaining,
-                    processed: nextProcessed,
+                    preparedByOriginal: nextPreparedByOriginal,
                     cloudTransmissionOccurred:
                         queueCloudTransmissionOccurred || currentFileCloudTransmissionOccurred,
                 });
@@ -388,20 +440,25 @@ export default function PdfUploader({
             } else if (code === "DECRYPTION_AUTH_FAILED" || (cause instanceof ExecutionError && cause.code === "DECRYPTION_AUTH_FAILED")) {
                 setError("Incorrect password. The protected file and password were not sent to Cloud.");
             } else {
-                setError("This device could not unlock the file. No Cloud fallback occurred. You can choose Cloud and explicitly authorize a Cloud unlock, or cancel.");
+                setError(protectedFileHandling === "cloud-only"
+                    ? "Local preparation failed and no Cloud fallback occurred. You can cancel or explicitly authorize Cloud unlock below."
+                    : "This device could not unlock the file. No Cloud fallback occurred. You can choose Cloud and explicitly authorize a Cloud unlock, or cancel.");
             }
         } finally {
             if (operationId === operationIdRef.current) {
                 preparingRef.current = false;
                 activeAbortRef.current = null;
+                setActivePreparationMode(null);
                 setIsPreparing(false);
             }
         }
-    }, [onFilesAccepted, password, queue]);
+    }, [onFilesAccepted, password, protectedFileHandling, queue]);
 
     const activeLockedFile = queue?.remaining[0];
     const selectedMode = queue?.processingMode ?? "auto";
     const canChooseMode = protectedFileHandling === "choose-mode";
+    const cloudOnly = protectedFileHandling === "cloud-only";
+    const cloudConsent = protectedFileHandling === "cloud-consent";
     const deviceLockedOut = Boolean(queue?.cloudTransmissionOccurred);
 
     if (sessionConsentFiles) {
@@ -431,7 +488,13 @@ export default function PdfUploader({
                     Protected document detected {queue.remaining.length > 1 && `(1 of ${queue.remaining.length})`}
                 </h2>
                 <p className="text-xs text-[var(--muted)] text-center mb-4 max-w-sm">
-                    “{activeLockedFile.name}” is encrypted. Preparation stays on this device unless you explicitly authorize Cloud unlock below.
+                    {cloudOnly
+                        ? `“${activeLockedFile.name}” is encrypted. Cloud processing is required for this tool. Entering the password unlocks the PDF locally; the prepared file is sent only after you authorize this tool's Cloud processing on the next screen.`
+                        : cloudConsent
+                            ? `“${activeLockedFile.name}” is encrypted. Some annotation modes can send the prepared PDF to Platen Cloud. Password preparation stays local; the route will ask before Cloud processing.`
+                        : deviceLockedOut
+                            ? `“${activeLockedFile.name}” is encrypted and this source was already sent to Cloud. This preparation action does not undo that transmission.`
+                            : `“${activeLockedFile.name}” is encrypted. Preparation stays on this device unless you explicitly authorize Cloud unlock below.`}
                 </p>
 
                 {failClosed ? (
@@ -463,7 +526,7 @@ export default function PdfUploader({
 
                         {deviceLockedOut && (
                             <p role="status" className="text-xs text-amber-700 dark:text-amber-300">
-                                This source and password have already been sent to Cloud. Device-only mode is unavailable for this source.
+                                This source was already sent to Cloud. Device-only mode is unavailable for this source.
                             </p>
                         )}
 
@@ -480,7 +543,15 @@ export default function PdfUploader({
                             }}
                         />
 
-                        {selectedMode === "cloud" ? (
+                        {cloudOnly ? (
+                            <p className="text-xs text-[var(--muted)]">
+                                Local password preparation and Cloud processing have separate consent steps. No file or password is sent during local unlock.
+                            </p>
+                        ) : cloudConsent ? (
+                            <p className="text-xs text-[var(--muted)]">
+                                Local password preparation and any Cloud submission have separate consent steps. No file or password is sent during local unlock.
+                            </p>
+                        ) : selectedMode === "cloud" ? (
                             <p className="text-xs text-amber-700 dark:text-amber-300">
                                 Clicking “Authorize Cloud unlock” sends this encrypted PDF and its password to Platen Cloud now. Auto fallback alone does not authorize this request.
                             </p>
@@ -491,7 +562,7 @@ export default function PdfUploader({
                         )}
 
                         {error && <span role="alert" className="text-[11px] text-rose-600 text-center">{error}</span>}
-                        {isPreparing && selectedMode === "cloud" && (
+                        {isPreparing && activePreparationMode === "cloud" && (
                             <span className="text-[11px] text-amber-700 dark:text-amber-300 text-center">
                                 Cancelling stops further work, but cannot recall bytes or passwords already transmitted.
                             </span>
@@ -500,18 +571,34 @@ export default function PdfUploader({
                 )}
 
                 <div className="flex justify-center gap-3 mt-4">
-                    <button type="button" onClick={() => cancelPreparation(isPreparing && selectedMode === "cloud" ? "Cancelled. Any bytes or password already sent to Cloud cannot be recalled." : undefined)} className="px-3 py-1.5 text-xs text-[var(--muted)]">
+                    <button type="button" onClick={() => cancelPreparation(isPreparing && activePreparationMode === "cloud" ? "Cancelled. Any bytes or password already sent to Cloud cannot be recalled." : undefined)} className="px-3 py-1.5 text-xs text-[var(--muted)]">
                         {isPreparing ? "Cancel preparation" : "Cancel all"}
                     </button>
                     {!failClosed && !explicitUnlock && (
-                        <button
-                            type="button"
-                            onClick={() => void handleProtectedFile()}
-                            disabled={isPreparing || !password || (selectedMode === "device" && deviceLockedOut)}
-                            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium text-white bg-[var(--accent)] rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {isPreparing ? <><Loader2 className="animate-spin" size={13} />Preparing…</> : selectedMode === "cloud" ? "Authorize Cloud unlock" : "Unlock on this device"}
-                        </button>
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => void handleProtectedFile()}
+                                disabled={isPreparing || !password || (!cloudOnly && selectedMode === "device" && deviceLockedOut)}
+                                className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium text-white bg-[var(--accent)] rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isPreparing
+                                    ? <><Loader2 className="animate-spin" size={13} />{activePreparationMode === "cloud" ? "Authorizing Cloud unlock…" : "Preparing…"}</>
+                                    : cloudOnly
+                                        ? "Unlock locally"
+                                        : selectedMode === "cloud" ? "Authorize Cloud unlock" : "Unlock on this device"}
+                            </button>
+                            {(cloudOnly || cloudConsent) && error && (
+                                <button
+                                    type="button"
+                                onClick={() => void handleProtectedFile("cloud")}
+                                    disabled={isPreparing || !password}
+                                    className="px-4 py-1.5 text-xs font-medium text-amber-900 border border-amber-500/50 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed dark:text-amber-200"
+                                >
+                                    Authorize Cloud unlock
+                                </button>
+                            )}
+                        </>
                     )}
                 </div>
             </div>

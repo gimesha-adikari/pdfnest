@@ -24,6 +24,7 @@ import {
     type OcrAwareMarkupJob,
     type OcrAwareMarkupMode,
 } from "@/lib/ocrAwareMarkupV2";
+import { assertCloudProcessingAuthorized } from "@/lib/security/pdfInputPreparation";
 
 const MAX_PDF_BYTES = 100 * 1024 * 1024;
 
@@ -323,6 +324,7 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
         abortRef.current = controller;
 
         try {
+            assertCloudProcessingAuthorized(file, toolId || `${action}-pdf-v2`);
             const created = await submitOcrAwareMarkup(action, file, query.trim(), mode, language, color, selectedGeometry);
             setJob(created);
             const completed = await waitForOcrAwareMarkupJob(created.job_id, setJob, controller.signal);

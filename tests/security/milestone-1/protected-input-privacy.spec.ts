@@ -58,7 +58,7 @@ async function installLocalNetworkBoundary(context: BrowserContext): Promise<voi
             "access-control-allow-origin": appOrigin,
             "access-control-allow-credentials": "true",
             "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-            "access-control-allow-headers": "content-type, authorization",
+            "access-control-allow-headers": "content-type, authorization, idempotency-key",
         };
         if (request.method() === "OPTIONS") {
             await route.fulfill({ status: 204, headers: corsHeaders });
@@ -91,12 +91,70 @@ async function installLocalNetworkBoundary(context: BrowserContext): Promise<voi
             return;
         }
 
+        if (request.method() === "POST" && requestUrl.pathname === "/api/ocr/extract-text-async") {
+            await route.fulfill({
+                status: 200,
+                contentType: "application/json",
+                headers: corsHeaders,
+                body: JSON.stringify({ taskId: "synthetic-cloud-ocr-task" }),
+            });
+            return;
+        }
+
+        if (request.method() === "GET" && requestUrl.pathname === "/api/v1/tasks/synthetic-cloud-ocr-task") {
+            await route.fulfill({
+                status: 200,
+                contentType: "application/json",
+                headers: corsHeaders,
+                body: JSON.stringify({ id: "synthetic-cloud-ocr-task", status: "PROCESSING", progress: 5 }),
+            });
+            return;
+        }
+
         if (request.method() === "POST" && requestUrl.pathname.endsWith("/sessions/from-upload")) {
             await route.fulfill({
                 status: 422,
                 contentType: "application/json",
                 headers: corsHeaders,
                 body: JSON.stringify({ message: "Local security test mock rejected session creation after capturing the request." }),
+            });
+            return;
+        }
+
+        if (request.method() === "GET" && requestUrl.pathname === "/api/v2/ocr/structured/capabilities") {
+            await route.fulfill({
+                status: 200,
+                contentType: "application/json",
+                headers: corsHeaders,
+                body: JSON.stringify({
+                    service_ready: true,
+                    languages: [{ code: "eng", name: "English" }],
+                    routing_modes: [
+                        { id: "AUTO", available: true },
+                        { id: "FAST", available: true },
+                        { id: "QUALITY", available: true },
+                    ],
+                }),
+            });
+            return;
+        }
+
+        if (request.method() === "POST" && requestUrl.pathname === "/api/v2/ocr/document-extraction-v2/jobs") {
+            await route.fulfill({
+                status: 200,
+                contentType: "application/json",
+                headers: corsHeaders,
+                body: JSON.stringify({
+                    job_id: "623e4567-e89b-42d3-a456-426614174000",
+                    status: "FAILED",
+                    profile: "DOCUMENT_EXTRACTION_V2",
+                    language: "eng",
+                    routing_policy: "AUTO",
+                    progress: { completed_pages: 0, total_pages: 0, percent: 0, page_statuses: {} },
+                    warnings: [],
+                    result_available: false,
+                    error: { code: "STRUCTURED_ENGINE_UNAVAILABLE", message: "Synthetic test stop." },
+                }),
             });
             return;
         }
@@ -116,6 +174,13 @@ async function chooseFile(page: Page, fileName: string, bytes: Buffer): Promise<
         mimeType: "application/pdf",
         buffer: bytes,
     });
+}
+
+async function waitForInteractiveApp(page: Page): Promise<void> {
+    const themeToggle = page.getByRole("button", { name: /Switch to (light|dark) theme/ });
+    const initialLabel = await themeToggle.getAttribute("aria-label");
+    await themeToggle.click();
+    await expect.poll(() => themeToggle.getAttribute("aria-label")).not.toBe(initialLabel);
 }
 
 function unlockRequests(): ApiRequest[] {
@@ -227,6 +292,285 @@ test("Cloud unlock sends bytes and password only after the explicit authorizatio
     await expect(page.getByRole("button", { name: "Auto", exact: true })).toHaveAttribute("aria-pressed", "true");
     await expect(deviceChoice).toBeDisabled();
     await expect(page.getByRole("status").filter({ hasText: /changing the processing mode cannot undo/ })).toBeVisible();
+});
+
+test("Cloud-only PDF-to-Word requires a separate Cloud processing consent after local protected-input preparation", async ({ page }) => {
+    await page.goto("/pdf-to-word");
+    await waitForInteractiveApp(page);
+    await chooseFile(page, "protected-alpha.pdf", protectedAlpha);
+    const dialog = page.getByRole("dialog", { name: "Protected document detected" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Device", exact: true })).toHaveCount(0);
+    await expect(dialog).toContainText(/Cloud processing is required/i);
+    await dialog.getByLabel("PDF password").fill(alphaPassword);
+    await dialog.getByRole("button", { name: /Unlock locally/ }).click();
+
+    const authorization = page.getByRole("dialog", { name: "Cloud processing authorization" });
+    await expect(authorization).toBeVisible();
+    expect(unlockRequests()).toHaveLength(0);
+    expect(processingPosts()).toHaveLength(0);
+    await authorization.getByRole("button", { name: "Authorize Cloud processing" }).click();
+
+    await page.getByRole("button", { name: "Convert PDF to DOCX" }).click();
+    await expect.poll(() => apiRequests.filter((request) => request.method === "POST" && request.path === "/api/conversion/pdf-to-word").length).toBe(1);
+    const processingRequest = apiRequests.find((request) => request.path === "/api/conversion/pdf-to-word");
+    expect(processingRequest).toBeDefined();
+    expect(processingRequest!.body.toString("latin1")).toContain(`name="file_password"\r\n\r\n${alphaPassword}`);
+    expect(processingRequest!.body.indexOf(protectedAlpha)).toBe(-1);
+    expect(unlockRequests()).toHaveLength(0);
+    expectNoProductionRequests();
+});
+
+test("plain PDF-to-Word keeps its existing Cloud workflow without a protected-input consent gate", async ({ page }) => {
+    await page.goto("/pdf-to-word");
+    await waitForInteractiveApp(page);
+    await chooseFile(page, "plain-two-pages.pdf", plainPdf);
+    await expect(page).toHaveURL(/\/pdf-to-word\/workspace$/);
+    await expect(page.getByRole("dialog", { name: "Cloud processing authorization" })).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Convert PDF to DOCX" }).click();
+    await expect.poll(() => apiRequests.some((request) => request.method === "POST" && request.path === "/api/conversion/pdf-to-word")).toBe(true);
+    expectNoProductionRequests();
+});
+
+test("a queued structured route sends no protected input before its route-scoped Cloud authorization", async ({ page }) => {
+    await page.goto("/document-extraction-v2");
+    await waitForInteractiveApp(page);
+    await chooseFile(page, "protected-alpha.pdf", protectedAlpha);
+    const dialog = page.getByRole("dialog", { name: "Protected document detected" });
+    await expect(dialog.getByRole("button", { name: "Device", exact: true })).toHaveCount(0);
+    await dialog.getByLabel("PDF password").fill(alphaPassword);
+    await dialog.getByRole("button", { name: /Unlock locally/ }).click();
+
+    const authorization = page.getByRole("dialog", { name: "Cloud processing authorization" });
+    await expect(authorization).toBeVisible();
+    const beforeAuthorization = apiRequests.length;
+    expect(processingPosts()).toHaveLength(0);
+    expect(apiRequests.slice(beforeAuthorization).some((request) => containsFilePayload(request, "protected-alpha.pdf", protectedAlpha))).toBe(false);
+
+    await authorization.getByRole("button", { name: "Authorize Cloud processing" }).click();
+    await expect(page.getByRole("heading", { name: "Extract Data from PDF" })).toBeVisible();
+    await expect.poll(() => apiRequests.some((request) => request.path === "/api/v2/ocr/structured/capabilities")).toBe(true);
+    expect(apiRequests.some((request) => request.method === "POST" && request.path === "/api/v2/ocr/document-extraction-v2/jobs")).toBe(false);
+
+    const submitButton = page.getByRole("button", { name: "Extract data", exact: true });
+    await expect(submitButton).toBeEnabled();
+    await submitButton.click();
+    await expect.poll(() => apiRequests.some((request) => request.method === "POST" && request.path === "/api/v2/ocr/document-extraction-v2/jobs")).toBe(true);
+    const jobRequest = apiRequests.find((request) => request.method === "POST" && request.path === "/api/v2/ocr/document-extraction-v2/jobs")!;
+    expect(jobRequest.body.toString("latin1")).toContain('filename="protected-alpha.pdf"');
+    expect(jobRequest.body.indexOf(protectedAlpha)).toBe(-1);
+    expect(jobRequest.body.toString("latin1")).not.toContain(alphaPassword);
+    expectNoProductionRequests();
+});
+
+test("Cloud-capable annotation routes do not offer Device for protected input and require route consent", async ({ page }) => {
+    await page.goto("/highlight-pdf");
+    await waitForInteractiveApp(page);
+    await chooseFile(page, "protected-alpha.pdf", protectedAlpha);
+    const preparation = page.getByRole("dialog", { name: "Protected document detected" });
+    await expect(preparation.getByRole("button", { name: "Device", exact: true })).toHaveCount(0);
+    await expect(preparation).toContainText(/Some annotation modes can send the prepared PDF/);
+    await preparation.getByLabel("PDF password").fill(alphaPassword);
+    await preparation.getByRole("button", { name: "Unlock on this device" }).click();
+
+    const authorization = page.getByRole("dialog", { name: "Cloud processing authorization" });
+    await expect(authorization).toBeVisible();
+    expect(unlockRequests()).toHaveLength(0);
+    expect(processingPosts()).toHaveLength(0);
+    await authorization.getByRole("button", { name: "Authorize Cloud processing" }).click();
+    await expect(page.getByRole("heading", { name: "Highlighter Configuration" })).toBeVisible();
+    expect(apiRequests.some((request) => request.method === "POST" && request.path === "/api/markup/highlight")).toBe(false);
+    expectNoProductionRequests();
+});
+
+test("the Cloud-offline alternate action cannot switch a Cloud-prepared file to Device", async ({ page }) => {
+    await page.goto("/rotate-pdf");
+    await waitForInteractiveApp(page);
+    await chooseFile(page, "protected-alpha.pdf", protectedAlpha);
+    const dialog = page.getByRole("dialog", { name: "Protected document detected" });
+    await dialog.getByRole("button", { name: "Cloud", exact: true }).click();
+    await dialog.getByLabel("PDF password").fill(alphaPassword);
+    await dialog.getByRole("button", { name: "Authorize Cloud unlock" }).click();
+    await expect(page).toHaveURL(/\/rotate-pdf\/workspace$/);
+    await page.evaluate(() => window.dispatchEvent(new Event("offline")));
+    await expect(page.getByText("Cloud processing is currently unavailable.")).toBeVisible();
+
+    const deviceChoice = page.getByRole("button", { name: "Device", exact: true });
+    await expect(deviceChoice).toBeDisabled();
+    const alternateDevice = page.getByRole("button", { name: "Switch to Device" });
+    await expect(alternateDevice).toBeDisabled();
+    await expect(page.getByRole("status").filter({ hasText: /cannot undo that transmission/i })).toBeVisible();
+    expect(unlockRequests()).toHaveLength(1);
+});
+
+test("eligible plain PDF inputs retain Device, Auto, and Cloud mode selection", async ({ page }) => {
+    await page.goto("/rotate-pdf");
+    await waitForInteractiveApp(page);
+    await chooseFile(page, "plain-two-pages.pdf", plainPdf);
+    await expect(page).toHaveURL(/\/rotate-pdf\/workspace$/);
+
+    const device = page.getByRole("button", { name: "Device", exact: true });
+    const auto = page.getByRole("button", { name: "Auto", exact: true });
+    const cloud = page.getByRole("button", { name: "Cloud", exact: true });
+    await expect(device).toBeEnabled();
+    await expect(auto).toBeEnabled();
+    await expect(cloud).toBeEnabled();
+
+    await device.click();
+    await expect(device).toHaveAttribute("aria-pressed", "true");
+    await auto.click();
+    await expect(auto).toHaveAttribute("aria-pressed", "true");
+    await cloud.click();
+    await expect(cloud).toHaveAttribute("aria-pressed", "true");
+    expect(processingPosts()).toHaveLength(0);
+    expectNoProductionRequests();
+});
+
+test("PDF-to-Text requires separate Cloud processing authorization and records the OCR transmission", async ({ page }) => {
+    await page.goto("/pdf-to-text");
+    await waitForInteractiveApp(page);
+    await chooseFile(page, "protected-alpha.pdf", protectedAlpha);
+    const preparation = page.getByRole("dialog", { name: "Protected document detected" });
+    await preparation.getByRole("button", { name: "Cloud", exact: true }).click();
+    await preparation.getByLabel("PDF password").fill(alphaPassword);
+    expect(unlockRequests()).toHaveLength(0);
+    await preparation.getByRole("button", { name: "Authorize Cloud unlock" }).click();
+    await expect.poll(() => unlockRequests().length).toBe(1);
+    await expect(page).toHaveURL(/\/pdf-to-text\/workspace$/);
+
+    await page.getByRole("button", { name: "Extract Text via Cloud OCR" }).click();
+    const consent = page.getByRole("dialog", { name: "Authorize Cloud text extraction" });
+    await expect(consent).toBeVisible();
+    expect(unlockRequests()).toHaveLength(1);
+    expect(apiRequests.filter((request) => request.method === "POST" && request.path === "/api/ocr/extract-text-async")).toHaveLength(0);
+
+    await consent.getByRole("button", { name: "Authorize and extract text" }).click();
+    await expect.poll(() => apiRequests.filter((request) => request.method === "POST" && request.path === "/api/ocr/extract-text-async").length).toBe(1);
+    const request = apiRequests.find((item) => item.method === "POST" && item.path === "/api/ocr/extract-text-async")!;
+    const payload = request.body.toString("latin1");
+    expect(payload).toContain('filename="protected-alpha.pdf"');
+    expect(payload).toContain(`name="file_password"\r\n\r\n${alphaPassword}`);
+    await expect(page.getByRole("button", { name: "Device", exact: true })).toBeDisabled();
+    await expect(page.getByText(/This input was already sent to Cloud\. Changing modes cannot undo that transmission\./)).toBeVisible();
+    expectNoProductionRequests();
+});
+
+test("mixed Merge input preparation preserves original order around a protected file", async ({ page }) => {
+    await page.goto("/merge-pdf");
+    await waitForInteractiveApp(page);
+    await page.locator('input[type="file"]').first().setInputFiles([
+        { name: "plain-a.pdf", mimeType: "application/pdf", buffer: plainPdf },
+        { name: "protected-b.pdf", mimeType: "application/pdf", buffer: protectedAlpha },
+        { name: "plain-c.pdf", mimeType: "application/pdf", buffer: plainPdf },
+    ]);
+    const dialog = page.getByRole("dialog", { name: "Protected document detected" });
+    await dialog.getByRole("button", { name: "Device", exact: true }).click();
+    await dialog.getByLabel("PDF password").fill(alphaPassword);
+    await dialog.getByRole("button", { name: "Unlock on this device" }).click();
+    await expect(page).toHaveURL(/\/merge-pdf\/workspace$/);
+    await expect.poll(async () => page.getByTestId("merge-queue-file").allTextContents()).toEqual([
+        "plain-a.pdf", "protected-b.pdf", "plain-c.pdf",
+    ]);
+    expect(processingPosts()).toHaveLength(0);
+    expectNoProductionRequests();
+});
+
+test("protected Merge inputs retain their own passwords and selected positions", async ({ page }) => {
+    await page.goto("/merge-pdf");
+    await waitForInteractiveApp(page);
+    await page.locator('input[type="file"]').first().setInputFiles([
+        { name: "protected-a.pdf", mimeType: "application/pdf", buffer: protectedAlpha },
+        { name: "plain-b.pdf", mimeType: "application/pdf", buffer: plainPdf },
+        { name: "protected-c.pdf", mimeType: "application/pdf", buffer: protectedBeta },
+    ]);
+    let dialog = page.getByRole("dialog", { name: "Protected document detected" });
+    await dialog.getByRole("button", { name: "Device", exact: true }).click();
+    await dialog.getByLabel("PDF password").fill(alphaPassword);
+    await dialog.getByRole("button", { name: "Unlock on this device" }).click();
+    dialog = page.getByRole("dialog", { name: "Protected document detected" });
+    await expect(dialog).toContainText("protected-c.pdf");
+    await dialog.getByLabel("PDF password").fill(betaPassword);
+    await dialog.getByRole("button", { name: "Unlock on this device" }).click();
+    await expect(page).toHaveURL(/\/merge-pdf\/workspace$/);
+    await expect.poll(async () => page.getByTestId("merge-queue-file").allTextContents()).toEqual([
+        "protected-a.pdf", "plain-b.pdf", "protected-c.pdf",
+    ]);
+    expect(unlockRequests()).toHaveLength(0);
+    expect(processingPosts()).toHaveLength(0);
+});
+
+test("cancelling midway through a mixed Merge queue does not navigate or submit files", async ({ page }) => {
+    await page.goto("/merge-pdf");
+    await waitForInteractiveApp(page);
+    await page.locator('input[type="file"]').first().setInputFiles([
+        { name: "protected-a.pdf", mimeType: "application/pdf", buffer: protectedAlpha },
+        { name: "plain-b.pdf", mimeType: "application/pdf", buffer: plainPdf },
+        { name: "protected-c.pdf", mimeType: "application/pdf", buffer: protectedBeta },
+    ]);
+    let dialog = page.getByRole("dialog", { name: "Protected document detected" });
+    await dialog.getByRole("button", { name: "Device", exact: true }).click();
+    await dialog.getByLabel("PDF password").fill(alphaPassword);
+    await dialog.getByRole("button", { name: "Unlock on this device" }).click();
+    dialog = page.getByRole("dialog", { name: "Protected document detected" });
+    await expect(dialog).toContainText("protected-c.pdf");
+    await dialog.getByRole("button", { name: "Cancel all" }).click();
+    await expect(page).toHaveURL(/\/merge-pdf$/);
+    expect(processingPosts()).toHaveLength(0);
+    expectNoProductionRequests();
+});
+
+test("transferring a protected-source result to PDF Editor cannot submit before target-route consent", async ({ page }) => {
+    await page.goto("/rotate-pdf");
+    await waitForInteractiveApp(page);
+    await page.route("**/api/structure/rotate", async (route) => {
+        const request = route.request();
+        apiRequests.push({
+            method: request.method(),
+            origin: new URL(request.url()).origin,
+            path: new URL(request.url()).pathname,
+            body: request.postDataBuffer() || Buffer.alloc(0),
+        });
+        await route.fulfill({ status: 200, contentType: "application/pdf", body: plainPdf });
+    });
+    await page.route("**/api/security/lock", async (route) => {
+        const request = route.request();
+        apiRequests.push({
+            method: request.method(),
+            origin: new URL(request.url()).origin,
+            path: new URL(request.url()).pathname,
+            body: request.postDataBuffer() || Buffer.alloc(0),
+        });
+        await route.fulfill({ status: 200, contentType: "application/pdf", body: plainPdf });
+    });
+    await chooseFile(page, "protected-alpha.pdf", protectedAlpha);
+    const dialog = page.getByRole("dialog", { name: "Protected document detected" });
+    await dialog.getByRole("button", { name: "Device", exact: true }).click();
+    await dialog.getByLabel("PDF password").fill(alphaPassword);
+    await dialog.getByRole("button", { name: "Unlock on this device" }).click();
+    await expect(page).toHaveURL(/\/rotate-pdf\/workspace$/);
+    await page.getByRole("button", { name: "Cloud", exact: true }).click();
+    await page.getByRole("button", { name: "Rotate All 90°" }).click();
+    await page.getByRole("button", { name: "Apply Rotation Matrices" }).click();
+    await expect.poll(() => apiRequests.filter((request) => request.method === "POST" && request.path === "/api/structure/rotate").length).toBe(1);
+    await expect(page).toHaveURL(/\/rotate-pdf\/download$/);
+    expect(apiRequests.find((request) => request.path === "/api/structure/rotate")!.body.toString("latin1")).toContain(`name="file_password"\r\n\r\n${alphaPassword}`);
+
+    const editorCard = page.getByRole("heading", { name: "PDF Editor" }).locator("..");
+    await editorCard.getByRole("button", { name: "Open tool" }).click();
+    await expect(page).toHaveURL(/\/edit-pdf\/workspace$/);
+    const authorization = page.getByRole("dialog", { name: "Cloud processing authorization" });
+    await expect(authorization).toBeVisible();
+    await expect(authorization).toContainText(/already transmitted to Cloud/i);
+    const requestCountBeforeConsent = processingPosts().length;
+    expect(apiRequests.some((request) => request.path === "/api/edit/extract")).toBe(false);
+    expect(processingPosts()).toHaveLength(requestCountBeforeConsent);
+    await authorization.getByRole("button", { name: "Authorize Cloud processing" }).click();
+    await expect.poll(() => apiRequests.some((request) => request.method === "POST" && request.path === "/api/edit/extract")).toBe(true);
+    const targetRequest = apiRequests.find((request) => request.method === "POST" && request.path === "/api/edit/extract")!;
+    expect(targetRequest.body.indexOf(plainPdf)).toBeGreaterThanOrEqual(0);
+    expect(targetRequest.body.toString("latin1")).not.toContain(alphaPassword);
+    expectNoProductionRequests();
 });
 
 test("cancellation during Cloud preparation prevents stale navigation after the request returns", async ({ page }) => {

@@ -24,6 +24,7 @@ import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { useAsyncTask } from "@/hooks/useAsyncTask";
+import { assertCloudProcessingAuthorized } from "@/lib/security/pdfInputPreparation";
 import { getOCRLanguages, OCRLanguage } from "@/lib/ocr";
 
 export default function PdfToMarkdownWorkspace() {
@@ -139,7 +140,7 @@ export default function PdfToMarkdownWorkspace() {
             } else {
                 notify("Failed to download converted Markdown artifact.", "error");
             }
-        } catch (err: any) {
+        } catch {
             notify("Error fetching completed Markdown output.", "error");
         }
     };
@@ -161,19 +162,20 @@ export default function PdfToMarkdownWorkspace() {
         resetTask();
 
         try {
+            assertCloudProcessingAuthorized(file, toolId || "pdf-to-markdown");
             const formData = new FormData();
             formData.append("file", file);
             formData.append("lang", lang);
 
-            const typedFile = file as any;
+            const typedFile = file as File & { originalPassword?: string };
             if (typedFile.originalPassword) {
                 formData.append("password", typedFile.originalPassword);
                 formData.append("file_password", typedFile.originalPassword);
             }
 
             await submitTask("/api/conversion/pdf-to-markdown-async", formData);
-        } catch (err: any) {
-            notify(err?.message || "PDF to Markdown conversion failed.", "error");
+        } catch (error: unknown) {
+            notify(error instanceof Error ? error.message : "PDF to Markdown conversion failed.", "error");
         }
     };
 

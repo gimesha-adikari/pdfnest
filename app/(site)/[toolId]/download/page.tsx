@@ -10,10 +10,11 @@ import { useTools } from "@/context/ToolContext";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import { getSuggestedNextTools } from "@/lib/toolSuggestions";
 import RepositoryAnalyzerDownload from "@/components/tools/RepositoryAnalyzerDownload";
+import { hasCloudTransmissionOccurred, hasProtectedInputLineage } from "@/lib/security/pdfInputPreparation";
 
 export default function SharedDownloadPage() {
     const router = useRouter();
-    const { toolId, downloadData, setFile, setDownloadData } = useSharedTool();
+    const { toolId, file, downloadData, setFile, setDownloadData } = useSharedTool();
     const { setPendingTransfer, clearTransfer } = useWorkflow();
     const { tools } = useTools();
 
@@ -67,6 +68,10 @@ export default function SharedDownloadPage() {
             mimeType: downloadData.blob.type || "application/pdf",
             sourceToolHref: `/${toolId}`,
             targetToolHref: nextHref,
+            provenance: {
+                derivedFromProtectedInput: hasProtectedInputLineage(file),
+                cloudTransmissionOccurred: hasCloudTransmissionOccurred(file),
+            },
         });
 
         setFile(null);

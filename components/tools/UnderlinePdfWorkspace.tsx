@@ -27,6 +27,7 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { usePreview } from "@/lib/preview/usePreview";
 import type { PreviewError } from "@/lib/preview/types";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
+import { assertCloudProcessingAuthorized } from "@/lib/security/pdfInputPreparation";
 
 interface CustomPdfFile extends File {
     originalPassword?: string;
@@ -136,8 +137,10 @@ async function submitUnderlineJob(
     file: File,
     boxes: UnderlineBox[],
     mode: UnderlineMode,
-    filePassword?: string
+    filePassword?: string,
+    toolId = "underline-pdf"
 ): Promise<JobSubmissionResponse> {
+    assertCloudProcessingAuthorized(file, toolId);
     const formData = new FormData();
     formData.append("file", file);
     formData.append("boxes", JSON.stringify(boxes));
@@ -811,7 +814,8 @@ export default function UnderlinePdfWorkspace() {
                         validFile,
                         validBoxes,
                         "ocr",
-                        validFile.originalPassword
+                        validFile.originalPassword,
+                        toolId || "underline-pdf"
                     );
 
                     setJobId(submission.job_id);

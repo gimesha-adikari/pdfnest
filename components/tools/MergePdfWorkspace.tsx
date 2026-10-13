@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useCallback, useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, FileText } from "lucide-react";
 import { getFriendlyErrorMessage } from "@/lib/errorHandler";
@@ -18,7 +18,7 @@ import LazyPdfThumbnail from "@/components/pdf/LazyPdfThumbnail";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
-import { hasCloudPreparedInput } from "@/lib/security/pdfInputPreparation";
+import { hasCloudTransmissionOccurred } from "@/lib/security/pdfInputPreparation";
 import { getInitialProcessingMode } from "@/lib/security/pdfInputPreparation";
 
 export default function MergePdfWorkspace() {
@@ -31,19 +31,7 @@ export default function MergePdfWorkspace() {
     const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
     const [fileMeta] = useState<Record<string, { originalPassword?: string }>>({});
 
-    // Automatically ingest the initial full files collection matrix
-    useEffect(() => {
-        if (file && files.length === 0) {
-            const batch = (file as any).initialBatch as File[];
-            if (batch && batch.length > 0) {
-                addFiles(batch);
-            } else {
-                addFiles([file]);
-            }
-        }
-    }, [file]);
-
-    const addFiles = async (
+    const addFiles = useCallback(async (
         newFiles: File[],
         acceptance?: { processingMode: ProcessingMode }
     ) => {
@@ -73,7 +61,22 @@ export default function MergePdfWorkspace() {
                     )
             );
         });
-    };
+    }, [files]);
+
+    // Automatically ingest the initial full files collection matrix.
+    useEffect(() => {
+        if (file && files.length === 0) {
+            const batch = (file as File & { initialBatch?: File[] }).initialBatch;
+            let active = true;
+            queueMicrotask(() => {
+                if (active) void addFiles(batch?.length ? batch : [file]);
+            });
+            return () => {
+                active = false;
+            };
+        }
+        return;
+    }, [addFiles, file, files.length]);
 
     const removeFile = (indexToRemove: number) => {
         const updated = files.filter((_, index) => index !== indexToRemove);
@@ -162,7 +165,7 @@ export default function MergePdfWorkspace() {
                         onChange={setProcessingMode}
                         toolPolicy="CLIENT_PREFERRED"
                         disabled={isMerging}
-                        cloudPrepared={hasCloudPreparedInput(files) || hasCloudPreparedInput(file)}
+                        cloudTransmissionOccurred={hasCloudTransmissionOccurred(files) || hasCloudTransmissionOccurred(file)}
                     />
                 </div>
 
@@ -192,7 +195,7 @@ export default function MergePdfWorkspace() {
                                         </div>
                                     </div>
                                     <div className="w-full mt-2 text-center">
-                                        <p className="text-xs font-semibold truncate max-w-full px-1 text-[color:var(--foreground)]">{item.name}</p>
+                                        <p data-testid="merge-queue-file" className="text-xs font-semibold truncate max-w-full px-1 text-[color:var(--foreground)]">{item.name}</p>
                                         <p className="text-[10px] text-[color:var(--muted)]">{(item.size / 1024 / 1024).toFixed(2)} MB</p>
                                     </div>
                                 </div>

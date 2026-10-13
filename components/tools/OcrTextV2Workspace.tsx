@@ -24,6 +24,7 @@ import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import OcrLanguagePicker from "@/components/tools/OcrLanguagePicker";
 import { languageLabel } from "@/lib/languagePresentation";
+import { assertCloudProcessingAuthorized } from "@/lib/security/pdfInputPreparation";
 import {
     cancelOcrTextV2Job,
     createOcrTextV2Job,
@@ -291,6 +292,7 @@ export default function OcrTextV2Workspace() {
         const idempotencyKey = crypto.randomUUID();
 
         try {
+            assertCloudProcessingAuthorized(file, toolId || "ocr-text-v2");
             let response: OcrTextV2JobStatus | null = null;
             for (let attempt = 0; attempt < 3; attempt += 1) {
                 try {

@@ -13,7 +13,7 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
-import { getInitialProcessingMode } from "@/lib/security/pdfInputPreparation";
+import { getInitialProcessingMode, hasCloudTransmissionOccurred } from "@/lib/security/pdfInputPreparation";
 import PasswordField from "@/components/ui/PasswordField";
 
 function formatMB(bytes: number) {
@@ -24,6 +24,7 @@ export default function UnlockPdfWorkspace() {
     const { requireAuth } = useAuth();
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
+    const cloudTransmissionOccurred = hasCloudTransmissionOccurred(file);
 
     const [password, setPassword] = useState("");
     const [isProcessing, setIsProcessing] = useState(false);
@@ -142,7 +143,11 @@ export default function UnlockPdfWorkspace() {
                             <span>
                                 {processingMode === "cloud"
                                     ? "Cloud Mode: File and password are processed securely on high-performance cloud servers."
-                                    : "On-Device Privacy: Your password and document remain private on your computer and never leave your browser."}
+                                    : cloudTransmissionOccurred
+                                        ? "This input was already sent to Cloud. Changing modes cannot undo that transmission."
+                                        : processingMode === "device"
+                                            ? "Device mode runs this operation in your browser when the local engine supports it."
+                                            : "Auto uses the local engine when eligible and may use Cloud processing when needed."}
                             </span>
                         </div>
                     </div>
