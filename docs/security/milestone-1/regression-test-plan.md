@@ -6,7 +6,7 @@
 
 ## Test execution boundaries
 
-The two scripts under `tests/security/milestone-1/` remain opt-in and outside default test discovery. The Stage 0 F-01 script is now a separate required M1-S1-01 verification command and all seven manager assertions pass on the integrated milestone branch; the original `main` baseline failed three of them. F-02 remains unresolved and its script is expected to fail its two re-lock assertions. The ordinary unit suite discovers `tests/unit/deviceModeSafety.test.ts`, which carries manager-level Device checks in CI without adding the F-01 script itself to the unit runner. Do not enable the F-02 script in required CI during this task.
+The Stage 0 F-01 execution script remains a separate M1-S1-01 task-verification command; all seven manager assertions pass on the integrated milestone branch, while the original `main` baseline failed three. The F-02 script remains opt-in and is expected to fail its two re-lock assertions. Ordinary unit discovery includes the Device safety and feature-flag tests plus the M1-S1-02 transient-provenance and worker-cancellation tests. The new Playwright privacy suite is a separate task-verification command and is not added to required CI. Do not enable the F-02 script in required CI.
 
 Commands:
 
@@ -15,6 +15,16 @@ npx tsx tests/security/milestone-1/generate-fixtures.ts
 npx tsx tests/security/milestone-1/f01-execution.regression.ts
 npx tsx tests/security/milestone-1/f02-relock-failure.regression.ts
 ```
+
+The browser suite uses only synthetic fixtures, a local Next.js app, a local API mock, and Playwright request interception. Start the mock and app in separate terminals, after generating fixtures:
+
+```sh
+node tests/security/milestone-1/local-api-mock.mjs
+NEXT_PUBLIC_API_URL=http://127.0.0.1:3999 NEXT_PUBLIC_HYBRID_ENABLE_ALL=true NEXT_PUBLIC_HYBRID_ENABLE_UNLOCK=true NEXT_TELEMETRY_DISABLED=1 npx next dev -p 3001
+PLATEN_M1_PRIVACY_E2E=1 E2E_BASE_URL=http://localhost:3001 NEXT_PUBLIC_API_URL=http://127.0.0.1:3999 NEXT_PUBLIC_HYBRID_ENABLE_ALL=true NEXT_PUBLIC_HYBRID_ENABLE_UNLOCK=true npx playwright test tests/security/milestone-1/protected-input-privacy.spec.ts --project=chromium --workers=1
+```
+
+The Playwright context blocks external requests, records local API request order and multipart bodies, and fulfills only the unlock and Studio session-upload routes used by the cases. No production API is contacted.
 
 Fixtures default to `/tmp/platen-m1-security-fixtures`; use `--out-dir PATH` to select another local directory. These commands do not contact production services. F-01 stubs both executors; F-02 stubs `axios.post` and uses a `.invalid` base URL. F-01 now passes only for the manager-level assertions; this does not establish full document-path privacy.
 
@@ -48,14 +58,22 @@ Core source boundary: [ExecutionManager Device routing](../../../lib/execution/E
 | Auto exclusions and fallback controls | Executor spy; invalid input, wrong password, cancellation, `allowFallback: false` | No discretionary Cloud fallback for excluded errors or when disabled | Covered by mandatory `deviceModeSafety.test.ts` |
 | Auto unsupported/disabled local operation | Executor spy; unsupported tool or per-tool flag false | Preserve existing Cloud routing | Covered by mandatory `deviceModeSafety.test.ts` |
 | Explicit Cloud | Executor-spy unit, including disabled client flag | Cloud executes once without ClientExecutor | Passes in the F-01 script and mandatory `deviceModeSafety.test.ts` suite |
-| Protected bytes before venue selection | Browser/network test with synthetic protected file and request interception | Device selection/consent precedes any upload; record whether source bytes or password reach `/api/security/unlock` or processing endpoints | Planned only; not covered by the executor harness. Current `PdfUploader` posts to unlock before workspace navigation |
-| Wrong password | Browser/API contract test with `protected-alpha.pdf` and wrong synthetic password | No processing continuation, no false success, and no unintended alternate venue | Planned only; uploader maps failures to its incorrect-password message |
-| Password-dialog cancellation | Browser test; cancel while protected input is queued | No unlock or processing request after cancel | Planned only; current handler clears queue/password |
-| File replacement / stale async response | Browser/component race test; replace or cancel while unlock/processing is pending | No stale source/password submitted or stale result published | Planned only; no current Stage 0 browser harness |
-| Multiple protected PDFs with distinct passwords | Browser/API integration test using alpha and beta | Each selected password is associated with its source; venue policy is explicit; no first-password assumption | Fixture pair exists; merge policy and test remain open pending product decision |
-| Direct Studio and Studio V2 bypasses | Route-level browser/API coverage per API owner | Assert each path's venue choice, request payload, and result publication | Planned only; legacy direct API and Studio V2 session/job paths are separate |
+| Protected bytes before venue selection | Browser/network test with synthetic protected file and request interception | Device selection/consent precedes any upload; record whether source bytes or password reach `/api/security/unlock` or processing endpoints | At M1-S1-01, still exposed before workspace navigation; M1-S1-02 Playwright coverage now verifies Device and Auto local preparation with zero processing POSTs and Cloud only after affirmative authorization |
+| Wrong password | Browser test with `protected-alpha.pdf` and a wrong synthetic password | No processing continuation, false success, or unintended alternate venue | M1-S1-02 browser test verifies local failure and zero Cloud requests |
+| Password-dialog cancellation | Browser test; cancel while protected input is queued or Cloud request is pending | No new request after cancel; an already-started authorized Cloud request is not described as recalled | M1-S1-02 browser tests verify no request on pre-submit cancel and no stale navigation after Cloud cancellation |
+| File replacement / stale async response | Browser/component race test; replace or cancel while inspection/unlock is pending | No stale source/password submitted or stale result published | M1-S1-02 browser tests cover replacement during inspection, cancellation during Cloud request, and component unmount |
+| Multiple protected PDFs with distinct passwords | Browser test using alpha and beta | Each selected password is associated with its source and queue order | M1-S1-02 Merge browser case verifies each multipart payload and the additional-file path; mixed-password output policy remains unresolved and out of scope |
+| Direct Studio and workspace PDF pickers | Route-level browser coverage per API owner | Assert each path's venue choice and request payload | M1-S1-02 verifies legacy Studio welcome/sidebar/Merge, direct OCR-aware and structured-document pickers fail-closed, and Studio V2 consent before session upload; other direct legacy Studio endpoints remain a separate audit boundary |
 
-The executor harness uses fake in-memory PDF bytes and mocks both executors; it does not send any request. **Passing `ExecutionManager` tests does not prove that explicit Device processing keeps the entire document preparation path local.** The shared uploader still submits encrypted bytes and the entered password to `/api/security/unlock` before workspace navigation, while the venue selector is presented in the workspace. Browser/network proof and a separate pre-workspace privacy fix remain necessary.
+The executor harness uses fake in-memory PDF bytes and mocks both executors; it does not send any request. **Passing `ExecutionManager` tests does not prove that explicit Device processing keeps the entire document preparation path local.** M1-S1-02 adds a separate shared-uploader boundary and local browser/network evidence; it does not establish production-backend behavior, cover every direct legacy Studio endpoint, or complete the full F-01 acceptance contract.
+
+## M1-S1-02 input-preparation contract and evidence
+
+For ordinary tool landing pages, PDF protection inspection runs locally before any submit. Protected input presents Device, Auto, and Cloud choices. Device and Auto perform the available pdfcpu browser unlock locally; Auto's later processing fallback remains separate. Local preparation failures, incorrect passwords, invalid PDFs, and unsupported paths fail without Cloud fallback. Cloud preparation sends the encrypted file and password to the existing `/api/security/unlock` endpoint only after the user clicks **Authorize Cloud unlock**. A missing policy defaults to fail-closed for protected input. Explicit Unlock continues to accept the protected source for its intentional operation, and Studio V2 retains its session-upload path behind an explicit Cloud upload confirmation because it intentionally bypasses inspection.
+
+The selected mode travels transiently with the in-memory `File` to canonical workspaces. Password and source/provenance metadata are not placed in URLs, persistent browser storage, analytics, or new logs. A Cloud-prepared file keeps its Cloud-transmission state across later mode changes, and Device selection is disabled for that same source. A user can cancel and select a fresh source for a local attempt. Merge's additional-file uploader uses the current workspace mode and the same protected-input gate.
+
+The Playwright suite `tests/security/milestone-1/protected-input-privacy.spec.ts` has 15 cases covering protected and plain synthetic PDF/image input, explicit Unlock, Merge queue/password association and additional protected input, cancellation/races, legacy Studio welcome/sidebar/Merge guards, direct OCR-aware and structured-document PDF pickers, and Studio V2 session upload against a local app with intercepted requests. It does not validate a real backend response, production browser behavior, every legacy Studio direct endpoint, or protected output publication. F-01 is therefore not fully verified or closed. The F-02 re-lock failure characterization remains unchanged and is still expected to fail its two assertions.
 
 ## F-02 protected-result matrix
 
@@ -82,12 +100,12 @@ The current F-02 harness injects the lock failure in-process and never contacts 
 |---|---|---|
 | Required unit suite | F-01 manager routing, Device/Auto/Cloud compatibility, feature flags | `npm run test:unit` discovers `tests/unit/deviceModeSafety.test.ts` and `tests/unit/flags.test.ts` |
 | Task-specific characterization | Seven F-01 execution-manager assertions; F-02 helper failure ordering | Run `npx tsx tests/security/milestone-1/f01-execution.regression.ts` for M1-S1-01; keep `f02-relock-failure.regression.ts` opt-in and unresolved |
-| Browser/network | Pre-workspace uploader requests, mode consent, cancellation, replacement races, direct Studio routes | Playwright once a test API/mock route is specified; not added to mandatory tests in Stage 0 |
+| Browser/network | Pre-workspace uploader requests, mode consent, cancellation, replacement races, selected Studio paths | `tests/security/milestone-1/protected-input-privacy.spec.ts`; opt-in task verification against a local app/API mock, not in required CI |
 | Backend/API integration | Unlock/lock response errors, malformed/unprotected output, merge behavior, temporary-file lifecycle | Synthetic local integration environment only; no production endpoint or production file |
 | Independent artifact validation | Encryption, password correctness, page count, marker content | qpdf, pdfinfo, pdftotext against generated fixtures/results |
 | Existing frontend checks | Unit and hybrid execution coverage | `npm run test:unit` scans `tests/unit/*.test.ts`/`.mts`; [`tests/runUnitTests.ts`](../../../tests/runUnitTests.ts#L1-L50) excludes seven execution suites. [`tests/runHybridTests.ts`](../../../tests/runHybridTests.ts) separately drives hybrid suites. Neither runner discovers this `tests/security/.../*.regression.ts` scaffold. |
 
-The default Playwright command is `npm test`; the security scripts do not match normal Playwright or unit-test discovery. No testing framework or npm dependency was added. Manager assertions are mandatory through the existing unit suite; the F-01 script remains a separate required task-verification command to avoid duplicating the full characterization script in CI. Browser/network tests, independent artifact validation, and unresolved product rules remain separate acceptance gates.
+The security Playwright spec is excluded from the default `npm test` run unless `PLATEN_M1_PRIVACY_E2E=1` is explicitly set, because it requires the local app and mock API. No testing framework or npm dependency was added. Manager assertions remain mandatory through the existing unit suite; the F-01 execution script stays a separate task-verification command. The two deterministic M1-S1-02 unit tests are discovered by `npm run test:unit`; browser/network acceptance, independent output-artifact validation, and unresolved product rules remain separate gates.
 
 ## Existing evidence and limits
 
@@ -95,11 +113,11 @@ The default Playwright command is `npm test`; the security scripts do not match 
 - The findings' production tests cover selected synthetic, unencrypted Merge submissions and other workflows; they do not prove encrypted input privacy or protected output restoration.
 - Stage 0's baseline run showed three F-01 manager failures and two F-02 failures. M1-S1-01's focused run now passes all seven F-01 manager assertions; the separate F-02 script still fails two assertions as expected.
 - Feature-flag unit tests run under Node and verify precedence, normalization, and malformed-value handling. They do not prove that a Next.js production build inlines the public environment values; M1-S1-01 did not run a build-artifact check.
-- Browser-level network capture, successful end-to-end re-encryption, malformed/unprotected response validation, cancellation during restoration, Studio V2 result validation, and mixed-password merge are not covered by the current scaffolding.
+- Browser-level request interception now covers the selected input-preparation paths listed above, but real backend behavior, successful end-to-end re-encryption, malformed/unprotected output validation, cancellation during output restoration, Studio V2 result validation, and mixed-password merge remain unverified.
 
 ## Remaining boundaries
 
-1. The M1-S1-01 integration covers only `ExecutionManager`. The next F-01 implementation task should prevent the shared uploader from sending protected source bytes/password to `/api/security/unlock` before the user selects an execution venue, then add synthetic browser/network assertions for that ordering.
+1. M1-S1-01 covered only `ExecutionManager`; M1-S1-02 closes the unauthorized shared-uploader preparation route in the covered workflows. Remaining F-01 work should audit uncovered legacy/direct Cloud paths and qualify real supported browser/API combinations before claiming complete application-wide Device privacy.
 2. F-02 re-lock failure propagation and protected-artifact validation remain a separate unresolved task. Its current regression script is expected to fail and is not enabled in required CI.
 3. Browser/network acceptance, successful encrypted-output validation, malformed/unprotected response validation, Studio V2 result validation, and mixed-password merge behavior have not been established here.
 4. Continue remaining work on unreleased development branches. Consider production merges only after milestone qualification and explicit user approval; this plan does not authorize production deployment or a default-branch merge.
