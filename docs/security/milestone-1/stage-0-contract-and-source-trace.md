@@ -5,6 +5,8 @@
 **Frontend baseline:** `main` at `0f4323f5bd95263b6cb8fcd97e017e75e10c3b4b`
 **Stage 0 branch:** `milestone-1/privacy-protected-artifacts`
 
+**Historical snapshot:** Source behavior and baseline outcomes in this Stage 0 report describe the recorded revisions above, before PR #22 was integrated. The later manager-only integration status is recorded below and in [regression-test-plan.md](regression-test-plan.md).
+
 ## Evidence and limits
 
 This report distinguishes product wording, current source behavior, and inferred expectations. The revisions recorded during preflight were:
@@ -102,12 +104,28 @@ These decisions require product-owner approval where they define user-facing beh
 
 As checked during Stage 0, [PR #22](https://github.com/gimesha-adikari/pdfnest/pull/22) is **OPEN**, not draft, based on `main` at `0f4323f5bd95263b6cb8fcd97e017e75e10c3b4b`, and has head `e084e3e076b5f3eb4a91b3c24739b7e4f90f8fe2` on `release/gim-43-device-mode-safety`. GitHub reports merge state `CLEAN` and no review decision. At inspection, Frontend CI, Codeac, Vercel preview, and Vercel Preview Comments were successful.
 
-Its four changed files are `lib/execution/ExecutionManager.ts`, `lib/execution/flags.ts`, `tests/unit/deviceModeSafety.test.ts`, and `tests/unit/flags.test.ts`. The implementation makes explicit Device requests fail closed for unsupported/disabled local operations and removes the password-related Device-to-Cloud fallback; Auto and explicit Cloud behavior are retained. The flag change replaces dynamic `process.env` indexing with explicit static readers for public per-tool flags so Next.js can inline those values; it does not change the boolean parser. Its new Device tests cover those manager paths, and both new/updated test files remain discoverable by the current unit runner once on `main`.
+Its four changed files are `lib/execution/ExecutionManager.ts`, `lib/execution/flags.ts`, `tests/unit/deviceModeSafety.test.ts`, and `tests/unit/flags.test.ts`. The implementation makes explicit Device requests fail closed for unsupported/disabled local operations and removes the password-related Device-to-Cloud fallback; Auto and explicit Cloud behavior are retained. The flag change replaces dynamic `process.env` indexing with explicit static readers for public per-tool flags so Next.js can inline those values; it does not change the boolean parser. Its new Device tests cover those manager paths, and both new/updated test files match the existing unit-runner discovery on the milestone branch.
 
 It does **not** change the shared uploader's pre-workspace Cloud unlock and does not change `uploadAndDownloadFile`'s swallowed re-lock failure. It therefore only partially addresses F-01 and does not address F-02.
 
-**Recommended integration order:** have PR #22 receive independent review and merge to `main` first if accepted; then merge the updated `origin/main` into the Stage 0 branch (or otherwise update from that accepted base without rewriting history) before Stage 1 implementation. This avoids duplicating its manager/flag changes in a milestone PR and keeps review ownership clear. Do not cherry-pick or modify PR #22 as part of Stage 0. A stacked PR is a fallback only if sequencing is blocked and its duplicate diff is clearly disclosed.
+**Approved Milestone 1 integration order:**
+
+1. Preserve original PR #22.
+2. Integrate its original commit into the Milestone 1 development branch.
+3. Verify manager behavior against the Stage 0 regression assertions.
+4. Continue the remaining privacy and publication work on unreleased development branches.
+5. Consider production merges only after milestone qualification and explicit user approval.
+
+Do not merge PR #22 into `main` as a prerequisite to Milestone 1 development; a default-branch merge may trigger automatic production deployment.
+
+## M1-S1-01 manager integration status
+
+The exact PR #22 head `e084e3e076b5f3eb4a91b3c24739b7e4f90f8fe2` was merged into `milestone-1/privacy-protected-artifacts` with non-fast-forward merge commit `07153ebb0cf80e05ba577126a52e99c128d2e677`. Its parents are the Stage 0 head `8cd7682d37c29614501f0376c28843ae53c5868a` and the original PR #22 head, preserving both histories. PR #22 remains open and unchanged; `main` was not modified.
+
+The merged manager now fails explicit Device requests closed for unsupported operations, disabled client flags, password-related local limitations, generic client errors, and safety-gate rejections. The seven Stage 0 F-01 manager assertions pass on this branch. The ordinary `deviceModeSafety.test.ts` suite also checks successful Device execution, no fallback, telemetry mode/error reporting, Auto routing, and explicit Cloud routing.
+
+This is only the execution-manager portion of F-01. `PdfUploader` still sends protected source bytes and the entered password to `/api/security/unlock` before workspace navigation and before the workspace's venue selector is available. **Passing `ExecutionManager` tests does not prove that explicit Device processing keeps the entire document preparation path local.** This is the next F-01 implementation boundary. The independent F-02 re-lock/publication vulnerability remains unresolved.
 
 ## Stage 0 conclusion
 
-The source provides actionable F-01/F-02 regression boundaries, but product acceptance remains open for ordinary PDF output preservation, mixed-password merge, encryption equivalence, transfer behavior, and Studio contracts. The regression plan and opt-in baseline demonstrations are in [regression-test-plan.md](regression-test-plan.md). No production behavior was changed in this task.
+The source provides actionable F-01/F-02 regression boundaries, but product acceptance remains open for ordinary PDF output preservation, mixed-password merge, encryption equivalence, transfer behavior, and Studio contracts. The regression plan and opt-in baseline demonstrations are in [regression-test-plan.md](regression-test-plan.md). No production behavior was changed in Stage 0; M1-S1-01 later integrated PR #22 only on the unreleased milestone branch.

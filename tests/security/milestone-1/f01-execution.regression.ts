@@ -176,7 +176,7 @@ async function main(): Promise<void> {
     }
 
     if (failures.length > 0) {
-        console.error(`\n${failures.length} F-01 invariant(s) fail on the current baseline: ${failures.join(", ")}`);
+        console.error(`\n${failures.length} F-01 invariant(s) failed on the current branch: ${failures.join(", ")}`);
         process.exitCode = 1;
     } else {
         console.log("\nAll F-01 execution invariants passed.");
