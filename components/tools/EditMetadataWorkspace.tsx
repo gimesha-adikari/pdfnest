@@ -15,6 +15,7 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
+import { getInitialProcessingMode } from "@/lib/security/pdfInputPreparation";
 
 export default function EditMetadataWorkspace() {
     const { requireAuth } = useAuth();
@@ -25,7 +26,7 @@ export default function EditMetadataWorkspace() {
     const [author, setAuthor] = useState("");
     const [subject, setSubject] = useState("");
     const [keywords, setKeywords] = useState("");
-    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [isReadingFile, setIsReadingFile] = useState(false);

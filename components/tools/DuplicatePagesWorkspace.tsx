@@ -15,6 +15,7 @@ import { usePreview } from "@/lib/preview/usePreview";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
+import { getInitialProcessingMode } from "@/lib/security/pdfInputPreparation";
 
 interface CustomPdfFile extends File {
     originalPassword?: string;
@@ -31,7 +32,7 @@ export default function DuplicatePagesWorkspace() {
 
     const [pageSelection, setPageSelection] = useState<string>("1");
     const [numCopies, setNumCopies] = useState<number>(1);
-    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);

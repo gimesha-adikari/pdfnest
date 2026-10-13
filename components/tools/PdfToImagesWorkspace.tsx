@@ -12,6 +12,7 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
+import { getInitialProcessingMode } from "@/lib/security/pdfInputPreparation";
 
 type ImageTypeOption = {
     value: "jpg" | "png" | "pnggray" | "pngmono";
@@ -50,7 +51,7 @@ export default function PdfToImagesWorkspace() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
     const [imageType, setImageType] = useState<ImageTypeOption["value"]>("jpg");
-    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
 
     const selectedOption =
         IMAGE_TYPE_OPTIONS.find((option) => option.value === imageType) ?? IMAGE_TYPE_OPTIONS[0];

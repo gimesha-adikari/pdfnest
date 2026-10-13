@@ -27,6 +27,7 @@ import { useAsyncTask } from "@/hooks/useAsyncTask";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
+import { getInitialProcessingMode } from "@/lib/security/pdfInputPreparation";
 
 const AUTO_LANGUAGE: OCRLanguage = { code: "auto", name: "Auto detect" };
 
@@ -41,7 +42,7 @@ export default function PdfToTextWorkspace() {
     const [localStatus, setLocalStatus] = useState<string | null>(null);
     const localAbortControllerRef = useRef<AbortController | null>(null);
     const [success, setSuccess] = useState(false);
-    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
     const [deviceOcrWarning, setDeviceOcrWarning] = useState<string | null>(null);
 
     const [languages, setLanguages] = useState<OCRLanguage[]>([

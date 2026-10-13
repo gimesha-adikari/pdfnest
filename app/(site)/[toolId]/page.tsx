@@ -13,6 +13,10 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
 import RepositoryAnalyzerSourceSelector from "@/components/tools/RepositoryAnalyzerSourceSelector";
+import {
+    getPdfInputPreparation,
+    markPdfInputPreparation,
+} from "@/lib/security/pdfInputPreparation";
 
 interface ExtendedFile extends File {
     initialBatch?: File[];
@@ -89,8 +93,18 @@ export default function SharedUploadPage() {
         toolId,
     ]);
 
-    const handleFilesAccepted = (files: File[]) => {
+    const handleFilesAccepted = (
+        files: File[],
+        acceptance?: { processingMode: "auto" | "device" | "cloud" }
+    ) => {
         if (files && files.length > 0) {
+            const processingMode = acceptance?.processingMode ?? "auto";
+            files.forEach((acceptedFile) => {
+                const existing = getPdfInputPreparation(acceptedFile);
+                if (existing) {
+                    markPdfInputPreparation(acceptedFile, { ...existing, processingMode });
+                }
+            });
             const baselineFile = files[0] as ExtendedFile;
 
             if (toolConfig.multiple) {
@@ -197,6 +211,7 @@ export default function SharedUploadPage() {
                         accept={toolConfig.accept || ".pdf"}
                         multiple={toolConfig.multiple}
                         bypassEncryptionCheck={toolId === "unlock-pdf"}
+                        protectedFileHandling={toolId === "unlock-pdf" ? "explicit-unlock" : "choose-mode"}
                     />
                 )}
             </div>

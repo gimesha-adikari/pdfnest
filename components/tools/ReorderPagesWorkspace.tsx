@@ -17,6 +17,7 @@ import { usePreviews } from "@/lib/preview/usePreviews";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
+import { getInitialProcessingMode } from "@/lib/security/pdfInputPreparation";
 
 export default function ReorderPagesWorkspace() {
     const { requireAuth } = useAuth();
@@ -28,7 +29,7 @@ export default function ReorderPagesWorkspace() {
     const [isLoadingElements, setIsLoadingElements] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
-    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
 
 
     useEffect(() => {

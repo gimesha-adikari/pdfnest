@@ -13,6 +13,7 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
+import { getInitialProcessingMode } from "@/lib/security/pdfInputPreparation";
 import PasswordField from "@/components/ui/PasswordField";
 
 function formatMB(bytes: number) {
@@ -27,7 +28,7 @@ export default function LockPdfWorkspace() {
     const [password, setPassword] = useState("");
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
-    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     useEffect(() => {

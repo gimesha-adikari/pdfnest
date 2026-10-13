@@ -4,12 +4,15 @@ import { Cpu, HardDrive, Zap, CloudOff } from "lucide-react";
 import { ProcessingMode, ToolPolicy } from "@/lib/execution/types";
 import { useBackendHealth } from "@/context/BackendHealthContext";
 import {useAuth} from "@/context/AuthContext";
+import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
+import { hasCloudPreparedInput } from "@/lib/security/pdfInputPreparation";
 
 interface ProcessingModeSelectorProps {
     mode: ProcessingMode;
     onChange: (mode: ProcessingMode) => void;
     toolPolicy?: ToolPolicy;
     disabled?: boolean;
+    cloudPrepared?: boolean;
 }
 
 export function ProcessingModeSelector({
@@ -17,9 +20,12 @@ export function ProcessingModeSelector({
     onChange,
     toolPolicy = "CLIENT_PREFERRED",
     disabled = false,
+    cloudPrepared: cloudPreparedProp,
 }: ProcessingModeSelectorProps) {
     const { status } = useBackendHealth();
     const {billingPolicy} = useAuth();
+    const { file } = useSharedTool();
+    const cloudPrepared = cloudPreparedProp ?? hasCloudPreparedInput(file);
     const isCloudOffline = status === "offline";
     const isCloudOnly = toolPolicy === "BACKEND_ONLY" || toolPolicy === "SECURITY_CRITICAL_BACKEND";
 
@@ -60,6 +66,7 @@ export function ProcessingModeSelector({
             <div className="grid grid-cols-3 gap-2 p-1 bg-[color:var(--card)] rounded-xl border border-[color:var(--border)]">
                 <button
                     type="button"
+                    aria-pressed={mode === "auto"}
                     disabled={disabled}
                     onClick={() => onChange("auto")}
                     className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold transition ${
@@ -74,7 +81,9 @@ export function ProcessingModeSelector({
 
                 <button
                     type="button"
-                    disabled={disabled}
+                    aria-pressed={mode === "device"}
+                    disabled={disabled || cloudPrepared}
+                    title={cloudPrepared ? "This input was already sent to Cloud during password preparation." : undefined}
                     onClick={() => onChange("device")}
                     className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold transition ${
                         mode === "device"
@@ -88,6 +97,7 @@ export function ProcessingModeSelector({
 
                 <button
                     type="button"
+                    aria-pressed={mode === "cloud"}
                     disabled={disabled}
                     onClick={() => onChange("cloud")}
                     className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold transition ${
@@ -100,6 +110,12 @@ export function ProcessingModeSelector({
                     <span>Cloud</span>
                 </button>
             </div>
+
+            {cloudPrepared && (
+                <p role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">
+                    This input and its password were sent to Platen Cloud for password preparation. Device-only mode is unavailable, and changing the processing mode cannot undo that transmission.
+                </p>
+            )}
 
             {mode === "cloud" && isCloudOffline ? (
                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200 space-y-2">

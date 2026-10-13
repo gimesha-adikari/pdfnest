@@ -15,6 +15,7 @@ import { usePreviews } from "@/lib/preview/usePreviews";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
+import { getInitialProcessingMode } from "@/lib/security/pdfInputPreparation";
 
 import LazyPdfThumbnail from "@/components/pdf/LazyPdfThumbnail";
 
@@ -29,7 +30,7 @@ export default function RotatePdfWorkspace() {
 
     const [pageCount, setPageCount] = useState<number>(0);
     const [pageRotations, setPageRotations] = useState<Record<number, number>>({});
-    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [isReadingTotal, setIsReadingTotal] = useState(false);

@@ -80,7 +80,7 @@ export class ClientExecutor {
 
         if (normalizedTool === "unlock") {
             const unlockPassword = options.password || params.password || (file as any).originalPassword;
-            return await executePdfcpuWasmUnlock(file, unlockPassword);
+            return await executePdfcpuWasmUnlock(file, unlockPassword, options.signal);
         }
 
         if (normalizedTool === "pdf_to_images") {

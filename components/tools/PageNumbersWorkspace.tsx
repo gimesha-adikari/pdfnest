@@ -15,6 +15,7 @@ import { usePreview } from "@/lib/preview/usePreview";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
+import { getInitialProcessingMode } from "@/lib/security/pdfInputPreparation";
 
 const STYLISTIC_FONTS = [
     { id: "Helvetica", name: "Sans-Serif Modern (Helvetica)", cssClass: "font-sans font-bold" },
@@ -30,7 +31,7 @@ export default function PageNumbersWorkspace() {
     const [fontFamily, setFontFamily] = useState<string>("Helvetica");
     const [fontSize, setFontSize] = useState<number>(12);
     const [position, setPosition] = useState<string>("bc");
-    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
 
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);

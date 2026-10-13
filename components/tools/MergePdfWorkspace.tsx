@@ -18,6 +18,8 @@ import LazyPdfThumbnail from "@/components/pdf/LazyPdfThumbnail";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
+import { hasCloudPreparedInput } from "@/lib/security/pdfInputPreparation";
+import { getInitialProcessingMode } from "@/lib/security/pdfInputPreparation";
 
 export default function MergePdfWorkspace() {
     const { requireAuth } = useAuth();
@@ -26,7 +28,7 @@ export default function MergePdfWorkspace() {
 
     const [files, setFiles] = useState<File[]>([]);
     const [isMerging, setIsMerging] = useState(false);
-    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
     const [fileMeta] = useState<Record<string, { originalPassword?: string }>>({});
 
     // Automatically ingest the initial full files collection matrix
@@ -41,7 +43,11 @@ export default function MergePdfWorkspace() {
         }
     }, [file]);
 
-    const addFiles = async (newFiles: File[]) => {
+    const addFiles = async (
+        newFiles: File[],
+        acceptance?: { processingMode: ProcessingMode }
+    ) => {
+        if (acceptance) setProcessingMode(acceptance.processingMode);
         const MAX_FILE_SIZE = 50 * 1024 * 1024;
         const validFiles = newFiles.filter(item => {
             if (item.size > MAX_FILE_SIZE) {
@@ -146,6 +152,8 @@ export default function MergePdfWorkspace() {
                     description="Select multiple PDFs to merge"
                     multiple={true}
                     accept=".pdf"
+                    processingMode={processingMode}
+                    protectedFileHandling="current-mode"
                 />
 
                 <div className="mt-6 mb-6">
@@ -154,6 +162,7 @@ export default function MergePdfWorkspace() {
                         onChange={setProcessingMode}
                         toolPolicy="CLIENT_PREFERRED"
                         disabled={isMerging}
+                        cloudPrepared={hasCloudPreparedInput(files) || hasCloudPreparedInput(file)}
                     />
                 </div>
 
