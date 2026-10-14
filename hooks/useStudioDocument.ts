@@ -7,6 +7,7 @@ import {
     authorizeRestoredStudioPreview,
     createRestoredStudioPreviewScope,
     revokeRestoredStudioPreview,
+    revokeRestoredStudioPreviewIfUnreachable,
     type RestoredStudioPreviewScope,
 } from "@/lib/security/restoredStudioPreviewAuthorization";
 
@@ -133,6 +134,18 @@ export function useStudioDocument() {
         setCurrentPageIndex(snapshot.currentPageIndex);
         setErrorMessage(null);
         setIsScanning(false);
+    }, []);
+
+    const reconcileActiveRestoreScope = useCallback((reachableSnapshots: readonly DocumentSnapshot[]) => {
+        const activeScope = activeRestoreScopeRef.current;
+        if (!activeScope) return;
+
+        if (revokeRestoredStudioPreviewIfUnreachable(
+            activeScope,
+            reachableSnapshots.map((snapshot) => snapshot.file),
+        )) {
+            activeRestoreScopeRef.current = null;
+        }
     }, []);
 
     const prepareProjectRestore = useCallback(async (
@@ -272,10 +285,7 @@ export function useStudioDocument() {
                     fingerprint: getSnapshotFingerprint(file, scanned, 0),
                 };
 
-                if (activeRestoreScopeRef.current) {
-                    revokeRestoredStudioPreview(activeRestoreScopeRef.current);
-                    activeRestoreScopeRef.current = null;
-                }
+                reconcileActiveRestoreScope([snapshot, ...nextPast, ...nextFuture]);
 
                 setPast(nextPast);
                 setFuture(nextFuture);
@@ -299,7 +309,7 @@ export function useStudioDocument() {
                 if (isOperationCurrent(operationId)) setIsScanning(false);
             }
         },
-        [captureSnapshot, invalidatePendingRestoreOperations, isOperationCurrent, scanPages, past]
+        [captureSnapshot, invalidatePendingRestoreOperations, isOperationCurrent, reconcileActiveRestoreScope, scanPages, past]
     );
 
     const handleFilesAccepted = useCallback(
@@ -333,15 +343,17 @@ export function useStudioDocument() {
 
         const currentSnapshot = captureSnapshot();
         const previousSnapshot = past[past.length - 1];
+        const nextPast = past.slice(0, -1);
+        const nextFuture = currentSnapshot
+            ? appendSnapshot(future, currentSnapshot)
+            : future;
 
-        setPast((prev) => prev.slice(0, -1));
-
-        if (currentSnapshot) {
-            setFuture((prev) => appendSnapshot(prev, currentSnapshot));
-        }
+        reconcileActiveRestoreScope([previousSnapshot, ...nextPast, ...nextFuture]);
+        setPast(nextPast);
+        setFuture(nextFuture);
 
         restoreSnapshot(previousSnapshot);
-    }, [captureSnapshot, invalidatePendingRestoreOperations, past, restoreSnapshot]);
+    }, [captureSnapshot, future, invalidatePendingRestoreOperations, past, reconcileActiveRestoreScope, restoreSnapshot]);
 
     const redo = useCallback(() => {
         if (!future.length) return;
@@ -349,15 +361,17 @@ export function useStudioDocument() {
 
         const currentSnapshot = captureSnapshot();
         const nextSnapshot = future[future.length - 1];
+        const nextFuture = future.slice(0, -1);
+        const nextPast = currentSnapshot
+            ? appendSnapshot(past, currentSnapshot)
+            : past;
 
-        setFuture((prev) => prev.slice(0, -1));
-
-        if (currentSnapshot) {
-            setPast((prev) => appendSnapshot(prev, currentSnapshot));
-        }
+        reconcileActiveRestoreScope([nextSnapshot, ...nextPast, ...nextFuture]);
+        setFuture(nextFuture);
+        setPast(nextPast);
 
         restoreSnapshot(nextSnapshot);
-    }, [captureSnapshot, future, invalidatePendingRestoreOperations, restoreSnapshot]);
+    }, [captureSnapshot, future, invalidatePendingRestoreOperations, past, reconcileActiveRestoreScope, restoreSnapshot]);
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {

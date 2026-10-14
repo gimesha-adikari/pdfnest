@@ -24,8 +24,13 @@ if (fs.existsSync(dedicatedEnvFile)) {
 const managedTarget = Boolean(process.env.E2E_BASE_URL);
 const managedStorageState = process.env.E2E_STORAGE_STATE || undefined;
 const isolatedPrivacySuite = process.env.PLATEN_M1_PRIVACY_E2E === '1';
-const privacyAppOrigin = 'http://127.0.0.1:3000';
+const privacyAppPort = process.env.PLATEN_M1_PRIVACY_PORT || '3000';
+const privacyAppOrigin = `http://127.0.0.1:${privacyAppPort}`;
 const privacyMockApiOrigin = 'http://127.0.0.1:3999';
+
+if (isolatedPrivacySuite) {
+  process.env.PLATEN_M1_PRIVACY_APP_ORIGIN = privacyAppOrigin;
+}
 
 /**
  * PDFNest End-to-End Testing Configuration
@@ -72,7 +77,7 @@ export default defineConfig({
     : {
         webServer: {
           command: isolatedPrivacySuite
-            ? 'npm run dev -- --hostname 127.0.0.1 --port 3000'
+            ? `npm run dev -- --hostname 127.0.0.1 --port ${privacyAppPort}`
             : 'npm run dev',
           url: isolatedPrivacySuite ? privacyAppOrigin : 'http://localhost:3000',
           reuseExistingServer: !isolatedPrivacySuite,

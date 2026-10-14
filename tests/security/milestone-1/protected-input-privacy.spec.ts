@@ -19,7 +19,7 @@ const malformedPdf = readFileSync(path.join(fixtureDir, "malformed.pdf"));
 const alphaPassword = "platen-m1-user-alpha";
 const betaPassword = "platen-m1-user-beta";
 const appOrigin = process.env.PLATEN_M1_PRIVACY_E2E === "1"
-    ? "http://127.0.0.1:3000"
+    ? process.env.PLATEN_M1_PRIVACY_APP_ORIGIN || "http://127.0.0.1:3000"
     : new URL(process.env.E2E_BASE_URL || "http://localhost:3000").origin;
 
 type ApiRequest = { method: string; origin: string; path: string; body: Buffer };
@@ -1539,6 +1539,66 @@ test("authorized restored project can preview current, past, and future snapshot
     await page.keyboard.press("Control+z");
     await expect.poll(() => apiRequests.filter((request) => request.path === "/api/conversion/preview/session").length).toBe(3);
     await expect(page.getByRole("dialog", { name: /Authorize Cloud preview/i })).toHaveCount(0);
+    expectNoProductionRequests();
+});
+
+test("restored preview authorization remains valid while its exact File is retained by Undo and Redo history", async ({ page }) => {
+    await page.goto("/studio");
+    await waitForInteractiveApp(page);
+    await page.locator('input[type="file"]').first().setInputFiles({
+        name: "authorized-history-project.pns",
+        mimeType: "application/x-pdfnest-project",
+        buffer: plainStudioProject,
+    });
+
+    const consent = page.getByRole("dialog", { name: /Authorize Cloud preview for this restored project/i });
+    await expect(consent).toBeVisible();
+    expect(apiRequests.filter((request) => request.path === "/api/conversion/preview/session")).toHaveLength(0);
+    await consent.getByRole("button", { name: "Authorize Cloud preview" }).click();
+    await expect.poll(() => apiRequests.filter((request) => request.path === "/api/conversion/preview/session").length).toBe(1);
+
+    const sidebarInput = page.getByRole("complementary").locator('input[type="file"]');
+    await sidebarInput.setInputFiles({
+        name: "failed-replacement.pdf",
+        mimeType: "application/pdf",
+        buffer: malformedPdf,
+    });
+    await expect(page.getByRole("alert").filter({ hasText: /Could not verify whether.*protected/i })).toBeVisible();
+    await expect(page.getByRole("complementary").getByText("plain-two-pages.pdf", { exact: true })).toBeVisible();
+    await expect(page.getByText(/Cloud preview for this restored Studio project requires explicit Cloud preview authorization/i)).toHaveCount(0);
+    expect(apiRequests.filter((request) => request.path === "/api/conversion/preview/session")).toHaveLength(1);
+
+    await sidebarInput.setInputFiles({
+        name: "ordinary-replacement.pdf",
+        mimeType: "application/pdf",
+        buffer: plainPdf,
+    });
+    await expect(page.getByRole("complementary").getByText("ordinary-replacement.pdf", { exact: true })).toBeVisible();
+    await expect.poll(() => apiRequests.filter((request) => request.path === "/api/conversion/preview/session").length).toBe(2);
+
+    await page.keyboard.press("Control+z");
+    await expect(page.getByRole("complementary").getByText("plain-two-pages.pdf", { exact: true })).toBeVisible();
+    await expect(page.getByRole("img", { name: "Preview page 1" })).toBeVisible();
+    await expect(page.getByText(/Cloud preview for this restored Studio project requires explicit Cloud preview authorization/i)).toHaveCount(0);
+    await expect(page.getByRole("dialog", { name: /Authorize Cloud preview/i })).toHaveCount(0);
+
+    await page.keyboard.press("Control+y");
+    await expect(page.getByRole("complementary").getByText("ordinary-replacement.pdf", { exact: true })).toBeVisible();
+    await expect(page.getByText(/Cloud preview for this restored Studio project requires explicit Cloud preview authorization/i)).toHaveCount(0);
+    await page.keyboard.press("Control+z");
+    await expect(page.getByRole("complementary").getByText("plain-two-pages.pdf", { exact: true })).toBeVisible();
+    await expect(page.getByRole("img", { name: "Preview page 1" })).toBeVisible();
+    await expect(page.getByText(/Cloud preview for this restored Studio project requires explicit Cloud preview authorization/i)).toHaveCount(0);
+
+    const previewSessions = apiRequests.filter((request) => request.path === "/api/conversion/preview/session");
+    expect(previewSessions).toHaveLength(2);
+    expect(previewSessions[0].body.toString("latin1")).toContain('filename="plain-two-pages.pdf"');
+    expect(previewSessions[1].body.toString("latin1")).toContain('filename="ordinary-replacement.pdf"');
+    expect(apiRequests.filter((request) => request.path === "/api/security/unlock")).toHaveLength(0);
+    expect(studioProcessingPosts().map((request) => request.path)).toEqual([
+        "/api/conversion/preview/session",
+        "/api/conversion/preview/session",
+    ]);
     expectNoProductionRequests();
 });
 

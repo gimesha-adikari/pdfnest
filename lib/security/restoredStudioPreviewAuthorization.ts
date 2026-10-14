@@ -44,6 +44,26 @@ export function revokeRestoredStudioPreview(scope: RestoredStudioPreviewScope): 
     stateByScope.set(scope, "revoked");
 }
 
+/**
+ * Keep an authorized restore scope alive while any exact File in it remains
+ * reachable from Studio's active, undo, or redo snapshots. Once the history no
+ * longer contains one of those Files, revoke the project-scoped consent.
+ */
+export function revokeRestoredStudioPreviewIfUnreachable(
+    scope: RestoredStudioPreviewScope,
+    reachableFiles: Iterable<File>,
+): boolean {
+    const scopedFiles = filesByScope.get(scope);
+    if (scopedFiles) {
+        for (const file of reachableFiles) {
+            if (scopedFiles.has(file)) return false;
+        }
+    }
+
+    revokeRestoredStudioPreview(scope);
+    return true;
+}
+
 export function isRestoredStudioPreviewRequired(file: File | null | undefined): boolean {
     return Boolean(file && scopeByFile.has(file));
 }
