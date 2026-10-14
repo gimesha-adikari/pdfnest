@@ -54,7 +54,7 @@ import { isOcrV2DevelopmentToolId } from "@/lib/ocrV2DevelopmentTools";
 import { getProtectedPdfRoutePolicy } from "@/lib/security/protectedPdfRoutePolicy";
 import {
     authorizeCloudProcessing,
-    hasCloudTransmissionOccurred,
+    hasCloudSubmissionInitiated,
     isCloudProcessingAuthorized,
     requiresCloudProcessingAuthorization,
 } from "@/lib/security/pdfInputPreparation";
@@ -131,7 +131,7 @@ export default function SharedWorkspacePage() {
                             : `${toolConfig.name} can send protected input to Platen Cloud for some processing modes.`}
                         {" "}This input is associated with protected or unverified source data. This approval authorizes this tool to send its current input to Platen Cloud. Cloud-unlock consent, if used, does not authorize this processing request.
                     </p>
-                    {hasCloudTransmissionOccurred(file) && <p role="status" className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">This input or its protected source was already transmitted to Cloud. That transmission cannot be undone.</p>}
+                    {hasCloudSubmissionInitiated(file) && <p role="status" className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">A Cloud request was started for this input or its protected source. File delivery may have occurred and cannot be recalled.</p>}
                     <div className="mt-5 flex justify-center gap-3">
                         <button type="button" onClick={() => { setFile(null); router.replace(`/${toolId}`); }} className="rounded-xl border border-[color:var(--border)] px-4 py-2 text-sm font-semibold">Cancel</button>
                         <button type="button" onClick={() => { authorizeCloudProcessing(file, toolId); setAuthorizedFile(file); }} className="rounded-xl bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white">Authorize Cloud processing</button>

@@ -13,7 +13,7 @@ import { studioVisualResolution } from "@/components/editor-v2/visualResolution"
 import { EditorLanguageControl } from "@/components/editor-v2/EditorLanguageControl";
 import { downloadEditorJob, EditorJobRecord, submitEditorCompile, submitEditorExtract, waitForEditorJob } from "@/lib/editorJobs";
 import { notify } from "@/lib/notify";
-import { assertCloudProcessingAuthorized } from "@/lib/security/pdfInputPreparation";
+import { assertCloudProcessingAuthorized, markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 import { handleClientError } from "@/lib/errorHandler";
 import { usePreviews } from "@/lib/preview/usePreviews";
 
@@ -123,6 +123,7 @@ export default function EditPdfWorkspace({ engine }: EditPdfWorkspaceProps = {})
     setCompiling(true); setError(null);
     try {
       assertCloudProcessingAuthorized(file, toolId || "edit-pdf");
+      markCloudSubmissionInitiated([file]);
       const submitted = await submitEditorCompile({ ...draft, source_tracker: sourceTracker });
       const job = await waitForEditorJob(submitted.job_id);
       if (job.status !== "succeeded") throw new Error(job.error || "Compilation failed");

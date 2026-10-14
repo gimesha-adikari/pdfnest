@@ -14,6 +14,7 @@ import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
 import RepositoryAnalyzerSourceSelector from "@/components/tools/RepositoryAnalyzerSourceSelector";
 import {
+    createTransferredPdfPreparation,
     getPdfInputPreparation,
     markPdfInputPreparation,
 } from "@/lib/security/pdfInputPreparation";
@@ -59,15 +60,7 @@ export default function SharedUploadPage() {
                 lastModified: Date.now(),
             }) as ExtendedFile;
 
-            markPdfInputPreparation(restoredFile, {
-                sourceProtected: "unchecked",
-                bytesState: "unchecked",
-                preparedOn: "none",
-                processingMode: "auto",
-                cloudTransmissionOccurred: transfer.provenance.cloudTransmissionOccurred,
-                derivedFromProtectedInput: transfer.provenance.derivedFromProtectedInput,
-                transferredFromTool: true,
-            });
+            markPdfInputPreparation(restoredFile, createTransferredPdfPreparation(transfer.provenance));
 
             queueMicrotask(() => setTransferredFiles([restoredFile]));
             return;

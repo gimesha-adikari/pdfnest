@@ -60,6 +60,22 @@ async function createPlainPdf(filePath: string): Promise<void> {
     writeFileSync(filePath, await pdf.save({ useObjectStreams: false, addDefaultPage: false }));
 }
 
+async function createScannedPdf(filePath: string): Promise<void> {
+    const pdf = await PDFDocument.create();
+    pdf.setTitle("Platen Milestone 1 synthetic scanned fixture");
+    pdf.setAuthor("Platen PDF security regression scaffold");
+    pdf.setCreator("tests/security/milestone-1/generate-fixtures.ts");
+    pdf.setCreationDate(FIXED_DATE);
+    pdf.setModificationDate(FIXED_DATE);
+    const scanImage = await pdf.embedPng(Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j2ioAAAAASUVORK5CYII=",
+        "base64"
+    ));
+    const page = pdf.addPage([612, 792]);
+    page.drawImage(scanImage, { x: 0, y: 0, width: 612, height: 792 });
+    writeFileSync(filePath, await pdf.save({ useObjectStreams: false, addDefaultPage: false }));
+}
+
 function encryptPdf(source: string, destination: string, userPassword: string, ownerPassword: string): void {
     run("qpdf", [
         "--encrypt",
@@ -97,15 +113,28 @@ async function main(): Promise<void> {
     const protectedAlpha = path.join(directory, "protected-alpha.pdf");
     const protectedBeta = path.join(directory, "protected-beta.pdf");
     const malformed = path.join(directory, "malformed.pdf");
+    const scanned = path.join(directory, "scanned-image-only.pdf");
+    const protectedScanned = path.join(directory, "protected-scanned.pdf");
 
     await createPlainPdf(plain);
+    await createScannedPdf(scanned);
     encryptPdf(plain, protectedAlpha, PASSWORD_ALPHA, OWNER_ALPHA);
     encryptPdf(plain, protectedBeta, PASSWORD_BETA, OWNER_BETA);
+    encryptPdf(scanned, protectedScanned, PASSWORD_ALPHA, OWNER_ALPHA);
     writeFileSync(malformed, Buffer.from("%PDF-1.7\nPLATEN_M1_MALFORMED_SYNTHETIC_INPUT\n", "ascii"));
 
     verifyPdf(plain, undefined, [ALPHA_MARKER, BETA_MARKER]);
     verifyPdf(protectedAlpha, PASSWORD_ALPHA, [ALPHA_MARKER, BETA_MARKER]);
     verifyPdf(protectedBeta, PASSWORD_BETA, [ALPHA_MARKER, BETA_MARKER]);
+    run("qpdf", ["--check", scanned]);
+    run("qpdf", [`--password=${PASSWORD_ALPHA}`, "--check", protectedScanned]);
+    assert.match(run("pdfinfo", ["-upw", PASSWORD_ALPHA, protectedScanned]), /^Pages:\s+1\s*$/m);
+    assert.match(run("pdfinfo", ["-upw", PASSWORD_ALPHA, protectedScanned]), /^Encrypted:\s+yes\b/m);
+    assert.equal(
+        run("pdftotext", ["-upw", PASSWORD_ALPHA, protectedScanned, "-"]).trim(),
+        "",
+        "the protected scanned fixture must have no native text layer"
+    );
     runExpectedFailure("qpdf", [`--password=${PASSWORD_ALPHA}-wrong`, "--check", protectedAlpha]);
     runExpectedFailure("qpdf", ["--check", malformed]);
 
@@ -115,7 +144,7 @@ async function main(): Promise<void> {
     }
 
     const qpdfVersion = run("qpdf", ["--version"]).trim().split("\n")[0];
-    const fixtures = [plain, protectedAlpha, protectedBeta, malformed].map((filePath) => ({
+    const fixtures = [plain, protectedAlpha, protectedBeta, scanned, protectedScanned, malformed].map((filePath) => ({
         file: path.basename(filePath),
         bytes: readFileSync(filePath).byteLength,
         sha256: sha256(filePath),
@@ -130,6 +159,7 @@ async function main(): Promise<void> {
             alphaOwnerPassword: OWNER_ALPHA,
             betaUserPassword: PASSWORD_BETA,
             betaOwnerPassword: OWNER_BETA,
+            protectedScannedUserPassword: PASSWORD_ALPHA,
             invalidPasswordCase: `${PASSWORD_ALPHA}-wrong against protected-alpha.pdf`,
         },
         verification: "qpdf --check, pdfinfo, and pdftotext passed; wrong-password and malformed-input checks failed as expected",

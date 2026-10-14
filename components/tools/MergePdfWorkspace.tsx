@@ -18,7 +18,7 @@ import LazyPdfThumbnail from "@/components/pdf/LazyPdfThumbnail";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
-import { hasCloudTransmissionOccurred } from "@/lib/security/pdfInputPreparation";
+import { capturePdfResultProvenance, hasCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 import { getInitialProcessingMode } from "@/lib/security/pdfInputPreparation";
 
 export default function MergePdfWorkspace() {
@@ -116,16 +116,18 @@ export default function MergePdfWorkspace() {
 
             try {
                 setIsMerging(true);
+                const submittedFiles = [...files];
 
                 const result = await ExecutionManager.run({
                     tool: "merge",
-                    files,
+                    files: submittedFiles,
                     mode: processingMode,
                 });
 
                 setDownloadData({
                     blob: result.blob,
-                    fileName: result.fileName || "merged-document.pdf"
+                    fileName: result.fileName || "merged-document.pdf",
+                    provenance: capturePdfResultProvenance(submittedFiles, toolId),
                 });
 
                 router.push(`/${toolId}/download`);
@@ -165,7 +167,7 @@ export default function MergePdfWorkspace() {
                         onChange={setProcessingMode}
                         toolPolicy="CLIENT_PREFERRED"
                         disabled={isMerging}
-                        cloudTransmissionOccurred={hasCloudTransmissionOccurred(files) || hasCloudTransmissionOccurred(file)}
+                        cloudSubmissionInitiated={hasCloudSubmissionInitiated(files) || hasCloudSubmissionInitiated(file)}
                     />
                 </div>
 

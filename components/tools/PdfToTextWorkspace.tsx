@@ -31,7 +31,7 @@ import {
     assertCloudProcessingAuthorized,
     authorizeCloudProcessing,
     getInitialProcessingMode,
-    hasCloudTransmissionOccurred,
+    hasCloudSubmissionInitiated,
     isCloudProcessingAuthorized,
     requiresCloudProcessingAuthorization,
 } from "@/lib/security/pdfInputPreparation";
@@ -42,7 +42,7 @@ export default function PdfToTextWorkspace() {
     const { requireAuth } = useAuth();
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
-    const cloudTransmissionOccurred = hasCloudTransmissionOccurred(file);
+    const cloudSubmissionInitiated = hasCloudSubmissionInitiated(file);
 
     const [isProcessingLocal, setIsProcessingLocal] = useState(false);
     const [localProgress, setLocalProgress] = useState(0);
@@ -428,8 +428,8 @@ export default function PdfToTextWorkspace() {
                             <div className="flex items-center gap-2 text-xs text-[color:var(--muted)] px-1">
                                 <Lock size={12} className="text-emerald-500 shrink-0" />
                                 <span>
-                                    {cloudTransmissionOccurred
-                                        ? "This input was already sent to Cloud. Changing modes cannot undo that transmission."
+                                    {cloudSubmissionInitiated
+                                        ? "A Cloud request was started for this input. File delivery may have occurred, and changing modes cannot recall the request."
                                         : processingMode === "cloud"
                                             ? "Cloud Mode: Full document and scanned pages processed via server-side OCR engine."
                                             : processingMode === "device"

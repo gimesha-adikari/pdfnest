@@ -1,4 +1,5 @@
 import { getBaseUrl } from "@/lib/api";
+import { markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 
 export type OcrTextV2State =
     | "IDLE"
@@ -208,6 +209,7 @@ export async function createOcrTextV2Job(
     if (language !== "auto") for (const code of language.split("+")) form.append("languages", code);
     form.append("routing_policy", routingPolicy);
 
+    markCloudSubmissionInitiated([file]);
     return requestJson<OcrTextV2JobStatus>("/api/v2/ocr/text/jobs", {
         method: "POST",
         headers: {

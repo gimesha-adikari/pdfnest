@@ -13,7 +13,7 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
-import { getInitialProcessingMode, hasCloudTransmissionOccurred } from "@/lib/security/pdfInputPreparation";
+import { getInitialProcessingMode, hasCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 import PasswordField from "@/components/ui/PasswordField";
 
 function formatMB(bytes: number) {
@@ -24,7 +24,7 @@ export default function UnlockPdfWorkspace() {
     const { requireAuth } = useAuth();
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
-    const cloudTransmissionOccurred = hasCloudTransmissionOccurred(file);
+    const cloudSubmissionInitiated = hasCloudSubmissionInitiated(file);
 
     const [password, setPassword] = useState("");
     const [isProcessing, setIsProcessing] = useState(false);
@@ -143,8 +143,8 @@ export default function UnlockPdfWorkspace() {
                             <span>
                                 {processingMode === "cloud"
                                     ? "Cloud Mode: File and password are processed securely on high-performance cloud servers."
-                                    : cloudTransmissionOccurred
-                                        ? "This input was already sent to Cloud. Changing modes cannot undo that transmission."
+                                    : cloudSubmissionInitiated
+                                        ? "A Cloud request was started for this input. File delivery may have occurred, and changing modes cannot recall the request."
                                         : processingMode === "device"
                                             ? "Device mode runs this operation in your browser when the local engine supports it."
                                             : "Auto uses the local engine when eligible and may use Cloud processing when needed."}

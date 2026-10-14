@@ -6,14 +6,14 @@ import { ProcessingMode, ToolPolicy } from "@/lib/execution/types";
 import { useBackendHealth } from "@/context/BackendHealthContext";
 import {useAuth} from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
-import { hasCloudTransmissionOccurred } from "@/lib/security/pdfInputPreparation";
+import { hasCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 
 interface ProcessingModeSelectorProps {
     mode: ProcessingMode;
     onChange: (mode: ProcessingMode) => void;
     toolPolicy?: ToolPolicy;
     disabled?: boolean;
-    cloudTransmissionOccurred?: boolean;
+    cloudSubmissionInitiated?: boolean;
 }
 
 export function ProcessingModeSelector({
@@ -21,22 +21,22 @@ export function ProcessingModeSelector({
     onChange,
     toolPolicy = "CLIENT_PREFERRED",
     disabled = false,
-    cloudTransmissionOccurred: cloudTransmissionProp,
+    cloudSubmissionInitiated,
 }: ProcessingModeSelectorProps) {
     const { status } = useBackendHealth();
     const {billingPolicy} = useAuth();
     const { file } = useSharedTool();
-    const cloudTransmissionOccurred = cloudTransmissionProp ?? hasCloudTransmissionOccurred(file);
-    const effectiveMode = cloudTransmissionOccurred && mode === "device" ? "cloud" : mode;
+    const submissionStarted = cloudSubmissionInitiated ?? hasCloudSubmissionInitiated(file);
+    const effectiveMode = submissionStarted && mode === "device" ? "cloud" : mode;
     const isCloudOffline = status === "offline";
     const isCloudOnly = toolPolicy === "BACKEND_ONLY" || toolPolicy === "SECURITY_CRITICAL_BACKEND";
 
     useEffect(() => {
-        if (cloudTransmissionOccurred && mode === "device") onChange("cloud");
-    }, [cloudTransmissionOccurred, mode, onChange]);
+        if (submissionStarted && mode === "device") onChange("cloud");
+    }, [submissionStarted, mode, onChange]);
 
     const requestModeChange = (nextMode: ProcessingMode) => {
-        if (nextMode === "device" && cloudTransmissionOccurred) return;
+        if (nextMode === "device" && submissionStarted) return;
         onChange(nextMode);
     };
 
@@ -93,8 +93,8 @@ export function ProcessingModeSelector({
                 <button
                     type="button"
                     aria-pressed={effectiveMode === "device"}
-                    disabled={disabled || cloudTransmissionOccurred}
-                    title={cloudTransmissionOccurred ? "This input was already sent to Cloud." : undefined}
+                    disabled={disabled || submissionStarted}
+                    title={submissionStarted ? "A Cloud request was started for this input; bytes may have been sent." : undefined}
                     onClick={() => requestModeChange("device")}
                     className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold transition ${
                         effectiveMode === "device"
@@ -122,9 +122,9 @@ export function ProcessingModeSelector({
                 </button>
             </div>
 
-            {cloudTransmissionOccurred && (
+            {submissionStarted && (
                 <p role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">
-                    This input was already sent to Platen Cloud. Device-only mode is unavailable, and changing the processing mode cannot undo that transmission.
+                    A Cloud request was started for this input. File delivery may have occurred; Device-only mode is unavailable, and changing the mode cannot recall a request.
                 </p>
             )}
 
@@ -135,14 +135,14 @@ export function ProcessingModeSelector({
                         <span>Cloud processing is currently unavailable.</span>
                     </div>
                     <p className="text-[11px] text-amber-800/90 dark:text-amber-300/80">
-                        {cloudTransmissionOccurred
-                            ? "The backend service is offline or unreachable. This input was already sent to Cloud, so Device mode remains unavailable. You can switch to Auto or cancel."
+                        {submissionStarted
+                            ? "The backend service is offline or unreachable. A Cloud request was started for this input and may have sent data, so Device mode remains unavailable. You can switch to Auto or cancel."
                             : "The backend service is offline or unreachable. Switch to Auto or Device mode to process locally in your browser."}
                     </p>
                     <div className="flex gap-2 pt-1">
                         <button
                             type="button"
-                            disabled={cloudTransmissionOccurred || disabled}
+                            disabled={submissionStarted || disabled}
                             onClick={() => requestModeChange("device")}
                             className="px-2.5 py-1 rounded bg-amber-500 text-white font-semibold text-[11px] hover:brightness-105 transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                         >

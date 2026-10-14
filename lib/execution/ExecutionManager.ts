@@ -12,7 +12,10 @@ import {
     ExecutionResult,
     ToolPolicy,
 } from "./types";
-import { hasCloudTransmissionOccurred, markCloudTransmissionOccurred } from "@/lib/security/pdfInputPreparation";
+import {
+    hasCloudSubmissionInitiated,
+    setPdfInputProcessingMode,
+} from "@/lib/security/pdfInputPreparation";
 
 export class ExecutionManager {
     static async run(options: ExecutionOptions): Promise<ExecutionResult> {
@@ -56,6 +59,8 @@ export class ExecutionManager {
             throw new ExecutionError("USER_CANCELLATION", "Execution was cancelled by the user.");
         }
 
+        setPdfInputProcessingMode(files, mode);
+
         const primaryFile = files[0];
         const outputFileName = buildOutputFileName(tool, primaryFile.name);
         const policy: ToolPolicy = getToolPolicy(tool);
@@ -64,13 +69,13 @@ export class ExecutionManager {
         const clientSupported = ClientExecutor.isSupported(tool);
         const flagEnabled = isClientExecutionEnabled(tool);
         const clientEligible = clientSupported && flagEnabled;
-        const cloudTransmissionOccurred = hasCloudTransmissionOccurred(files);
+        const cloudSubmissionInitiated = hasCloudSubmissionInitiated(files);
 
         // Device mode is a strict venue choice: fail closed before any cloud call.
-        if (mode === "device" && (!clientEligible || cloudTransmissionOccurred)) {
-            const featureFlagDisabled = !cloudTransmissionOccurred && clientSupported && !flagEnabled;
-            const message = cloudTransmissionOccurred
-                ? "This input was already sent to Cloud. Device-only processing is unavailable for this source."
+        if (mode === "device" && (!clientEligible || cloudSubmissionInitiated)) {
+            const featureFlagDisabled = !cloudSubmissionInitiated && clientSupported && !flagEnabled;
+            const message = cloudSubmissionInitiated
+                ? "A Cloud request was started for this input. File delivery may have occurred, so Device-only processing is unavailable for this source."
                 : !clientSupported
                     ? `Tool '${tool}' is not supported for Device processing.`
                     : `Device processing for '${tool}' is disabled by its client execution feature flag.`;
@@ -97,7 +102,6 @@ export class ExecutionManager {
             const isFlagDisabled = clientSupported && !flagEnabled;
             const isAutoFallback = mode === "auto" && isFlagDisabled;
             try {
-                markCloudTransmissionOccurred(files);
                 const blob = await CloudExecutor.execute(options);
                 const durationMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - startTime;
                 telemetry.record({
@@ -309,7 +313,6 @@ export class ExecutionManager {
 
                 console.warn("[ExecutionManager] Client execution failed in Auto mode. Triggering Cloud fallback:", err);
                 try {
-                    markCloudTransmissionOccurred(files);
                     const blob = await CloudExecutor.execute(options);
                     const durationMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - startTime;
                     telemetry.record({
@@ -368,7 +371,6 @@ export class ExecutionManager {
 
         // Safety gate rejected local execution -> Route to Cloud
         try {
-            markCloudTransmissionOccurred(files);
             const blob = await CloudExecutor.execute(options);
             const durationMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - startTime;
             telemetry.record({

@@ -1,5 +1,6 @@
 import axios from "axios";
 import { backendHealth } from "@/lib/health/backendHealth";
+import { markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 
 export interface BackendError {
     code: string;
@@ -297,7 +298,17 @@ export async function uploadAndDownloadFile(
     let responseBlob: Blob;
     let contentType = "";
 
+    const submittedFiles: File[] = [];
+    if (typeof File !== "undefined") {
+        formData.forEach((value) => {
+            if (value instanceof File) submittedFiles.push(value);
+        });
+    }
+
     try {
+        // The request is now locally validated and is about to leave this browser.
+        // Keep this marker if the request later fails or is cancelled.
+        markCloudSubmissionInitiated(submittedFiles);
         const response = await axios.post(targetUrl, formData, {
             responseType: "blob",
             withCredentials: true,

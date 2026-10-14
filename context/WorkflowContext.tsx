@@ -8,6 +8,7 @@ import React, {
     useSyncExternalStore,
     type ReactNode,
 } from "react";
+import type { PdfResultProvenance } from "@/lib/security/pdfInputPreparation";
 
 export type WorkflowTransfer = {
     blob: Blob;
@@ -16,10 +17,7 @@ export type WorkflowTransfer = {
     sourceToolHref: string;
     targetToolHref: string;
     createdAt: number;
-    provenance: {
-        derivedFromProtectedInput: boolean;
-        cloudTransmissionOccurred: boolean;
-    };
+    provenance: PdfResultProvenance;
 };
 
 type WorkflowTransferInput = Omit<WorkflowTransfer, "createdAt">;

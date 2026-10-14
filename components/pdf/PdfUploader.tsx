@@ -6,7 +6,7 @@ import { uploadAndDownloadFile } from "@/lib/api";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ExecutionError, type ProcessingMode } from "@/lib/execution/types";
 import {
-    hasCloudTransmissionOccurred,
+    hasCloudSubmissionInitiated,
     getPdfInputPreparation,
     markPdfInputPreparation,
     orderPreparedPdfInputs,
@@ -95,7 +95,7 @@ interface UploadQueue {
     originalFiles: File[];
     preparedByOriginal: Map<File, File>;
     processingMode: ProcessingMode;
-    cloudTransmissionOccurred: boolean;
+    cloudSubmissionInitiated: boolean;
 }
 
 export default function PdfUploader({
@@ -151,7 +151,7 @@ export default function PdfUploader({
                         bytesState: "unchecked",
                         preparedOn: "none",
                         processingMode: selectedMode,
-                        cloudTransmissionOccurred: previous?.cloudTransmissionOccurred ?? false,
+                        cloudSubmissionInitiated: previous?.cloudSubmissionInitiated ?? false,
                         derivedFromProtectedInput: previous?.derivedFromProtectedInput,
                         transferredFromTool: previous?.transferredFromTool,
                     });
@@ -201,16 +201,16 @@ export default function PdfUploader({
         if (operationId !== operationIdRef.current) return;
 
         if (protectedFiles.length > 0) {
-            const cloudTransmissionOccurred = hasCloudTransmissionOccurred(files);
+            const cloudSubmissionInitiated = hasCloudSubmissionInitiated(files);
             if (protectedFileHandling !== "choose-mode" && protectedFileHandling !== "current-mode") {
                 setQueue({
                     remaining: protectedFiles,
                     originalFiles: files,
                     preparedByOriginal: new Map(plain.map((file) => [file, file])),
-                    processingMode: cloudTransmissionOccurred
+                    processingMode: cloudSubmissionInitiated
                         ? "cloud"
                         : protectedFileHandling === "cloud-only" ? "device" : selectedMode,
-                    cloudTransmissionOccurred,
+                    cloudSubmissionInitiated,
                 });
                 return;
             }
@@ -219,10 +219,10 @@ export default function PdfUploader({
                 remaining: protectedFiles,
                 originalFiles: files,
                 preparedByOriginal: new Map(plain.map((file) => [file, file])),
-                processingMode: cloudTransmissionOccurred
+                processingMode: cloudSubmissionInitiated
                     ? "cloud"
                     : protectedFileHandling === "choose-mode" ? "auto" : selectedMode,
-                cloudTransmissionOccurred,
+                cloudSubmissionInitiated,
             });
             return;
         }
@@ -234,9 +234,9 @@ export default function PdfUploader({
                 bytesState: "plain",
                 preparedOn: "none",
                 processingMode: selectedMode,
-                cloudTransmissionOccurred: previous?.cloudTransmissionOccurred ?? false,
+                cloudSubmissionInitiated: previous?.cloudSubmissionInitiated ?? false,
                 derivedFromProtectedInput: previous?.derivedFromProtectedInput,
-                transferredFromTool: false,
+                transferredFromTool: previous?.transferredFromTool,
             });
         });
         await onFilesAccepted(accepted, { processingMode: selectedMode });
@@ -282,9 +282,9 @@ export default function PdfUploader({
             return markPdfInputPreparation(file, {
                 sourceProtected: previous?.sourceProtected ?? "unchecked",
                 bytesState: previous?.bytesState ?? "unchecked",
-                preparedOn: "cloud",
+                preparedOn: "none",
                 processingMode: "cloud",
-                cloudTransmissionOccurred: true,
+                cloudSubmissionInitiated: previous?.cloudSubmissionInitiated ?? false,
                 derivedFromProtectedInput: previous?.derivedFromProtectedInput,
                 transferredFromTool: previous?.transferredFromTool,
             });
@@ -330,22 +330,12 @@ export default function PdfUploader({
         try {
             let preparedBlob: Blob;
             let preparedOn: "device" | "cloud";
-            let currentFileCloudTransmissionOccurred = Boolean(
-                getPdfInputPreparation(currentLockedFile)?.cloudTransmissionOccurred
+            let currentFileCloudSubmissionInitiated = Boolean(
+                getPdfInputPreparation(currentLockedFile)?.cloudSubmissionInitiated
             );
-            const queueCloudTransmissionOccurred = queue.cloudTransmissionOccurred;
+            const queueCloudSubmissionInitiated = queue.cloudSubmissionInitiated;
 
             if (mode === "cloud") {
-                currentFileCloudTransmissionOccurred = true;
-                markPdfInputPreparation(currentLockedFile, {
-                    sourceProtected: true,
-                    bytesState: "encrypted",
-                    preparedOn: "cloud",
-                    processingMode: mode,
-                    cloudTransmissionOccurred: true,
-                });
-                setQueue({ ...queue, cloudTransmissionOccurred: true });
-
                 const formData = new FormData();
                 formData.append("file", currentLockedFile);
                 formData.append("password", password);
@@ -355,6 +345,7 @@ export default function PdfUploader({
                     undefined,
                     controller.signal
                 );
+                currentFileCloudSubmissionInitiated = hasCloudSubmissionInitiated(currentLockedFile);
                 preparedOn = "cloud";
             } else {
                 const result = await ExecutionManager.run({
@@ -392,7 +383,7 @@ export default function PdfUploader({
                 bytesState: "decrypted",
                 preparedOn,
                 processingMode: mode,
-                cloudTransmissionOccurred: currentFileCloudTransmissionOccurred,
+                cloudSubmissionInitiated: currentFileCloudSubmissionInitiated,
                 derivedFromProtectedInput: sourcePreparation?.derivedFromProtectedInput,
                 transferredFromTool: sourcePreparation?.transferredFromTool,
             });
@@ -414,7 +405,7 @@ export default function PdfUploader({
                             bytesState: "plain",
                             preparedOn: "none",
                             processingMode: acceptedMode,
-                            cloudTransmissionOccurred: false,
+                            cloudSubmissionInitiated: false,
                         });
                 });
                 await onFilesAccepted(accepted, { processingMode: acceptedMode });
@@ -426,17 +417,28 @@ export default function PdfUploader({
                     ...queue,
                     remaining: nextRemaining,
                     preparedByOriginal: nextPreparedByOriginal,
-                    cloudTransmissionOccurred:
-                        queueCloudTransmissionOccurred || currentFileCloudTransmissionOccurred,
+                    cloudSubmissionInitiated: queueCloudSubmissionInitiated || currentFileCloudSubmissionInitiated,
                 });
             }
         } catch (cause: unknown) {
             if (operationId !== operationIdRef.current || controller.signal.aborted) return;
             const code = errorCode(cause);
             if (code === "USER_CANCELLATION" || (cause instanceof Error && cause.name === "AbortError")) {
-                setError("Preparation was cancelled. Any bytes or password already sent to Cloud cannot be recalled.");
+                setError(hasCloudSubmissionInitiated(currentLockedFile)
+                    ? "Preparation was cancelled after a Cloud request started. The request may have sent the file or password, and any transfer cannot be recalled."
+                    : "Preparation was cancelled before a Cloud request started. No file or password was sent to Cloud.");
             } else if (mode === "cloud") {
-                setError("Cloud could not unlock this file. Check the password or cancel and select a fresh source for a local attempt. This request may already have transmitted the file and password.");
+                const cloudRequestStarted = hasCloudSubmissionInitiated(currentLockedFile);
+                setError(cloudRequestStarted
+                    ? "Cloud could not unlock this file. Check the password or cancel and select a fresh source for a local attempt. The request may already have sent the file and password."
+                    : "Cloud could not start this unlock request because local validation failed. No file or password was sent. Check the file and try again.");
+                if (cloudRequestStarted) {
+                    setQueue((current) => current ? {
+                        ...current,
+                        processingMode: "cloud",
+                        cloudSubmissionInitiated: true,
+                    } : current);
+                }
             } else if (code === "DECRYPTION_AUTH_FAILED" || (cause instanceof ExecutionError && cause.code === "DECRYPTION_AUTH_FAILED")) {
                 setError("Incorrect password. The protected file and password were not sent to Cloud.");
             } else {
@@ -459,7 +461,7 @@ export default function PdfUploader({
     const canChooseMode = protectedFileHandling === "choose-mode";
     const cloudOnly = protectedFileHandling === "cloud-only";
     const cloudConsent = protectedFileHandling === "cloud-consent";
-    const deviceLockedOut = Boolean(queue?.cloudTransmissionOccurred);
+    const deviceLockedOut = Boolean(queue?.cloudSubmissionInitiated);
 
     if (sessionConsentFiles) {
         return (
@@ -493,7 +495,7 @@ export default function PdfUploader({
                         : cloudConsent
                             ? `“${activeLockedFile.name}” is encrypted. Some annotation modes can send the prepared PDF to Platen Cloud. Password preparation stays local; the route will ask before Cloud processing.`
                         : deviceLockedOut
-                            ? `“${activeLockedFile.name}” is encrypted and this source was already sent to Cloud. This preparation action does not undo that transmission.`
+                            ? `“${activeLockedFile.name}” is encrypted and a Cloud request was already started for this source. File delivery may have occurred, and this preparation action cannot recall the request.`
                             : `“${activeLockedFile.name}” is encrypted. Preparation stays on this device unless you explicitly authorize Cloud unlock below.`}
                 </p>
 
@@ -526,7 +528,7 @@ export default function PdfUploader({
 
                         {deviceLockedOut && (
                             <p role="status" className="text-xs text-amber-700 dark:text-amber-300">
-                                This source was already sent to Cloud. Device-only mode is unavailable for this source.
+                                A Cloud request was already started for this source. File delivery may have occurred, so Device-only mode is unavailable.
                             </p>
                         )}
 
@@ -562,16 +564,28 @@ export default function PdfUploader({
                         )}
 
                         {error && <span role="alert" className="text-[11px] text-rose-600 text-center">{error}</span>}
-                        {isPreparing && activePreparationMode === "cloud" && (
+                        {isPreparing && activePreparationMode === "cloud" && hasCloudSubmissionInitiated(queue?.remaining[0]) && (
                             <span className="text-[11px] text-amber-700 dark:text-amber-300 text-center">
-                                Cancelling stops further work, but cannot recall bytes or passwords already transmitted.
+                                A Cloud request was started. Cancelling stops follow-on work, but file delivery may have occurred and cannot be recalled.
                             </span>
                         )}
                     </div>
                 )}
 
                 <div className="flex justify-center gap-3 mt-4">
-                    <button type="button" onClick={() => cancelPreparation(isPreparing && activePreparationMode === "cloud" ? "Cancelled. Any bytes or password already sent to Cloud cannot be recalled." : undefined)} className="px-3 py-1.5 text-xs text-[var(--muted)]">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const cloudRequestStarted = isPreparing && activePreparationMode === "cloud" &&
+                                hasCloudSubmissionInitiated(queue?.remaining[0]);
+                            cancelPreparation(isPreparing
+                                ? cloudRequestStarted
+                                    ? "Cancelled after a Cloud request started. File delivery may have occurred, and any transfer cannot be recalled."
+                                    : "Preparation was cancelled before a Cloud request started. No file or password was sent."
+                                : undefined);
+                        }}
+                        className="px-3 py-1.5 text-xs text-[var(--muted)]"
+                    >
                         {isPreparing ? "Cancel preparation" : "Cancel all"}
                     </button>
                     {!failClosed && !explicitUnlock && (

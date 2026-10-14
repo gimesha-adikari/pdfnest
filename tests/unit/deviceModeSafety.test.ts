@@ -5,8 +5,8 @@ import { ExecutionManager } from "../../lib/execution/ExecutionManager";
 import { ExecutionError } from "../../lib/execution/types";
 import { telemetry } from "../../lib/execution/telemetry";
 import {
-    hasCloudTransmissionOccurred,
-    markCloudTransmissionOccurred,
+    hasCloudSubmissionInitiated,
+    markCloudSubmissionInitiated,
     markPdfInputPreparation,
 } from "../../lib/security/pdfInputPreparation";
 
@@ -97,9 +97,9 @@ async function runTests() {
             bytesState: "decrypted",
             preparedOn: "device",
             processingMode: "device",
-            cloudTransmissionOccurred: false,
+            cloudSubmissionInitiated: false,
         });
-        markCloudTransmissionOccurred([alreadyTransmitted]);
+        markCloudSubmissionInitiated([alreadyTransmitted]);
         cloudCalls = 0;
         localCalls = 0;
         telemetry.clearEvents();
@@ -173,7 +173,11 @@ async function runTests() {
         assert.equal(autoSafetyResult.executionMode, "cloud", "Auto preserves Cloud routing after a safety rejection");
         assert.equal(cloudCalls, 1, "Auto safety rejection invokes CloudExecutor once");
         assert.equal(localCalls, 0, "Auto safety rejection does not invoke ClientExecutor");
-        assert.equal(hasCloudTransmissionOccurred(oversizedFile), true, "safety-rejected input records its Cloud transmission");
+        assert.equal(
+            hasCloudSubmissionInitiated(oversizedFile),
+            false,
+            "an executor mock that returns without starting an HTTP request must not claim transmission"
+        );
 
         ClientExecutor.execute = async () => {
             localCalls += 1;

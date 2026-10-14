@@ -27,7 +27,7 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { usePreview } from "@/lib/preview/usePreview";
 import type { PreviewError } from "@/lib/preview/types";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
-import { assertCloudProcessingAuthorized } from "@/lib/security/pdfInputPreparation";
+import { assertCloudProcessingAuthorized, markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 
 interface CustomPdfFile extends File {
     originalPassword?: string;
@@ -144,6 +144,7 @@ async function submitHighlightJob(
         formData.append("file_password", filePassword.trim());
     }
 
+    markCloudSubmissionInitiated([file]);
     const response = await fetch(buildApiUrl("/api/markup/highlight"), {
         method: "POST",
         body: formData,
@@ -509,6 +510,8 @@ export default function HighlightPdfWorkspace() {
                     formData.append("file_password", maybePassword);
                 }
 
+                assertCloudProcessingAuthorized(file, toolId);
+                markCloudSubmissionInitiated([file]);
                 const response = await fetch(`${buildApiUrl("/api/structure/analyze")}`, {
                     method: "POST",
                     body: formData,

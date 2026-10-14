@@ -9,6 +9,7 @@ import {
 } from "@/lib/taskStorage";
 import { notify, notifyBackendError } from "@/lib/notify";
 import { getBaseUrl } from "@/lib/api";
+import { markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 
 export type TaskStatus =
     | "PENDING"
@@ -226,6 +227,16 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
 
         for (let attempt = 0; attempt < 5; attempt++) {
             try {
+                const submittedFiles: File[] = [];
+                if (typeof File !== "undefined") {
+                    formData.forEach((value) => {
+                        if (value instanceof File) submittedFiles.push(value);
+                    });
+                }
+                // This helper submits backend tasks directly with fetch, outside
+                // uploadAndDownloadFile. Record risk immediately before each
+                // actual POST, including retries.
+                markCloudSubmissionInitiated(submittedFiles);
                 const res = await fetch(`${getBaseApiUrl()}${endpoint}`, {
                     method: "POST",
                     headers: {
