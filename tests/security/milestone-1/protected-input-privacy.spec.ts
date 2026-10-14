@@ -1564,7 +1564,7 @@ test("restored preview authorization remains valid while its exact File is retai
         buffer: malformedPdf,
     });
     await expect(page.getByRole("alert").filter({ hasText: /Could not verify whether.*protected/i })).toBeVisible();
-    await expect(page.getByRole("complementary").getByText("plain-two-pages.pdf", { exact: true })).toBeVisible();
+    await expect(page.getByRole("complementary").getByText("plain-two-pages.pdf", { exact: true }).first()).toBeVisible();
     await expect(page.getByText(/Cloud preview for this restored Studio project requires explicit Cloud preview authorization/i)).toHaveCount(0);
     expect(apiRequests.filter((request) => request.path === "/api/conversion/preview/session")).toHaveLength(1);
 
@@ -1599,6 +1599,48 @@ test("restored preview authorization remains valid while its exact File is retai
         "/api/conversion/preview/session",
         "/api/conversion/preview/session",
     ]);
+    expectNoProductionRequests();
+});
+
+test("tool-generated Studio replacement keeps the restored source preview authorized through Undo", async ({ page }) => {
+    const rotateRequests: ApiRequest[] = [];
+    await page.route("**/api/structure/rotate", async (route) => {
+        rotateRequests.push(captureApiRequest(route.request()));
+        await route.fulfill({ status: 200, contentType: "application/pdf", body: plainPdf });
+    });
+
+    await page.goto("/studio");
+    await waitForInteractiveApp(page);
+    await page.locator('input[type="file"]').first().setInputFiles({
+        name: "tool-replacement-project.pns",
+        mimeType: "application/x-pdfnest-project",
+        buffer: plainStudioProject,
+    });
+
+    const consent = page.getByRole("dialog", { name: /Authorize Cloud preview for this restored project/i });
+    await expect(consent).toBeVisible();
+    expect(apiRequests.filter((request) => request.path === "/api/conversion/preview/session")).toHaveLength(0);
+    await consent.getByRole("button", { name: "Authorize Cloud preview" }).click();
+    await expect.poll(() => apiRequests.filter((request) => request.path === "/api/conversion/preview/session").length).toBe(1);
+
+    await page.getByRole("button", { name: "Rotate", exact: true }).click();
+    await page.getByRole("button", { name: "Rotate all 90°" }).click();
+    await page.getByRole("button", { name: "Apply rotation to current document" }).click();
+
+    await expect.poll(() => rotateRequests.length).toBe(1);
+    await expect(page.getByText("The rotated PDF replaced the current document and is now part of the Studio history.")).toBeVisible();
+    await expect(page.getByRole("complementary").getByText("rotated-document.pdf", { exact: true }).first()).toBeVisible();
+
+    await page.keyboard.press("Control+z");
+    await expect(page.getByRole("complementary").getByText("plain-two-pages.pdf", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("img", { name: "Preview page 1" })).toBeVisible();
+    await expect(page.getByText(/Cloud preview for this restored Studio project requires explicit Cloud preview authorization/i)).toHaveCount(0);
+    await expect(page.getByRole("dialog", { name: /Authorize Cloud preview/i })).toHaveCount(0);
+
+    expect(rotateRequests[0].path).toBe("/api/structure/rotate");
+    expect(rotateRequests[0].body.toString("latin1")).toContain('filename="plain-two-pages.pdf"');
+    expect(rotateRequests[0].body.indexOf(plainPdf)).toBeGreaterThanOrEqual(0);
+    expect(apiRequests.filter((request) => request.path === "/api/security/unlock")).toHaveLength(0);
     expectNoProductionRequests();
 });
 
