@@ -1,7 +1,7 @@
 import { test, expect, type BrowserContext, type Page, type Request } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -73,6 +73,8 @@ type NetworkEvidence = {
     events: RequestEvidence[];
     blockedOrigins: Set<string>;
     directWorkerRequests: number;
+    responseTasks: Promise<void>[];
+    responseErrors: string[];
 };
 
 function requestFilename(body: Buffer | undefined): string | null {
@@ -121,11 +123,22 @@ function logNetworkSummary(scenario: string, evidence: NetworkEvidence): void {
     })}`);
 }
 
+async function settleNetworkEvidence(evidence: NetworkEvidence): Promise<void> {
+    let observed = -1;
+    while (observed !== evidence.responseTasks.length) {
+        observed = evidence.responseTasks.length;
+        await Promise.all(evidence.responseTasks);
+    }
+    expect(evidence.responseErrors).toEqual([]);
+}
+
 async function installNetworkBoundary(page: Page): Promise<NetworkEvidence> {
     const evidence: NetworkEvidence = {
         events: [],
         blockedOrigins: new Set(),
         directWorkerRequests: 0,
+        responseTasks: [],
+        responseErrors: [],
     };
     const byRequest = new WeakMap<Request, RequestEvidence>();
 
@@ -161,7 +174,7 @@ async function installNetworkBoundary(page: Page): Promise<NetworkEvidence> {
     });
 
     page.on("response", (response) => {
-        void (async () => {
+        const task = (async () => {
             const event = byRequest.get(response.request());
             if (!event) return;
             const status = response.status();
@@ -178,7 +191,10 @@ async function installNetworkBoundary(page: Page): Promise<NetworkEvidence> {
                 if (contentType.startsWith("image/jpeg")) event.responseBody = await response.body();
             }
             event.status = status;
-        })();
+        })().catch((error: unknown) => {
+            evidence.responseErrors.push(error instanceof Error ? error.name : "unknown response capture error");
+        });
+        evidence.responseTasks.push(task);
     });
 
     return evidence;
@@ -272,12 +288,42 @@ async function deleteSessions(page: Page, evidence: NetworkEvidence): Promise<vo
     if (page.isClosed()) return;
     const ids = [...new Set(successfulUploads(evidence).flatMap((event) => event.sessionId ? [event.sessionId] : []))];
     if (!ids.length) return;
-    await page.evaluate(async ({ apiOrigin, sessionIds }) => {
-        await Promise.all(sessionIds.map((sessionId) => fetch(
-            `${apiOrigin}/api/conversion/preview/session/${encodeURIComponent(sessionId)}`,
-            { method: "DELETE", credentials: "include" },
-        )));
+    const deletions = await page.evaluate(async ({ apiOrigin, sessionIds }) => {
+        return Promise.all(sessionIds.map(async (sessionId) => {
+            const response = await fetch(
+                `${apiOrigin}/api/conversion/preview/session/${encodeURIComponent(sessionId)}`,
+                { method: "DELETE", credentials: "include" },
+            );
+            return { sessionId, status: response.status };
+        }));
     }, { apiOrigin: backendOrigin, sessionIds: ids });
+    for (const deletion of deletions) {
+        expect(deletion.status, "preview session DELETE must succeed for its owning guest").toBe(204);
+    }
+    await expect.poll(() => ids.every((sessionId) =>
+        !existsSync(path.join(workerSessionDirectory, sessionId))
+    )).toBe(true);
+    await settleNetworkEvidence(evidence);
+}
+
+async function sessionPageStatus(page: Page, sessionId: string): Promise<number> {
+    return page.evaluate(async ({ apiOrigin, id }) => {
+        const response = await fetch(
+            `${apiOrigin}/api/conversion/preview/session/${encodeURIComponent(id)}/page/1?scale=2`,
+            { credentials: "include" },
+        );
+        return response.status;
+    }, { apiOrigin: backendOrigin, id: sessionId });
+}
+
+async function sessionDeleteStatus(page: Page, sessionId: string): Promise<number> {
+    return page.evaluate(async ({ apiOrigin, id }) => {
+        const response = await fetch(
+            `${apiOrigin}/api/conversion/preview/session/${encodeURIComponent(id)}`,
+            { method: "DELETE", credentials: "include" },
+        );
+        return response.status;
+    }, { apiOrigin: backendOrigin, id: sessionId });
 }
 
 test.describe("REAL BACKEND + REAL PREVIEW WORKER — restored Studio preview", () => {
@@ -444,10 +490,124 @@ test.describe("REAL BACKEND + REAL PREVIEW WORKER — restored Studio preview", 
             expect(unrelatedProcessingPosts(evidence)).toEqual([]);
             assertIsolatedBrowserRequests(evidence);
         } finally {
+            if (outsiderEvidence) await settleNetworkEvidence(outsiderEvidence);
             await outsiderContext?.close();
             await deleteSessions(page, evidence);
             logNetworkSummary("fresh project consent and owner-isolated session", evidence);
             if (outsiderEvidence) logNetworkSummary("cross-identity page request", outsiderEvidence);
+        }
+    });
+
+    test("identical PDFs from separate guests keep independent sessions and deletion", async ({ page, browser }) => {
+        const evidenceA = await openStudio(page);
+        let guestBContext: BrowserContext | undefined;
+        let pageB: Page | undefined;
+        let evidenceB: NetworkEvidence | undefined;
+        try {
+            await page.locator('input[type="file"]').first().setInputFiles({
+                name: "guest-a-preview.pdf",
+                mimeType: "application/pdf",
+                buffer: plainPdf,
+            });
+            await waitForUploadCount(page, evidenceA, 1);
+            const sessionA = assertUploadedPdf(successfulUploads(evidenceA)[0], "guest-a-preview.pdf", plainPdf);
+            assertWorkerReceived(sessionA, plainPdf);
+            await assertRenderedJpeg(evidenceA, sessionA, 5);
+
+            await page.getByRole("complementary").locator('input[type="file"]').first().setInputFiles({
+                name: "guest-a-same-content-again.pdf",
+                mimeType: "application/pdf",
+                buffer: plainPdf,
+            });
+            await waitForUploadCount(page, evidenceA, 2);
+            const sameIdentitySession = assertUploadedPdf(successfulUploads(evidenceA)[1], "guest-a-same-content-again.pdf", plainPdf);
+
+            guestBContext = await browser.newContext({ serviceWorkers: "block" });
+            pageB = await guestBContext.newPage();
+            evidenceB = await openStudio(pageB);
+            await pageB.locator('input[type="file"]').first().setInputFiles({
+                name: "guest-b-preview.pdf",
+                mimeType: "application/pdf",
+                buffer: plainPdf,
+            });
+            await waitForUploadCount(pageB, evidenceB, 1);
+            const sessionB = assertUploadedPdf(successfulUploads(evidenceB)[0], "guest-b-preview.pdf", plainPdf);
+            assertWorkerReceived(sessionB, plainPdf);
+            await assertRenderedJpeg(evidenceB, sessionB, 6);
+
+            const aOwnAfterB = await sessionPageStatus(page, sessionA);
+            const bOwnAfterA = await sessionPageStatus(pageB, sessionB);
+            const aCrossPage = await sessionPageStatus(page, sessionB);
+            const bCrossPage = await sessionPageStatus(pageB, sessionA);
+            const aCrossDelete = await sessionDeleteStatus(page, sessionB);
+            const bCrossDelete = await sessionDeleteStatus(pageB, sessionA);
+            const deleteA = await sessionDeleteStatus(page, sessionA);
+            const bAfterDeleteA = await sessionPageStatus(pageB, sessionB);
+            const deleteB = await sessionDeleteStatus(pageB, sessionB);
+
+            await page.locator('input[type="file"]').first().setInputFiles({
+                name: "guest-a-preview-after-delete.pdf",
+                mimeType: "application/pdf",
+                buffer: plainPdf,
+            });
+            await waitForUploadCount(page, evidenceA, 3);
+            const sessionA2 = assertUploadedPdf(successfulUploads(evidenceA)[2], "guest-a-preview-after-delete.pdf", plainPdf);
+            assertWorkerReceived(sessionA2, plainPdf);
+
+            await pageB.getByRole("complementary").locator('input[type="file"]').first().setInputFiles({
+                name: "guest-b-preview-after-delete.pdf",
+                mimeType: "application/pdf",
+                buffer: plainPdf,
+            });
+            await waitForUploadCount(pageB, evidenceB, 2);
+            const sessionB2 = assertUploadedPdf(successfulUploads(evidenceB)[1], "guest-b-preview-after-delete.pdf", plainPdf);
+            assertWorkerReceived(sessionB2, plainPdf);
+
+            const deleteB2 = await sessionDeleteStatus(pageB, sessionB2);
+            const aAfterDeleteB = await sessionPageStatus(page, sessionA2);
+            const deleteA2 = await sessionDeleteStatus(page, sessionA2);
+
+            console.info(`[M1-S1-04R] ${JSON.stringify({
+                scenario: "two guest identities upload identical PDF bytes",
+                sessionIdsDistinct: sessionA !== sessionB,
+                sameIdentitySessionReused: sessionA === sameIdentitySession,
+                statuses: {
+                    aOwnAfterB, bOwnAfterA, aCrossPage, bCrossPage,
+                    aCrossDelete, bCrossDelete, deleteA, bAfterDeleteA,
+                    deleteB, deleteB2, aAfterDeleteB, deleteA2,
+                },
+                workerStorageCleaned: [sessionA, sessionB, sessionA2, sessionB2].map((id) => !existsSync(path.join(workerSessionDirectory, id))),
+            })}`);
+
+            expect(sessionA).not.toBe(sessionB);
+            expect(sameIdentitySession).toBe(sessionA);
+            expect(aOwnAfterB).toBe(200);
+            expect(bOwnAfterA).toBe(200);
+            expect(aCrossPage).toBe(403);
+            expect(bCrossPage).toBe(403);
+            expect(aCrossDelete).toBe(403);
+            expect(bCrossDelete).toBe(403);
+            expect(deleteA).toBe(204);
+            expect(bAfterDeleteA).toBe(200);
+            expect(deleteB).toBe(204);
+            expect(deleteB2).toBe(204);
+            expect(aAfterDeleteB).toBe(200);
+            expect(deleteA2).toBe(204);
+            for (const sessionId of [sessionA, sessionB, sessionA2, sessionB2]) {
+                expect(existsSync(path.join(workerSessionDirectory, sessionId))).toBe(false);
+            }
+            expect(unrelatedProcessingPosts(evidenceA)).toEqual([]);
+            expect(unrelatedProcessingPosts(evidenceB!)).toEqual([]);
+            assertIsolatedBrowserRequests(evidenceA);
+            assertIsolatedBrowserRequests(evidenceB!);
+        } finally {
+            await Promise.all([
+                deleteSessions(page, evidenceA),
+                pageB && evidenceB ? deleteSessions(pageB, evidenceB) : Promise.resolve(),
+            ]);
+            await guestBContext?.close();
+            logNetworkSummary("guest A identical-content session and ownership requests", evidenceA);
+            if (evidenceB) logNetworkSummary("guest B identical-content session and ownership requests", evidenceB);
         }
     });
 
