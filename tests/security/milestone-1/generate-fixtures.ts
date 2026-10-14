@@ -62,6 +62,19 @@ async function createPlainPdf(filePath: string): Promise<void> {
     writeFileSync(filePath, await pdf.save({ useObjectStreams: false, addDefaultPage: false }));
 }
 
+async function createDistinctPlainPdf(filePath: string, marker: string): Promise<void> {
+    const pdf = await PDFDocument.create();
+    pdf.setTitle("Platen Milestone 1 distinct preview fixture");
+    pdf.setAuthor("Platen PDF security regression scaffold");
+    pdf.setCreator("tests/security/milestone-1/generate-fixtures.ts");
+    pdf.setCreationDate(FIXED_DATE);
+    pdf.setModificationDate(FIXED_DATE);
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    const page = pdf.addPage([612, 792]);
+    page.drawText(marker, { x: 54, y: 720, size: 14, font });
+    writeFileSync(filePath, await pdf.save({ useObjectStreams: false, addDefaultPage: false }));
+}
+
 async function createScannedPdf(filePath: string): Promise<void> {
     const pdf = await PDFDocument.create();
     pdf.setTitle("Platen Milestone 1 synthetic scanned fixture");
@@ -97,14 +110,23 @@ function encryptPdf(
     ]);
 }
 
-function verifyPdf(filePath: string, expectedPassword: string | undefined, markers: string[]): void {
+function verifyPdf(
+    filePath: string,
+    expectedPassword: string | undefined,
+    markers: string[],
+    expectedPageCount = 2,
+): void {
     const passwordArgs = expectedPassword ? [`--password=${expectedPassword}`] : [];
     run("qpdf", [...passwordArgs, "--check", filePath]);
 
     const pdfInfo = expectedPassword
         ? run("pdfinfo", ["-upw", expectedPassword, filePath])
         : run("pdfinfo", [filePath]);
-    assert.match(pdfInfo, /^Pages:\s+2\s*$/m, `${path.basename(filePath)} must contain two pages`);
+    assert.match(
+        pdfInfo,
+        new RegExp(`^Pages:\\s+${expectedPageCount}\\s*$`, "m"),
+        `${path.basename(filePath)} must contain ${expectedPageCount} page(s)`,
+    );
 
     const extractedText = expectedPassword
         ? run("pdftotext", ["-upw", expectedPassword, filePath, "-"])
@@ -119,9 +141,14 @@ async function createStudioProject(
     currentPdfPath: string,
     historyPdfPaths: string[],
     futurePdfPaths: string[] = [],
+    options: { manifestPageCount?: number; currentPageIndex?: number } = {},
 ): Promise<void> {
     const archive: Record<string, Uint8Array> = {};
-    const page = { id: "synthetic-studio-page-1", pageNumber: 1 };
+    const manifestPageCount = options.manifestPageCount ?? 1;
+    const pages = Array.from({ length: manifestPageCount }, (_, index) => ({
+        id: `synthetic-studio-page-${index + 1}`,
+        pageNumber: index + 1,
+    }));
     archive["manifest.json"] = strToU8(JSON.stringify({
         version: 1,
         savedAt: FIXED_DATE.getTime(),
@@ -129,20 +156,20 @@ async function createStudioProject(
         zoom: 1,
         current: {
             fileName: path.basename(currentPdfPath),
-            currentPageIndex: 0,
-            pages: [page],
+            currentPageIndex: options.currentPageIndex ?? 0,
+            pages,
             fingerprint: "synthetic-current-snapshot",
         },
         past: historyPdfPaths.map((historyPath, index) => ({
             fileName: path.basename(historyPath),
             currentPageIndex: 0,
-            pages: [page],
+            pages,
             fingerprint: `synthetic-past-snapshot-${index + 1}`,
         })),
         future: futurePdfPaths.map((futurePath, index) => ({
             fileName: path.basename(futurePath),
             currentPageIndex: 0,
-            pages: [page],
+            pages,
             fingerprint: `synthetic-future-snapshot-${index + 1}`,
         })),
     }));
@@ -175,6 +202,9 @@ async function main(): Promise<void> {
     const malformed = path.join(directory, "malformed.pdf");
     const scanned = path.join(directory, "scanned-image-only.pdf");
     const protectedScanned = path.join(directory, "protected-scanned.pdf");
+    const distinctPlain = path.join(directory, "plain-preview-future.pdf");
+    const legacyStudioPreviewHistoryProject = path.join(directory, "legacy-studio-preview-history.pns");
+    const legacyStudioPreviewInvalidPageProject = path.join(directory, "legacy-studio-preview-invalid-page.pns");
     const legacyStudioProtectedProject = path.join(directory, "legacy-studio-protected.pns");
     const legacyStudioProtectedHistoryProject = path.join(directory, "legacy-studio-protected-history.pns");
     const legacyStudioProtectedFutureProject = path.join(directory, "legacy-studio-protected-future.pns");
@@ -182,6 +212,7 @@ async function main(): Promise<void> {
     const legacyStudioAlternatePlainProject = path.join(directory, "legacy-studio-alternate-plain.pns");
 
     await createPlainPdf(plain);
+    await createDistinctPlainPdf(distinctPlain, "PLATEN_M1_SYNTHETIC_PREVIEW_FUTURE");
     await createScannedPdf(scanned);
     encryptPdf(plain, protectedAlpha, PASSWORD_ALPHA, OWNER_ALPHA);
     encryptPdf(plain, protectedBeta, PASSWORD_BETA, OWNER_BETA);
@@ -193,8 +224,19 @@ async function main(): Promise<void> {
     await createStudioProject(legacyStudioProtectedFutureProject, plain, [], [protectedAlpha]);
     await createStudioProject(legacyStudioPlainProject, plain, [plain], [plain]);
     await createStudioProject(legacyStudioAlternatePlainProject, scanned, [], []);
+    await createStudioProject(legacyStudioPreviewHistoryProject, plain, [scanned], [distinctPlain]);
+    // Deliberately inconsistent page metadata exercises a safe real-worker
+    // rejection after session creation; the PDF bytes themselves remain valid.
+    await createStudioProject(
+        legacyStudioPreviewInvalidPageProject,
+        plain,
+        [],
+        [],
+        { manifestPageCount: 3, currentPageIndex: 2 },
+    );
 
     verifyPdf(plain, undefined, [ALPHA_MARKER, BETA_MARKER]);
+    verifyPdf(distinctPlain, undefined, ["PLATEN_M1_SYNTHETIC_PREVIEW_FUTURE"], 1);
     verifyPdf(protectedAlpha, PASSWORD_ALPHA, [ALPHA_MARKER, BETA_MARKER]);
     verifyPdf(protectedBeta, PASSWORD_BETA, [ALPHA_MARKER, BETA_MARKER]);
     verifyPdf(protectedLockOutput, PASSWORD_ALPHA, [ALPHA_MARKER, BETA_MARKER]);
@@ -226,7 +268,7 @@ async function main(): Promise<void> {
     }
 
     const qpdfVersion = run("qpdf", ["--version"]).trim().split("\n")[0];
-    const fixtures = [plain, protectedAlpha, protectedBeta, protectedLockOutput, scanned, protectedScanned, malformed, legacyStudioProtectedProject, legacyStudioProtectedHistoryProject, legacyStudioProtectedFutureProject, legacyStudioPlainProject, legacyStudioAlternatePlainProject].map((filePath) => ({
+    const fixtures = [plain, distinctPlain, protectedAlpha, protectedBeta, protectedLockOutput, scanned, protectedScanned, malformed, legacyStudioProtectedProject, legacyStudioProtectedHistoryProject, legacyStudioProtectedFutureProject, legacyStudioPlainProject, legacyStudioAlternatePlainProject, legacyStudioPreviewHistoryProject, legacyStudioPreviewInvalidPageProject].map((filePath) => ({
         file: path.basename(filePath),
         bytes: readFileSync(filePath).byteLength,
         sha256: sha256(filePath),
