@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { RotateCw, ShieldCheck, Loader2, FileText } from "lucide-react";
 import { getFriendlyErrorMessage, handleClientError } from "@/lib/errorHandler";
@@ -23,6 +23,14 @@ function formatMB(bytes: number) {
     return (bytes / 1024 / 1024).toFixed(2);
 }
 
+type RotateOperation = {
+    id: number;
+    file: File;
+    mode: ProcessingMode;
+    rotations: Record<number, number>;
+    controller: AbortController;
+};
+
 export default function RotatePdfWorkspace() {
     const { requireAuth } = useAuth();
     const router = useRouter();
@@ -36,6 +44,51 @@ export default function RotatePdfWorkspace() {
     const [isReadingTotal, setIsReadingTotal] = useState(false);
     const [success, setSuccess] = useState(false);
     const [lastExecutionVenue, setLastExecutionVenue] = useState<"client" | "cloud" | null>(null);
+
+    const currentFileRef = useRef(file);
+    const currentModeRef = useRef(processingMode);
+    const currentRotationsRef = useRef(pageRotations);
+    const operationGenerationRef = useRef(0);
+    const activeOperationRef = useRef<RotateOperation | null>(null);
+
+    const cancelActiveOperation = (publishState = true) => {
+        const operation = activeOperationRef.current;
+        if (!operation) return;
+
+        activeOperationRef.current = null;
+        operationGenerationRef.current += 1;
+        operation.controller.abort();
+        if (publishState) {
+            setIsProcessing(false);
+            setSuccess(false);
+        }
+    };
+
+    const isCurrentOperation = (operation: RotateOperation) =>
+        activeOperationRef.current === operation &&
+        operationGenerationRef.current === operation.id &&
+        currentFileRef.current === operation.file &&
+        currentModeRef.current === operation.mode &&
+        currentRotationsRef.current === operation.rotations &&
+        !operation.controller.signal.aborted;
+
+    useLayoutEffect(() => {
+        currentFileRef.current = file;
+        currentModeRef.current = processingMode;
+        currentRotationsRef.current = pageRotations;
+
+        const operation = activeOperationRef.current;
+        if (
+            operation &&
+            (operation.file !== file || operation.mode !== processingMode || operation.rotations !== pageRotations)
+        ) {
+            cancelActiveOperation();
+        }
+    }, [file, processingMode, pageRotations]);
+
+    useEffect(() => () => {
+        cancelActiveOperation(false);
+    }, []);
 
     useEffect(() => {
         if (!file) {
@@ -105,16 +158,27 @@ export default function RotatePdfWorkspace() {
         setPageRotations({});
     };
 
-    const handleRotateProcessing = async () => {
+    const handleRotateProcessing = () => {
+        if (!file || activeOperationRef.current) return;
+
+        const operation: RotateOperation = {
+            id: operationGenerationRef.current + 1,
+            file,
+            mode: processingMode,
+            rotations: pageRotations,
+            controller: new AbortController(),
+        };
+        operationGenerationRef.current = operation.id;
+        activeOperationRef.current = operation;
+
         requireAuth(async () => {
-            if (!file) return;
+            if (!isCurrentOperation(operation)) return;
+            setIsProcessing(true);
+            setSuccess(false);
 
             try {
-                setIsProcessing(true);
-                setSuccess(false);
-
                 const groupedRotations: Record<string, number> = {};
-                Object.entries(pageRotations).forEach(([pageStr, degrees]) => {
+                Object.entries(operation.rotations).forEach(([pageStr, degrees]) => {
                     if (degrees > 0) {
                         if (!groupedRotations[pageStr]) {
                             groupedRotations[pageStr] = degrees;
@@ -124,12 +188,14 @@ export default function RotatePdfWorkspace() {
 
                 const result = await ExecutionManager.run({
                     tool: "rotate",
-                    files: [file],
+                    files: [operation.file],
                     params: { rotations: groupedRotations },
-                    mode: processingMode,
-                    password: (file as any).originalPassword,
+                    mode: operation.mode,
+                    password: (operation.file as any).originalPassword,
+                    signal: operation.controller.signal,
                 });
 
+                if (!isCurrentOperation(operation)) return;
                 setLastExecutionVenue(result.executionMode);
                 setDownloadData({
                     blob: result.blob,
@@ -140,10 +206,14 @@ export default function RotatePdfWorkspace() {
                 setPageRotations({});
                 router.push(`/${toolId}/download`);
             } catch (err) {
+                if (!isCurrentOperation(operation)) return;
                 console.error(err);
                 handleClientError(err);
             } finally {
-                setIsProcessing(false);
+                if (activeOperationRef.current === operation) {
+                    activeOperationRef.current = null;
+                    setIsProcessing(false);
+                }
             }
         });
     };
@@ -160,6 +230,7 @@ export default function RotatePdfWorkspace() {
             <div className="mt-12 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8 shadow-lg w-full">
                 <div className="space-y-6">
                     <PdfFileInfo file={file} onClear={() => {
+                        cancelActiveOperation();
                         setFile(null);
                         router.push(`/${toolId}`);
                     }} />

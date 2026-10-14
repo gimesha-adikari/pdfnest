@@ -1286,7 +1286,10 @@ test("transferring a protected-source result to PDF Editor cannot submit before 
     await page.getByRole("button", { name: "Apply Rotation Matrices" }).click();
     await expect.poll(() => apiRequests.filter((request) => request.method === "POST" && request.path === "/api/structure/rotate").length).toBe(1);
     await expect(page).toHaveURL(/\/rotate-pdf\/download$/);
-    expect(apiRequests.find((request) => request.path === "/api/structure/rotate")!.body.toString("latin1")).toContain(`name="file_password"\r\n\r\n${alphaPassword}`);
+    const rotatePayload = apiRequests.find((request) => request.path === "/api/structure/rotate")!.body.toString("latin1");
+    expect(rotatePayload).not.toContain(alphaPassword);
+    expect(rotatePayload).not.toContain('name="password_0"');
+    expect(rotatePayload).not.toContain('name="file_password"');
 
     const editorCard = page.getByRole("heading", { name: "PDF Editor" }).locator("..");
     await editorCard.getByRole("button", { name: "Open tool" }).click();
@@ -1987,6 +1990,7 @@ test("Legacy Studio still submits plain PDFs to its existing Rotate Cloud endpoi
 
     await page.goto("/studio");
     await chooseFile(page, "plain-two-pages.pdf", plainPdf);
+    await expect(page.getByRole("complementary").getByText("plain-two-pages.pdf", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Rotate", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Rotate", exact: true }).click();
     await page.getByRole("button", { name: "Rotate all 90°" }).click();
@@ -2035,6 +2039,7 @@ test("Legacy Studio still submits plain multiple-file input to its existing Merg
 test("legacy Studio sidebar and Merge replacement uploads fail closed for protected input", async ({ page }) => {
     await page.goto("/studio");
     await chooseFile(page, "plain-two-pages.pdf", plainPdf);
+    await expect(page.getByRole("complementary").getByText("plain-two-pages.pdf", { exact: true })).toBeVisible();
     const sidebarUpload = page.getByRole("complementary").locator('input[type="file"]');
     await expect(sidebarUpload).toHaveCount(1);
     await expect.poll(() => apiRequests.filter((request) => request.path === "/api/conversion/preview/session").length).toBe(1);

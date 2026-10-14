@@ -60,19 +60,27 @@ export class CloudExecutor {
             });
         }
 
-        // 3. Preserve password propagation for per-file passwords (password_0, password_1, ...) and single file_password
-        files.forEach((f, idx) => {
-            const pwd =
-                (options.passwords && options.passwords[idx]) ||
-                (f as any).originalPassword ||
-                (idx === 0 ? options.password : undefined);
-            if (pwd) {
-                formData.append(`password_${idx}`, pwd);
-                if (idx === 0) {
-                    formData.append("file_password", pwd);
+        // Lock's requested output password is already in the endpoint parameters.
+        // Rotate accepts only the prepared PDF and rotation map. The shared
+        // API helper uses the File's transient originalPassword metadata for
+        // the separate post-processing lock request, so the source password
+        // does not need to be sent to /api/structure/rotate.
+        if (normalizedTool !== "rotate" && normalizedTool !== "lock") {
+            // Preserve password propagation for per-file passwords (password_0,
+            // password_1, ...) and the single-file file_password field.
+            files.forEach((f, idx) => {
+                const pwd =
+                    (options.passwords && options.passwords[idx]) ||
+                    (f as any).originalPassword ||
+                    (idx === 0 ? options.password : undefined);
+                if (pwd) {
+                    formData.append(`password_${idx}`, pwd);
+                    if (idx === 0) {
+                        formData.append("file_password", pwd);
+                    }
                 }
-            }
-        });
+            });
+        }
 
         // 4. Resolve backend API endpoint
         const endpoint = getEndpointForTool(tool, params);
