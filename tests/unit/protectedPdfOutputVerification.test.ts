@@ -47,6 +47,17 @@ async function main(): Promise<void> {
         "a parser-openable document must not be accepted as protected",
     );
 
+    await assert.rejects(
+        verifyProtectedPdfBlob(new Blob(["%PDF-1.7\nmalformed synthetic bytes"], { type: "application/pdf" }), "synthetic-password"),
+        /password protection could not be verified/i,
+        "PDF.js must reject malformed bytes rather than accepting a PDF label or header",
+    );
+    await assert.rejects(
+        verifyProtectedPdfBlob(new Blob(["not a PDF document"], { type: "application/pdf" }), "synthetic-password"),
+        /password protection could not be verified/i,
+        "PDF.js must reject non-PDF content even when it has a PDF media type",
+    );
+
     const wrongPasswordRuntime: PdfJsRuntime = {
         PasswordResponses: { NEED_PASSWORD: 1, INCORRECT_PASSWORD: 2 },
         getDocument: ({ password }) => {

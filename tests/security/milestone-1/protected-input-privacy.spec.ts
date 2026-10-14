@@ -1,5 +1,6 @@
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -360,6 +361,24 @@ function expectMultipartUnlock(request: ApiRequest, fileName: string, fileBytes:
     expect(request.body.indexOf(fileBytes)).toBeGreaterThanOrEqual(0);
 }
 
+function independentlyVerifyEncryptedPdf(filePath: string, password: string): void {
+    execFileSync("qpdf", [`--password=${password}`, "--check", filePath], { stdio: "pipe" });
+    expect(() => execFileSync("qpdf", ["--check", filePath], { stdio: "pipe" })).toThrow();
+    const details = execFileSync("pdfinfo", ["-upw", password, filePath], { encoding: "utf8" });
+    expect(details).toMatch(/^Encrypted:\s+yes\b/m);
+}
+
+async function independentlyVerifyDownload(download: import("@playwright/test").Download, password: string): Promise<void> {
+    const directory = mkdtempSync(path.join(os.tmpdir(), "platen-lock-output-"));
+    try {
+        const outputPath = path.join(directory, download.suggestedFilename());
+        await download.saveAs(outputPath);
+        independentlyVerifyEncryptedPdf(outputPath, password);
+    } finally {
+        rmSync(directory, { recursive: true, force: true });
+    }
+}
+
 function containsFilePayload(request: ApiRequest, fileName: string, fileBytes: Buffer): boolean {
     return request.body.toString("latin1").includes(`filename="${fileName}"`) ||
         request.body.indexOf(fileBytes) >= 0;
@@ -367,6 +386,199 @@ function containsFilePayload(request: ApiRequest, fileName: string, fileBytes: B
 
 test.beforeEach(async ({ context }) => {
     await installLocalNetworkBoundary(context);
+});
+
+test("explicit Cloud Lock rejects plaintext HTTP 200 before publishing a result", async ({ page }) => {
+    await page.route("**/api/security/lock", async (route) => {
+        captureApiRequest(route.request());
+        await route.fulfill({ status: 200, contentType: "application/pdf", body: plainPdf });
+    });
+
+    await page.goto("/lock-pdf");
+    await waitForInteractiveApp(page);
+    await chooseFile(page, "plain-two-pages.pdf", plainPdf);
+    await expect(page).toHaveURL(/\/lock-pdf\/workspace$/);
+
+    await page.getByRole("button", { name: "Cloud", exact: true }).click();
+    await page.getByPlaceholder("Configure strong access code strings").fill(alphaPassword);
+    await page.getByRole("button", { name: /Encrypt and Protect PDF/i }).click();
+
+    await expect(page).toHaveURL(/\/lock-pdf\/workspace$/);
+    await expect(page.getByText(/could not be confirmed; no download was created/i)).toBeVisible();
+    await expect(page.getByText("Task completed successfully!")).toHaveCount(0);
+    expect(apiRequests.filter((request) => request.method === "POST" && request.path === "/api/security/lock")).toHaveLength(1);
+    expectNoProductionRequests();
+});
+
+test("explicit Cloud Lock publishes only a valid protected PDF and does not recurse to a second Lock request", async ({ page }) => {
+    await page.route("**/api/security/lock", async (route) => {
+        captureApiRequest(route.request());
+        await route.fulfill({ status: 200, contentType: "application/pdf", body: protectedLockOutputAes128 });
+    });
+
+    await page.goto("/lock-pdf");
+    await waitForInteractiveApp(page);
+    await chooseFile(page, "plain-two-pages.pdf", plainPdf);
+    await expect(page).toHaveURL(/\/lock-pdf\/workspace$/);
+    await page.getByRole("button", { name: "Cloud", exact: true }).click();
+    await page.getByPlaceholder("Configure strong access code strings").fill(alphaPassword);
+    await page.getByRole("button", { name: /Encrypt and Protect PDF/i }).click();
+
+    await expect(page).toHaveURL(/\/lock-pdf\/download$/);
+    await expect(page.getByText("Task completed successfully!")).toBeVisible();
+    const lockRequests = apiRequests.filter((request) => request.method === "POST" && request.path === "/api/security/lock");
+    expect(lockRequests).toHaveLength(1);
+    expect(lockRequests[0].body.toString("latin1")).toContain(`name="password"\r\n\r\n${alphaPassword}`);
+
+    const downloadPromise = page.waitForEvent("download");
+    await page.getByRole("button", { name: /Download File/i }).click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe("plain-two-pages-locked.pdf");
+    await independentlyVerifyDownload(download, alphaPassword);
+    expectNoProductionRequests();
+});
+
+test("Device Lock verifies the real local pdfcpu result before publication", async ({ page }) => {
+    await page.goto("/lock-pdf");
+    await waitForInteractiveApp(page);
+    await chooseFile(page, "plain-two-pages.pdf", plainPdf);
+    await expect(page).toHaveURL(/\/lock-pdf\/workspace$/);
+    await page.getByRole("button", { name: "Device", exact: true }).click();
+    await page.getByPlaceholder("Configure strong access code strings").fill(alphaPassword);
+    await page.getByRole("button", { name: /Encrypt and Protect PDF/i }).click();
+
+    await expect(page).toHaveURL(/\/lock-pdf\/download$/);
+    await expect(page.getByText("Task completed successfully!")).toBeVisible();
+    const downloadPromise = page.waitForEvent("download");
+    await page.getByRole("button", { name: /Download File/i }).click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe("plain-two-pages-locked.pdf");
+    await independentlyVerifyDownload(download, alphaPassword);
+    expect(processingPosts()).toHaveLength(0);
+    expectNoProductionRequests();
+});
+
+test("Auto Lock accepts its verified local result without a Cloud request", async ({ page }) => {
+    await page.goto("/lock-pdf");
+    await waitForInteractiveApp(page);
+    await chooseFile(page, "plain-two-pages.pdf", plainPdf);
+    await expect(page).toHaveURL(/\/lock-pdf\/workspace$/);
+    const autoButton = page.getByRole("button", { name: "Auto", exact: true });
+    await expect(autoButton).toHaveAttribute("aria-pressed", "true");
+    await page.getByPlaceholder("Configure strong access code strings").fill(alphaPassword);
+    await page.getByRole("button", { name: /Encrypt and Protect PDF/i }).click();
+
+    await expect(page).toHaveURL(/\/lock-pdf\/download$/);
+    await expect(page.getByText("Task completed successfully!")).toBeVisible();
+    const downloadPromise = page.waitForEvent("download");
+    await page.getByRole("button", { name: /Download File/i }).click();
+    const download = await downloadPromise;
+    await independentlyVerifyDownload(download, alphaPassword);
+    expect(apiRequests.filter((request) => request.method === "POST" && request.path === "/api/security/lock")).toHaveLength(0);
+    expect(processingPosts()).toHaveLength(0);
+    expectNoProductionRequests();
+});
+
+test("Auto Lock verifies a Cloud-selected result when client execution is disabled", async ({ page }) => {
+    test.skip(
+        process.env.NEXT_PUBLIC_HYBRID_ENABLE_LOCK !== "false",
+        "Run this case with NEXT_PUBLIC_HYBRID_ENABLE_LOCK=false to exercise Auto's Cloud-selected path.",
+    );
+    await page.route("**/api/security/lock", async (route) => {
+        captureApiRequest(route.request());
+        await route.fulfill({ status: 200, contentType: "application/pdf", body: protectedLockOutputAes128 });
+    });
+
+    await page.goto("/lock-pdf");
+    await waitForInteractiveApp(page);
+    await chooseFile(page, "plain-two-pages.pdf", plainPdf);
+    await expect(page).toHaveURL(/\/lock-pdf\/workspace$/);
+    const autoButton = page.getByRole("button", { name: "Auto", exact: true });
+    await expect(autoButton).toHaveAttribute("aria-pressed", "true");
+    await page.getByPlaceholder("Configure strong access code strings").fill(alphaPassword);
+    await page.getByRole("button", { name: /Encrypt and Protect PDF/i }).click();
+
+    await expect(page).toHaveURL(/\/lock-pdf\/download$/);
+    await expect(page.getByText("Task completed successfully!")).toBeVisible();
+    const lockRequests = apiRequests.filter((request) => request.method === "POST" && request.path === "/api/security/lock");
+    expect(lockRequests).toHaveLength(1);
+    expect(lockRequests[0].body.toString("latin1")).toContain(`name="password"\r\n\r\n${alphaPassword}`);
+
+    const downloadPromise = page.waitForEvent("download");
+    await page.getByRole("button", { name: /Download File/i }).click();
+    const download = await downloadPromise;
+    await independentlyVerifyDownload(download, alphaPassword);
+    expect(processingPosts()).toHaveLength(1);
+    expectNoProductionRequests();
+});
+
+test("Cloud Lock rejects a protected result that uses the wrong password", async ({ page }) => {
+    await page.route("**/api/security/lock", async (route) => {
+        captureApiRequest(route.request());
+        await route.fulfill({ status: 200, contentType: "application/pdf", body: protectedBeta });
+    });
+
+    await page.goto("/lock-pdf");
+    await waitForInteractiveApp(page);
+    await chooseFile(page, "plain-two-pages.pdf", plainPdf);
+    await expect(page).toHaveURL(/\/lock-pdf\/workspace$/);
+    await page.getByRole("button", { name: "Cloud", exact: true }).click();
+    await page.getByPlaceholder("Configure strong access code strings").fill(alphaPassword);
+    await page.getByRole("button", { name: /Encrypt and Protect PDF/i }).click();
+
+    await expect(
+        page.getByRole("alert").filter({ hasText: /could not be confirmed; no download was created/i }),
+    ).toBeVisible();
+    await expect(page).toHaveURL(/\/lock-pdf\/workspace$/);
+    await expect(page.getByText("Task completed successfully!")).toHaveCount(0);
+    expect(apiRequests.filter((request) => request.method === "POST" && request.path === "/api/security/lock")).toHaveLength(1);
+    expectNoProductionRequests();
+});
+
+test("duplicate Cloud Lock clicks submit once and a stale response after removal cannot publish", async ({ page }) => {
+    let markRequestSeen!: () => void;
+    const requestSeen = new Promise<void>((resolve) => { markRequestSeen = resolve; });
+    let releaseResponse!: () => void;
+    const responseGate = new Promise<void>((resolve) => { releaseResponse = resolve; });
+    let markRouteComplete!: () => void;
+    const routeComplete = new Promise<void>((resolve) => { markRouteComplete = resolve; });
+    await page.route("**/api/security/lock", async (route) => {
+        captureApiRequest(route.request());
+        markRequestSeen();
+        await responseGate;
+        await route.fulfill({ status: 200, contentType: "application/pdf", body: protectedBeta }).catch(() => {});
+        markRouteComplete();
+    });
+
+    await page.goto("/lock-pdf");
+    await waitForInteractiveApp(page);
+    await chooseFile(page, "plain-two-pages.pdf", plainPdf);
+    await expect(page).toHaveURL(/\/lock-pdf\/workspace$/);
+    await page.getByRole("button", { name: "Cloud", exact: true }).click();
+    await page.getByPlaceholder("Configure strong access code strings").fill(alphaPassword);
+    const lockButton = page.getByRole("button", { name: /Encrypt and Protect PDF/i });
+    await lockButton.evaluate((element) => {
+        element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    await requestSeen;
+    await expect.poll(() => apiRequests.filter((request) => request.method === "POST" && request.path === "/api/security/lock").length).toBe(1);
+    expect(apiRequests.find((request) => request.path === "/api/security/lock")!.body.toString("latin1"))
+        .toContain(`name="password"\r\n\r\n${alphaPassword}`);
+
+    const requestSettled = page.waitForEvent("requestfailed", (request) =>
+        new URL(request.url()).pathname === "/api/security/lock",
+    );
+    await page.getByRole("button", { name: "Remove", exact: true }).click();
+    await expect(page).toHaveURL(/\/lock-pdf$/);
+    releaseResponse();
+    await Promise.all([routeComplete, requestSettled]);
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+    await expect(page).toHaveURL(/\/lock-pdf$/);
+    await expect(page.getByText("Task completed successfully!")).toHaveCount(0);
+    expect(apiRequests.filter((request) => request.method === "POST" && request.path === "/api/security/lock")).toHaveLength(1);
+    expectNoProductionRequests();
 });
 
 test("a plaintext HTTP 200 re-lock response cannot publish an immediate Cloud result", async ({ page }) => {

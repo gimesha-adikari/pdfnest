@@ -1,10 +1,8 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Lock, ShieldCheck, ShieldAlert } from "lucide-react";
-import { handleClientError } from "@/lib/errorHandler";
-import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
@@ -14,6 +12,7 @@ import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
 import { getInitialProcessingMode, hasCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
+import { verifyProtectedPdfBlob } from "@/lib/security/verifyProtectedPdf";
 import PasswordField from "@/components/ui/PasswordField";
 
 function formatMB(bytes: number) {
@@ -31,8 +30,40 @@ export default function LockPdfWorkspace() {
     const [success, setSuccess] = useState(false);
     const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const isProcessingRef = useRef(false);
+    const operationIdRef = useRef(0);
+    const activeControllerRef = useRef<AbortController | null>(null);
+    const mountedRef = useRef(false);
+    const previousFileRef = useRef(file);
+    const latestInputsRef = useRef({ file, password, processingMode });
 
     useEffect(() => {
+        latestInputsRef.current = { file, password, processingMode };
+    }, [file, password, processingMode]);
+
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+            operationIdRef.current += 1;
+            activeControllerRef.current?.abort();
+            activeControllerRef.current = null;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (previousFileRef.current !== file) {
+            previousFileRef.current = file;
+            operationIdRef.current += 1;
+            activeControllerRef.current?.abort();
+            activeControllerRef.current = null;
+            isProcessingRef.current = false;
+            setIsProcessing(false);
+            setPassword("");
+            setSuccess(false);
+            setErrorMessage(null);
+        }
+
         if (!file) {
             setPassword("");
             setSuccess(false);
@@ -46,8 +77,33 @@ export default function LockPdfWorkspace() {
     }, [file]);
 
     const handleLockProcessing = async () => {
+        if (!file || !password) return;
+
+        const operation = { file, password, mode: processingMode };
         requireAuth(async () => {
-            if (!file || !password) return;
+            const currentInputs = latestInputsRef.current;
+            if (
+                isProcessingRef.current ||
+                !mountedRef.current ||
+                currentInputs.file !== operation.file ||
+                currentInputs.password !== operation.password ||
+                currentInputs.processingMode !== operation.mode
+            ) return;
+
+            isProcessingRef.current = true;
+            const operationId = ++operationIdRef.current;
+            const controller = new AbortController();
+            activeControllerRef.current = controller;
+            const isCurrentOperation = () => {
+                const latestInputs = latestInputsRef.current;
+                return mountedRef.current &&
+                    operationIdRef.current === operationId &&
+                    activeControllerRef.current === controller &&
+                    !controller.signal.aborted &&
+                    latestInputs.file === operation.file &&
+                    latestInputs.password === operation.password &&
+                    latestInputs.processingMode === operation.mode;
+            };
 
             try {
                 setIsProcessing(true);
@@ -56,27 +112,39 @@ export default function LockPdfWorkspace() {
 
                 const result = await ExecutionManager.run({
                     tool: "lock",
-                    files: [file],
-                    params: { password },
-                    mode: processingMode,
-                    password,
+                    files: [operation.file],
+                    params: { password: operation.password },
+                    mode: operation.mode,
+                    password: operation.password,
+                    signal: controller.signal,
                 });
+
+                // ExecutionManager success does not prove that Lock produced a
+                // password-protected PDF. Validate its actual result before any
+                // download state, success message, or navigation is published.
+                await verifyProtectedPdfBlob(result.blob, operation.password, controller.signal);
+                if (!isCurrentOperation()) return;
 
                 setDownloadData({
                     blob: result.blob,
-                    fileName: `${file.name.replace(/\.pdf$/i, "")}-locked.pdf`,
+                    fileName: `${operation.file.name.replace(/\.pdf$/i, "")}-locked.pdf`,
                 });
 
                 setSuccess(true);
                 setPassword("");
                 router.push(`/${toolId}/download`);
-            } catch (err: any) {
-                console.error(err);
-                const msg = err?.message || "Failed to encrypt document. Please check the document and password.";
-                setErrorMessage(msg);
-                handleClientError(err);
+            } catch {
+                if (isCurrentOperation()) {
+                    setErrorMessage("PDF protection could not be confirmed; no download was created. Please try again.");
+                }
             } finally {
-                setIsProcessing(false);
+                if (operationIdRef.current === operationId) {
+                    isProcessingRef.current = false;
+                    if (activeControllerRef.current === controller) {
+                        activeControllerRef.current = null;
+                    }
+                    if (mountedRef.current) setIsProcessing(false);
+                }
             }
         });
     };
@@ -109,6 +177,7 @@ export default function LockPdfWorkspace() {
                             </label>
                             <PasswordField
                                 value={password}
+                                disabled={isProcessing}
                                 onChange={(e) => {
                                     setPassword(e.target.value);
                                     if (errorMessage) setErrorMessage(null);
@@ -148,7 +217,7 @@ export default function LockPdfWorkspace() {
                     </div>
 
                     {errorMessage && (
-                        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-red-900 dark:text-red-200 flex items-start gap-3">
+                        <div role="alert" className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-red-900 dark:text-red-200 flex items-start gap-3">
                             <ShieldAlert className="text-red-500 mt-0.5 shrink-0" size={18} />
                             <div>
                                 <p className="text-sm font-semibold">Encryption Failed</p>
@@ -165,7 +234,7 @@ export default function LockPdfWorkspace() {
                             <div>
                                 <p className="text-sm font-semibold">Security configuration execution success!</p>
                                 <p className="text-xs mt-1 text-emerald-800/80 dark:text-emerald-200/70">
-                                    The newly protected document container has been compiled by the system engine and delivered successfully.
+                                    The PDF was verified to require the password you entered before it was made available for download.
                                 </p>
                             </div>
                         </div>
