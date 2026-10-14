@@ -2,8 +2,14 @@
 
 import { strict as assert } from "assert";
 import { ServerPdfRenderer } from "../../lib/preview/ServerPdfRenderer";
+import { PreviewManager } from "../../lib/preview/PreviewManager";
 import type { PreviewRequest } from "../../lib/preview/types";
 import { getPdfInputPreparation, markPdfInputPreparation } from "../../lib/security/pdfInputPreparation";
+import {
+    authorizeRestoredStudioPreview,
+    createRestoredStudioPreviewScope,
+    revokeRestoredStudioPreview,
+} from "../../lib/security/restoredStudioPreviewAuthorization";
 
 // ---------------------------------------------------------------------------
 // Minimal stubs
@@ -330,6 +336,7 @@ async function test15_concurrentCancellationIndependence(): Promise<void> {
     const r = new ServerPdfRenderer({ fetchImpl });
     const controllerA = new AbortController();
     const controllerB = new AbortController();
+    const sharedRequest = makeRequest();
 
     let resourceA: unknown;
     let errorA: unknown;
@@ -337,11 +344,11 @@ async function test15_concurrentCancellationIndependence(): Promise<void> {
     let errorB: unknown;
 
     // Start both renders before session creation completes.
-    const promiseA = r.render(makeRequest(), controllerA.signal)
+    const promiseA = r.render(sharedRequest, controllerA.signal)
         .then((res) => { resourceA = res; })
         .catch((err) => { errorA = err; });
 
-    const promiseB = r.render(makeRequest(), controllerB.signal)
+    const promiseB = r.render(sharedRequest, controllerB.signal)
         .then((res) => { resourceB = res; })
         .catch((err) => { errorB = err; });
 
@@ -434,6 +441,144 @@ async function test17_previewSessionRecordsAttemptBeforeRequestAndKeepsItAfterFa
     );
 }
 
+async function test18_restoredFileWithoutConsentCannotCreatePreviewSession(): Promise<void> {
+    const file = makeFile("restored-project.pdf");
+    createRestoredStudioPreviewScope([file]);
+    let fetchCount = 0;
+    const renderer = new ServerPdfRenderer({
+        fetchImpl: async () => {
+            fetchCount += 1;
+            return sessionResponse("unexpected");
+        },
+    });
+
+    await assert.rejects(
+        () => renderer.render(
+            makeRequest({ document: { id: "restored-project", version: "v1", pageCount: 1, file } }),
+            liveSignal(),
+        ),
+        /explicit Cloud preview authorization/i,
+    );
+    assert.equal(fetchCount, 0, "an unauthorized restored File must not reach the session endpoint");
+    assert.equal(getPdfInputPreparation(file)?.cloudSubmissionInitiated, undefined);
+}
+
+async function test19_authorizationAloneDoesNotMarkTransmissionButRequestFailureDoes(): Promise<void> {
+    const file = makeFile("restored-project.pdf");
+    const scope = createRestoredStudioPreviewScope([file]);
+    authorizeRestoredStudioPreview(scope);
+    assert.equal(getPdfInputPreparation(file)?.cloudSubmissionInitiated, undefined, "consent does not prove a request started");
+
+    const renderer = new ServerPdfRenderer({
+        fetchImpl: async () => {
+            assert.equal(
+                getPdfInputPreparation(file)?.cloudSubmissionInitiated,
+                true,
+                "request-start history is set immediately before fetch",
+            );
+            throw new TypeError("synthetic authorized preview failure");
+        },
+    });
+    await assert.rejects(
+        () => renderer.render(
+            makeRequest({ document: { id: "restored-project", version: "v1", pageCount: 1, file } }),
+            liveSignal(),
+        ),
+        /synthetic authorized preview failure/,
+    );
+    assert.equal(getPdfInputPreparation(file)?.cloudSubmissionInitiated, true);
+}
+
+async function test20_revokedRestoredFileCannotReuseAnExistingPreviewSession(): Promise<void> {
+    const file = makeFile("restored-project.pdf");
+    const scope = createRestoredStudioPreviewScope([file]);
+    authorizeRestoredStudioPreview(scope);
+    let fetchCount = 0;
+    const renderer = new ServerPdfRenderer({
+        fetchImpl: async (input) => {
+            fetchCount += 1;
+            return String(input).includes("/page/") ? pageResponse() : sessionResponse("authorized-session");
+        },
+    });
+    const request = makeRequest({ document: { id: "restored-project", version: "v1", pageCount: 1, file } });
+
+    await renderer.render(request, liveSignal());
+    assert.equal(fetchCount, 2);
+    revokeRestoredStudioPreview(scope);
+    await assert.rejects(() => renderer.render(request, liveSignal()), /explicit Cloud preview authorization/i);
+    assert.equal(fetchCount, 2, "revocation must be checked before cached session/page reuse");
+}
+
+async function test21_previewManagerCacheCannotBypassRevokedConsent(): Promise<void> {
+    const file = makeFile("restored-project.pdf");
+    const scope = createRestoredStudioPreviewScope([file]);
+    authorizeRestoredStudioPreview(scope);
+    let fetchCount = 0;
+    const manager = new PreviewManager();
+    manager.registerRenderer(new ServerPdfRenderer({
+        fetchImpl: async (input) => {
+            fetchCount += 1;
+            return String(input).includes("/page/") ? pageResponse() : sessionResponse("manager-session");
+        },
+    }));
+    const request: PreviewRequest = {
+        document: { id: "restored-manager-test", version: "v1", pageCount: 1, file },
+        page: 1,
+        renderer: "server",
+    };
+
+    const first = manager.request(request);
+    await new Promise<void>((resolve, reject) => {
+        first.subscribe((result) => result.status === "success" ? resolve() : reject(new Error(result.error?.message)));
+    });
+    assert.equal(fetchCount, 2);
+
+    revokeRestoredStudioPreview(scope);
+    let secondError: string | undefined;
+    const second = manager.request(request);
+    second.subscribe((result) => { secondError = result.error?.message; });
+    assert.match(secondError ?? "", /explicit Cloud preview authorization/i);
+    assert.equal(fetchCount, 2, "a cached preview resource must not bypass revoked project authorization");
+    manager.dispose();
+}
+
+async function test22_previewManagerCacheSeparatesDistinctFilesWithMatchingMetadata(): Promise<void> {
+    const firstFile = makeFile("same.pdf");
+    const secondFile = makeFile("same.pdf");
+    let sessionCount = 0;
+    let pageCount = 0;
+    const manager = new PreviewManager();
+    manager.registerRenderer(new ServerPdfRenderer({
+        fetchImpl: async (input) => {
+            if (String(input).endsWith("/api/conversion/preview/session")) {
+                sessionCount += 1;
+                return sessionResponse(`same-metadata-session-${sessionCount}`);
+            }
+            pageCount += 1;
+            return pageResponse();
+        },
+    }));
+
+    const makeRequestFor = (file: File): PreviewRequest => ({
+        document: { id: "same-document-id", version: "same-version", pageCount: 1, file },
+        page: 1,
+        renderer: "server",
+    });
+    const render = (request: PreviewRequest) => new Promise<void>((resolve, reject) => {
+        manager.request(request).subscribe((result) => {
+            if (result.status === "error") reject(new Error(result.error?.message));
+            if (result.status === "success") resolve();
+        });
+    });
+
+    await render(makeRequestFor(firstFile));
+    await render(makeRequestFor(secondFile));
+
+    assert.equal(sessionCount, 2, "each distinct File object needs its own Cloud preview session");
+    assert.equal(pageCount, 2, "each distinct File object must render instead of reusing a colliding cache entry");
+    manager.dispose();
+}
+
 // ---------------------------------------------------------------------------
 // Runner
 // ---------------------------------------------------------------------------
@@ -457,6 +602,11 @@ async function runTests(): Promise<void> {
         ["15: concurrent cancellation does not affect peer caller", test15_concurrentCancellationIndependence],
         ["16: revoke() is idempotent", test16_idempotentRevoke],
         ["17: preview upload attempt is recorded and retained after failure", test17_previewSessionRecordsAttemptBeforeRequestAndKeepsItAfterFailure],
+        ["18: restored preview without consent is rejected before network", test18_restoredFileWithoutConsentCannotCreatePreviewSession],
+        ["19: consent is distinct from transmission and failure retains request history", test19_authorizationAloneDoesNotMarkTransmissionButRequestFailureDoes],
+        ["20: revoked restored preview authorization blocks session reuse", test20_revokedRestoredFileCannotReuseAnExistingPreviewSession],
+        ["21: preview manager cache cannot bypass revoked authorization", test21_previewManagerCacheCannotBypassRevokedConsent],
+        ["22: preview cache separates File objects with matching metadata", test22_previewManagerCacheSeparatesDistinctFilesWithMatchingMetadata],
     ];
 
     let passed = 0;

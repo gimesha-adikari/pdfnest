@@ -10,6 +10,9 @@ const protectedAlpha = readFileSync(path.join(fixtureDir, "protected-alpha.pdf")
 const protectedBeta = readFileSync(path.join(fixtureDir, "protected-beta.pdf"));
 const protectedStudioProject = readFileSync(path.join(fixtureDir, "legacy-studio-protected.pns"));
 const protectedStudioHistoryProject = readFileSync(path.join(fixtureDir, "legacy-studio-protected-history.pns"));
+const protectedStudioFutureProject = readFileSync(path.join(fixtureDir, "legacy-studio-protected-future.pns"));
+const plainStudioProject = readFileSync(path.join(fixtureDir, "legacy-studio-plain.pns"));
+const alternatePlainStudioProject = readFileSync(path.join(fixtureDir, "legacy-studio-alternate-plain.pns"));
 const protectedLockOutputAes128 = readFileSync(path.join(fixtureDir, "protected-lock-output-aes128.pdf"));
 const protectedScanned = readFileSync(path.join(fixtureDir, "protected-scanned.pdf"));
 const malformedPdf = readFileSync(path.join(fixtureDir, "malformed.pdf"));
@@ -24,6 +27,7 @@ let apiRequests: ApiRequest[] = [];
 let externalRequests: string[] = [];
 let unlockResponseGate: Promise<void> | null = null;
 let mockHealthStatuses: number[] = [];
+let previewSessionCount = 0;
 
 function delayNextUnlockResponse(): () => void {
     let release = () => {};
@@ -36,6 +40,7 @@ async function installLocalNetworkBoundary(context: BrowserContext): Promise<voi
     externalRequests = [];
     unlockResponseGate = null;
     mockHealthStatuses = [];
+    previewSessionCount = 0;
     await context.route("**/*", async (route) => {
         const requestUrl = new URL(route.request().url());
         const isApp = requestUrl.origin === appOrigin;
@@ -94,6 +99,25 @@ async function installLocalNetworkBoundary(context: BrowserContext): Promise<voi
                     subscription: { tier: "free" },
                     billing_policy: null,
                 }),
+            });
+            return;
+        }
+        if (request.method() === "POST" && requestUrl.pathname === "/api/conversion/preview/session") {
+            previewSessionCount += 1;
+            await route.fulfill({
+                status: 200,
+                contentType: "application/json",
+                headers: corsHeaders,
+                body: JSON.stringify({ session_id: `synthetic-studio-preview-${previewSessionCount}`, page_count: 2 }),
+            });
+            return;
+        }
+        if (request.method() === "GET" && /\/api\/conversion\/preview\/session\/[^/]+\/page\/\d+$/.test(requestUrl.pathname)) {
+            await route.fulfill({
+                status: 200,
+                contentType: "image/png",
+                headers: corsHeaders,
+                body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j2ioAAAAASUVORK5CYII=", "base64"),
             });
             return;
         }
@@ -202,6 +226,43 @@ async function chooseFile(page: Page, fileName: string, bytes: Buffer): Promise<
         name: fileName,
         mimeType: "application/pdf",
         buffer: bytes,
+    });
+}
+
+async function blockStudioSnapshotInspection(page: Page, snapshotName: string): Promise<void> {
+    await page.addInitScript((targetName: string) => {
+        const originalArrayBuffer = File.prototype.arrayBuffer;
+        const testWindow = window as typeof window & {
+            __studioInspectionStarted?: boolean;
+            __releaseStudioInspection?: () => void;
+        };
+
+        Object.defineProperty(File.prototype, "arrayBuffer", {
+            configurable: true,
+            value: function patchedArrayBuffer(this: File): Promise<ArrayBuffer> {
+                if (this.name === targetName && !testWindow.__studioInspectionStarted) {
+                    testWindow.__studioInspectionStarted = true;
+                    return new Promise<ArrayBuffer>((resolve, reject) => {
+                        testWindow.__releaseStudioInspection = () => {
+                            originalArrayBuffer.call(this).then(resolve, reject);
+                        };
+                    });
+                }
+                return originalArrayBuffer.call(this);
+            },
+        });
+    }, snapshotName);
+}
+
+async function waitForBlockedStudioInspection(page: Page): Promise<void> {
+    await expect.poll(() => page.evaluate(() =>
+        Boolean((window as Window & { __studioInspectionStarted?: boolean }).__studioInspectionStarted)
+    )).toBe(true);
+}
+
+async function releaseBlockedStudioInspection(page: Page): Promise<void> {
+    await page.evaluate(() => {
+        (window as Window & { __releaseStudioInspection?: () => void }).__releaseStudioInspection?.();
     });
 }
 
@@ -1372,6 +1433,7 @@ test("Merge preserves per-file passwords and requires Cloud authorization for ad
 
 test("legacy shared uploader fails closed for protected input without an explicit policy", async ({ page }) => {
     await page.goto("/studio");
+    await waitForInteractiveApp(page);
     const picker = page.locator('input[type="file"]').first();
     await picker.setInputFiles({
         name: "protected-alpha.pdf",
@@ -1387,6 +1449,7 @@ test("legacy shared uploader fails closed for protected input without an explici
 
 test("Legacy Studio rejects an encrypted PDF imported from a project before creating a preview session", async ({ page }) => {
     await page.goto("/studio");
+    await waitForInteractiveApp(page);
     await page.locator('input[type="file"]').first().setInputFiles({
         name: "protected-project.pns",
         mimeType: "application/x-pdfnest-project",
@@ -1401,6 +1464,7 @@ test("Legacy Studio rejects an encrypted PDF imported from a project before crea
 
 test("Legacy Studio rejects protected PDFs hidden in project history before enabling undo or redo", async ({ page }) => {
     await page.goto("/studio");
+    await waitForInteractiveApp(page);
     await page.locator('input[type="file"]').first().setInputFiles({
         name: "protected-history-project.pns",
         mimeType: "application/x-pdfnest-project",
@@ -1410,6 +1474,361 @@ test("Legacy Studio rejects protected PDFs hidden in project history before enab
     await expect(page.getByRole("paragraph").filter({ hasText: /Legacy Studio only accepts unprotected PDFs from project and recovery files/i })).toBeVisible();
     expect(apiRequests.filter((request) => request.path === "/api/conversion/preview/session")).toHaveLength(0);
     expect(studioProcessingPosts()).toHaveLength(0);
+    expectNoProductionRequests();
+});
+
+test("Legacy Studio rejects protected PDFs hidden in future project snapshots before consent", async ({ page }) => {
+    await page.goto("/studio");
+    await waitForInteractiveApp(page);
+    await page.locator('input[type="file"]').first().setInputFiles({
+        name: "protected-future-project.pns",
+        mimeType: "application/x-pdfnest-project",
+        buffer: protectedStudioFutureProject,
+    });
+
+    await expect(page.getByRole("paragraph").filter({
+        hasText: /Legacy Studio only accepts unprotected PDFs from project and recovery files/i,
+    })).toBeVisible();
+    expect(apiRequests.filter((request) => request.path === "/api/conversion/preview/session")).toHaveLength(0);
+    await expect(page.getByRole("dialog", { name: /Authorize Cloud preview/i })).toHaveCount(0);
+    expectNoProductionRequests();
+});
+
+test("restored .pns project waits for explicit Cloud preview authorization and can be declined", async ({ page }) => {
+    await page.goto("/studio");
+    await waitForInteractiveApp(page);
+    await page.locator('input[type="file"]').first().setInputFiles({
+        name: "plain-project.pns",
+        mimeType: "application/x-pdfnest-project",
+        buffer: plainStudioProject,
+    });
+
+    const consent = page.getByRole("dialog", { name: /Authorize Cloud preview for this restored project/i });
+    await expect(consent).toBeVisible();
+    await expect(consent).toContainText(/preview rendering uses Platen Cloud/i);
+    await expect(consent).toContainText(/current PDF and its saved document-history snapshots/i);
+    await expect(consent).toContainText(/source-protection or earlier Device\/Cloud execution history.*cannot be reconstructed/i);
+    expect(apiRequests.filter((request) => request.path === "/api/conversion/preview/session")).toHaveLength(0);
+
+    await consent.getByRole("button", { name: "Cancel" }).click();
+    await expect(consent).toHaveCount(0);
+    expect(apiRequests.filter((request) => request.path === "/api/conversion/preview/session")).toHaveLength(0);
+    await expect(page.getByRole("button", { name: "Upload a PDF to start the Studio" })).toBeVisible();
+    expectNoProductionRequests();
+});
+
+test("authorized restored project can preview current, past, and future snapshots without another prompt", async ({ page }) => {
+    await page.goto("/studio");
+    await waitForInteractiveApp(page);
+    await page.locator('input[type="file"]').first().setInputFiles({
+        name: "plain-project.pns",
+        mimeType: "application/x-pdfnest-project",
+        buffer: plainStudioProject,
+    });
+
+    const consent = page.getByRole("dialog", { name: /Authorize Cloud preview for this restored project/i });
+    await expect(consent).toBeVisible();
+    expect(apiRequests.filter((request) => request.path === "/api/conversion/preview/session")).toHaveLength(0);
+    await consent.getByRole("button", { name: "Authorize Cloud preview" }).click();
+    await expect.poll(() => apiRequests.filter((request) => request.path === "/api/conversion/preview/session").length).toBe(1);
+    expect(apiRequests.filter((request) => request.path === "/api/conversion/preview/session")[0].body.indexOf(plainPdf)).toBeGreaterThanOrEqual(0);
+
+    await page.keyboard.press("Control+y");
+    await expect.poll(() => apiRequests.filter((request) => request.path === "/api/conversion/preview/session").length).toBe(2);
+    await page.keyboard.press("Control+z");
+    await page.keyboard.press("Control+z");
+    await expect.poll(() => apiRequests.filter((request) => request.path === "/api/conversion/preview/session").length).toBe(3);
+    await expect(page.getByRole("dialog", { name: /Authorize Cloud preview/i })).toHaveCount(0);
+    expectNoProductionRequests();
+});
+
+test("a different imported project requires its own preview authorization", async ({ page }) => {
+    await page.goto("/studio");
+    await waitForInteractiveApp(page);
+    const welcomeInput = page.locator('input[type="file"]').first();
+    await welcomeInput.setInputFiles({
+        name: "first-project.pns",
+        mimeType: "application/x-pdfnest-project",
+        buffer: plainStudioProject,
+    });
+    const firstConsent = page.getByRole("dialog", { name: /Authorize Cloud preview for this restored project/i });
+    await expect(firstConsent).toBeVisible();
+    await firstConsent.getByRole("button", { name: "Authorize Cloud preview" }).click();
+    await expect.poll(() => apiRequests.filter((request) => request.path === "/api/conversion/preview/session").length).toBe(1);
+
+    const sidebarInput = page.getByRole("complementary").locator('input[type="file"]');
+    await sidebarInput.setInputFiles({
+        name: "second-project.pns",
+        mimeType: "application/x-pdfnest-project",
+        buffer: plainStudioProject,
+    });
+    const secondConsent = page.getByRole("dialog", { name: /Authorize Cloud preview for this restored project/i });
+    await expect(secondConsent).toBeVisible();
+    expect(apiRequests.filter((request) => request.path === "/api/conversion/preview/session")).toHaveLength(1);
+
+    await secondConsent.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByRole("complementary").getByText("plain-two-pages.pdf", { exact: true })).toBeVisible();
+    expect(apiRequests.filter((request) => request.path === "/api/conversion/preview/session")).toHaveLength(1);
+    expectNoProductionRequests();
+});
+
+test("a newer project import wins over an older blocked inspection", async ({ page }) => {
+    await blockStudioSnapshotInspection(page, "plain-two-pages.pdf");
+    await page.goto("/studio");
+    await waitForInteractiveApp(page);
+    const picker = page.locator('input[type="file"]').first();
+    await picker.setInputFiles({
+        name: "slow-project-a.pns",
+        mimeType: "application/x-pdfnest-project",
+        buffer: plainStudioProject,
+    });
+    await waitForBlockedStudioInspection(page);
+
+    await picker.setInputFiles({
+        name: "project-b.pns",
+        mimeType: "application/x-pdfnest-project",
+        buffer: alternatePlainStudioProject,
+    });
+    const consent = page.getByRole("dialog", { name: /Authorize Cloud preview for this restored project/i });
+    await expect(consent).toBeVisible();
+    await consent.getByRole("button", { name: "Authorize Cloud preview" }).click();
+    await expect.poll(() => apiRequests.filter((request) => request.path === "/api/conversion/preview/session").length).toBe(1);
+
+    await releaseBlockedStudioInspection(page);
+    await page.waitForTimeout(100);
+    const sessions = apiRequests.filter((request) => request.path === "/api/conversion/preview/session");
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].body.toString("latin1")).toContain('filename="scanned-image-only.pdf"');
+    expect(sessions[0].body.indexOf(plainPdf)).toBe(-1);
+    await expect(page.getByRole("heading", { name: /Authorize Cloud preview/i })).toHaveCount(0);
+    expectNoProductionRequests();
+});
+
+test("authorizing restored project preview does not persist an authorization token", async ({ page }) => {
+    await page.goto("/studio");
+    await waitForInteractiveApp(page);
+    await page.locator('input[type="file"]').first().setInputFiles({
+        name: "plain-project.pns",
+        mimeType: "application/x-pdfnest-project",
+        buffer: plainStudioProject,
+    });
+    await page.getByRole("dialog", { name: /Authorize Cloud preview for this restored project/i })
+        .getByRole("button", { name: "Authorize Cloud preview" }).click();
+    await expect.poll(() => apiRequests.filter((request) => request.path === "/api/conversion/preview/session").length).toBe(1);
+
+    const storedAuthorization = await page.evaluate(() => {
+        const allValues = [localStorage, sessionStorage].flatMap((storage) =>
+            Array.from({ length: storage.length }, (_, index) => {
+                const key = storage.key(index) ?? "";
+                return `${key}=${storage.getItem(key) ?? ""}`;
+            }),
+        ).join("\n");
+        return /restoredStudioPreview|cloudPreviewAuthorization/i.test(allValues);
+    });
+    expect(storedAuthorization).toBe(false);
+    expectNoProductionRequests();
+});
+
+test("recovery requires preview authorization and declining it preserves the IndexedDB record", async ({ page }) => {
+    await page.goto("/");
+    await page.evaluate(async (pdfBytes) => {
+        const request = indexedDB.open("pdfnest-studio", 1);
+        const database = await new Promise<IDBDatabase>((resolve, reject) => {
+            request.onupgradeneeded = () => request.result.createObjectStore("autosave");
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+        const file = new File([new Uint8Array(pdfBytes)], "plain-recovery.pdf", { type: "application/pdf" });
+        const transaction = database.transaction("autosave", "readwrite");
+        transaction.objectStore("autosave").put({
+            version: 1,
+            savedAt: Date.now(),
+            activeTool: "select",
+            zoom: 1,
+            current: {
+                file,
+                pages: [{ id: "synthetic-recovery-page", pageNumber: 1 }],
+                currentPageIndex: 0,
+                fingerprint: "synthetic-recovery-plain",
+            },
+            past: [],
+            future: [],
+        }, "current");
+        await new Promise<void>((resolve, reject) => {
+            transaction.oncomplete = () => resolve();
+            transaction.onerror = () => reject(transaction.error);
+        });
+        database.close();
+    }, Array.from(plainPdf));
+
+    await page.goto("/studio");
+    await page.getByRole("button", { name: "Resume" }).click();
+    const consent = page.getByRole("dialog", { name: /Authorize Cloud preview for this restored project/i });
+    await expect(consent).toBeVisible();
+    expect(apiRequests.filter((request) => request.path === "/api/conversion/preview/session")).toHaveLength(0);
+    await consent.getByRole("button", { name: "Cancel" }).click();
+    expect(apiRequests.filter((request) => request.path === "/api/conversion/preview/session")).toHaveLength(0);
+    const recoveryStillExists = await page.evaluate(async () => {
+        const request = indexedDB.open("pdfnest-studio", 1);
+        const database = await new Promise<IDBDatabase>((resolve, reject) => {
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+        const transaction = database.transaction("autosave", "readonly");
+        const result = await new Promise<unknown>((resolve, reject) => {
+            const getRequest = transaction.objectStore("autosave").get("current");
+            getRequest.onsuccess = () => resolve(getRequest.result);
+            getRequest.onerror = () => reject(getRequest.error);
+        });
+        database.close();
+        return Boolean(result);
+    });
+    expect(recoveryStillExists).toBe(true);
+    expectNoProductionRequests();
+});
+
+test("cancelling a blocked recovery inspection preserves the recovery and prevents preview", async ({ page }) => {
+    await blockStudioSnapshotInspection(page, "plain-recovery.pdf");
+    await page.goto("/");
+    await page.evaluate(async (pdfBytes) => {
+        const request = indexedDB.open("pdfnest-studio", 1);
+        const database = await new Promise<IDBDatabase>((resolve, reject) => {
+            request.onupgradeneeded = () => request.result.createObjectStore("autosave");
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+        const file = new File([new Uint8Array(pdfBytes)], "plain-recovery.pdf", { type: "application/pdf" });
+        const transaction = database.transaction("autosave", "readwrite");
+        transaction.objectStore("autosave").put({
+            version: 1,
+            savedAt: Date.now(),
+            activeTool: "select",
+            zoom: 1,
+            current: {
+                file,
+                pages: [{ id: "synthetic-recovery-page", pageNumber: 1 }],
+                currentPageIndex: 0,
+                fingerprint: "synthetic-recovery-plain",
+            },
+            past: [],
+            future: [],
+        }, "current");
+        await new Promise<void>((resolve, reject) => {
+            transaction.oncomplete = () => resolve();
+            transaction.onerror = () => reject(transaction.error);
+        });
+        database.close();
+    }, Array.from(plainPdf));
+
+    await page.goto("/studio");
+    await page.getByRole("button", { name: "Resume" }).click();
+    await waitForBlockedStudioInspection(page);
+    await page.getByRole("dialog", { name: /Opening restored Studio project/i }).getByRole("button", { name: "Cancel" }).click();
+    await releaseBlockedStudioInspection(page);
+    await expect(page.getByRole("heading", { name: "Resume previous session?" })).toBeVisible();
+    await expect(page.getByRole("status")).toContainText(/saved recovery remains available/i);
+    expect(apiRequests.filter((request) => request.path === "/api/conversion/preview/session")).toHaveLength(0);
+    const recoveryStillExists = await page.evaluate(async () => {
+        const request = indexedDB.open("pdfnest-studio", 1);
+        const database = await new Promise<IDBDatabase>((resolve, reject) => {
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+        const transaction = database.transaction("autosave", "readonly");
+        const result = await new Promise<unknown>((resolve, reject) => {
+            const getRequest = transaction.objectStore("autosave").get("current");
+            getRequest.onsuccess = () => resolve(getRequest.result);
+            getRequest.onerror = () => reject(getRequest.error);
+        });
+        database.close();
+        return Boolean(result);
+    });
+    expect(recoveryStillExists).toBe(true);
+    expectNoProductionRequests();
+});
+
+test("cancelling while restored snapshot inspection is blocked cannot start preview", async ({ page }) => {
+    await blockStudioSnapshotInspection(page, "plain-two-pages.pdf");
+    await page.goto("/studio");
+    await waitForInteractiveApp(page);
+    await page.locator('input[type="file"]').first().setInputFiles({
+        name: "slow-project.pns",
+        mimeType: "application/x-pdfnest-project",
+        buffer: plainStudioProject,
+    });
+    await waitForBlockedStudioInspection(page);
+    await page.getByRole("dialog", { name: /Opening restored Studio project/i }).getByRole("button", { name: "Cancel" }).click();
+    await releaseBlockedStudioInspection(page);
+    await page.waitForTimeout(100);
+    expect(apiRequests.filter((request) => request.path === "/api/conversion/preview/session")).toHaveLength(0);
+    await expect(page.getByRole("button", { name: "Upload a PDF to start the Studio" })).toBeVisible();
+    expectNoProductionRequests();
+});
+
+test("reset invalidates a restored-project inspection before its late completion", async ({ page }) => {
+    await blockStudioSnapshotInspection(page, "plain-two-pages.pdf");
+    await page.goto("/studio");
+    await waitForInteractiveApp(page);
+    await page.locator('input[type="file"]').first().setInputFiles({
+        name: "slow-project.pns",
+        mimeType: "application/x-pdfnest-project",
+        buffer: plainStudioProject,
+    });
+    await waitForBlockedStudioInspection(page);
+    // Exercise the reset callback while the restore dialog is modal; normal
+    // pointer interaction is intentionally blocked by that dialog.
+    await page.getByRole("button", { name: "Reset" }).dispatchEvent("click");
+    await releaseBlockedStudioInspection(page);
+    await page.waitForTimeout(100);
+    expect(apiRequests.filter((request) => request.path === "/api/conversion/preview/session")).toHaveLength(0);
+    await expect(page.getByRole("button", { name: "Upload a PDF to start the Studio" })).toBeVisible();
+    expectNoProductionRequests();
+});
+
+test("a newer PDF selection wins over a blocked restored-project inspection", async ({ page }) => {
+    await blockStudioSnapshotInspection(page, "plain-two-pages.pdf");
+    await page.goto("/studio");
+    await waitForInteractiveApp(page);
+    const input = page.locator('input[type="file"]').first();
+    await input.setInputFiles({
+        name: "slow-project.pns",
+        mimeType: "application/x-pdfnest-project",
+        buffer: plainStudioProject,
+    });
+    await waitForBlockedStudioInspection(page);
+
+    await input.setInputFiles({
+        name: "replacement.pdf",
+        mimeType: "application/pdf",
+        buffer: plainPdf,
+    });
+    await expect(page.getByRole("complementary").getByText("replacement.pdf", { exact: true })).toBeVisible();
+    await releaseBlockedStudioInspection(page);
+    await page.waitForTimeout(150);
+
+    const sessions = apiRequests.filter((request) => request.path === "/api/conversion/preview/session");
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].body.toString("latin1")).toContain('filename="replacement.pdf"');
+    await expect(page.getByRole("dialog", { name: /Authorize Cloud preview/i })).toHaveCount(0);
+    expectNoProductionRequests();
+});
+
+test("unmount during a blocked project inspection prevents late preview submission", async ({ page }) => {
+    await blockStudioSnapshotInspection(page, "plain-two-pages.pdf");
+    await page.goto("/studio");
+    await waitForInteractiveApp(page);
+    await page.locator('input[type="file"]').first().setInputFiles({
+        name: "slow-project.pns",
+        mimeType: "application/x-pdfnest-project",
+        buffer: plainStudioProject,
+    });
+    await waitForBlockedStudioInspection(page);
+
+    await page.locator('header a[href="/"]').dispatchEvent("click");
+    await page.waitForURL("**/");
+    await releaseBlockedStudioInspection(page);
+    await page.waitForTimeout(100);
+    expect(apiRequests.filter((request) => request.path === "/api/conversion/preview/session")).toHaveLength(0);
     expectNoProductionRequests();
 });
 
@@ -1489,6 +1908,8 @@ test("Legacy Studio still submits plain multiple-file input to its existing Merg
 
     await page.goto("/studio");
     await chooseFile(page, "plain-base.pdf", plainPdf);
+    await expect(page.getByRole("complementary").getByText("plain-base.pdf", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Merge", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Merge", exact: true }).click();
     await page.locator('input[type="file"]').last().setInputFiles({
         name: "plain-additional.pdf",

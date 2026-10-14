@@ -118,6 +118,7 @@ async function createStudioProject(
     filePath: string,
     currentPdfPath: string,
     historyPdfPaths: string[],
+    futurePdfPaths: string[] = [],
 ): Promise<void> {
     const archive: Record<string, Uint8Array> = {};
     const page = { id: "synthetic-studio-page-1", pageNumber: 1 };
@@ -138,11 +139,19 @@ async function createStudioProject(
             pages: [page],
             fingerprint: `synthetic-past-snapshot-${index + 1}`,
         })),
-        future: [],
+        future: futurePdfPaths.map((futurePath, index) => ({
+            fileName: path.basename(futurePath),
+            currentPageIndex: 0,
+            pages: [page],
+            fingerprint: `synthetic-future-snapshot-${index + 1}`,
+        })),
     }));
     archive["current/current.pdf"] = new Uint8Array(readFileSync(currentPdfPath));
     for (let index = 0; index < historyPdfPaths.length; index += 1) {
         archive[`past/${index}.pdf`] = new Uint8Array(readFileSync(historyPdfPaths[index]));
+    }
+    for (let index = 0; index < futurePdfPaths.length; index += 1) {
+        archive[`future/${index}.pdf`] = new Uint8Array(readFileSync(futurePdfPaths[index]));
     }
 
     const zipped = zipSync(archive, { level: 9 });
@@ -168,6 +177,9 @@ async function main(): Promise<void> {
     const protectedScanned = path.join(directory, "protected-scanned.pdf");
     const legacyStudioProtectedProject = path.join(directory, "legacy-studio-protected.pns");
     const legacyStudioProtectedHistoryProject = path.join(directory, "legacy-studio-protected-history.pns");
+    const legacyStudioProtectedFutureProject = path.join(directory, "legacy-studio-protected-future.pns");
+    const legacyStudioPlainProject = path.join(directory, "legacy-studio-plain.pns");
+    const legacyStudioAlternatePlainProject = path.join(directory, "legacy-studio-alternate-plain.pns");
 
     await createPlainPdf(plain);
     await createScannedPdf(scanned);
@@ -178,6 +190,9 @@ async function main(): Promise<void> {
     writeFileSync(malformed, Buffer.from("%PDF-1.7\nPLATEN_M1_MALFORMED_SYNTHETIC_INPUT\n", "ascii"));
     await createStudioProject(legacyStudioProtectedProject, protectedAlpha, [plain]);
     await createStudioProject(legacyStudioProtectedHistoryProject, plain, [protectedAlpha]);
+    await createStudioProject(legacyStudioProtectedFutureProject, plain, [], [protectedAlpha]);
+    await createStudioProject(legacyStudioPlainProject, plain, [plain], [plain]);
+    await createStudioProject(legacyStudioAlternatePlainProject, scanned, [], []);
 
     verifyPdf(plain, undefined, [ALPHA_MARKER, BETA_MARKER]);
     verifyPdf(protectedAlpha, PASSWORD_ALPHA, [ALPHA_MARKER, BETA_MARKER]);
@@ -211,7 +226,7 @@ async function main(): Promise<void> {
     }
 
     const qpdfVersion = run("qpdf", ["--version"]).trim().split("\n")[0];
-    const fixtures = [plain, protectedAlpha, protectedBeta, protectedLockOutput, scanned, protectedScanned, malformed, legacyStudioProtectedProject, legacyStudioProtectedHistoryProject].map((filePath) => ({
+    const fixtures = [plain, protectedAlpha, protectedBeta, protectedLockOutput, scanned, protectedScanned, malformed, legacyStudioProtectedProject, legacyStudioProtectedHistoryProject, legacyStudioProtectedFutureProject, legacyStudioPlainProject, legacyStudioAlternatePlainProject].map((filePath) => ({
         file: path.basename(filePath),
         bytes: readFileSync(filePath).byteLength,
         sha256: sha256(filePath),

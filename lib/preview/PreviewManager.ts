@@ -2,6 +2,7 @@
 
 import { PreviewRequest, PreviewResource, PreviewKey, createPreviewKey, PreviewRenderer, PreviewResult, PreviewError } from "./types";
 import { PreviewCache } from "./PreviewCache";
+import { isRestoredStudioPreviewAuthorized } from "@/lib/security/restoredStudioPreviewAuthorization";
 
 /**
  * Core orchestration layer for preview rendering. Handles request normalization, cache lookup,
@@ -82,6 +83,9 @@ export class PreviewManager {
 
     /** Direct cache lookup without triggering rendering. */
     getCached(request: PreviewRequest): PreviewResource | undefined {
+        if (request.document.file && !isRestoredStudioPreviewAuthorized(request.document.file)) {
+            return undefined;
+        }
         const key = createPreviewKey(request);
         return this.cache.get(key);
     }
@@ -92,8 +96,24 @@ export class PreviewManager {
             throw new Error("PreviewManager disposed");
         }
         const key = createPreviewKey(request);
-        const cached = this.cache.get(key);
         const handle = new PreviewHandleImpl(this, key);
+
+        if (request.document.file && !isRestoredStudioPreviewAuthorized(request.document.file)) {
+            handle._setPendingResult({
+                status: "error",
+                resource: null,
+                error: {
+                    code: "CLOUD_PREVIEW_AUTH_REQUIRED",
+                    message: "Cloud preview for this restored Studio project requires explicit Cloud preview authorization in this browser session.",
+                },
+                isLoading: false,
+                isSuccess: false,
+                isError: true,
+            }, null);
+            return handle;
+        }
+
+        const cached = this.cache.get(key);
 
         if (cached) {
             // Cache hit – store pending result; retain only when subscriber registers.

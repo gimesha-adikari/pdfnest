@@ -52,6 +52,8 @@ function hasPdfHeader(blob: Blob): Promise<boolean> {
 
 interface PdfUploaderProps {
     onFilesAccepted: (files: File[], acceptance?: UploadAcceptance) => void | Promise<void>;
+    /** Fires synchronously when a new picker/drop operation begins. */
+    onFilesSelected?: (files: File[]) => void;
     title?: string;
     description?: string;
     accept?: string;
@@ -74,6 +76,7 @@ interface UploadQueue {
 
 export default function PdfUploader({
     onFilesAccepted,
+    onFilesSelected,
     title = "Select or Drop Files Here",
     description = "Supports standard documents configuration formats",
     accept = "*/*",
@@ -113,6 +116,7 @@ export default function PdfUploader({
         setSessionConsentFiles(null);
         setPassword("");
         setError(null);
+        onFilesSelected?.(files);
 
         const selectedMode = processingMode;
 
@@ -214,7 +218,7 @@ export default function PdfUploader({
             });
         });
         await onFilesAccepted(accepted, { processingMode: selectedMode });
-    }, [bypassEncryptionCheck, onFilesAccepted, processingMode, protectedFileHandling]);
+    }, [bypassEncryptionCheck, onFilesAccepted, onFilesSelected, processingMode, protectedFileHandling]);
 
     useEffect(() => {
         if (!initialFiles?.length || handledInitialFilesRef.current === initialFiles) return;

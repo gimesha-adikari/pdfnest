@@ -1,8 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { StudioProject } from "@/lib/studio/project";
 import { inspectPdfEncryption } from "@/lib/security/inspectPdfProtection";
+import {
+    authorizeRestoredStudioPreview,
+    createRestoredStudioPreviewScope,
+    revokeRestoredStudioPreview,
+    type RestoredStudioPreviewScope,
+} from "@/lib/security/restoredStudioPreviewAuthorization";
 
 const PROTECTED_PROJECT_INPUT_MESSAGE =
     "Legacy Studio only accepts unprotected PDFs from project and recovery files. Open a password-free copy using a workflow you explicitly authorize. No document was submitted.";
@@ -23,6 +29,12 @@ export interface LoadFileResult {
     snapshot: DocumentSnapshot;
     past: DocumentSnapshot[];
     future: DocumentSnapshot[];
+}
+
+export interface PreparedStudioRestore {
+    readonly operationId: number;
+    readonly project: StudioProject;
+    readonly previewScope: RestoredStudioPreviewScope;
 }
 
 const MAX_HISTORY = 50;
@@ -68,6 +80,39 @@ export function useStudioDocument() {
 
     const [past, setPast] = useState<DocumentSnapshot[]>([]);
     const [future, setFuture] = useState<DocumentSnapshot[]>([]);
+    const operationGenerationRef = useRef(0);
+    const pendingRestoreScopeRef = useRef<RestoredStudioPreviewScope | null>(null);
+    const activeRestoreScopeRef = useRef<RestoredStudioPreviewScope | null>(null);
+    const mountedRef = useRef(true);
+
+    const invalidatePendingRestoreOperations = useCallback((): number => {
+        operationGenerationRef.current += 1;
+        const pendingScope = pendingRestoreScopeRef.current;
+        if (pendingScope) revokeRestoredStudioPreview(pendingScope);
+        pendingRestoreScopeRef.current = null;
+        setIsScanning(false);
+        return operationGenerationRef.current;
+    }, []);
+
+    const isOperationCurrent = useCallback((operationId: number): boolean => (
+        mountedRef.current && operationGenerationRef.current === operationId
+    ), []);
+
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+            operationGenerationRef.current += 1;
+            if (pendingRestoreScopeRef.current) {
+                revokeRestoredStudioPreview(pendingRestoreScopeRef.current);
+                pendingRestoreScopeRef.current = null;
+            }
+            if (activeRestoreScopeRef.current) {
+                revokeRestoredStudioPreview(activeRestoreScopeRef.current);
+                activeRestoreScopeRef.current = null;
+            }
+        };
+    }, []);
 
     const totalPages = pages.length;
 
@@ -90,22 +135,67 @@ export function useStudioDocument() {
         setIsScanning(false);
     }, []);
 
-    const restoreProject = useCallback(async (project: StudioProject) => {
+    const prepareProjectRestore = useCallback(async (
+        project: StudioProject,
+        requestedOperationId?: number,
+    ): Promise<PreparedStudioRestore | null> => {
+        const operationId = requestedOperationId ?? invalidatePendingRestoreOperations();
+        if (!isOperationCurrent(operationId)) return null;
+
         const snapshots = [project.current, ...project.past, ...project.future];
         const inspectedFiles = new Set<File>();
+        const previewScope = createRestoredStudioPreviewScope(snapshots.map((snapshot) => snapshot.file));
+        pendingRestoreScopeRef.current = previewScope;
 
-        for (const snapshot of snapshots) {
-            if (inspectedFiles.has(snapshot.file)) continue;
-            inspectedFiles.add(snapshot.file);
+        try {
+            for (const snapshot of snapshots) {
+                if (inspectedFiles.has(snapshot.file)) continue;
+                inspectedFiles.add(snapshot.file);
 
-            let encrypted: boolean;
-            try {
-                encrypted = await inspectPdfEncryption(snapshot.file);
-            } catch {
-                throw new Error("A PDF in this Studio project could not be verified as unprotected. No document was submitted.");
+                let encrypted: boolean;
+                try {
+                    encrypted = await inspectPdfEncryption(snapshot.file);
+                } catch {
+                    throw new Error("A PDF in this Studio project could not be verified as unprotected. No document was submitted.");
+                }
+
+                if (!isOperationCurrent(operationId)) {
+                    revokeRestoredStudioPreview(previewScope);
+                    return null;
+                }
+                if (encrypted) throw new Error(PROTECTED_PROJECT_INPUT_MESSAGE);
             }
-            if (encrypted) throw new Error(PROTECTED_PROJECT_INPUT_MESSAGE);
+
+            if (!isOperationCurrent(operationId) || pendingRestoreScopeRef.current !== previewScope) {
+                revokeRestoredStudioPreview(previewScope);
+                return null;
+            }
+
+            return Object.freeze({ operationId, project, previewScope });
+        } catch (error) {
+            revokeRestoredStudioPreview(previewScope);
+            if (pendingRestoreScopeRef.current === previewScope) pendingRestoreScopeRef.current = null;
+            throw error;
         }
+    }, [invalidatePendingRestoreOperations, isOperationCurrent]);
+
+    const activatePreparedRestore = useCallback((prepared: PreparedStudioRestore): boolean => {
+        if (
+            !isOperationCurrent(prepared.operationId) ||
+            pendingRestoreScopeRef.current !== prepared.previewScope
+        ) {
+            revokeRestoredStudioPreview(prepared.previewScope);
+            return false;
+        }
+
+        authorizeRestoredStudioPreview(prepared.previewScope);
+        if (activeRestoreScopeRef.current && activeRestoreScopeRef.current !== prepared.previewScope) {
+            revokeRestoredStudioPreview(activeRestoreScopeRef.current);
+        }
+        activeRestoreScopeRef.current = prepared.previewScope;
+        pendingRestoreScopeRef.current = null;
+
+        const { project } = prepared;
 
         setActiveFile(project.current.file);
         setPages(clonePages(project.current.pages));
@@ -124,6 +214,16 @@ export function useStudioDocument() {
         })));
         setErrorMessage(null);
         setIsScanning(false);
+        return true;
+    }, [isOperationCurrent]);
+
+    const cancelPreparedRestore = useCallback((prepared: PreparedStudioRestore): void => {
+        revokeRestoredStudioPreview(prepared.previewScope);
+        if (pendingRestoreScopeRef.current !== prepared.previewScope) return;
+        pendingRestoreScopeRef.current = null;
+        if (operationGenerationRef.current === prepared.operationId) {
+            operationGenerationRef.current += 1;
+        }
     }, []);
 
     const scanPages = useCallback(async (file: Blob): Promise<StudioPage[]> => {
@@ -148,6 +248,7 @@ export function useStudioDocument() {
             file: File,
             pushHistory: boolean
         ): Promise<LoadFileResult | null> => {
+            const operationId = invalidatePendingRestoreOperations();
             const snapshotBeforeChange = pushHistory ? captureSnapshot() : null;
 
             setErrorMessage(null);
@@ -155,6 +256,8 @@ export function useStudioDocument() {
 
             try {
                 const scanned = await scanPages(file);
+
+                if (!isOperationCurrent(operationId)) return null;
 
                 const nextPast = snapshotBeforeChange
                     ? appendSnapshot(past, snapshotBeforeChange)
@@ -169,6 +272,11 @@ export function useStudioDocument() {
                     fingerprint: getSnapshotFingerprint(file, scanned, 0),
                 };
 
+                if (activeRestoreScopeRef.current) {
+                    revokeRestoredStudioPreview(activeRestoreScopeRef.current);
+                    activeRestoreScopeRef.current = null;
+                }
+
                 setPast(nextPast);
                 setFuture(nextFuture);
                 setActiveFile(file);
@@ -181,16 +289,17 @@ export function useStudioDocument() {
                     future: nextFuture,
                 };
             } catch (err: unknown) {
+                if (!isOperationCurrent(operationId)) return null;
                 const message =
                     err instanceof Error ? err.message : "Failed to read PDF pages.";
                 setErrorMessage(message);
                 console.error(err);
                 return null;
             } finally {
-                setIsScanning(false);
+                if (isOperationCurrent(operationId)) setIsScanning(false);
             }
         },
-        [captureSnapshot, scanPages, past]
+        [captureSnapshot, invalidatePendingRestoreOperations, isOperationCurrent, scanPages, past]
     );
 
     const handleFilesAccepted = useCallback(
@@ -220,6 +329,7 @@ export function useStudioDocument() {
 
     const undo = useCallback(() => {
         if (!past.length) return;
+        invalidatePendingRestoreOperations();
 
         const currentSnapshot = captureSnapshot();
         const previousSnapshot = past[past.length - 1];
@@ -231,10 +341,11 @@ export function useStudioDocument() {
         }
 
         restoreSnapshot(previousSnapshot);
-    }, [captureSnapshot, past, restoreSnapshot]);
+    }, [captureSnapshot, invalidatePendingRestoreOperations, past, restoreSnapshot]);
 
     const redo = useCallback(() => {
         if (!future.length) return;
+        invalidatePendingRestoreOperations();
 
         const currentSnapshot = captureSnapshot();
         const nextSnapshot = future[future.length - 1];
@@ -246,7 +357,7 @@ export function useStudioDocument() {
         }
 
         restoreSnapshot(nextSnapshot);
-    }, [captureSnapshot, future, restoreSnapshot]);
+    }, [captureSnapshot, future, invalidatePendingRestoreOperations, restoreSnapshot]);
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -282,6 +393,11 @@ export function useStudioDocument() {
     }, [redo, undo]);
 
     const resetDocument = useCallback(() => {
+        invalidatePendingRestoreOperations();
+        if (activeRestoreScopeRef.current) {
+            revokeRestoredStudioPreview(activeRestoreScopeRef.current);
+            activeRestoreScopeRef.current = null;
+        }
         setActiveFile(null);
         setPages([]);
         setCurrentPageIndex(0);
@@ -289,7 +405,7 @@ export function useStudioDocument() {
         setIsScanning(false);
         setPast([]);
         setFuture([]);
-    }, []);
+    }, [invalidatePendingRestoreOperations]);
 
     return {
         activeFile,
@@ -309,7 +425,11 @@ export function useStudioDocument() {
         redo,
         resetDocument,
         captureSnapshot,
-        restoreProject,
+        prepareProjectRestore,
+        activatePreparedRestore,
+        cancelPreparedRestore,
+        beginRestoreOperation: invalidatePendingRestoreOperations,
+        isOperationCurrent,
         past,
         future,
     };

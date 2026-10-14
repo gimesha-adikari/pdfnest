@@ -5,11 +5,18 @@ import StudioBanner from "@/components/studio/StudioBanner";
 import StudioWelcome from "@/components/studio/StudioWelcome";
 import StudioWorkspace from "@/components/studio/StudioWorkspace";
 import { useStudio } from "@/hooks/useStudio";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ExportDialog from "@/components/studio/export/ExportDialog";
 import { deleteStudioSession, loadStudioSession } from "@/lib/studio/autosave";
 import RecoveryDialog from "@/components/studio/recovery/RecoveryDialog";
 import { openProject } from "@/lib/studio/openProject";
+import RestoreCloudPreviewDialog from "@/components/studio/recovery/RestoreCloudPreviewDialog";
+import type { PreparedStudioRestore } from "@/hooks/useStudioDocument";
+
+type RestoreSource = "project" | "recovery";
+type RestoreFlow =
+    | { stage: "inspecting"; source: RestoreSource; operationId: number }
+    | { stage: "consent"; source: RestoreSource; prepared: PreparedStudioRestore };
 
 if (typeof window !== "undefined") {
     import("pdfjs-dist")
@@ -25,7 +32,10 @@ if (typeof window !== "undefined") {
 export default function StudioPageBase() {
     const [recoveryOpen, setRecoveryOpen] = useState(false);
     const [recovery, setRecovery] = useState<any>(null);
+    const [recoveryFeedback, setRecoveryFeedback] = useState<string | null>(null);
+    const [restoreFlow, setRestoreFlow] = useState<RestoreFlow | null>(null);
     const [exportOpen, setExportOpen] = useState(false);
+    const selectedOperationByFile = useRef(new WeakMap<File, number>());
 
     const {
         document,
@@ -38,38 +48,64 @@ export default function StudioPageBase() {
         saveCurrentProject,
     } = useStudio();
 
+    const { beginRestoreOperation, isOperationCurrent } = document;
+
     useEffect(() => {
+        const operationId = beginRestoreOperation();
+        let active = true;
         (async () => {
             try {
                 const save = await loadStudioSession();
+                if (!active || !isOperationCurrent(operationId)) return;
                 if (!save) return;
 
                 setRecovery(save);
+                setRecoveryFeedback(null);
                 setRecoveryOpen(true);
             } catch (err) {
+                if (!active || !isOperationCurrent(operationId)) return;
                 console.error("Failed to read the autosaved Studio session:", err);
             }
         })();
-    }, []);
+        return () => {
+            active = false;
+        };
+    }, [beginRestoreOperation, isOperationCurrent]);
+
+    const handleFilesSelected = (files: File[]) => {
+        const operationId = document.beginRestoreOperation();
+        for (const file of files) selectedOperationByFile.current.set(file, operationId);
+
+        setRestoreFlow(null);
+        setRecoveryOpen(false);
+        setRecoveryFeedback(null);
+    };
 
     const resumeRecovery = async () => {
         if (!recovery) return;
 
+        const operationId = document.beginRestoreOperation();
+        setRecoveryOpen(false);
+        setRecoveryFeedback(null);
+        setRestoreFlow({ stage: "inspecting", source: "recovery", operationId });
         try {
-            await document.restoreProject(recovery);
-            preview.clearPreviewCache();
-            zoom.setZoom(recovery.zoom);
-            tools.setActiveTool(recovery.activeTool);
-            setRecoveryOpen(false);
+            const prepared = await document.prepareProjectRestore(recovery, operationId);
+            if (!prepared || !document.isOperationCurrent(operationId)) return;
+            setRestoreFlow({ stage: "consent", source: "recovery", prepared });
         } catch (err) {
+            if (!document.isOperationCurrent(operationId)) return;
+            setRestoreFlow(null);
             document.setErrorMessage(
                 err instanceof Error ? err.message : "This Studio recovery could not be opened."
             );
-            setRecoveryOpen(false);
+            setRecoveryFeedback("The saved recovery was left unchanged. You can try again or discard it.");
+            setRecoveryOpen(true);
         }
     };
 
     const discardRecovery = async () => {
+        document.beginRestoreOperation();
+        setRestoreFlow(null);
         try {
             await deleteStudioSession();
         } catch (err) {
@@ -77,7 +113,50 @@ export default function StudioPageBase() {
         }
 
         setRecovery(null);
+        setRecoveryFeedback(null);
         setRecoveryOpen(false);
+    };
+
+    const cancelRestore = () => {
+        if (!restoreFlow) return;
+        if (restoreFlow.stage === "consent") {
+            document.cancelPreparedRestore(restoreFlow.prepared);
+        } else {
+            document.beginRestoreOperation();
+        }
+
+        setRestoreFlow(null);
+        if (restoreFlow.source === "recovery") {
+            setRecoveryFeedback("Cloud preview was not authorized. The current document is unchanged and the saved recovery remains available.");
+            setRecoveryOpen(true);
+        } else {
+            document.setErrorMessage("The project was not opened because Cloud preview was not authorized. The current document is unchanged.");
+        }
+    };
+
+    const authorizeRestorePreview = () => {
+        if (!restoreFlow || restoreFlow.stage !== "consent") return;
+
+        const { prepared } = restoreFlow;
+        try {
+            if (!document.activatePreparedRestore(prepared)) {
+                setRestoreFlow(null);
+                return;
+            }
+
+            preview.clearPreviewCache();
+            zoom.setZoom(prepared.project.zoom);
+            tools.setActiveTool(prepared.project.activeTool);
+            setRestoreFlow(null);
+            setRecoveryOpen(false);
+            setRecoveryFeedback(null);
+        } catch (err) {
+            document.cancelPreparedRestore(prepared);
+            setRestoreFlow(null);
+            document.setErrorMessage(
+                err instanceof Error ? err.message : "This Studio project could not be authorized for preview."
+            );
+        }
     };
 
     const handleFilesAccepted = async (files: File[]) => {
@@ -87,15 +166,19 @@ export default function StudioPageBase() {
         const lower = file.name.toLowerCase();
 
         if (lower.endsWith(".pns")) {
-            preview.clearPreviewCache();
+            const operationId = selectedOperationByFile.current.get(file) ?? document.beginRestoreOperation();
+            setRecoveryOpen(false);
+            setRestoreFlow({ stage: "inspecting", source: "project", operationId });
 
             try {
                 const project = await openProject(file);
-
-                await document.restoreProject(project);
-                zoom.setZoom(project.zoom);
-                tools.setActiveTool(project.activeTool);
+                if (!document.isOperationCurrent(operationId)) return;
+                const prepared = await document.prepareProjectRestore(project, operationId);
+                if (!prepared || !document.isOperationCurrent(operationId)) return;
+                setRestoreFlow({ stage: "consent", source: "project", prepared });
             } catch (err) {
+                if (!document.isOperationCurrent(operationId)) return;
+                setRestoreFlow(null);
                 document.setErrorMessage(
                     err instanceof Error ? err.message : "This Studio project could not be opened."
                 );
@@ -105,6 +188,14 @@ export default function StudioPageBase() {
         }
 
         await document.handleFilesAccepted([file]);
+    };
+
+    const handleReset = () => {
+        document.beginRestoreOperation();
+        setRestoreFlow(null);
+        setRecoveryOpen(false);
+        setRecoveryFeedback(null);
+        resetStudio();
     };
 
     const handleSaveProject = async () => {
@@ -140,12 +231,13 @@ export default function StudioPageBase() {
                 totalPages={document.totalPages}
                 isSidebarOpen={sidebar.isSidebarOpen}
                 onToggleSidebar={sidebar.toggleSidebar}
-                onReset={resetStudio}
+                onReset={handleReset}
             />
 
             {!document.activeFile ? (
                 <StudioWelcome
                     onFilesAccepted={handleFilesAccepted}
+                    onFilesSelected={handleFilesSelected}
                     errorMessage={document.errorMessage}
                 />
             ) : (
@@ -166,6 +258,7 @@ export default function StudioPageBase() {
                     onToggleSidebar={sidebar.toggleSidebar}
                     onUploadClick={sidebar.openUpload}
                     onFilesAccepted={handleFilesAccepted}
+                    onFilesSelected={handleFilesSelected}
                     onPageSelect={document.setCurrentPageIndex}
                     onToolSelect={tools.setActiveTool}
                     onZoomIn={zoom.zoomIn}
@@ -195,7 +288,15 @@ export default function StudioPageBase() {
                 open={recoveryOpen}
                 onResume={resumeRecovery}
                 onDiscard={discardRecovery}
+                message={recoveryFeedback}
             />
+            {restoreFlow && (
+                <RestoreCloudPreviewDialog
+                    stage={restoreFlow.stage}
+                    onAuthorize={restoreFlow.stage === "consent" ? authorizeRestorePreview : undefined}
+                    onCancel={cancelRestore}
+                />
+            )}
         </div>
     );
 }

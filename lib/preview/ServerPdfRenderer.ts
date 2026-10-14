@@ -1,7 +1,8 @@
 // pdfnest/lib/preview/ServerPdfRenderer.ts
 
-import { PreviewRenderer, PreviewRequest, PreviewResource } from "./types";
+import { PreviewRenderer, PreviewRequest, PreviewResource, getPreviewFileIdentity } from "./types";
 import { markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
+import { assertRestoredStudioPreviewAuthorized } from "@/lib/security/restoredStudioPreviewAuthorization";
 
 export interface ServerPdfRendererOptions {
     /**
@@ -30,8 +31,8 @@ function isAbortError(err: unknown): boolean {
 /**
  * Thin server-side renderer adapter wrapping the backend preview session REST API.
  *
- * Session lifecycle: A session is created once per document identity (file name + size +
- * lastModified + type) and reused for subsequent page requests. On a 404 (session expired),
+ * Session lifecycle: A session is created once per in-memory File identity and reused for
+ * subsequent page requests. On a 404 (session expired),
  * the renderer creates a new session and retries the page fetch exactly once.
  *
  * Session-creation deduplication: concurrent render calls share one in-flight session promise.
@@ -82,6 +83,7 @@ export class ServerPdfRenderer implements PreviewRenderer {
         }
 
         const file = request.document.file;
+        assertRestoredStudioPreviewAuthorized(file);
         const scale = this._resolveScale(request);
 
         // Await the shared session promise independently — see _ensureSession for signal contract.
@@ -149,7 +151,7 @@ export class ServerPdfRenderer implements PreviewRenderer {
     // ---------------------------------------------------------------------------
 
     private _fileIdentity(file: File): string {
-        return `${file.name}:${file.size}:${file.lastModified}:${file.type}`;
+        return getPreviewFileIdentity(file);
     }
 
     private _invalidateSession(file: File): void {
@@ -222,6 +224,9 @@ export class ServerPdfRenderer implements PreviewRenderer {
         const formData = new FormData();
         formData.append("file", file);
 
+        // Recheck immediately at the transport boundary. The outer check also
+        // protects an already-created or in-flight session from later reuse.
+        assertRestoredStudioPreviewAuthorized(file);
         // This is the Legacy Studio upload boundary. The marker is an attempt
         // record only and remains set if the request fails or is cancelled.
         markCloudSubmissionInitiated([file]);

@@ -26,6 +26,7 @@ interface StudioSidebarProps {
     onToggleSidebar: () => void;
     onUploadClick: () => void;
     onFilesAccepted: (files: File[]) => Promise<void>;
+    onFilesSelected: (files: File[]) => void;
     onPageSelect: (page: number) => void;
 }
 
@@ -39,6 +40,7 @@ export default function StudioSidebar({
                                           onToggleSidebar,
                                           onUploadClick,
                                           onFilesAccepted,
+                                          onFilesSelected,
                                           onPageSelect,
                                       }: StudioSidebarProps) {
     return (
@@ -116,6 +118,7 @@ export default function StudioSidebar({
                         inputRef={uploadInputRef}
                         showDropZone={isSidebarOpen}
                         onFilesAccepted={onFilesAccepted}
+                        onFilesSelected={onFilesSelected}
                         title="Drop PDF here"
                         description="Or use upload button"
                         accept=".pdf,.pns"

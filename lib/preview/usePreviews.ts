@@ -12,6 +12,7 @@ import {
     PreviewRequest,
     PreviewResource,
     PreviewResult,
+    getPreviewFileIdentity,
 } from "./types";
 import { getDefaultPreviewManager } from "./usePreview";
 
@@ -55,7 +56,7 @@ export interface PreviewItemResult {
 
 function buildDocumentHandle(file: File): DocumentHandle {
     return {
-        id: `${file.name}:${file.size}:${file.lastModified}:${file.type}`,
+        id: getPreviewFileIdentity(file),
         version: String(file.lastModified),
         pageCount: 0,
         file,
