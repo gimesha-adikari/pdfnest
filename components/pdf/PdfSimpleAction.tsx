@@ -49,7 +49,7 @@ export default function PdfSimpleAction({
                 const formData = new FormData();
                 formData.append("file", file);
 
-                const responseBlob = await uploadAndDownloadFile(apiEndpoint, formData);
+                const responseBlob = await uploadAndDownloadFile(apiEndpoint, formData, undefined, undefined, "pdf");
 
                 const prefix = apiEndpoint.split('/').pop() || "processed";
 

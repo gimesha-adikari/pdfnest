@@ -70,7 +70,7 @@ export default function OfficeConverter({targetFormat, title, description, icon}
                     formData.append("file_password", typedFile.originalPassword);
                 }
 
-                const responseBlob = await uploadAndDownloadFile(apiEndpoint, formData);
+                const responseBlob = await uploadAndDownloadFile(apiEndpoint, formData, undefined, undefined, "non-pdf");
 
                 const baseName = file.name.replace(/\.pdf$/i, "");
 

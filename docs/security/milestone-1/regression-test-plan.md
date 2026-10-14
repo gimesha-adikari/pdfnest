@@ -6,7 +6,7 @@
 
 ## Test execution boundaries
 
-The Stage 0 F-01 execution script remains a separate M1-S1-01 task-verification command; all seven manager assertions pass on the integrated milestone branch, while the original `main` baseline failed three. The F-02 script remains opt-in and is expected to fail its two re-lock assertions. Ordinary unit discovery includes the Device safety and feature-flag tests plus the M1-S1-02 transient-provenance and worker-cancellation tests. The new Playwright privacy suite is a separate task-verification command and is not added to required CI. Do not enable the F-02 script in required CI.
+The Stage 0 F-01 execution script remains a separate M1-S1-01 task-verification command; all seven manager assertions pass on the integrated milestone branch, while the original `main` baseline failed three. The F-02 script's two failure-open assertions failed at the Stage 0/M1-S1-02R2 baseline and now pass after M1-S2-01; the script remains opt-in because it uses qpdf-generated synthetic artifacts. Ordinary unit discovery includes the Device safety and feature-flag tests, M1-S1-02 transient-provenance and worker-cancellation tests, and deterministic protected-output helper/validator tests. The Playwright privacy suite remains a separate local task-verification command and is not added to required CI. Do not contact production services from these tests.
 
 Commands:
 
@@ -30,13 +30,14 @@ Fixtures default to `/tmp/platen-m1-security-fixtures`; use `--out-dir PATH` to 
 
 ## Synthetic fixture set
 
-`tests/security/milestone-1/generate-fixtures.ts` creates four small files from a deterministic, fixed-metadata two-page `pdf-lib` source, then uses installed `qpdf` to produce independent encrypted variants. Encryption uses randomized ciphertext, so byte hashes can differ between runs; the script prints SHA-256 per generated artifact for each run rather than asserting a fixed encrypted-file digest. No binary PDF is committed.
+`tests/security/milestone-1/generate-fixtures.ts` creates seven small files from deterministic, fixed-metadata `pdf-lib` sources, then uses installed `qpdf` to produce independent encrypted variants. Encryption uses randomized ciphertext, so byte hashes can differ between runs; the script prints SHA-256 per generated artifact for each run rather than asserting a fixed encrypted-file digest. No binary PDF is committed.
 
 | Fixture | Format/pages | Marker | Protection and test password | Independent verification |
 |---|---|---|---|---|
 | `plain-two-pages.pdf` | Valid PDF, 2 pages | `PLATEN_M1_SYNTHETIC_ALPHA`, `PLATEN_M1_SYNTHETIC_BETA` | None | `qpdf --check`; `pdfinfo` page count; `pdftotext` marker extraction |
 | `protected-alpha.pdf` | Valid PDF, 2 pages | Same two markers | AES-256; user `platen-m1-user-alpha`, owner `platen-m1-owner-alpha` | Correct password accepted by qpdf/pdfinfo/pdftotext; `pdfinfo` reports `Encrypted: yes`; wrong password rejected by qpdf |
 | `protected-beta.pdf` | Valid PDF, 2 pages | Same two markers | AES-256; user `platen-m1-user-beta`, owner `platen-m1-owner-beta` | Correct password accepted by qpdf/pdfinfo/pdftotext; `pdfinfo` reports `Encrypted: yes` |
+| `protected-lock-output-aes128.pdf` | Valid PDF, 2 pages | Same two markers | AES-128 (AESv2); user and owner `platen-m1-user-alpha` | qpdf `--show-encryption` reports AESv2; correct password and content validated independently |
 | `malformed.pdf` | Deliberately invalid PDF-like bytes | `PLATEN_M1_MALFORMED_SYNTHETIC_INPUT` | None | `qpdf --check` fails as expected |
 
 The user passwords are synthetic test data, not credentials. Fixture creation requires existing `pdf-lib`, `qpdf`, `pdfinfo`, and `pdftotext`; no PDF package was installed. qpdf 12.3.2 is available in the inspected environment. qpdf does not allow `--deterministic-id` with encrypted output; the generator therefore fixes source metadata and content but lets qpdf generate encryption randomness. The per-run hashes preserve evidence of the exact artifacts used.
@@ -96,49 +97,53 @@ The 26-case Playwright suite in `tests/security/milestone-1/protected-input-priv
 
 ## F-02 protected-result matrix
 
-Core source boundary: [`uploadAndDownloadFile`](../../../lib/api.ts#L323-L365), followed by each workspace's result/download state. In a re-lock failure, the current helper emits 100% progress first, catches the lock error, and resolves with the processing response Blob.
+Core source boundary: [`uploadAndDownloadFile`](../../../lib/api.ts#L323-L365), followed by each workspace's result/download state. At the Stage 0 baseline, a re-lock failure emitted 100% progress, swallowed the lock error, and resolved with the processing response Blob. M1-S2-01 removes that failure-open path.
 
 | Case | Layer / stimulus | Invariant to assert | Stage 0 status |
 |---|---|---|---|
 | Successful protected PDF processing | API integration using an alpha fixture | Re-lock completes; response is a valid two-page PDF; correct password opens it; no/incorrect password is rejected | Planned for Stage 1; validate with independent qpdf/pdfinfo/pdftotext, not HTTP success alone |
-| Injected `/api/security/lock` failure | API helper unit; successful synthetic processing response then 503 at lock | Reject; no result Blob; no download-state publication; no 100% completion before protection | Included in `f02-relock-failure.regression.ts`; still fails on the milestone branch for resolve/no-Blob and progress invariants; not part of M1-S1-01 |
-| Malformed lock response | API/browser integration; 200 response containing malformed bytes or non-PDF content | Treat as failure; no result publication | Planned; current helper trusts response data/type |
-| Unexpected unprotected response | API integration; lock endpoint returns a valid but unencrypted PDF | Reject/withhold result under an approved preservation contract | Planned; validate encryption independently with qpdf |
-| Cancellation during required restoration | API/browser integration; abort after processing but before/during lock | No success state or download; abort semantics are explicit; no unprotected fallback | Planned; current helper uses the signal for initial request but does not pass it to its lock request |
+| Injected `/api/security/lock` failure | API helper unit; successful synthetic processing response then transport/HTTP failure at lock | Reject; no result Blob; no download-state publication; no 100% completion before protection | Stage 0/M1-S1 baseline failed; passes in the expanded `f02-relock-failure.regression.ts` and mandatory `pdfArtifactRestoration.test.ts` |
+| Malformed lock response | API/validator tests; 200 response containing malformed bytes or non-PDF content | Treat as failure; no result publication | Passes in the helper unit suite and F-02 regression script |
+| PDF result with missing, generic, or misleading media type | API helper regression; PDF bytes returned as `application/octet-stream`, without `Content-Type`, or mislabeled `application/json` | Detect the PDF candidate and require restoration; reject an unprotected response | Passes in the helper unit suite and F-02 regression script; a local browser case also uses `application/octet-stream` |
+| Valid protected lock output with generic media type | F-02 regression; AES-128 response returned as `application/octet-stream` | Validate the actual PDF and expected password rather than trusting or requiring MIME metadata | Passes in the F-02 regression script; qpdf independently confirms the AESv2 artifact |
+| Unexpected unprotected response | API/validator tests; lock endpoint returns a valid but unencrypted PDF | Reject/withhold result under the existing single-file password-restoration contract | Passes using PDF.js runtime verification; the actual result fixture is independently inspected with qpdf |
+| Wrong-password lock response | API/validator tests; response uses a different synthetic user password | Reject; no result Blob or 100% completion | Passes in `f02-relock-failure.regression.ts` using protected beta as the incorrect-password response |
+| Cancellation during required restoration | API/validator/browser test; abort after processing and before/during lock or while PDF.js is validating | No success state or download; abort semantics are explicit; no unprotected fallback | Passes in helper and validator unit tests; browser request is local-mock-only |
 | Wrong input password | Integration with wrong password | Reject processing; no output Blob or download | Planned; independent backend behavior must be exercised with synthetic fixture |
 | Multiple protected inputs | Merge integration with alpha and beta | Follow an explicitly approved mixed-password/output policy; validate every output independently | Fixture pair exists; policy and test are blocked on product decision |
 | Temporary result publication/cleanup failure | Backend/API integration with injected file/send/cleanup faults | No artifact is reported complete before validated protected bytes exist; temporary files are handled under an explicit lifecycle rule | Planned; backend cleanup paths are not changed in Stage 0 |
-| Progress/completion order | API helper test with progress spy | 100% and success state follow completed protection and validation | Included for lock failure; currently fails because 100 is emitted before the lock request |
-| Non-PDF and explicit Unlock | Contract regression for TXT/images/Word and Unlock | Do not apply PDF re-lock to outputs where protection is not applicable or intentionally removed | Plan only; product exceptions should be codified before global helper changes |
+| Progress/completion order | API helper test with progress spy | 100% and success state follow completed protection and validation | Failure and positive cases pass; completion is emitted only after verification |
+| Non-PDF and explicit Unlock | Contract regression for DOCX and Unlock; explicit Lock endpoint regression | Do not apply PDF re-lock to outputs where protection is not applicable or intentionally removed; avoid recursive explicit Lock | Passes in `pdfArtifactRestoration.test.ts`; explicit Lock output validation remains outside this task |
 
-The current F-02 harness injects the lock failure in-process and never contacts a backend. It checks one processing call, one lock call, absence of a resolved Blob, and absence of 100% progress. It does not yet validate a successful encrypted artifact or a workspace's `setDownloadData`/download side effect.
+At the Stage 0 baseline, the F-02 harness injected a lock failure in-process and demonstrated that the helper incorrectly resolved with a Blob and emitted 100%. M1-S2-01 keeps this characterization and expands it with valid AES-128, plaintext, malformed, unexpected-content, wrong-password, HTTP-failure, and generically, missing, or incorrectly labeled PDF media types. A PDF MIME type or a PDF header in the first 1024 bytes classifies a candidate; callers may also specify a known PDF/non-PDF output kind. PDF.js must parse the restored artifact and prove password behavior. The lock response MIME is not trusted or required once PDF.js can validate the Blob. The script continues to use local Axios stubs; no backend request is made. The browser test exercises the real Rotate workspace success/failure handlers against intercepted synthetic responses and confirms that an unverified plaintext response cannot reach the download page.
 
 ## Test layers, discovery, and CI activation
 
 | Layer | Responsibility | Current or planned runner |
 |---|---|---|
-| Required unit suite | F-01 manager routing, Device/Auto/Cloud compatibility, feature flags, PDF preparation provenance, and route policy | `npm run test:unit` discovers the manager, flag, preparation, cancellation, and route-policy suites |
-| Task-specific characterization | Seven F-01 execution-manager assertions; F-02 helper failure ordering | Run `npx tsx tests/security/milestone-1/f01-execution.regression.ts` for M1-S1-01; keep `f02-relock-failure.regression.ts` opt-in and unresolved |
+| Required unit suite | F-01 manager routing, Device/Auto/Cloud compatibility, feature flags, PDF preparation provenance, route policy, protected-output HTTP boundary, and deterministic PDF.js verifier behavior | `npm run test:unit` discovers the added `pdfArtifactRestoration.test.ts` and `protectedPdfOutputVerification.test.ts` suites |
+| Task-specific characterization | Seven F-01 execution-manager assertions; F-02 helper restoration and actual artifact checks | Run the F-01 script and `npx tsx tests/security/milestone-1/f02-relock-failure.regression.ts`; F-02 remains out of required CI because its positive fixture relies on qpdf |
 | Browser/network | Pre-workspace uploader requests, mode consent, cancellation, replacement races, selected Studio paths | `tests/security/milestone-1/protected-input-privacy.spec.ts`; opt-in task verification against a local app/API mock, not in required CI |
 | Backend/API integration | Unlock/lock response errors, malformed/unprotected output, merge behavior, temporary-file lifecycle | Synthetic local integration environment only; no production endpoint or production file |
 | Independent artifact validation | Encryption, password correctness, page count, marker content | qpdf, pdfinfo, pdftotext against generated fixtures/results |
 | Existing frontend checks | Unit and hybrid execution coverage | `npm run test:unit` scans `tests/unit/*.test.ts`/`.mts`; [`tests/runUnitTests.ts`](../../../tests/runUnitTests.ts#L1-L50) excludes seven execution suites. [`tests/runHybridTests.ts`](../../../tests/runHybridTests.ts) separately drives hybrid suites. Neither runner discovers this `tests/security/.../*.regression.ts` scaffold. |
 
-The security Playwright spec is excluded from the default `npm test` run unless `PLATEN_M1_PRIVACY_E2E=1` is explicitly set, because it requires the local app and mock API. No testing framework or npm dependency was added. Manager assertions remain mandatory through the existing unit suite; the F-01 execution script stays a separate task-verification command. Browser/network acceptance, independent output-artifact validation, and unresolved product rules remain separate gates.
+The security Playwright spec is excluded from the default `npm test` run unless `PLATEN_M1_PRIVACY_E2E=1` is explicitly set, because it requires the local app and mock API. No testing framework or npm dependency was added. Manager assertions and the deterministic F-02 helper/validator tests run in ordinary unit verification; the qpdf-backed F-02 script and browser/network suite remain separate task-verification commands. Browser-to-mock evidence is separate from real-backend integration.
 
 ## Existing evidence and limits
 
 - The prior findings repository reports 100 frontend unit-test files passed in its earlier baseline validation, while stating that the complete application suite/build was not run during that audit. This is historical audit evidence, not a command run for this Stage 0 commit.
 - The findings' production tests cover selected synthetic, unencrypted Merge submissions and other workflows; they do not prove encrypted input privacy or protected output restoration.
-- Stage 0's baseline run showed three F-01 manager failures and two F-02 failures. M1-S1-01's focused run now passes all seven F-01 manager assertions; the separate F-02 script still fails two assertions as expected.
+- Stage 0's baseline run showed three F-01 manager failures and two F-02 failures. M1-S1-01's focused run passes all seven F-01 manager assertions; M1-S2-01 changes the two F-02 failure-open assertions to passing requirements on the milestone branch.
 - Feature-flag unit tests run under Node and verify precedence, normalization, and malformed-value handling. They do not prove that a Next.js production build inlines the public environment values; M1-S1-01 did not run a build-artifact check.
-- Browser-level request interception verifies the selected route and uploader boundaries listed above, but real backend behavior, successful end-to-end re-encryption, malformed/unprotected output validation, cancellation during output restoration, Studio V2 result validation, and mixed-password Merge output policy remain unverified.
+- Browser-level request interception verifies the selected route and uploader boundaries listed above. M1-S2-01 additionally verifies the real React Rotate caller against local mocked processing and lock endpoints. Real backend behavior, production-browser behavior, queued/Studio V2 result validation, and mixed-password Merge output policy remain unverified.
+- The complete local Chromium privacy suite passed 38/38 cases for this task revision. The two M1-S2-01 cases prove that a plaintext HTTP 200 lock response leaves the real Rotate workspace without publishing a result, while a backend-compatible AES-128 response reaches the download page only after PDF.js verification. The cross-tool transfer case also re-inspects the encrypted result and requires target-route authorization before another Cloud submission.
 
 ## Remaining boundaries
 
 1. M1-S1-02R closes the reviewed uploader-to-workspace venue inconsistency for the tested and qualified routes. Remaining F-01 work should audit unqualified and uncovered legacy/direct Cloud paths and qualify real supported browser/API combinations before claiming complete application-wide Device privacy.
-2. F-02 re-lock failure propagation and protected-artifact validation remain a separate unresolved task. Its current regression script is expected to fail and is not enabled in required CI.
-3. Browser/network acceptance, successful encrypted-output validation, malformed/unprotected response validation, Studio V2 result validation, and mixed-password merge behavior have not been established here.
+2. M1-S2-01 closes the shared single-file `uploadAndDownloadFile` failure-open re-lock path. This is bounded F-02 progress, not complete protected-artifact safety: explicit Lock output validation, mixed-password Merge policy, direct/queued/Studio V2 publication, and backend integration remain outside scope or unresolved.
+3. The local browser test and qpdf/PDF.js fixture checks are not production or real-backend acceptance. Mixed-password Merge policy remains undecided and must not be inferred from this task.
 4. Continue remaining work on unreleased development branches. Consider production merges only after milestone qualification and explicit user approval; this plan does not authorize production deployment or a default-branch merge.
 
 ## M1-S1-02R2 consent and result-provenance correction

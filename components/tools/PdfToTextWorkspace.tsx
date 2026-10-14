@@ -210,7 +210,10 @@ export default function PdfToTextWorkspace() {
 
             const responseBlob = await uploadAndDownloadFile(
                 "/api/ocr/extract-text-async",
-                formData
+                formData,
+                undefined,
+                undefined,
+                "non-pdf"
             );
 
             const jsonText = await responseBlob.text();

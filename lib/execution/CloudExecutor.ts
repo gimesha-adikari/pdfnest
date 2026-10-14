@@ -76,9 +76,12 @@ export class CloudExecutor {
 
         // 4. Resolve backend API endpoint
         const endpoint = getEndpointForTool(tool, params);
+        const outputKind = ["pdf_to_images", "pdf_to_text", "pdf_to_markdown"].includes(normalizedTool)
+            ? "non-pdf"
+            : "pdf";
 
         try {
-            const blob = await uploadAndDownloadFile(endpoint, formData, onProgress, options.signal);
+            const blob = await uploadAndDownloadFile(endpoint, formData, onProgress, options.signal, outputKind);
             return blob;
         } catch (err: unknown) {
             if (

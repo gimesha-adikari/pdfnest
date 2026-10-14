@@ -50,7 +50,10 @@ export default function WordExport({ file, onExportedFile }: StudioExportProps) 
 
                 const responseBlob = await uploadAndDownloadFile(
                     "/api/conversion/pdf-to-word",
-                    formData
+                    formData,
+                    undefined,
+                    undefined,
+                    "non-pdf"
                 );
 
                 const result: StudioExportResult = {

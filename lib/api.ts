@@ -1,6 +1,7 @@
 import axios from "axios";
 import { backendHealth } from "@/lib/health/backendHealth";
 import { markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
+import { verifyProtectedPdfBlob } from "@/lib/security/verifyProtectedPdf";
 
 export interface BackendError {
     code: string;
@@ -21,6 +22,8 @@ export interface ClientError extends Error {
     raw?: unknown;
 }
 
+export type UploadOutputKind = "pdf" | "non-pdf";
+
 function getHeader(headers: unknown, key: string): string {
     if (!headers || typeof headers !== "object") return "";
 
@@ -40,6 +43,54 @@ function getHeader(headers: unknown, key: string): string {
 
     return "";
 
+}
+
+function requestPath(targetUrl: string, baseUrl: string): string {
+    try {
+        return new URL(targetUrl, baseUrl).pathname.replace(/\/+$/, "");
+    } catch {
+        return targetUrl.split("?", 1)[0].replace(/\/+$/, "");
+    }
+}
+
+async function isPdfResponse(responseBlob: Blob, contentType: string): Promise<boolean> {
+    const declaredType = contentType.split(";", 1)[0].trim().toLowerCase();
+    const blobType = responseBlob.type.split(";", 1)[0].trim().toLowerCase();
+    if (declaredType === "application/pdf" || blobType === "application/pdf") return true;
+
+    // Some endpoints return PDF bytes with a missing, generic, or otherwise
+    // incorrect media type. Treat a header only as a candidate signal;
+    // verifyProtectedPdfBlob still has to parse the artifact and prove that the
+    // expected password is required and correct. Callers with a known non-PDF
+    // contract pass outputKind="non-pdf" to avoid probing exports or task payloads.
+    const prefix = await responseBlob.slice(0, 1024).text();
+    return /%PDF-\d\.\d/.test(prefix);
+}
+
+function createRequestCancellationError(): ClientError {
+    const error = new Error("Request cancelled by user.") as ClientError & { code: string };
+    error.name = "AbortError";
+    error.code = "USER_CANCELLATION";
+    return error;
+}
+
+function isRequestCancelled(error: unknown, signal?: AbortSignal): boolean {
+    if (signal?.aborted || axios.isCancel(error)) return true;
+    if (typeof error !== "object" || error === null) return false;
+    const candidate = error as { name?: unknown; code?: unknown };
+    return candidate.name === "AbortError" ||
+        candidate.name === "CanceledError" ||
+        candidate.code === "ERR_CANCELED" ||
+        candidate.code === "USER_CANCELLATION";
+}
+
+function createProtectionRestorationError(status?: number): ClientError & { code: string } {
+    const error = new Error(
+        "PDF password protection could not be restored and verified. No result is available."
+    ) as ClientError & { code: string };
+    error.code = "PDF_PROTECTION_RESTORE_FAILED";
+    if (typeof status === "number" && (status < 200 || status >= 300)) error.status = status;
+    return error;
 }
 
 function isObjectLike(value: unknown): value is Record<string, unknown> {
@@ -276,12 +327,14 @@ export async function uploadAndDownloadFile(
     endpoint: string,
     formData: FormData,
     onProgress?: (percentage: number) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    outputKind?: UploadOutputKind,
 ): Promise<Blob> {
     const apiUrl = getBaseUrl();
     const targetUrl = endpoint.startsWith("http")
         ? endpoint
         : `${apiUrl}${endpoint}`;
+    const endpointPath = requestPath(targetUrl, apiUrl);
 
     const fileEntry = formData.get("file");
 
@@ -331,21 +384,23 @@ export async function uploadAndDownloadFile(
         throw await handleAxiosError(error);
     }
 
-    onProgress?.(100);
-
-    const isPdf =
-        contentType.includes("application/pdf") ||
-        responseBlob.type === "application/pdf";
+    const isPdf = outputKind === "pdf"
+        ? true
+        : outputKind === "non-pdf"
+            ? false
+            : await isPdfResponse(responseBlob, contentType);
 
     let resultBlob = responseBlob;
 
     if (
         passwordToRestore &&
         isPdf &&
-        endpoint !== "/api/security/unlock" &&
-        endpoint !== "/api/security/lock" &&
+        endpointPath !== "/api/security/unlock" &&
+        endpointPath !== "/api/security/lock" &&
         fileEntry instanceof File
     ) {
+        if (signal?.aborted) throw createRequestCancellationError();
+
         try {
             const lockForm = new FormData();
 
@@ -364,15 +419,35 @@ export async function uploadAndDownloadFile(
                 {
                     responseType: "blob",
                     withCredentials: true,
+                    signal,
                 }
             );
 
+            const status = lockResponse.status;
+            if (typeof status !== "number" || status < 200 || status >= 300) {
+                throw createProtectionRestorationError(status);
+            }
+            if (!(lockResponse.data instanceof Blob)) {
+                throw createProtectionRestorationError(status);
+            }
+
+            // The media type is metadata, not evidence of encryption. Let PDF.js
+            // determine whether the response is a valid protected PDF and whether
+            // the expected password contract is satisfied.
+            await verifyProtectedPdfBlob(lockResponse.data, passwordToRestore, signal);
             resultBlob = lockResponse.data;
         } catch (error) {
-            console.warn("Security re-lock failed:", error);
+            if (isRequestCancelled(error, signal)) throw createRequestCancellationError();
+            const status = typeof error === "object" && error !== null &&
+                typeof (error as { status?: unknown }).status === "number"
+                ? (error as { status: number }).status
+                : undefined;
+            throw createProtectionRestorationError(status);
         }
     }
 
+    if (signal?.aborted) throw createRequestCancellationError();
+    onProgress?.(100);
     return resultBlob;
 
 }

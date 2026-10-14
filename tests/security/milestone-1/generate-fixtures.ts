@@ -76,12 +76,19 @@ async function createScannedPdf(filePath: string): Promise<void> {
     writeFileSync(filePath, await pdf.save({ useObjectStreams: false, addDefaultPage: false }));
 }
 
-function encryptPdf(source: string, destination: string, userPassword: string, ownerPassword: string): void {
+function encryptPdf(
+    source: string,
+    destination: string,
+    userPassword: string,
+    ownerPassword: string,
+    keyLength = 256,
+): void {
     run("qpdf", [
         "--encrypt",
         userPassword,
         ownerPassword,
-        "256",
+        String(keyLength),
+        ...(keyLength === 128 ? ["--use-aes=y"] : []),
         "--",
         source,
         destination,
@@ -112,6 +119,7 @@ async function main(): Promise<void> {
     const plain = path.join(directory, "plain-two-pages.pdf");
     const protectedAlpha = path.join(directory, "protected-alpha.pdf");
     const protectedBeta = path.join(directory, "protected-beta.pdf");
+    const protectedLockOutput = path.join(directory, "protected-lock-output-aes128.pdf");
     const malformed = path.join(directory, "malformed.pdf");
     const scanned = path.join(directory, "scanned-image-only.pdf");
     const protectedScanned = path.join(directory, "protected-scanned.pdf");
@@ -120,12 +128,24 @@ async function main(): Promise<void> {
     await createScannedPdf(scanned);
     encryptPdf(plain, protectedAlpha, PASSWORD_ALPHA, OWNER_ALPHA);
     encryptPdf(plain, protectedBeta, PASSWORD_BETA, OWNER_BETA);
+    encryptPdf(plain, protectedLockOutput, PASSWORD_ALPHA, OWNER_ALPHA, 128);
     encryptPdf(scanned, protectedScanned, PASSWORD_ALPHA, OWNER_ALPHA);
     writeFileSync(malformed, Buffer.from("%PDF-1.7\nPLATEN_M1_MALFORMED_SYNTHETIC_INPUT\n", "ascii"));
 
     verifyPdf(plain, undefined, [ALPHA_MARKER, BETA_MARKER]);
     verifyPdf(protectedAlpha, PASSWORD_ALPHA, [ALPHA_MARKER, BETA_MARKER]);
     verifyPdf(protectedBeta, PASSWORD_BETA, [ALPHA_MARKER, BETA_MARKER]);
+    verifyPdf(protectedLockOutput, PASSWORD_ALPHA, [ALPHA_MARKER, BETA_MARKER]);
+    assert.match(
+        run("pdfinfo", ["-upw", PASSWORD_ALPHA, protectedLockOutput]),
+        /^Encrypted:\s+yes\b.*algorithm:AES\)\s*$/m,
+        "the backend-compatible re-lock fixture must be AES-encrypted and readable with the expected password"
+    );
+    assert.match(
+        run("qpdf", [`--password=${PASSWORD_ALPHA}`, "--show-encryption", protectedLockOutput]),
+        /stream encryption method: AESv2\b/,
+        "the backend-compatible fixture must use PDF AES-128 (AESv2), not RC4 or AES-256"
+    );
     run("qpdf", ["--check", scanned]);
     run("qpdf", [`--password=${PASSWORD_ALPHA}`, "--check", protectedScanned]);
     assert.match(run("pdfinfo", ["-upw", PASSWORD_ALPHA, protectedScanned]), /^Pages:\s+1\s*$/m);
@@ -144,7 +164,7 @@ async function main(): Promise<void> {
     }
 
     const qpdfVersion = run("qpdf", ["--version"]).trim().split("\n")[0];
-    const fixtures = [plain, protectedAlpha, protectedBeta, scanned, protectedScanned, malformed].map((filePath) => ({
+    const fixtures = [plain, protectedAlpha, protectedBeta, protectedLockOutput, scanned, protectedScanned, malformed].map((filePath) => ({
         file: path.basename(filePath),
         bytes: readFileSync(filePath).byteLength,
         sha256: sha256(filePath),
@@ -159,6 +179,8 @@ async function main(): Promise<void> {
             alphaOwnerPassword: OWNER_ALPHA,
             betaUserPassword: PASSWORD_BETA,
             betaOwnerPassword: OWNER_BETA,
+            backendLockOutputUserPassword: PASSWORD_ALPHA,
+            backendLockOutputKeyLengthBits: 128,
             protectedScannedUserPassword: PASSWORD_ALPHA,
             invalidPasswordCase: `${PASSWORD_ALPHA}-wrong against protected-alpha.pdf`,
         },

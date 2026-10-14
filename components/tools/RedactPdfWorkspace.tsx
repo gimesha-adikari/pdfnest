@@ -205,7 +205,7 @@ export default function RedactPdfWorkspace() {
                 formData.append("keywords", keywords.trim());
                 formData.append("boxes", JSON.stringify(drawnBoxes));
 
-                const responseBlob = await uploadAndDownloadFile("/api/security/redact-text", formData);
+                const responseBlob = await uploadAndDownloadFile("/api/security/redact-text", formData, undefined, undefined, "pdf");
 
                 setDownloadData({
                     blob: responseBlob,

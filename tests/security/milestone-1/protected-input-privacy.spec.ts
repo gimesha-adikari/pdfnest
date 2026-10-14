@@ -7,6 +7,7 @@ const fixtureDir = process.env.PLATEN_M1_FIXTURE_DIR || path.join(os.tmpdir(), "
 const plainPdf = readFileSync(path.join(fixtureDir, "plain-two-pages.pdf"));
 const protectedAlpha = readFileSync(path.join(fixtureDir, "protected-alpha.pdf"));
 const protectedBeta = readFileSync(path.join(fixtureDir, "protected-beta.pdf"));
+const protectedLockOutputAes128 = readFileSync(path.join(fixtureDir, "protected-lock-output-aes128.pdf"));
 const protectedScanned = readFileSync(path.join(fixtureDir, "protected-scanned.pdf"));
 const malformedPdf = readFileSync(path.join(fixtureDir, "malformed.pdf"));
 const alphaPassword = "platen-m1-user-alpha";
@@ -366,6 +367,66 @@ function containsFilePayload(request: ApiRequest, fileName: string, fileBytes: B
 
 test.beforeEach(async ({ context }) => {
     await installLocalNetworkBoundary(context);
+});
+
+test("a plaintext HTTP 200 re-lock response cannot publish an immediate Cloud result", async ({ page }) => {
+    await page.route("**/api/structure/rotate", async (route) => {
+        captureApiRequest(route.request());
+        await route.fulfill({ status: 200, contentType: "application/octet-stream", body: plainPdf });
+    });
+    await page.route("**/api/security/lock", async (route) => {
+        captureApiRequest(route.request());
+        await route.fulfill({ status: 200, contentType: "application/pdf", body: plainPdf });
+    });
+
+    await page.goto("/rotate-pdf");
+    await chooseFile(page, "protected-alpha.pdf", protectedAlpha);
+    const dialog = page.getByRole("dialog", { name: "Protected document detected" });
+    await dialog.getByRole("button", { name: "Cloud", exact: true }).click();
+    await dialog.getByLabel("PDF password").fill(alphaPassword);
+    await dialog.getByRole("button", { name: "Authorize Cloud unlock" }).click();
+    await expect(page).toHaveURL(/\/rotate-pdf\/workspace$/);
+
+    await page.getByRole("button", { name: "Rotate All 90°" }).click();
+    await page.getByRole("button", { name: "Apply Rotation Matrices" }).click();
+    await expect.poll(() => apiRequests.some((request) => request.method === "POST" && request.path === "/api/security/lock")).toBe(true);
+    await expect(page).toHaveURL(/\/rotate-pdf\/workspace$/);
+    await expect(page.getByText("Page rotation adjustments successful!")).toHaveCount(0);
+    await expect(page.getByText("Task completed successfully!")).toHaveCount(0);
+    expect(apiRequests.findIndex((request) => request.path === "/api/security/lock"))
+        .toBeGreaterThan(apiRequests.findIndex((request) => request.path === "/api/structure/rotate"));
+    expectNoProductionRequests();
+});
+
+test("a backend-compatible AES-128 restoration response reaches the download page only after PDF.js verification", async ({ page }) => {
+    await page.route("**/api/structure/rotate", async (route) => {
+        captureApiRequest(route.request());
+        await route.fulfill({ status: 200, contentType: "application/octet-stream", body: plainPdf });
+    });
+    await page.route("**/api/security/lock", async (route) => {
+        captureApiRequest(route.request());
+        await route.fulfill({ status: 200, contentType: "application/pdf", body: protectedLockOutputAes128 });
+    });
+
+    await page.goto("/rotate-pdf");
+    await chooseFile(page, "protected-alpha.pdf", protectedAlpha);
+    const dialog = page.getByRole("dialog", { name: "Protected document detected" });
+    await dialog.getByRole("button", { name: "Cloud", exact: true }).click();
+    await dialog.getByLabel("PDF password").fill(alphaPassword);
+    await dialog.getByRole("button", { name: "Authorize Cloud unlock" }).click();
+    await expect(page).toHaveURL(/\/rotate-pdf\/workspace$/);
+
+    await page.getByRole("button", { name: "Rotate All 90°" }).click();
+    await page.getByRole("button", { name: "Apply Rotation Matrices" }).click();
+    await expect(page).toHaveURL(/\/rotate-pdf\/download$/);
+    await expect(page.getByText("Task completed successfully!")).toBeVisible();
+    const lockRequest = apiRequests.find((request) => request.path === "/api/security/lock");
+    expect(lockRequest).toBeDefined();
+    expect(lockRequest!.body.toString("latin1")).toContain(`name="password"\r\n\r\n${alphaPassword}`);
+    expect(lockRequest!.body.indexOf(plainPdf)).toBeGreaterThanOrEqual(0);
+    expect(apiRequests.findIndex((request) => request.path === "/api/security/lock"))
+        .toBeGreaterThan(apiRequests.findIndex((request) => request.path === "/api/structure/rotate"));
+    expectNoProductionRequests();
 });
 
 test("Device protected input unlocks locally and carries Device mode into the workspace", async ({ page, context }) => {
@@ -897,7 +958,7 @@ test("transferring a protected-source result to PDF Editor cannot submit before 
             path: new URL(request.url()).pathname,
             body: request.postDataBuffer() || Buffer.alloc(0),
         });
-        await route.fulfill({ status: 200, contentType: "application/pdf", body: plainPdf });
+        await route.fulfill({ status: 200, contentType: "application/pdf", body: protectedLockOutputAes128 });
     });
     await chooseFile(page, "protected-alpha.pdf", protectedAlpha);
     const dialog = page.getByRole("dialog", { name: "Protected document detected" });
@@ -914,6 +975,10 @@ test("transferring a protected-source result to PDF Editor cannot submit before 
 
     const editorCard = page.getByRole("heading", { name: "PDF Editor" }).locator("..");
     await editorCard.getByRole("button", { name: "Open tool" }).click();
+    const transferredProtectedInput = page.getByRole("dialog", { name: "Protected document detected" });
+    await expect(transferredProtectedInput).toBeVisible();
+    await transferredProtectedInput.getByLabel("PDF password").fill(alphaPassword);
+    await transferredProtectedInput.getByRole("button", { name: "Unlock locally" }).click();
     await expect(page).toHaveURL(/\/edit-pdf\/workspace$/);
     const authorization = page.getByRole("dialog", { name: "Cloud processing authorization" });
     await expect(authorization).toBeVisible();
