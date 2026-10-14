@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { StudioProject } from "@/lib/studio/project";
+import { inspectPdfEncryption } from "@/lib/security/inspectPdfProtection";
+
+const PROTECTED_PROJECT_INPUT_MESSAGE =
+    "Legacy Studio only accepts unprotected PDFs from project and recovery files. Open a password-free copy using a workflow you explicitly authorize. No document was submitted.";
 
 export interface StudioPage {
     id: string;
@@ -86,7 +90,23 @@ export function useStudioDocument() {
         setIsScanning(false);
     }, []);
 
-    const restoreProject = useCallback((project: StudioProject) => {
+    const restoreProject = useCallback(async (project: StudioProject) => {
+        const snapshots = [project.current, ...project.past, ...project.future];
+        const inspectedFiles = new Set<File>();
+
+        for (const snapshot of snapshots) {
+            if (inspectedFiles.has(snapshot.file)) continue;
+            inspectedFiles.add(snapshot.file);
+
+            let encrypted: boolean;
+            try {
+                encrypted = await inspectPdfEncryption(snapshot.file);
+            } catch {
+                throw new Error("A PDF in this Studio project could not be verified as unprotected. No document was submitted.");
+            }
+            if (encrypted) throw new Error(PROTECTED_PROJECT_INPUT_MESSAGE);
+        }
+
         setActiveFile(project.current.file);
         setPages(clonePages(project.current.pages));
         setCurrentPageIndex(project.current.currentPageIndex);

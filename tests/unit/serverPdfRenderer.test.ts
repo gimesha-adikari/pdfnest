@@ -3,6 +3,7 @@
 import { strict as assert } from "assert";
 import { ServerPdfRenderer } from "../../lib/preview/ServerPdfRenderer";
 import type { PreviewRequest } from "../../lib/preview/types";
+import { getPdfInputPreparation, markPdfInputPreparation } from "../../lib/security/pdfInputPreparation";
 
 // ---------------------------------------------------------------------------
 // Minimal stubs
@@ -399,6 +400,40 @@ async function test16_idempotentRevoke(): Promise<void> {
     }
 }
 
+async function test17_previewSessionRecordsAttemptBeforeRequestAndKeepsItAfterFailure(): Promise<void> {
+    const file = makeFile("legacy-studio-plain.pdf");
+    markPdfInputPreparation(file, {
+        sourceProtected: false,
+        bytesState: "plain",
+        preparedOn: "none",
+        processingMode: "auto",
+        cloudSubmissionInitiated: false,
+    });
+
+    const fetchImpl: typeof fetch = async () => {
+        assert.equal(
+            getPdfInputPreparation(file)?.cloudSubmissionInitiated,
+            true,
+            "the upload-start marker must be set at the submission boundary before fetch",
+        );
+        throw new TypeError("synthetic local request failure");
+    };
+    const r = new ServerPdfRenderer({ fetchImpl });
+
+    await assert.rejects(
+        () => r.render(
+            makeRequest({ document: { id: "legacy-studio", version: "v1", pageCount: 1, file } }),
+            liveSignal(),
+        ),
+        /synthetic local request failure/,
+    );
+    assert.equal(
+        getPdfInputPreparation(file)?.cloudSubmissionInitiated,
+        true,
+        "a failed request keeps conservative attempted-transmission history",
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Runner
 // ---------------------------------------------------------------------------
@@ -421,6 +456,7 @@ async function runTests(): Promise<void> {
         ["14: different file invalidates session", test14_differentFileInvalidatesSession],
         ["15: concurrent cancellation does not affect peer caller", test15_concurrentCancellationIndependence],
         ["16: revoke() is idempotent", test16_idempotentRevoke],
+        ["17: preview upload attempt is recorded and retained after failure", test17_previewSessionRecordsAttemptBeforeRequestAndKeepsItAfterFailure],
     ];
 
     let passed = 0;

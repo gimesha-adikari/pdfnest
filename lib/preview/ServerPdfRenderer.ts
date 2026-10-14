@@ -1,6 +1,7 @@
 // pdfnest/lib/preview/ServerPdfRenderer.ts
 
 import { PreviewRenderer, PreviewRequest, PreviewResource } from "./types";
+import { markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 
 export interface ServerPdfRendererOptions {
     /**
@@ -221,6 +222,9 @@ export class ServerPdfRenderer implements PreviewRenderer {
         const formData = new FormData();
         formData.append("file", file);
 
+        // This is the Legacy Studio upload boundary. The marker is an attempt
+        // record only and remains set if the request fails or is cancelled.
+        markCloudSubmissionInitiated([file]);
         const response = await this.fetchImpl(
             `${this.baseUrl}/api/conversion/preview/session`,
             { method: "POST", body: formData, credentials: "include" },

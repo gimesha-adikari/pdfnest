@@ -19,6 +19,7 @@ import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/lib/notify";
 import { getFriendlyErrorMessage, handleClientError } from "@/lib/errorHandler";
 import { getBaseUrl } from "@/lib/api";
+import { markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 import { usePreview } from "@/lib/preview/usePreview";
 import type { PreviewError } from "@/lib/preview/types";
 
@@ -145,6 +146,7 @@ async function submitHighlightJob(
         formData.append("file_password", filePassword.trim());
     }
 
+    markCloudSubmissionInitiated([file]);
     const response = await fetch(buildApiUrl("/api/markup/highlight"), {
         method: "POST",
         body: formData,
@@ -436,6 +438,7 @@ export default function HighlightTool({ baseFile, onHighlightedFile }: Highlight
                 const maybePassword = (baseFile as CustomPdfFile).originalPassword;
                 if (maybePassword) formData.append("file_password", maybePassword);
 
+                markCloudSubmissionInitiated([baseFile]);
                 const response = await fetch(buildApiUrl("/api/structure/analyze"), {
                     method: "POST",
                     body: formData,

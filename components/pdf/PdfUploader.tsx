@@ -12,6 +12,7 @@ import {
     orderPreparedPdfInputs,
     setTransientOriginalPassword,
 } from "@/lib/security/pdfInputPreparation";
+import { inspectPdfEncryption } from "@/lib/security/inspectPdfProtection";
 import PasswordField from "@/components/ui/PasswordField";
 
 type ProtectedFileHandling =
@@ -27,9 +28,6 @@ type UploadAcceptance = {
     processingMode: ProcessingMode;
 };
 
-type DestroyablePdf = { destroy?: () => unknown };
-type PdfLoadingTask = { promise: Promise<DestroyablePdf>; destroy?: () => unknown };
-
 function errorCode(error: unknown): string | undefined {
     if (!error || typeof error !== "object") return undefined;
     const record = error as Record<string, unknown>;
@@ -40,30 +38,6 @@ function errorCode(error: unknown): string | undefined {
     }
     return undefined;
 }
-
-const inspectEncryption = async (file: File): Promise<boolean> => {
-    let loadingTask: PdfLoadingTask | null = null;
-    let pdfDoc: DestroyablePdf | null = null;
-    try {
-        const pdfjs = await import("pdfjs-dist");
-        pdfjs.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
-
-        const arrayBuffer = await file.arrayBuffer();
-        loadingTask = pdfjs.getDocument({ data: arrayBuffer }) as unknown as PdfLoadingTask;
-        pdfDoc = await loadingTask.promise;
-        return false;
-    } catch (error: unknown) {
-        if (error && typeof error === "object" && "name" in error && error.name === "PasswordException") return true;
-        throw new Error("PDF protection could not be verified.");
-    } finally {
-        if (pdfDoc && typeof pdfDoc.destroy === "function") {
-            try { await pdfDoc.destroy(); } catch {}
-        }
-        if (loadingTask && typeof loadingTask.destroy === "function") {
-            try { await loadingTask.destroy(); } catch {}
-        }
-    }
-};
 
 async function isPdfFile(file: File): Promise<boolean> {
     if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
@@ -183,7 +157,7 @@ export default function PdfUploader({
 
                 let encrypted: boolean;
                 try {
-                    encrypted = await inspectEncryption(file);
+                    encrypted = await inspectPdfEncryption(file);
                 } catch {
                     if (operationId === operationIdRef.current) {
                         setError(`Could not verify whether "${file.name}" is protected. No file was submitted. Select a valid PDF and try again.`);
@@ -372,7 +346,7 @@ export default function PdfUploader({
                 type: "application/pdf",
                 lastModified: currentLockedFile.lastModified,
             });
-            if (await inspectEncryption(unlockedFile)) {
+            if (await inspectPdfEncryption(unlockedFile)) {
                 throw new Error("PDF preparation returned an encrypted document.");
             }
             if (operationId !== operationIdRef.current || controller.signal.aborted) return;

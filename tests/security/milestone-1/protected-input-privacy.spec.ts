@@ -8,17 +8,22 @@ const fixtureDir = process.env.PLATEN_M1_FIXTURE_DIR || path.join(os.tmpdir(), "
 const plainPdf = readFileSync(path.join(fixtureDir, "plain-two-pages.pdf"));
 const protectedAlpha = readFileSync(path.join(fixtureDir, "protected-alpha.pdf"));
 const protectedBeta = readFileSync(path.join(fixtureDir, "protected-beta.pdf"));
+const protectedStudioProject = readFileSync(path.join(fixtureDir, "legacy-studio-protected.pns"));
+const protectedStudioHistoryProject = readFileSync(path.join(fixtureDir, "legacy-studio-protected-history.pns"));
 const protectedLockOutputAes128 = readFileSync(path.join(fixtureDir, "protected-lock-output-aes128.pdf"));
 const protectedScanned = readFileSync(path.join(fixtureDir, "protected-scanned.pdf"));
 const malformedPdf = readFileSync(path.join(fixtureDir, "malformed.pdf"));
 const alphaPassword = "platen-m1-user-alpha";
 const betaPassword = "platen-m1-user-beta";
-const appOrigin = new URL(process.env.E2E_BASE_URL || "http://localhost:3000").origin;
+const appOrigin = process.env.PLATEN_M1_PRIVACY_E2E === "1"
+    ? "http://127.0.0.1:3000"
+    : new URL(process.env.E2E_BASE_URL || "http://localhost:3000").origin;
 
 type ApiRequest = { method: string; origin: string; path: string; body: Buffer };
 let apiRequests: ApiRequest[] = [];
 let externalRequests: string[] = [];
 let unlockResponseGate: Promise<void> | null = null;
+let mockHealthStatuses: number[] = [];
 
 function delayNextUnlockResponse(): () => void {
     let release = () => {};
@@ -30,6 +35,7 @@ async function installLocalNetworkBoundary(context: BrowserContext): Promise<voi
     apiRequests = [];
     externalRequests = [];
     unlockResponseGate = null;
+    mockHealthStatuses = [];
     await context.route("**/*", async (route) => {
         const requestUrl = new URL(route.request().url());
         const isApp = requestUrl.origin === appOrigin;
@@ -65,6 +71,16 @@ async function installLocalNetworkBoundary(context: BrowserContext): Promise<voi
         };
         if (request.method() === "OPTIONS") {
             await route.fulfill({ status: 204, headers: corsHeaders });
+            return;
+        }
+        if (request.method() === "GET" && requestUrl.pathname === "/api/health") {
+            mockHealthStatuses.push(200);
+            await route.fulfill({
+                status: 200,
+                contentType: "application/json",
+                headers: corsHeaders,
+                body: JSON.stringify({ status: "ok", available: true }),
+            });
             return;
         }
         if (request.method() === "GET" && requestUrl.pathname.endsWith("/auth/session")) {
@@ -350,8 +366,15 @@ function processingPosts(): ApiRequest[] {
     );
 }
 
+function studioProcessingPosts(): ApiRequest[] {
+    return apiRequests.filter((request) => request.method === "POST" && request.path.startsWith("/api/"));
+}
+
 function expectNoProductionRequests(): void {
     expect(externalRequests.filter((url) => /platenpdf\.com/i.test(url))).toEqual([]);
+    expect(externalRequests.filter((url) => {
+        try { return new URL(url).port === "8080"; } catch { return false; }
+    })).toEqual([]);
 }
 
 function expectMultipartUnlock(request: ApiRequest, fileName: string, fileBytes: Buffer, password: string): void {
@@ -386,6 +409,25 @@ function containsFilePayload(request: ApiRequest, fileName: string, fileBytes: B
 
 test.beforeEach(async ({ context }) => {
     await installLocalNetworkBoundary(context);
+});
+
+test("isolated privacy-suite preflight uses only the configured mock API for health checks", async ({ page }) => {
+    test.skip(process.env.PLATEN_M1_PRIVACY_E2E !== "1", "Only applies to the isolated local-mock invocation.");
+    await page.goto("/");
+    await expect.poll(() => apiRequests.some((request) =>
+        request.method === "GET" &&
+        request.origin === "http://127.0.0.1:3999" &&
+        request.path === "/api/health"
+    )).toBe(true);
+    expect(mockHealthStatuses).toEqual([200]);
+    expect(externalRequests.filter((url) => /platenpdf\.com/i.test(url))).toEqual([]);
+    expect(externalRequests.filter((url) => {
+        try { return new URL(url).port === "8080"; } catch { return false; }
+    })).toEqual([]);
+    const blockedExternalOrigins = [...new Set(externalRequests.map((url) => {
+        try { return new URL(url).origin; } catch { return "invalid-url"; }
+    }))].sort();
+    console.log(`[privacy preflight] health mock=127.0.0.1:3999 status=200; blocked external origins=${JSON.stringify(blockedExternalOrigins)}; port-8080 requests=0; production Platen requests=0`);
 });
 
 test("explicit Cloud Lock rejects plaintext HTTP 200 before publishing a result", async ({ page }) => {
@@ -1343,16 +1385,140 @@ test("legacy shared uploader fails closed for protected input without an explici
     expectNoProductionRequests();
 });
 
+test("Legacy Studio rejects an encrypted PDF imported from a project before creating a preview session", async ({ page }) => {
+    await page.goto("/studio");
+    await page.locator('input[type="file"]').first().setInputFiles({
+        name: "protected-project.pns",
+        mimeType: "application/x-pdfnest-project",
+        buffer: protectedStudioProject,
+    });
+
+    await expect(page.getByRole("paragraph").filter({ hasText: /Legacy Studio only accepts unprotected PDFs from project and recovery files/i })).toBeVisible();
+    expect(apiRequests.filter((request) => request.path === "/api/conversion/preview/session")).toHaveLength(0);
+    expect(studioProcessingPosts()).toHaveLength(0);
+    expectNoProductionRequests();
+});
+
+test("Legacy Studio rejects protected PDFs hidden in project history before enabling undo or redo", async ({ page }) => {
+    await page.goto("/studio");
+    await page.locator('input[type="file"]').first().setInputFiles({
+        name: "protected-history-project.pns",
+        mimeType: "application/x-pdfnest-project",
+        buffer: protectedStudioHistoryProject,
+    });
+
+    await expect(page.getByRole("paragraph").filter({ hasText: /Legacy Studio only accepts unprotected PDFs from project and recovery files/i })).toBeVisible();
+    expect(apiRequests.filter((request) => request.path === "/api/conversion/preview/session")).toHaveLength(0);
+    expect(studioProcessingPosts()).toHaveLength(0);
+    expectNoProductionRequests();
+});
+
+test("Legacy Studio rejects a protected recovery document before creating a preview session", async ({ page }) => {
+    await page.goto("/");
+    await page.evaluate(async (pdfBytes) => {
+        const request = indexedDB.open("pdfnest-studio", 1);
+        const database = await new Promise<IDBDatabase>((resolve, reject) => {
+            request.onupgradeneeded = () => request.result.createObjectStore("autosave");
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+        const protectedFile = new File([new Uint8Array(pdfBytes)], "recovery-protected.pdf", { type: "application/pdf" });
+        const transaction = database.transaction("autosave", "readwrite");
+        transaction.objectStore("autosave").put({
+            version: 1,
+            savedAt: Date.now(),
+            activeTool: "select",
+            zoom: 1,
+            current: {
+                file: protectedFile,
+                pages: [{ id: "synthetic-recovery-page", pageNumber: 1 }],
+                currentPageIndex: 0,
+                fingerprint: "synthetic-recovery-protected",
+            },
+            past: [],
+            future: [],
+        }, "current");
+        await new Promise<void>((resolve, reject) => {
+            transaction.oncomplete = () => resolve();
+            transaction.onerror = () => reject(transaction.error);
+        });
+        database.close();
+    }, Array.from(protectedAlpha));
+
+    await page.goto("/studio");
+    await expect(page.getByRole("heading", { name: "Resume previous session?" })).toBeVisible();
+    await page.getByRole("button", { name: "Resume" }).click();
+
+    await expect(page.getByRole("paragraph").filter({
+        hasText: /Legacy Studio only accepts unprotected PDFs from project and recovery files/i,
+    })).toBeVisible();
+    expect(apiRequests.filter((request) => request.path === "/api/conversion/preview/session")).toHaveLength(0);
+    expect(studioProcessingPosts()).toHaveLength(0);
+    expectNoProductionRequests();
+});
+
+test("Legacy Studio still submits plain PDFs to its existing Rotate Cloud endpoint", async ({ page }) => {
+    const rotateRequests: ApiRequest[] = [];
+    await page.route("**/api/structure/rotate", async (route) => {
+        rotateRequests.push(captureApiRequest(route.request()));
+        await route.fulfill({ status: 200, contentType: "application/pdf", body: plainPdf });
+    });
+
+    await page.goto("/studio");
+    await chooseFile(page, "plain-two-pages.pdf", plainPdf);
+    await expect(page.getByRole("button", { name: "Rotate", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Rotate", exact: true }).click();
+    await page.getByRole("button", { name: "Rotate all 90°" }).click();
+    await page.getByRole("button", { name: "Apply rotation to current document" }).click();
+
+    await expect.poll(() => rotateRequests.length).toBe(1);
+    const rotateRequest = rotateRequests[0];
+    expect(rotateRequest.path).toBe("/api/structure/rotate");
+    expect(rotateRequest.method).toBe("POST");
+    expect(rotateRequest.body.toString("latin1")).toContain('filename="plain-two-pages.pdf"');
+    expect(rotateRequest.body.indexOf(plainPdf)).toBeGreaterThanOrEqual(0);
+    expectNoProductionRequests();
+});
+
+test("Legacy Studio still submits plain multiple-file input to its existing Merge Cloud endpoint", async ({ page }) => {
+    const mergeRequests: ApiRequest[] = [];
+    await page.route("**/api/structure/merge", async (route) => {
+        mergeRequests.push(captureApiRequest(route.request()));
+        await route.fulfill({ status: 200, contentType: "application/pdf", body: plainPdf });
+    });
+
+    await page.goto("/studio");
+    await chooseFile(page, "plain-base.pdf", plainPdf);
+    await page.getByRole("button", { name: "Merge", exact: true }).click();
+    await page.locator('input[type="file"]').last().setInputFiles({
+        name: "plain-additional.pdf",
+        mimeType: "application/pdf",
+        buffer: plainPdf,
+    });
+    await expect(page.getByRole("button", { name: "Merge into current document" })).toBeEnabled();
+    await page.getByRole("button", { name: "Merge into current document" }).click();
+
+    await expect.poll(() => mergeRequests.length).toBe(1);
+    const mergeRequest = mergeRequests[0];
+    const payload = mergeRequest.body.toString("latin1");
+    expect(mergeRequest.path).toBe("/api/structure/merge");
+    expect(mergeRequest.method).toBe("POST");
+    expect(payload).toContain('filename="plain-base.pdf"');
+    expect(payload).toContain('filename="plain-additional.pdf"');
+    expect(mergeRequest.body.indexOf(plainPdf)).toBeGreaterThanOrEqual(0);
+    expectNoProductionRequests();
+});
+
 test("legacy Studio sidebar and Merge replacement uploads fail closed for protected input", async ({ page }) => {
     await page.goto("/studio");
     await chooseFile(page, "plain-two-pages.pdf", plainPdf);
-    await expect(page.getByRole("button", { name: /Upload PDF Replace current document/ })).toBeVisible();
+    const sidebarUpload = page.getByRole("complementary").locator('input[type="file"]');
+    await expect(sidebarUpload).toHaveCount(1);
     await expect.poll(() => apiRequests.filter((request) => request.path === "/api/conversion/preview/session").length).toBe(1);
     await page.waitForTimeout(100);
     const requestsBeforeReplacement = processingPosts().length;
 
-    await page.getByRole("button", { name: /Upload PDF Replace current document/ }).click();
-    await page.locator('input[type="file"]').first().setInputFiles({
+    await sidebarUpload.setInputFiles({
         name: "protected-alpha.pdf",
         mimeType: "application/pdf",
         buffer: protectedAlpha,

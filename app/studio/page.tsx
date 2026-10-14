@@ -55,12 +55,18 @@ export default function StudioPageBase() {
     const resumeRecovery = async () => {
         if (!recovery) return;
 
-        preview.clearPreviewCache();
-        document.restoreProject(recovery);
-        zoom.setZoom(recovery.zoom);
-        tools.setActiveTool(recovery.activeTool);
-
-        setRecoveryOpen(false);
+        try {
+            await document.restoreProject(recovery);
+            preview.clearPreviewCache();
+            zoom.setZoom(recovery.zoom);
+            tools.setActiveTool(recovery.activeTool);
+            setRecoveryOpen(false);
+        } catch (err) {
+            document.setErrorMessage(
+                err instanceof Error ? err.message : "This Studio recovery could not be opened."
+            );
+            setRecoveryOpen(false);
+        }
     };
 
     const discardRecovery = async () => {
@@ -86,11 +92,10 @@ export default function StudioPageBase() {
             try {
                 const project = await openProject(file);
 
-                document.restoreProject(project);
+                await document.restoreProject(project);
                 zoom.setZoom(project.zoom);
                 tools.setActiveTool(project.activeTool);
             } catch (err) {
-                console.error(err);
                 document.setErrorMessage(
                     err instanceof Error ? err.message : "This Studio project could not be opened."
                 );
