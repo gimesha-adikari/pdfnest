@@ -199,6 +199,10 @@ async function main(): Promise<void> {
     const protectedAlpha = path.join(directory, "protected-alpha.pdf");
     const protectedBeta = path.join(directory, "protected-beta.pdf");
     const protectedLockOutput = path.join(directory, "protected-lock-output-aes128.pdf");
+    const mergeAlphaPlain = path.join(directory, "plain-merge-alpha.pdf");
+    const mergeBetaPlain = path.join(directory, "plain-merge-beta.pdf");
+    const protectedMergeAlpha = path.join(directory, "protected-merge-alpha-aes128.pdf");
+    const protectedMergeBeta = path.join(directory, "protected-merge-beta-aes256.pdf");
     const malformed = path.join(directory, "malformed.pdf");
     const scanned = path.join(directory, "scanned-image-only.pdf");
     const protectedScanned = path.join(directory, "protected-scanned.pdf");
@@ -213,10 +217,14 @@ async function main(): Promise<void> {
 
     await createPlainPdf(plain);
     await createDistinctPlainPdf(distinctPlain, "PLATEN_M1_SYNTHETIC_PREVIEW_FUTURE");
+    await createDistinctPlainPdf(mergeAlphaPlain, "PLATEN_M1_SYNTHETIC_ALPHA_MERGE");
+    await createDistinctPlainPdf(mergeBetaPlain, "PLATEN_M1_SYNTHETIC_BETA_MERGE");
     await createScannedPdf(scanned);
     encryptPdf(plain, protectedAlpha, PASSWORD_ALPHA, OWNER_ALPHA);
     encryptPdf(plain, protectedBeta, PASSWORD_BETA, OWNER_BETA);
     encryptPdf(plain, protectedLockOutput, PASSWORD_ALPHA, OWNER_ALPHA, 128);
+    encryptPdf(mergeAlphaPlain, protectedMergeAlpha, PASSWORD_ALPHA, OWNER_ALPHA, 128);
+    encryptPdf(mergeBetaPlain, protectedMergeBeta, PASSWORD_BETA, OWNER_BETA, 256);
     encryptPdf(scanned, protectedScanned, PASSWORD_ALPHA, OWNER_ALPHA);
     writeFileSync(malformed, Buffer.from("%PDF-1.7\nPLATEN_M1_MALFORMED_SYNTHETIC_INPUT\n", "ascii"));
     await createStudioProject(legacyStudioProtectedProject, protectedAlpha, [plain]);
@@ -240,6 +248,10 @@ async function main(): Promise<void> {
     verifyPdf(protectedAlpha, PASSWORD_ALPHA, [ALPHA_MARKER, BETA_MARKER]);
     verifyPdf(protectedBeta, PASSWORD_BETA, [ALPHA_MARKER, BETA_MARKER]);
     verifyPdf(protectedLockOutput, PASSWORD_ALPHA, [ALPHA_MARKER, BETA_MARKER]);
+    verifyPdf(mergeAlphaPlain, undefined, ["PLATEN_M1_SYNTHETIC_ALPHA_MERGE"], 1);
+    verifyPdf(mergeBetaPlain, undefined, ["PLATEN_M1_SYNTHETIC_BETA_MERGE"], 1);
+    verifyPdf(protectedMergeAlpha, PASSWORD_ALPHA, ["PLATEN_M1_SYNTHETIC_ALPHA_MERGE"], 1);
+    verifyPdf(protectedMergeBeta, PASSWORD_BETA, ["PLATEN_M1_SYNTHETIC_BETA_MERGE"], 1);
     assert.match(
         run("pdfinfo", ["-upw", PASSWORD_ALPHA, protectedLockOutput]),
         /^Encrypted:\s+yes\b.*algorithm:AES\)\s*$/m,
@@ -268,7 +280,7 @@ async function main(): Promise<void> {
     }
 
     const qpdfVersion = run("qpdf", ["--version"]).trim().split("\n")[0];
-    const fixtures = [plain, distinctPlain, protectedAlpha, protectedBeta, protectedLockOutput, scanned, protectedScanned, malformed, legacyStudioProtectedProject, legacyStudioProtectedHistoryProject, legacyStudioProtectedFutureProject, legacyStudioPlainProject, legacyStudioAlternatePlainProject, legacyStudioPreviewHistoryProject, legacyStudioPreviewInvalidPageProject].map((filePath) => ({
+    const fixtures = [plain, distinctPlain, mergeAlphaPlain, mergeBetaPlain, protectedAlpha, protectedBeta, protectedMergeAlpha, protectedMergeBeta, protectedLockOutput, scanned, protectedScanned, malformed, legacyStudioProtectedProject, legacyStudioProtectedHistoryProject, legacyStudioProtectedFutureProject, legacyStudioPlainProject, legacyStudioAlternatePlainProject, legacyStudioPreviewHistoryProject, legacyStudioPreviewInvalidPageProject].map((filePath) => ({
         file: path.basename(filePath),
         bytes: readFileSync(filePath).byteLength,
         sha256: sha256(filePath),

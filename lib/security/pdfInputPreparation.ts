@@ -152,6 +152,17 @@ export function requiresCloudProcessingAuthorization(file: File | null | undefin
     });
 }
 
+/** Check one exact input File without expanding any route-level initialBatch wrapper. */
+export function requiresCloudProcessingAuthorizationForInput(file: File | null | undefined): boolean {
+    if (!file) return false;
+    const preparation = getPdfInputPreparation(file);
+    return !preparation ||
+        preparation.sourceProtected !== false ||
+        preparation.bytesState === "unchecked" ||
+        preparation.derivedFromProtectedInput === true ||
+        preparation.transferredFromTool === true;
+}
+
 export function hasProtectedInputLineage(file: File | null | undefined): boolean {
     if (!file) return false;
     const inputs = (file as File & { initialBatch?: File[] }).initialBatch ?? [file];
@@ -161,21 +172,45 @@ export function hasProtectedInputLineage(file: File | null | undefined): boolean
     });
 }
 
+/** Check one exact File's source lineage without expanding an initial upload batch. */
+export function hasProtectedPdfInputLineage(file: File | null | undefined): boolean {
+    if (!file) return false;
+    const preparation = getPdfInputPreparation(file);
+    return preparation?.sourceProtected === true || preparation?.derivedFromProtectedInput === true;
+}
+
+function authorizeExactFileForCloudProcessing(file: File, toolId: string): void {
+    const existing = getPdfInputPreparation(file);
+    markPdfInputPreparation(file, {
+        sourceProtected: existing?.sourceProtected ?? "unchecked",
+        bytesState: existing?.bytesState ?? "unchecked",
+        preparedOn: existing?.preparedOn ?? "none",
+        processingMode: existing?.processingMode ?? "auto",
+        cloudSubmissionInitiated: existing?.cloudSubmissionInitiated ?? false,
+        derivedFromProtectedInput: existing?.derivedFromProtectedInput,
+        transferredFromTool: existing?.transferredFromTool,
+        cloudProcessingAuthorizedForTool: toolId,
+    });
+}
+
+/** Authorize only the exact input snapshot shown to the user for a workflow. */
+export function authorizeCloudProcessingInputs(files: readonly File[], toolId: string): void {
+    for (const file of new Set(files)) authorizeExactFileForCloudProcessing(file, toolId);
+}
+
 export function authorizeCloudProcessing(file: File, toolId: string): void {
     const inputs = (file as File & { initialBatch?: File[] }).initialBatch ?? [file];
-    for (const input of inputs) {
-        const existing = getPdfInputPreparation(input);
-        markPdfInputPreparation(input, {
-            sourceProtected: existing?.sourceProtected ?? "unchecked",
-            bytesState: existing?.bytesState ?? "unchecked",
-            preparedOn: existing?.preparedOn ?? "none",
-            processingMode: existing?.processingMode ?? "auto",
-            cloudSubmissionInitiated: existing?.cloudSubmissionInitiated ?? false,
-            derivedFromProtectedInput: existing?.derivedFromProtectedInput,
-            transferredFromTool: existing?.transferredFromTool,
-            cloudProcessingAuthorizedForTool: toolId,
-        });
-    }
+    authorizeCloudProcessingInputs(inputs, toolId);
+}
+
+/** Revoke only the exact file's matching route authorization; preserve transmission history. */
+export function revokeCloudProcessingAuthorization(file: File, toolId: string): void {
+    const existing = getPdfInputPreparation(file);
+    if (!existing || existing.cloudProcessingAuthorizedForTool !== toolId) return;
+    markPdfInputPreparation(file, {
+        ...existing,
+        cloudProcessingAuthorizedForTool: undefined,
+    });
 }
 
 export function isCloudProcessingAuthorized(file: File | null | undefined, toolId: string): boolean {
@@ -190,6 +225,18 @@ export function isCloudProcessingAuthorized(file: File | null | undefined, toolI
 export function assertCloudProcessingAuthorized(file: File, toolId: string): void {
     if (requiresCloudProcessingAuthorization(file) && !isCloudProcessingAuthorized(file, toolId)) {
         throw new Error("This protected or unverified input requires explicit Cloud processing authorization for this tool.");
+    }
+}
+
+/** Guard a submitted operation's exact File set without inheriting batch metadata. */
+export function assertCloudProcessingAuthorizedInputs(files: readonly File[], toolId: string): void {
+    for (const file of new Set(files)) {
+        if (
+            requiresCloudProcessingAuthorizationForInput(file) &&
+            getPdfInputPreparation(file)?.cloudProcessingAuthorizedForTool !== toolId
+        ) {
+            throw new Error("This protected or unverified input requires explicit Cloud processing authorization for this tool.");
+        }
     }
 }
 

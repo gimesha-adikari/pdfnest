@@ -21,6 +21,10 @@ export interface ExecutionOptions {
     passwords?: (string | undefined)[];
     onProgress?: (percentage: number) => void;
     signal?: AbortSignal;
+    /** Optional route scope required when this operation reaches Cloud. */
+    cloudAuthorizationTool?: string;
+    /** Called at the actual Cloud request boundary, after local validation. */
+    onCloudSubmissionInitiated?: () => void;
 }
 
 export interface ExecutionResult {

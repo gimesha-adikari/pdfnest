@@ -71,7 +71,14 @@ const fixtureDirectory = requireTemporaryDirectory(
     "PLATEN_M1_S203_FIXTURE_DIR",
     false,
 );
-for (const fixture of ["plain-two-pages.pdf", "protected-alpha.pdf"]) {
+for (const fixture of [
+    "plain-two-pages.pdf",
+    "protected-alpha.pdf",
+    "plain-merge-alpha.pdf",
+    "plain-merge-beta.pdf",
+    "protected-merge-alpha-aes128.pdf",
+    "protected-merge-beta-aes256.pdf",
+]) {
     if (!fs.existsSync(path.join(fixtureDirectory, fixture))) {
         throw new Error(`Required synthetic fixture is missing: ${fixture}`);
     }

@@ -25,7 +25,12 @@ if (!fixtureDirectory || !evidenceDirectory) {
 
 const plainPdf = readFileSync(path.join(fixtureDirectory, "plain-two-pages.pdf"));
 const protectedAlpha = readFileSync(path.join(fixtureDirectory, "protected-alpha.pdf"));
+const protectedMergeAlpha = readFileSync(path.join(fixtureDirectory, "protected-merge-alpha-aes128.pdf"));
+const protectedMergeBeta = readFileSync(path.join(fixtureDirectory, "protected-merge-beta-aes256.pdf"));
+const plainMergeAlpha = readFileSync(path.join(fixtureDirectory, "plain-merge-alpha.pdf"));
+const plainMergeBeta = readFileSync(path.join(fixtureDirectory, "plain-merge-beta.pdf"));
 const sourcePassword = "platen-m1-user-alpha";
+const sourcePasswordBeta = "platen-m1-user-beta";
 const outputPassword = "platen-m1-output-alpha";
 const wrongPassword = "platen-m1-wrong-password";
 
@@ -258,6 +263,7 @@ function verifyEncryptedPdf(
     expectedPassword: string,
     expectedPageCount: number,
     expectedRotation?: number,
+    expectedTextOrder?: string[],
 ): void {
     qpdfText([`--password=${expectedPassword}`, "--check", pdfPath]);
     const withoutPassword = spawnSync("qpdf", ["--check", pdfPath], { stdio: "ignore" });
@@ -281,6 +287,14 @@ function verifyEncryptedPdf(
     expect(info).toMatch(new RegExp(`^Pages:\\s+${expectedPageCount}\\s*$`, "m"));
     expect(text).toContain("PLATEN_M1_SYNTHETIC_ALPHA");
     expect(text).toContain("PLATEN_M1_SYNTHETIC_BETA");
+    if (expectedTextOrder) {
+        let previousPosition = -1;
+        for (const marker of expectedTextOrder) {
+            const position = text.indexOf(marker);
+            expect(position, `expected merged text marker ${marker}`).toBeGreaterThan(previousPosition);
+            previousPosition = position;
+        }
+    }
 
     if (expectedRotation !== undefined) {
         const pageInfo = qpdfText([`--password=${expectedPassword}`, "--show-npages", pdfPath]);
@@ -305,6 +319,8 @@ async function downloadAndVerify(
     expectedFilename: string,
     expectedPassword: string,
     expectedRotation?: number,
+    expectedPageCount = 2,
+    expectedTextOrder?: string[],
 ): Promise<void> {
     const downloadDirectory = mkdtempSync(path.join(os.tmpdir(), "platen-m1-s203-artifact-"));
     try {
@@ -314,7 +330,30 @@ async function downloadAndVerify(
         expect(download.suggestedFilename()).toBe(expectedFilename);
         const artifactPath = path.join(downloadDirectory, download.suggestedFilename());
         await download.saveAs(artifactPath);
-        verifyEncryptedPdf(artifactPath, expectedPassword, 2, expectedRotation);
+        verifyEncryptedPdf(artifactPath, expectedPassword, expectedPageCount, expectedRotation, expectedTextOrder);
+    } finally {
+        rmSync(downloadDirectory, { recursive: true, force: true });
+    }
+}
+
+async function downloadAndVerifyPlain(page: Page, expectedFilename: string): Promise<void> {
+    const downloadDirectory = mkdtempSync(path.join(os.tmpdir(), "platen-m1-s204-plain-artifact-"));
+    try {
+        const downloadPromise = page.waitForEvent("download");
+        await page.getByRole("button", { name: "Download File" }).click();
+        const download = await downloadPromise;
+        expect(download.suggestedFilename()).toBe(expectedFilename);
+        const artifactPath = path.join(downloadDirectory, download.suggestedFilename());
+        await download.saveAs(artifactPath);
+        const info = execFileSync("pdfinfo", [artifactPath], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+        const text = execFileSync("pdftotext", [artifactPath, "-"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+        execFileSync("qpdf", ["--check", artifactPath], { stdio: ["ignore", "ignore", "ignore"] });
+        expect(info).toMatch(/^Encrypted:\s+no\b/m);
+        expect(info).toMatch(/^Pages:\s+2\s*$/m);
+        const alpha = text.indexOf("PLATEN_M1_SYNTHETIC_ALPHA_MERGE");
+        const beta = text.indexOf("PLATEN_M1_SYNTHETIC_BETA_MERGE");
+        expect(alpha).toBeGreaterThanOrEqual(0);
+        expect(beta).toBeGreaterThan(alpha);
     } finally {
         rmSync(downloadDirectory, { recursive: true, force: true });
     }
@@ -327,22 +366,48 @@ function multipartFields(body: Buffer | undefined): string[] {
 }
 
 function multipartFilePayload(body: Buffer | undefined, contentType: string | undefined, fieldName: string): Buffer | null {
-    if (!body || !contentType) return null;
+    return multipartFilePayloads(body, contentType, fieldName)[0]?.bytes ?? null;
+}
+
+function multipartFilePayloads(
+    body: Buffer | undefined,
+    contentType: string | undefined,
+    fieldName: string,
+): Array<{ filename: string; bytes: Buffer }> {
+    if (!body || !contentType) return [];
     const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;\s]+))/i);
     const boundary = boundaryMatch?.[1] || boundaryMatch?.[2];
-    if (!boundary) return null;
+    if (!boundary) return [];
 
     const raw = body.toString("latin1");
+    const files: Array<{ filename: string; bytes: Buffer }> = [];
     for (const part of raw.split(`--${boundary}`)) {
         const separator = part.indexOf("\r\n\r\n");
         if (separator < 0) continue;
         const headers = part.slice(0, separator);
-        if (!headers.includes(`name="${fieldName}"`) || !headers.includes("filename=")) continue;
+        const disposition = headers.match(/Content-Disposition:\s*form-data;\s*name="([^"]+)";\s*filename="([^"]+)"/i);
+        if (!disposition || disposition[1] !== fieldName) continue;
         let contents = part.slice(separator + 4);
         if (contents.endsWith("\r\n")) contents = contents.slice(0, -2);
-        return Buffer.from(contents, "latin1");
+        files.push({ filename: disposition[2], bytes: Buffer.from(contents, "latin1") });
     }
-    return null;
+    return files;
+}
+
+function verifyPlainPdfPayload(pdfBytes: Buffer, expectedMarker: string): void {
+    const directory = mkdtempSync(path.join(os.tmpdir(), "platen-m1-s204-merge-input-"));
+    const filePath = path.join(directory, "prepared-input.pdf");
+    try {
+        writeFileSync(filePath, pdfBytes);
+        execFileSync("qpdf", ["--check", filePath], { stdio: ["ignore", "ignore", "ignore"] });
+        const info = execFileSync("pdfinfo", [filePath], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+        const text = execFileSync("pdftotext", [filePath, "-"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+        expect(info).toMatch(/^Encrypted:\s+no\b/m);
+        expect(info).toMatch(/^Pages:\s+1\s*$/m);
+        expect(text).toContain(expectedMarker);
+    } finally {
+        rmSync(directory, { recursive: true, force: true });
+    }
 }
 
 function verifyPlainRotateUpload(upload: Buffer | null): void {
@@ -358,6 +423,26 @@ function verifyPlainRotateUpload(upload: Buffer | null): void {
         expect(info).toMatch(/^Pages:\s+2\s*$/m);
         expect(text).toContain("PLATEN_M1_SYNTHETIC_ALPHA");
         expect(text).toContain("PLATEN_M1_SYNTHETIC_BETA");
+    } finally {
+        rmSync(temporaryDirectory, { recursive: true, force: true });
+    }
+}
+
+function verifyPlainMergedUpload(upload: Buffer | null): void {
+    expect(upload?.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+    const temporaryDirectory = mkdtempSync(path.join(os.tmpdir(), "platen-m1-s204-merge-output-"));
+    const uploadPath = path.join(temporaryDirectory, "merge-output.pdf");
+    try {
+        writeFileSync(uploadPath, upload!);
+        execFileSync("qpdf", ["--check", uploadPath], { stdio: ["ignore", "ignore", "ignore"] });
+        const info = execFileSync("pdfinfo", [uploadPath], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+        const text = execFileSync("pdftotext", [uploadPath, "-"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+        expect(info).toMatch(/^Encrypted:\s+no\b/m);
+        expect(info).toMatch(/^Pages:\s+2\s*$/m);
+        const alpha = text.indexOf("PLATEN_M1_SYNTHETIC_ALPHA_MERGE");
+        const beta = text.indexOf("PLATEN_M1_SYNTHETIC_BETA_MERGE");
+        expect(alpha).toBeGreaterThanOrEqual(0);
+        expect(beta).toBeGreaterThan(alpha);
     } finally {
         rmSync(temporaryDirectory, { recursive: true, force: true });
     }
@@ -470,6 +555,206 @@ test.describe("REAL GO BACKEND — explicit Lock and protected Rotate publicatio
         await downloadAndVerify(page, "protected-alpha-rotated.pdf", sourcePassword, 90);
         assertNoProductionOrFallbackRequests(evidence);
         logSummary("real protected Rotate and restoration", evidence);
+    });
+
+    test("Cloud Merge locally prepares two differently protected sources and publishes only the real backend's verified new-password output", async ({ page }) => {
+        const evidence = await installNetworkBoundary(page);
+        await page.goto("/merge-pdf");
+        await expect(page.getByRole("button", { name: /Switch to (light|dark) theme/ })).toBeVisible();
+        await expect.poll(() => evidence.requests.some((entry) =>
+            entry.method === "GET" && entry.path === "/api/health" && entry.status === 200
+        )).toBe(true);
+
+        await page.locator('input[type="file"]').first().setInputFiles([
+            { name: "protected-merge-alpha-aes128.pdf", mimeType: "application/pdf", buffer: protectedMergeAlpha },
+            { name: "protected-merge-beta-aes256.pdf", mimeType: "application/pdf", buffer: protectedMergeBeta },
+        ]);
+
+        let dialog = page.getByRole("dialog", { name: "Protected document detected" });
+        await expect(dialog).toContainText("protected-merge-alpha-aes128.pdf");
+        await dialog.getByRole("button", { name: "Device", exact: true }).click();
+        await dialog.getByLabel("PDF password").fill(sourcePassword);
+        await dialog.getByRole("button", { name: "Unlock on this device" }).click();
+
+        dialog = page.getByRole("dialog", { name: "Protected document detected" });
+        await expect(dialog).toContainText("protected-merge-beta-aes256.pdf");
+        await expect(dialog.getByRole("button", { name: "Device", exact: true })).toHaveAttribute("aria-pressed", "true");
+        await dialog.getByLabel("PDF password").fill(sourcePasswordBeta);
+        await dialog.getByRole("button", { name: "Unlock on this device" }).click();
+        await expect(page).toHaveURL(/\/merge-pdf\/workspace$/);
+        await expect.poll(() => page.getByTestId("merge-queue-file").allTextContents()).toEqual([
+            "protected-merge-alpha-aes128.pdf",
+            "protected-merge-beta-aes256.pdf",
+        ]);
+        expect(evidence.requests.filter((entry) => entry.method === "POST" && entry.path.startsWith("/api/")).map((entry) => entry.path)).toEqual([]);
+
+        const cloudButton = page.getByRole("button", { name: "Cloud", exact: true });
+        await cloudButton.click();
+        await expect(cloudButton).toHaveAttribute("aria-pressed", "true");
+        const outputGroup = page.getByRole("group", { name: "Merged output protection" });
+        await outputGroup.getByLabel("Protect merged output with a new password").check();
+        await page.getByLabel("New output password").fill(outputPassword);
+        await page.getByLabel("Confirm output password").fill(outputPassword);
+        await page.getByLabel("Authorize Cloud Merge").check();
+        await page.getByLabel("Authorize Cloud output protection request").check();
+        const mergeAction = page.getByRole("button", { name: "Merge 2 PDFs" });
+        await expect(mergeAction).toBeEnabled();
+        expect(evidence.requests.filter((entry) => entry.method === "POST" && entry.path.startsWith("/api/")).map((entry) => entry.path)).toEqual([]);
+
+        const lockDelay = createDelayedResponse("/api/security/lock");
+        evidence.delayed = lockDelay;
+        await mergeAction.click();
+        await lockDelay.fetched;
+        expect(lockDelay.responseStatus).toBe(200);
+        await expect(page).toHaveURL(/\/merge-pdf\/workspace$/);
+        await expect(page.getByText("Task completed successfully!")).toHaveCount(0);
+        await expect(page.getByRole("button", { name: "Download File" })).toHaveCount(0);
+
+        const operationRequests = evidence.requests.filter((entry) =>
+            entry.method === "POST" && ["/api/structure/merge", "/api/security/lock"].includes(entry.path)
+        );
+        expect(operationRequests.map((entry) => entry.path)).toEqual([
+            "/api/structure/merge",
+            "/api/security/lock",
+        ]);
+        expect(operationRequests[0].status).toBe(200);
+        expect(multipartFields(operationRequests[0].body)).toEqual(["files", "files"]);
+        const mergeFiles = multipartFilePayloads(operationRequests[0].body, operationRequests[0].requestContentType, "files");
+        expect(mergeFiles.map((entry) => entry.filename)).toEqual([
+            "protected-merge-alpha-aes128.pdf",
+            "protected-merge-beta-aes256.pdf",
+        ]);
+        expect(mergeFiles[0].bytes.equals(protectedMergeAlpha)).toBe(false);
+        expect(mergeFiles[1].bytes.equals(protectedMergeBeta)).toBe(false);
+        expect(operationRequests[0].body?.toString("latin1")).not.toMatch(/name="[^"]*password/i);
+        expect(operationRequests[0].body?.toString("latin1")).not.toContain(sourcePassword);
+        expect(operationRequests[0].body?.toString("latin1")).not.toContain(sourcePasswordBeta);
+        verifyPlainPdfPayload(mergeFiles[0].bytes, "PLATEN_M1_SYNTHETIC_ALPHA_MERGE");
+        verifyPlainPdfPayload(mergeFiles[1].bytes, "PLATEN_M1_SYNTHETIC_BETA_MERGE");
+
+        const lockRequest = operationRequests[1];
+        expect(lockDelay.responseStatus).toBe(200);
+        expect(multipartFields(lockRequest.body)).toEqual(["file", "password"]);
+        expect(lockRequest.body?.toString("latin1")).toContain(`name="password"\r\n\r\n${outputPassword}`);
+        expect(lockRequest.body?.toString("latin1")).not.toContain(sourcePassword);
+        expect(lockRequest.body?.toString("latin1")).not.toContain(sourcePasswordBeta);
+        verifyPlainMergedUpload(multipartFilePayload(lockRequest.body, lockRequest.requestContentType, "file"));
+
+        lockDelay.release();
+        await lockDelay.finished;
+        await expect.poll(() => lockRequest.status).toBe(200);
+        await expect(page).toHaveURL(/\/merge-pdf\/download$/);
+        await expect(page.getByText("Task completed successfully!")).toBeVisible();
+        await downloadAndVerify(
+            page,
+            "protected-merge-alpha-aes128-merge.pdf",
+            outputPassword,
+            undefined,
+            2,
+            ["PLATEN_M1_SYNTHETIC_ALPHA_MERGE", "PLATEN_M1_SYNTHETIC_BETA_MERGE"],
+        );
+        expect(evidence.requests.filter((entry) => entry.method === "POST").map((entry) => entry.path)).toEqual([
+            "/api/structure/merge",
+            "/api/security/lock",
+        ]);
+        assertNoProductionOrFallbackRequests(evidence);
+        logSummary("real Cloud Merge with separate input and output passwords", evidence);
+    });
+
+    test("all-plain Cloud Merge retains its ordinary unprotected output contract", async ({ page }) => {
+        const evidence = await installNetworkBoundary(page);
+        await page.goto("/merge-pdf");
+        await expect(page.getByRole("button", { name: /Switch to (light|dark) theme/ })).toBeVisible();
+        await expect.poll(() => evidence.requests.some((entry) =>
+            entry.method === "GET" && entry.path === "/api/health" && entry.status === 200
+        )).toBe(true);
+
+        await page.locator('input[type="file"]').first().setInputFiles([
+            { name: "plain-merge-alpha.pdf", mimeType: "application/pdf", buffer: plainMergeAlpha },
+            { name: "plain-merge-beta.pdf", mimeType: "application/pdf", buffer: plainMergeBeta },
+        ]);
+        await expect(page).toHaveURL(/\/merge-pdf\/workspace$/);
+        await expect.poll(() => page.getByTestId("merge-queue-file").allTextContents()).toEqual([
+            "plain-merge-alpha.pdf", "plain-merge-beta.pdf",
+        ]);
+        await expect(page.getByRole("group", { name: "Merged output protection" })).toHaveCount(0);
+        await page.getByRole("button", { name: "Cloud", exact: true }).click();
+
+        const mergeAction = page.getByRole("button", { name: "Merge 2 PDFs" });
+        await expect(mergeAction).toBeEnabled();
+        await mergeAction.click();
+        await expect.poll(() => evidence.requests.filter((entry) =>
+            entry.method === "POST" && entry.path === "/api/structure/merge"
+        ).length).toBe(1);
+        await expect(page).toHaveURL(/\/merge-pdf\/download$/);
+
+        const submissions = evidence.requests.filter((entry) => entry.method === "POST");
+        expect(submissions.map((entry) => entry.path)).toEqual(["/api/structure/merge"]);
+        expect(submissions[0].status).toBe(200);
+        expect(multipartFields(submissions[0].body)).toEqual(["files", "files"]);
+        const files = multipartFilePayloads(submissions[0].body, submissions[0].requestContentType, "files");
+        expect(files.map((entry) => entry.filename)).toEqual([
+            "plain-merge-alpha.pdf", "plain-merge-beta.pdf",
+        ]);
+        expect(files[0].bytes.equals(plainMergeAlpha)).toBe(true);
+        expect(files[1].bytes.equals(plainMergeBeta)).toBe(true);
+        expect(submissions[0].body?.toString("latin1")).not.toMatch(/name="[^\"]*password/i);
+        await downloadAndVerifyPlain(page, "plain-merge-alpha-merge.pdf");
+        assertNoProductionOrFallbackRequests(evidence);
+        logSummary("real all-plain Cloud Merge", evidence);
+    });
+
+    test("real Cloud Merge permits plaintext output only after explicit selection for a protected source", async ({ page }) => {
+        const evidence = await installNetworkBoundary(page);
+        await page.goto("/merge-pdf");
+        await expect(page.getByRole("button", { name: /Switch to (light|dark) theme/ })).toBeVisible();
+        await expect.poll(() => evidence.requests.some((entry) =>
+            entry.method === "GET" && entry.path === "/api/health" && entry.status === 200
+        )).toBe(true);
+
+        await page.locator('input[type="file"]').first().setInputFiles([
+            { name: "protected-merge-alpha-aes128.pdf", mimeType: "application/pdf", buffer: protectedMergeAlpha },
+            { name: "plain-merge-beta.pdf", mimeType: "application/pdf", buffer: plainMergeBeta },
+        ]);
+        const preparation = page.getByRole("dialog", { name: "Protected document detected" });
+        await expect(preparation).toContainText("protected-merge-alpha-aes128.pdf");
+        await preparation.getByRole("button", { name: "Device", exact: true }).click();
+        await preparation.getByLabel("PDF password").fill(sourcePassword);
+        await preparation.getByRole("button", { name: "Unlock on this device" }).click();
+        await expect(page).toHaveURL(/\/merge-pdf\/workspace$/);
+        await expect.poll(() => page.getByTestId("merge-queue-file").allTextContents()).toEqual([
+            "protected-merge-alpha-aes128.pdf",
+            "plain-merge-beta.pdf",
+        ]);
+
+        await page.getByRole("button", { name: "Cloud", exact: true }).click();
+        const outputGroup = page.getByRole("group", { name: "Merged output protection" });
+        await outputGroup.getByLabel("Create an unprotected merged PDF").check();
+        await outputGroup.getByLabel(/I understand and confirm that the merged PDF will not be password-protected/).check();
+        await page.getByLabel("Authorize Cloud Merge").check();
+        const mergeAction = page.getByRole("button", { name: "Merge 2 PDFs" });
+        await expect(mergeAction).toBeEnabled();
+        expect(evidence.requests.filter((entry) => entry.method === "POST")).toHaveLength(0);
+
+        await mergeAction.click();
+        await expect.poll(() => evidence.requests.filter((entry) => entry.method === "POST").length).toBe(1);
+        await expect(page).toHaveURL(/\/merge-pdf\/download$/);
+        const posts = evidence.requests.filter((entry) => entry.method === "POST");
+        expect(posts.map((entry) => entry.path)).toEqual(["/api/structure/merge"]);
+        expect(posts[0].status).toBe(200);
+        expect(multipartFields(posts[0].body)).toEqual(["files", "files"]);
+        const files = multipartFilePayloads(posts[0].body, posts[0].requestContentType, "files");
+        expect(files.map((file) => file.filename)).toEqual([
+            "protected-merge-alpha-aes128.pdf",
+            "plain-merge-beta.pdf",
+        ]);
+        expect(posts[0].body?.toString("latin1")).not.toMatch(/name="[^\"]*password/i);
+        expect(posts[0].body?.toString("latin1")).not.toContain(sourcePassword);
+        verifyPlainPdfPayload(files[0].bytes, "PLATEN_M1_SYNTHETIC_ALPHA_MERGE");
+        verifyPlainPdfPayload(files[1].bytes, "PLATEN_M1_SYNTHETIC_BETA_MERGE");
+        await downloadAndVerifyPlain(page, "protected-merge-alpha-aes128-merge.pdf");
+        assertNoProductionOrFallbackRequests(evidence);
+        logSummary("real Cloud Merge with explicitly selected unprotected output", evidence);
     });
 
     test("real Rotate success followed by a controlled re-lock error cannot publish plaintext", async ({ page }) => {

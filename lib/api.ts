@@ -329,6 +329,7 @@ export async function uploadAndDownloadFile(
     onProgress?: (percentage: number) => void,
     signal?: AbortSignal,
     outputKind?: UploadOutputKind,
+    onCloudSubmissionInitiated?: () => void,
 ): Promise<Blob> {
     const apiUrl = getBaseUrl();
     const targetUrl = endpoint.startsWith("http")
@@ -362,6 +363,7 @@ export async function uploadAndDownloadFile(
         // The request is now locally validated and is about to leave this browser.
         // Keep this marker if the request later fails or is cancelled.
         markCloudSubmissionInitiated(submittedFiles);
+        onCloudSubmissionInitiated?.();
         const response = await axios.post(targetUrl, formData, {
             responseType: "blob",
             withCredentials: true,
