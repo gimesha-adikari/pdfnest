@@ -26,6 +26,7 @@ interface StudioSidebarProps {
     onToggleSidebar: () => void;
     onUploadClick: () => void;
     onFilesAccepted: (files: File[]) => Promise<void>;
+    onFilesSelected: (files: File[]) => void;
     onPageSelect: (page: number) => void;
 }
 
@@ -39,6 +40,7 @@ export default function StudioSidebar({
                                           onToggleSidebar,
                                           onUploadClick,
                                           onFilesAccepted,
+                                          onFilesSelected,
                                           onPageSelect,
                                       }: StudioSidebarProps) {
     return (
@@ -83,24 +85,6 @@ export default function StudioSidebar({
 
                 </div>
 
-                {/* Hidden upload */}
-
-                <input
-                    ref={uploadInputRef}
-                    type="file"
-                    accept=".pdf,.pns"
-                    className="hidden"
-                    onChange={(e) => {
-                        const files = Array.from(
-                            e.target.files || []
-                        );
-
-                        e.target.value = "";
-
-                        void onFilesAccepted(files);
-                    }}
-                />
-
                 {/* Upload Button */}
 
                 <button
@@ -129,17 +113,18 @@ export default function StudioSidebar({
                     )}
                 </button>
 
-                {isSidebarOpen && (
-                    <div className="mt-4">
-                        <PdfUploader
-                            onFilesAccepted={onFilesAccepted}
-                            title="Drop PDF here"
-                            description="Or use upload button"
-                            accept=".pdf,.pns"
-                            multiple={false}
-                        />
-                    </div>
-                )}
+                <div className={isSidebarOpen ? "mt-4" : "sr-only"}>
+                    <PdfUploader
+                        inputRef={uploadInputRef}
+                        showDropZone={isSidebarOpen}
+                        onFilesAccepted={onFilesAccepted}
+                        onFilesSelected={onFilesSelected}
+                        title="Drop PDF here"
+                        description="Or use upload button"
+                        accept=".pdf,.pns"
+                        multiple={false}
+                    />
+                </div>
 
                 {isSidebarOpen && (
                     <div className="mt-6 flex items-center justify-between">

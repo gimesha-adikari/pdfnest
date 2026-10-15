@@ -6,6 +6,7 @@ import { ClientExecutor } from "@/lib/execution/ClientExecutor";
 import { CloudExecutor } from "@/lib/execution/CloudExecutor";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ExecutionSafetyGate } from "@/lib/execution/ExecutionSafetyGate";
+import { verifyProtectedPdfBlob } from "@/lib/security/verifyProtectedPdf";
 import { setupNodeWasmWorker } from "../setupNodeWasmWorker";
 
 export async function runLockExecutionTests() {
@@ -46,6 +47,7 @@ export async function runLockExecutionTests() {
     });
 
     assert.strictEqual(encryptedBlob.type, "application/pdf");
+    await verifyProtectedPdfBlob(encryptedBlob, "LockPassword123");
     const encArrayBuf = await encryptedBlob.arrayBuffer();
     const encBytes = new Uint8Array(encArrayBuf);
     assert.strictEqual(String.fromCharCode(...encBytes.slice(0, 5)), "%PDF-");
@@ -232,8 +234,36 @@ export async function runLockExecutionTests() {
         console.log("✓ [PASS] 14. Empty files array throws INVALID_INPUT error");
     }
 
+    // 15. A plaintext Device result fails verification without a Cloud retry
+    const originalClientExec = ClientExecutor.execute;
+    const originalCloudExec = CloudExecutor.execute;
+    let invalidDeviceCloudCalls = 0;
+    ClientExecutor.execute = async () => new Blob([await plainFile.arrayBuffer()], { type: "application/pdf" });
+    CloudExecutor.execute = async () => {
+        invalidDeviceCloudCalls += 1;
+        return encryptedBlob;
+    };
+    try {
+        const deviceResult = await ExecutionManager.run({
+            tool: "lock",
+            files: [plainFile],
+            params: { password: "DevicePassword123" },
+            mode: "device",
+            password: "DevicePassword123",
+        });
+        await assert.rejects(
+            verifyProtectedPdfBlob(deviceResult.blob, "DevicePassword123"),
+            /password protection could not be verified/i,
+        );
+        assert.strictEqual(invalidDeviceCloudCalls, 0, "verification failure in Device mode must not call CloudExecutor");
+        console.log("✓ [PASS] 15. Plaintext Device Lock result fails verification without Cloud fallback");
+    } finally {
+        ClientExecutor.execute = originalClientExec;
+        CloudExecutor.execute = originalCloudExec;
+    }
+
     console.log("\n=================================================");
-    console.log("     LOCK PDF TEST SUMMARY: 14 PASSED, 0 FAILED  ");
+    console.log("     LOCK PDF TEST SUMMARY: 15 PASSED, 0 FAILED  ");
     console.log("=================================================\n");
 }
 

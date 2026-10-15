@@ -26,6 +26,7 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
+import { getInitialProcessingMode } from "@/lib/security/pdfInputPreparation";
 
 import { usePreview } from "@/lib/preview/usePreview";
 
@@ -43,7 +44,7 @@ export default function WatermarkPdfWorkspace() {
     const [watermarkType, setWatermarkType] = useState<"text" | "image">("text");
     const [watermarkText, setWatermarkText] = useState("CONFIDENTIAL");
     const [fontFamily, setFontFamily] = useState<string>("Helvetica");
-    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
 
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string>("");

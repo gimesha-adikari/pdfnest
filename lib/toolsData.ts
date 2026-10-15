@@ -57,6 +57,14 @@ export interface ToolItem {
     clientCapable?: boolean;
     /** Execution policy for ExecutionManager */
     toolPolicy?: ToolPolicy;
+    /** Protected PDF input contract for the actual route implementation. */
+    protectedPdfPolicy?:
+        | "execution-manager"
+        | "cloud-only"
+        | "cloud-consent"
+        | "explicit-unlock"
+        | "studio-session-consent"
+        | "unqualified";
     /** Human-readable explanation when backend is required. */
     offlineReason?: string;
 }
@@ -426,6 +434,7 @@ const BASE_NAV_TOOLS_FALLBACK: ToolItem[] = [
         capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false, hasOfflineFallback: false, isHybridWorkspace: false },
         clientCapable: true,
         toolPolicy: "CLIENT_PREFERRED",
+        protectedPdfPolicy: "explicit-unlock",
         seoTitle: "Unlock PDF Online Free - Remove Password",
         seoDescription: "Remove passwords and security restrictions from PDF files quickly. Decrypt PDFs instantly.",
         intent: "Users want to remove password protection or restrictions from a PDF.",
@@ -809,6 +818,7 @@ const BASE_NAV_TOOLS_FALLBACK: ToolItem[] = [
         capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false, isHybridWorkspace: true },
         clientCapable: true,
         toolPolicy: "CLIENT_PREFERRED",
+        protectedPdfPolicy: "studio-session-consent",
         seoTitle: "Advanced PDF Studio - All-in-One Editor",
         seoDescription: "A powerful all-in-one workspace to edit, merge, process, and completely manage your PDF documents online.",
         intent: "Users need a comprehensive workspace to do multiple operations on a PDF.",
@@ -1632,6 +1642,7 @@ const BASE_NAV_TOOLS_FALLBACK: ToolItem[] = [
         capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false },
         clientCapable: true,
         toolPolicy: "CLIENT_PREFERRED",
+        protectedPdfPolicy: "cloud-consent",
 
         seoTitle: "Highlight PDF Online Free | Add Highlight Markers to PDF",
 
@@ -1704,6 +1715,7 @@ const BASE_NAV_TOOLS_FALLBACK: ToolItem[] = [
         capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false },
         clientCapable: true,
         toolPolicy: "CLIENT_PREFERRED",
+        protectedPdfPolicy: "cloud-consent",
 
         seoTitle: "Underline PDF Online Free | Add Underlines to PDF Documents",
 
@@ -1776,6 +1788,7 @@ const BASE_NAV_TOOLS_FALLBACK: ToolItem[] = [
         capability: { clientExecutable: true, workspaceOffline: true, requiresBackend: false },
         clientCapable: true,
         toolPolicy: "CLIENT_PREFERRED",
+        protectedPdfPolicy: "cloud-consent",
 
         seoTitle: "Strikeout PDF Online Free | Add Strikethrough to PDF Text",
 

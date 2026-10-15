@@ -13,6 +13,12 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfFeatures from "@/components/pdf/PdfFeatures";
 import RepositoryAnalyzerSourceSelector from "@/components/tools/RepositoryAnalyzerSourceSelector";
+import {
+    createTransferredPdfPreparation,
+    getPdfInputPreparation,
+    markPdfInputPreparation,
+} from "@/lib/security/pdfInputPreparation";
+import { getProtectedPdfRoutePolicy } from "@/lib/security/protectedPdfRoutePolicy";
 
 interface ExtendedFile extends File {
     initialBatch?: File[];
@@ -32,21 +38,13 @@ export default function SharedUploadPage() {
     const { pendingTransfer, consumeTransfer } = useWorkflow();
     const router = useRouter();
     const [urlInput, setUrlInput] = useState("");
+    const [transferredFiles, setTransferredFiles] = useState<File[] | undefined>(undefined);
     const handledTransferRef = useRef(false);
 
     const currentToolHref = `/${toolId}`;
     const shouldRestoreTransfer = pendingTransfer?.targetToolHref === currentToolHref;
 
     useEffect(() => {
-        console.log("[upload] effect", {
-            toolId,
-            currentToolHref,
-            isLoadingConfig,
-            hasFile: !!file,
-            shouldRestoreTransfer,
-            pendingTransferTarget: pendingTransfer?.targetToolHref || null,
-        });
-
         if (isLoadingConfig) return;
         if (handledTransferRef.current) return;
 
@@ -54,7 +52,6 @@ export default function SharedUploadPage() {
             handledTransferRef.current = true;
 
             const transfer = consumeTransfer();
-            console.log("[upload] consumeTransfer result", transfer);
 
             if (!transfer) return;
 
@@ -63,18 +60,13 @@ export default function SharedUploadPage() {
                 lastModified: Date.now(),
             }) as ExtendedFile;
 
-            console.log("[upload] restoring file into", currentToolHref, restoredFile.name);
+            markPdfInputPreparation(restoredFile, createTransferredPdfPreparation(transfer.provenance));
 
-            setFile(restoredFile);
-            router.replace(`/${toolId}/workspace`);
+            queueMicrotask(() => setTransferredFiles([restoredFile]));
             return;
         }
 
         if (file) {
-            console.log("[upload] existing file detected, going workspace", {
-                toolId,
-                fileName: file.name,
-            });
             router.replace(`/${toolId}/workspace`);
         }
     }, [
@@ -89,24 +81,43 @@ export default function SharedUploadPage() {
         toolId,
     ]);
 
-    const handleFilesAccepted = (files: File[]) => {
+    const handleFilesAccepted = (
+        files: File[],
+        acceptance?: { processingMode: "auto" | "device" | "cloud" }
+    ) => {
         if (files && files.length > 0) {
+            const processingMode = acceptance?.processingMode ?? "auto";
+            files.forEach((acceptedFile) => {
+                const existing = getPdfInputPreparation(acceptedFile);
+                if (existing) {
+                    markPdfInputPreparation(acceptedFile, { ...existing, processingMode });
+                }
+            });
             const baselineFile = files[0] as ExtendedFile;
+            setTransferredFiles(undefined);
 
             if (toolConfig.multiple) {
                 baselineFile.initialBatch = files;
             }
-
-            console.log("[upload] user selected file", {
-                toolId,
-                fileName: baselineFile.name,
-            });
 
             handledTransferRef.current = true;
             setFile(baselineFile);
             router.push(`/${toolId}/workspace`);
         }
     };
+
+    const protectedPolicy = getProtectedPdfRoutePolicy(toolId);
+    const protectedFileHandling = protectedPolicy === "execution-manager"
+        ? "choose-mode"
+        : protectedPolicy === "cloud-only"
+            ? "cloud-only"
+            : protectedPolicy === "cloud-consent"
+                ? "cloud-consent"
+            : protectedPolicy === "explicit-unlock"
+                ? "explicit-unlock"
+                : protectedPolicy === "studio-session-consent"
+                    ? "cloud-session-consent"
+                    : "fail-closed";
 
     const handleUrlSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -117,11 +128,6 @@ export default function SharedUploadPage() {
         }) as ExtendedFile;
 
         virtualFile.targetUrl = urlInput.trim();
-
-        console.log("[upload] url submitted", {
-            toolId,
-            url: urlInput.trim(),
-        });
 
         handledTransferRef.current = true;
         setFile(virtualFile);
@@ -140,9 +146,6 @@ export default function SharedUploadPage() {
             </PdfToolLayout>
         );
     }
-
-    console.log(toolConfig.icon);
-    console.log(typeof toolConfig.icon);
 
     return (
         <PdfToolLayout>
@@ -196,7 +199,9 @@ export default function SharedUploadPage() {
                         onFilesAccepted={handleFilesAccepted}
                         accept={toolConfig.accept || ".pdf"}
                         multiple={toolConfig.multiple}
+                        initialFiles={transferredFiles}
                         bypassEncryptionCheck={toolId === "unlock-pdf"}
+                        protectedFileHandling={protectedFileHandling}
                     />
                 )}
             </div>

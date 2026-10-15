@@ -9,6 +9,7 @@ import {
 } from "@/lib/taskStorage";
 import { notify, notifyBackendError } from "@/lib/notify";
 import { getBaseUrl } from "@/lib/api";
+import { markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 
 export type TaskStatus =
     | "PENDING"
@@ -35,8 +36,8 @@ function buildDownloadUrl(taskId: string, downloadToken?: string): string {
     return `${base}/api/v1/download/${taskId}`;
 }
 
-export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string) => void) {
-    const [taskId, setTaskId] = useState<string>("");
+export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string, taskId: string) => void) {
+    const [taskId, setTaskIdState] = useState<string>("");
     const [status, setStatus] = useState<TaskStatus | null>(null);
     const [progress, setProgress] = useState<number>(0);
     const [error, setError] = useState<string | null>(null);
@@ -46,6 +47,32 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
     const idempotencyKeyRef = useRef<string>("");
     const onCompleteRef = useRef(onComplete);
     const lastSubmissionRef = useRef<(() => Promise<string | null>) | null>(null);
+    const activeTaskIdRef = useRef("");
+    const taskGenerationRef = useRef(0);
+    const completedCallbacksRef = useRef(new Set<string>());
+
+    const setTaskId = useCallback((nextTaskId: string) => {
+        taskGenerationRef.current += 1;
+        activeTaskIdRef.current = nextTaskId;
+        completedCallbacksRef.current.clear();
+        setTaskIdState(nextTaskId);
+    }, []);
+
+    const publishCompletion = useCallback((requestedTaskId: string, data: TaskStatusResponse) => {
+        if (!requestedTaskId || activeTaskIdRef.current !== requestedTaskId) return;
+        if (data.id && data.id !== requestedTaskId) return;
+        if (completedCallbacksRef.current.has(requestedTaskId)) return;
+
+        completedCallbacksRef.current.add(requestedTaskId);
+        onCompleteRef.current?.(buildDownloadUrl(requestedTaskId, data.downloadToken), requestedTaskId);
+    }, []);
+
+    const failTaskResult = useCallback((failedTaskId: string, message: string) => {
+        if (!failedTaskId || activeTaskIdRef.current !== failedTaskId) return;
+        setStatus("FAILED");
+        setError(message);
+        updateStoredTask(failedTaskId, { status: "FAILED", error: message });
+    }, []);
 
     useEffect(() => {
         onCompleteRef.current = onComplete;
@@ -70,6 +97,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
         }
 
         let isMounted = true;
+        const generationAtStart = taskGenerationRef.current;
 
         fetch(`${getBaseApiUrl()}/api/v1/tasks/${existing.taskId}`, { credentials: "include" })
             .then((res) => {
@@ -81,7 +109,8 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
                 return res.json();
             })
             .then((data: TaskStatusResponse | null) => {
-                if (!isMounted || !data) return;
+                if (!isMounted || !data || generationAtStart !== taskGenerationRef.current) return;
+                if (data.id && data.id !== existing.taskId) return;
 
                 if (data.status === "PENDING" || data.status === "QUEUED" || data.status === "PROCESSING") {
                     setTaskId(existing.taskId);
@@ -98,7 +127,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
         return () => {
             isMounted = false;
         };
-    }, [toolName, getBaseApiUrl]);
+    }, [toolName, getBaseApiUrl, setTaskId]);
 
     useEffect(() => {
         if (!taskId) return;
@@ -115,7 +144,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
         const poll = async () => {
             try {
                 const res = await fetch(`${getBaseApiUrl()}/api/v1/tasks/${taskId}`, { credentials: "include" });
-                if (!isMounted) return;
+                if (!isMounted || activeTaskIdRef.current !== taskId) return;
 
                 if (res.status === 404 || res.status === 410) {
                     setStatus("FAILED");
@@ -130,7 +159,15 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
                 }
 
                 const data: TaskStatusResponse = await res.json();
-                if (!isMounted) return;
+                if (!isMounted || activeTaskIdRef.current !== taskId) return;
+
+                if (data.id && data.id !== taskId) {
+                    const message = "The server returned a different task result.";
+                    setStatus("FAILED");
+                    setError(message);
+                    updateStoredTask(taskId, { status: "FAILED", error: message });
+                    return;
+                }
 
                 consecutiveFailures = 0;
                 setProgress(data.progress || 0);
@@ -139,7 +176,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
                     setStatus("COMPLETED");
                     setProgress(100);
                     updateStoredTask(taskId, { status: "COMPLETED" });
-                    onCompleteRef.current?.(buildDownloadUrl(data.id || taskId, data.downloadToken));
+                    publishCompletion(taskId, data);
                     return;
                 } else if (data.status === "FAILED") {
                     setStatus("FAILED");
@@ -176,6 +213,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
         // Transient status-request failures are retried; a sustained outage is
         // surfaced instead of leaving the UI polling forever.
         const handlePollFailure = (err: unknown) => {
+            if (!isMounted || activeTaskIdRef.current !== taskId) return;
             consecutiveFailures += 1;
             console.warn(`Task status poll failed (attempt ${consecutiveFailures}):`, err);
 
@@ -191,7 +229,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
         };
 
         const scheduleNext = () => {
-            if (isMounted) {
+            if (isMounted && activeTaskIdRef.current === taskId) {
                 timeoutId = setTimeout(poll, currentInterval);
             }
         };
@@ -203,7 +241,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
             isMounted = false;
             clearTimeout(timeoutId);
         };
-    }, [taskId, status, getBaseApiUrl]);
+    }, [taskId, status, getBaseApiUrl, publishCompletion]);
 
     const registerSubmission = (submitFn: () => Promise<string | null>) => {
         lastSubmissionRef.current = submitFn;
@@ -214,6 +252,9 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
         formData: FormData,
         submitFn?: () => Promise<string | null>
     ): Promise<string | null> => {
+        setTaskId("");
+        setStatus(null);
+        setProgress(0);
         setIsSubmitting(true);
         setError(null);
 
@@ -226,6 +267,16 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
 
         for (let attempt = 0; attempt < 5; attempt++) {
             try {
+                const submittedFiles: File[] = [];
+                if (typeof File !== "undefined") {
+                    formData.forEach((value) => {
+                        if (value instanceof File) submittedFiles.push(value);
+                    });
+                }
+                // This helper submits backend tasks directly with fetch, outside
+                // uploadAndDownloadFile. Record risk immediately before each
+                // actual POST, including retries.
+                markCloudSubmissionInitiated(submittedFiles);
                 const res = await fetch(`${getBaseApiUrl()}${endpoint}`, {
                     method: "POST",
                     headers: {
@@ -281,6 +332,9 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
 
                 const data: any = await res.json();
                 const newTaskId = data.taskId || data.task_id || data.job_id;
+                if (typeof newTaskId !== "string" || newTaskId.length === 0) {
+                    throw new Error("The server did not return a task identifier.");
+                }
 
                 setTaskId(newTaskId);
                 setStatus("PENDING");
@@ -323,27 +377,39 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
                 method: "DELETE",
                 credentials: "include",
             });
+            if (activeTaskIdRef.current !== taskId) return;
 
             if (res.ok) {
                 const data: TaskStatusResponse = await res.json().catch(() => ({}) as any);
+                if (data.id && data.id !== taskId) {
+                    setStatus("FAILED");
+                    setError("The server returned a different task result.");
+                    return;
+                }
                 const finalStatus = data.status || "CANCELLED";
                 setStatus(finalStatus);
                 if (finalStatus === "CANCELLED") {
                     setError("Task was cancelled.");
                 } else if (finalStatus === "COMPLETED") {
                     setProgress(100);
-                    onCompleteRef.current?.(buildDownloadUrl(data.id || taskId, data.downloadToken));
+                    publishCompletion(taskId, data);
                 }
                 updateStoredTask(taskId, { status: finalStatus, error: data.error });
             } else if (res.status === 409 || res.status === 404 || res.status === 410) {
                 // Cancellation races with completion; resolve the server's terminal state.
                 const checkRes = await fetch(`${getBaseApiUrl()}/api/v1/tasks/${taskId}`, { credentials: "include" });
+                if (activeTaskIdRef.current !== taskId) return;
                 if (checkRes.ok) {
                     const data: TaskStatusResponse = await checkRes.json();
+                    if (data.id && data.id !== taskId) {
+                        setStatus("FAILED");
+                        setError("The server returned a different task result.");
+                        return;
+                    }
                     setStatus(data.status);
                     if (data.status === "COMPLETED") {
                         setProgress(100);
-                        onCompleteRef.current?.(buildDownloadUrl(data.id || taskId, data.downloadToken));
+                        publishCompletion(taskId, data);
                     }
                     updateStoredTask(taskId, { status: data.status, error: data.error });
                 } else {
@@ -441,5 +507,6 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
         setTaskId,
         setStatus,
         setProgress,
+        failTaskResult,
     };
 }

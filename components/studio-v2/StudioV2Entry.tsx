@@ -56,6 +56,7 @@ export const StudioV2Entry: React.FC<StudioV2EntryProps> = ({
             accept="application/pdf,.pdf"
             multiple={false}
             bypassEncryptionCheck
+            protectedFileHandling="cloud-session-consent"
             onFilesAccepted={onFilesAccepted}
           />
         )}

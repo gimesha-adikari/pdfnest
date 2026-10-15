@@ -4,6 +4,7 @@ import { CloudExecutor } from "../../lib/execution/CloudExecutor";
 import { ExecutionManager } from "../../lib/execution/ExecutionManager";
 import { ExecutionSafetyGate } from "../../lib/execution/ExecutionSafetyGate";
 import { ExecutionError } from "../../lib/execution/types";
+import { markPdfInputPreparation, setTransientOriginalPassword } from "../../lib/security/pdfInputPreparation";
 
 async function createDummyPdf(pageCount = 2, title?: string): Promise<File> {
     const pdfDoc = await PDFDocument.create();
@@ -82,6 +83,39 @@ export async function runMergeExecutionTests(): Promise<{ passed: number; failed
         assert(
             res3.executionMode === "client" && doc3.getPageCount() === 6 && cloudCallCount === 0,
             "3. Standard 3-PDF Merge combines pages locally with 0 cloud calls (output: 6 pages)"
+        );
+
+        // Prepared protected PDFs contain decrypted bytes. Their transient source
+        // password is provenance for later policy decisions, not a reason to
+        // reject a safe local merge of the already-prepared bytes.
+        cloudCallCount = 0;
+        const preparedProtected = await createDummyPdf(1, "Prepared Protected Source");
+        setTransientOriginalPassword(preparedProtected, "synthetic-source-password");
+        markPdfInputPreparation(preparedProtected, {
+            sourceProtected: true,
+            bytesState: "decrypted",
+            preparedOn: "device",
+            processingMode: "device",
+            cloudSubmissionInitiated: false,
+        });
+        let preparedProtectedResult: Awaited<ReturnType<typeof ExecutionManager.run>> | undefined;
+        try {
+            preparedProtectedResult = await ExecutionManager.run({
+                tool: "merge",
+                files: [fileA, preparedProtected],
+                mode: "device",
+            });
+        } catch {
+            // The assertion below reports the regression without hiding it as an
+            // uncaught test-runner failure.
+        }
+        const preparedProtectedPdf = preparedProtectedResult
+            ? await PDFDocument.load(await preparedProtectedResult.blob.arrayBuffer())
+            : null;
+        assert(
+            preparedProtectedResult?.executionMode === "client" &&
+                preparedProtectedPdf?.getPageCount() === 3 && cloudCallCount === 0,
+            "prepared protected-source PDFs remain mergeable in strict Device mode with no Cloud call"
         );
 
         // Test 4: Primary Document Metadata Preservation

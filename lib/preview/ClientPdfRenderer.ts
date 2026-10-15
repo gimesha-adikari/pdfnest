@@ -1,6 +1,6 @@
 // pdfnest/lib/preview/ClientPdfRenderer.ts
 
-import { PreviewRenderer, PreviewRequest, PreviewResource } from "./types";
+import { PreviewRenderer, PreviewRequest, PreviewResource, getPreviewFileIdentity } from "./types";
 
 export interface ClientPdfRendererOptions {
     /** Optional custom loader for PDF.js library (useful for testing or custom environments) */
@@ -38,7 +38,7 @@ export class ClientPdfRenderer implements PreviewRenderer {
     }>();
 
     private static getDocKey(file: File): string {
-        return `${file.name}:${file.size}:${file.lastModified}`;
+        return getPreviewFileIdentity(file);
     }
 
     private async _acquireDocument(file: File, signal: AbortSignal): Promise<{ entry: any; pdfDoc: any }> {

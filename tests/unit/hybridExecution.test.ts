@@ -100,9 +100,10 @@ export async function runHybridExecutionTests(): Promise<{ passed: number; faile
 
         // Test 6: ClientExecutor Logic Verification (Rotate Page 1 by 90deg)
         cloudCallCount = 0;
+        const deviceVerificationFile = await createDummyPdf(3);
         const res6 = await ExecutionManager.run({
             tool: "rotate",
-            files: [normalFile],
+            files: [deviceVerificationFile],
             params: { rotations: { "1": 90 } },
             mode: "device",
         });

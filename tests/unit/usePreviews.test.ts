@@ -22,6 +22,7 @@ import {
     PreviewRenderer,
     PreviewError,
     createPreviewKey,
+    getPreviewFileIdentity,
 } from "../../lib/preview/types";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -172,9 +173,10 @@ function makeKey(
     renderer = "client",
 ): string {
     const doc = {
-        id: `${file.name}:${file.size}:${file.lastModified}:${file.type}`,
+        id: getPreviewFileIdentity(file),
         version: String(file.lastModified),
         pageCount: 0,
+        file,
     };
     return createPreviewKey({
         document: doc as any,

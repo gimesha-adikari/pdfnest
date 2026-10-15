@@ -17,6 +17,7 @@ import type { PreviewError } from "@/lib/preview/types";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import type { ProcessingMode } from "@/lib/execution/types";
+import { getInitialProcessingMode } from "@/lib/security/pdfInputPreparation";
 
 type Stamp = {
     id: number;
@@ -38,7 +39,7 @@ export default function SignPdfWorkspace() {
 
     const [signatureBlob, setSignatureBlob] = useState<Blob | null>(null);
     const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
-    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
 
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);

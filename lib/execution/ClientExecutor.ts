@@ -18,6 +18,7 @@ import { executeMarkup } from "./markup/markupClient";
 import { executeSignPdf } from "./sign/signClient";
 import { executeCodeToPdf } from "./document/codeClient";
 import { executeMarkdownToPdf } from "./document/markdownClient";
+import { getPdfInputPreparation } from "@/lib/security/pdfInputPreparation";
 
 export class ClientExecutor {
     static isSupported(tool: string): boolean {
@@ -80,7 +81,7 @@ export class ClientExecutor {
 
         if (normalizedTool === "unlock") {
             const unlockPassword = options.password || params.password || (file as any).originalPassword;
-            return await executePdfcpuWasmUnlock(file, unlockPassword);
+            return await executePdfcpuWasmUnlock(file, unlockPassword, options.signal);
         }
 
         if (normalizedTool === "pdf_to_images") {
@@ -739,9 +740,10 @@ async function executeMerge(files: File[], options: ExecutionOptions): Promise<B
     const mergedDoc = await PDFDocument.create();
     let isFirst = true;
 
-    for (const file of files) {
-        const password = options.password || (file as any).originalPassword;
-        if (password) {
+    for (const [index, file] of files.entries()) {
+        const password = options.passwords?.[index] || options.password || (file as any).originalPassword;
+        const preparation = getPdfInputPreparation(file);
+        if (password && preparation?.bytesState !== "decrypted") {
             throw new ExecutionError(
                 "UNSUPPORTED_CLIENT_OP",
                 `Password-protected file '${file.name}' requires server-side encryption pipeline.`

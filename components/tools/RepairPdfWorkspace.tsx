@@ -13,6 +13,7 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import type { ProcessingMode } from "@/lib/execution/types";
+import { getInitialProcessingMode } from "@/lib/security/pdfInputPreparation";
 
 export default function RepairPdfWorkspace() {
     const { requireAuth } = useAuth();
@@ -21,7 +22,7 @@ export default function RepairPdfWorkspace() {
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
-    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
 
     const handleRepairDocument = async () => {
         requireAuth(async () => {

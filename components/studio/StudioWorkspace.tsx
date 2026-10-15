@@ -43,6 +43,7 @@ interface StudioWorkspaceProps {
     onToggleSidebar: () => void;
     onUploadClick: () => void;
     onFilesAccepted: (files: File[]) => Promise<void>;
+    onFilesSelected: (files: File[]) => void;
     onPageSelect: (page: number) => void;
     onToolSelect: (tool: StudioToolId) => void;
     onZoomIn: () => void;
@@ -73,6 +74,7 @@ export default function StudioWorkspace({
                                             onToggleSidebar,
                                             onUploadClick,
                                             onFilesAccepted,
+                                            onFilesSelected,
                                             onPageSelect,
                                             onToolSelect,
                                             onZoomIn,
@@ -106,6 +108,7 @@ export default function StudioWorkspace({
                     onToggleSidebar={onToggleSidebar}
                     onUploadClick={onUploadClick}
                     onFilesAccepted={onFilesAccepted}
+                    onFilesSelected={onFilesSelected}
                     onPageSelect={onPageSelect}
                 />
 

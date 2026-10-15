@@ -25,6 +25,19 @@ export interface PreviewRequest {
 
 export type PreviewKey = string;
 
+const previewFileIdentity = new WeakMap<File, number>();
+let nextPreviewFileIdentity = 1;
+
+/** Stable, non-persistent identity for one in-memory File object. */
+export function getPreviewFileIdentity(file: File): string {
+    let identity = previewFileIdentity.get(file);
+    if (identity === undefined) {
+        identity = nextPreviewFileIdentity++;
+        previewFileIdentity.set(file, identity);
+    }
+    return `file-${identity}`;
+}
+
 export function createPreviewKey(request: PreviewRequest): PreviewKey {
     const parts = [
         request.document.id,
@@ -33,6 +46,12 @@ export function createPreviewKey(request: PreviewRequest): PreviewKey {
         `m_${request.mode ?? "page"}`,
         `r_${request.renderer ?? "auto"}`,
     ];
+
+    // File-backed preview resources must not collide when separately restored
+    // or replaced File objects share the same name, size, and mtime.
+    if (request.document.file) {
+        parts.push(`f_${getPreviewFileIdentity(request.document.file)}`);
+    }
 
     if (request.scale !== undefined) {
         parts.push(`s_${request.scale}`);

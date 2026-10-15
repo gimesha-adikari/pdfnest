@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import {getBaseUrl, uploadAndDownloadFile} from "@/lib/api";
+import { markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { FileWithPassword } from "@/lib/types";
@@ -268,6 +269,7 @@ export default function RedactTool({ baseFile, onRedactedFile }: RedactToolProps
                 const maybePassword = (baseFile as FileWithPassword).originalPassword;
                 if (maybePassword) formData.append("file_password", maybePassword);
 
+                markCloudSubmissionInitiated([baseFile]);
                 const response = await fetch(`${baseUrl}/api/structure/analyze`, {
                     method: "POST",
                     body: formData,

@@ -1,5 +1,6 @@
 import axios, { AxiosError } from "axios";
 import type { EditorLayout } from "@/components/editor-v2/model";
+import { markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 
 const rawBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
 const normalizedBaseUrl = rawBaseUrl.endsWith("/api")
@@ -591,6 +592,7 @@ export const studioV2Api = {
   async createSessionFromUpload(file: File): Promise<StudioSessionResponse> {
     const form = new FormData();
     form.append("file", file, file.name);
+    markCloudSubmissionInitiated([file]);
     try {
       const res = await studioV2Client.post<StudioSessionResponse>(
         "/sessions/from-upload",
@@ -606,6 +608,7 @@ export const studioV2Api = {
   async uploadAsset(sessionId: string, file: File): Promise<StudioAssetUploadResponse> {
     const form = new FormData();
     form.append("file", file, file.name);
+    markCloudSubmissionInitiated([file]);
     try {
       const res = await studioV2Client.post<StudioAssetUploadResponse>(
         `/sessions/${sessionId}/assets`,

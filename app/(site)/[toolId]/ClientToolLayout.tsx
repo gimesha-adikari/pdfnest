@@ -17,6 +17,22 @@ import { BackendOnlyToolGuard } from "@/components/pdf/BackendOnlyToolGuard";
 import { RepositoryAnalyzerProvider } from "@/context/RepositoryAnalyzerContext";
 import { getOcrV2DevelopmentRouteConfig } from "@/lib/ocrV2DevelopmentTools";
 import { type EditPdfEditorEngine, resolveEditPdfEditorEngine } from "@/lib/editPdfEngine";
+import {
+    capturePdfResultProvenance,
+    type PdfResultProvenance,
+} from "@/lib/security/pdfInputPreparation";
+
+export type ToolDownloadData = {
+    blob: Blob;
+    fileName: string;
+    provenance: PdfResultProvenance;
+};
+
+type ToolDownloadDataInput = {
+    blob: Blob;
+    fileName: string;
+    provenance?: PdfResultProvenance;
+};
 
 interface ToolItem {
     title: string;
@@ -68,8 +84,8 @@ interface ToolContextProps {
     toolConfig: ToolConfig;
     file: File | null;
     setFile: (file: File | null) => void;
-    downloadData: { blob: Blob; fileName: string } | null;
-    setDownloadData: (data: { blob: Blob; fileName: string } | null) => void;
+    downloadData: ToolDownloadData | null;
+    setDownloadData: (data: ToolDownloadDataInput | null) => void;
     isLoadingConfig: boolean;
     editPdfEngine: EditPdfEditorEngine;
 }
@@ -100,7 +116,17 @@ export default function ClientToolLayout({
 
     const [fileState, setFileState] = useState<File | null>(null);
     const [activeToolHref, setActiveToolHref] = useState<string | null>(null);
-    const [downloadData, setDownloadData] = useState<{ blob: Blob; fileName: string } | null>(null);
+    const [downloadData, setDownloadDataState] = useState<ToolDownloadData | null>(null);
+
+    const setDownloadData = (data: ToolDownloadDataInput | null) => {
+        setDownloadDataState(data ? {
+            ...data,
+            provenance: data.provenance ?? capturePdfResultProvenance(
+                fileState ? [fileState] : [],
+                activeToolHref?.replace(/^\//, "") || toolId
+            ),
+        } : null);
+    };
 
     const file = activeToolHref === currentToolHref ? fileState : null;
 
