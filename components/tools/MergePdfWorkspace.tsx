@@ -65,14 +65,15 @@ export default function MergePdfWorkspace() {
         setAuthorizeCloudOutputLock(false);
     }, []);
 
-    const invalidateOperation = useCallback((resetDecision = false) => {
+    const invalidateOperation = useCallback((resetDecision = false, preservePublishedDownload = false) => {
         operationIdRef.current += 1;
         activeAbortRef.current?.abort();
         activeAbortRef.current = null;
         isMergingRef.current = false;
         setIsMerging(false);
+        if (!preservePublishedDownload) setDownloadData(null);
         if (resetDecision) resetOutputDecision();
-    }, [resetOutputDecision]);
+    }, [resetOutputDecision, setDownloadData]);
 
     const revokeCurrentMergeConsent = useCallback(() => {
         for (const currentFile of filesRef.current) {
@@ -80,9 +81,9 @@ export default function MergePdfWorkspace() {
         }
     }, []);
 
-    const updateQueue = useCallback((nextFiles: File[]) => {
+    const updateQueue = useCallback((nextFiles: File[], preservePublishedDownload = false) => {
         revokeCurrentMergeConsent();
-        invalidateOperation(true);
+        invalidateOperation(true, preservePublishedDownload);
         filesRef.current = nextFiles;
         setFiles(nextFiles);
     }, [invalidateOperation, revokeCurrentMergeConsent]);
@@ -126,7 +127,8 @@ export default function MergePdfWorkspace() {
 
     const addFiles = useCallback(async (
         newFiles: File[],
-        acceptance?: { processingMode: ProcessingMode }
+        acceptance?: { processingMode: ProcessingMode },
+        preservePublishedDownload = false,
     ) => {
         if (acceptance && acceptance.processingMode !== processingMode) {
             changeMode(acceptance.processingMode);
@@ -154,7 +156,7 @@ export default function MergePdfWorkspace() {
                 candidate.size === item.size &&
                 candidate.lastModified === item.lastModified
             )
-        ));
+        ), preservePublishedDownload);
     }, [changeMode, processingMode, updateQueue]);
 
     // Automatically ingest the initial full files collection matrix.
@@ -163,7 +165,9 @@ export default function MergePdfWorkspace() {
             const batch = (file as File & { initialBatch?: File[] }).initialBatch;
             let active = true;
             queueMicrotask(() => {
-                if (active) void addFiles(batch?.length ? batch : [file]);
+                // Hydrating a remounted workspace is passive Back navigation,
+                // not a new user request. Keep its completed download available.
+                if (active) void addFiles(batch?.length ? batch : [file], undefined, true);
             });
             return () => {
                 active = false;
@@ -205,6 +209,8 @@ export default function MergePdfWorkspace() {
 
     const mergePdfs = () => {
         if (isMergingRef.current) return;
+        // A new attempt supersedes the previous result even if auth is deferred.
+        setDownloadData(null);
 
         // requireAuth may defer its callback while session state is refreshed.
         // Capture the exact operation before that delay and invalidate it when

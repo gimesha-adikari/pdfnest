@@ -1331,6 +1331,211 @@ test("all-plain Merge keeps the existing output behavior without a password prom
     expectNoProductionRequests();
 });
 
+test("M1-S2-04R old plaintext download cannot survive a failed protected Merge through Forward", async ({ page }) => {
+    await page.route("**/api/structure/merge", async (route) => {
+        captureApiRequest(route.request());
+        await route.fulfill({ status: 200, contentType: "application/pdf", body: plainPdf });
+    });
+    await page.route("**/api/security/lock", async (route) => {
+        captureApiRequest(route.request());
+        await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "Synthetic Lock failure." }) });
+    });
+    await page.goto("/merge-pdf");
+    await waitForInteractiveApp(page);
+    await page.locator('input[type="file"]').first().setInputFiles([
+        { name: "plain-first.pdf", mimeType: "application/pdf", buffer: plainPdf },
+        { name: "plain-second.pdf", mimeType: "application/pdf", buffer: plainPdf },
+    ]);
+    await expect(page).toHaveURL(/\/merge-pdf\/workspace$/);
+    await page.getByRole("button", { name: "Cloud", exact: true }).click();
+    await page.getByRole("button", { name: "Merge 2 PDFs" }).click();
+    await expect(page).toHaveURL(/\/merge-pdf\/download$/);
+    const firstDownload = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download File", exact: true }).click();
+    expect(readFileSync((await (await firstDownload).path())!)).toEqual(plainPdf);
+
+    // Passive history navigation must retain the legitimate completed artifact.
+    await page.goBack();
+    await expect(page.getByTestId("merge-queue-file")).toHaveCount(2);
+    await page.goForward();
+    await expect(page.getByRole("button", { name: "Download File", exact: true })).toBeVisible();
+    await page.goBack();
+    await expect(page.getByTestId("merge-queue-file")).toHaveCount(2);
+    await page.getByRole("button", { name: "Auto", exact: true }).click();
+    await page.getByLabel("Upload Additional PDFs").setInputFiles({
+        name: "protected-third.pdf", mimeType: "application/pdf", buffer: protectedBeta,
+    });
+    const dialog = page.getByRole("dialog", { name: "Protected document detected" });
+    await dialog.getByLabel("PDF password").fill(betaPassword);
+    await dialog.getByRole("button", { name: "Unlock on this device" }).click();
+    await expect(page.getByTestId("merge-queue-file")).toHaveCount(3);
+    await page.getByRole("button", { name: "Cloud", exact: true }).click();
+    await page.getByLabel("Protect merged output with a new password").check();
+    await page.getByLabel("New output password").fill(alphaPassword);
+    await page.getByLabel("Confirm output password").fill(alphaPassword);
+    await page.getByLabel("Authorize Cloud Merge").check();
+    await page.getByLabel("Authorize Cloud output protection request").check();
+    await page.getByRole("button", { name: "Merge 3 PDFs" }).click();
+    await expect(page.getByText("Merge or output-password verification failed. No download was published.")).toBeVisible();
+    await expect(page).toHaveURL(/\/merge-pdf\/workspace$/);
+    expect(apiRequests.filter((request) => request.method === "POST" && request.path === "/api/structure/merge")).toHaveLength(2);
+    expect(apiRequests.filter((request) => request.method === "POST" && request.path === "/api/security/lock")).toHaveLength(1);
+
+    await page.goForward();
+    if (await page.getByRole("button", { name: "Download File", exact: true }).isVisible()) {
+        const staleDownload = page.waitForEvent("download");
+        await page.getByRole("button", { name: "Download File", exact: true }).click();
+        expect(readFileSync((await (await staleDownload).path())!)).toEqual(plainPdf);
+        console.log("[M1-S2-04R reproduction] Forward exposed the previous plaintext Blob after the protected attempt failed.");
+    }
+    await expect(page).toHaveURL(/\/merge-pdf(?:\/workspace)?$/);
+    await expect(page.getByText("Task completed successfully!")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Download File", exact: true })).toHaveCount(0);
+    expectNoProductionRequests();
+});
+
+async function publishPlainMergeForLifecycle(page: Page): Promise<void> {
+    await page.goto("/merge-pdf");
+    await waitForInteractiveApp(page);
+    await page.locator('input[type="file"]').first().setInputFiles([
+        { name: "plain-first.pdf", mimeType: "application/pdf", buffer: plainPdf },
+        { name: "plain-second.pdf", mimeType: "application/pdf", buffer: plainPdf },
+    ]);
+    await expect(page).toHaveURL(/\/merge-pdf\/workspace$/);
+    await page.getByRole("button", { name: "Cloud", exact: true }).click();
+    await page.getByRole("button", { name: "Merge 2 PDFs" }).click();
+    await expect(page).toHaveURL(/\/merge-pdf\/download$/);
+    const download = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download File", exact: true }).click();
+    expect(readFileSync((await (await download).path())!)).toEqual(plainPdf);
+    await page.goBack();
+    await expect(page.getByTestId("merge-queue-file")).toHaveCount(2);
+}
+
+for (const change of ["remove", "reorder", "retry"] as const) {
+    test(`M1-S2-04R ${change} supersedes a completed plain Merge download`, async ({ page }) => {
+        let mergeCount = 0;
+        await page.route("**/api/structure/merge", async (route) => {
+            captureApiRequest(route.request());
+            mergeCount += 1;
+            await route.fulfill(mergeCount === 1
+                ? { status: 200, contentType: "application/pdf", body: plainPdf }
+                : { status: 503, contentType: "application/json", body: "{}" });
+        });
+        await publishPlainMergeForLifecycle(page);
+        if (change === "retry") {
+            await expect(page.getByRole("button", { name: "Cloud", exact: true })).toHaveAttribute("aria-pressed", "true");
+            await page.getByRole("button", { name: "Merge 2 PDFs" }).click();
+            await expect.poll(() => mergeCount).toBe(2);
+            await expect(page.getByRole("button", { name: "Merge 2 PDFs" })).toBeEnabled();
+        } else {
+            const firstRow = page.getByText("#1 • plain-first.pdf", { exact: true }).locator("xpath=../..");
+            await firstRow.getByRole("button", { name: change === "remove" ? "Remove" : "Move file down" }).click();
+            await expect.poll(() => page.getByTestId("merge-queue-file").allTextContents()).toEqual(
+                change === "remove" ? ["plain-second.pdf"] : ["plain-second.pdf", "plain-first.pdf"],
+            );
+            expect(mergeCount).toBe(1);
+        }
+        await page.goForward();
+        await expect(page).toHaveURL(/\/merge-pdf(?:\/workspace)?$/);
+        await expect(page.getByRole("button", { name: "Download File", exact: true })).toHaveCount(0);
+        await expect(page.getByText("Task completed successfully!")).toHaveCount(0);
+        expectNoProductionRequests();
+    });
+}
+
+for (const response of [
+    { name: "HTTP 503", status: 503, body: Buffer.from("{}") },
+    { name: "plaintext", status: 200, body: plainPdf },
+    { name: "malformed", status: 200, body: malformedPdf },
+    // The old artifact opens with alpha, while the second attempt requests beta.
+    { name: "wrong password", status: 200, body: protectedLockOutputAes128 },
+]) {
+    test(`M1-S2-04R a previous protected download cannot satisfy a new password after ${response.name}`, async ({ page }) => {
+        await runMockedProtectedCloudMerge(page, { body: protectedLockOutputAes128 });
+        await expect(page).toHaveURL(/\/merge-pdf\/download$/);
+        const first = page.waitForEvent("download");
+        await page.getByRole("button", { name: "Download File", exact: true }).click();
+        expect(readFileSync((await (await first).path())!)).toEqual(protectedLockOutputAes128);
+        await page.goBack();
+        await expect(page.getByTestId("merge-queue-file")).toHaveCount(2);
+        await page.getByRole("button", { name: "Cloud", exact: true }).click();
+        await page.getByLabel("Protect merged output with a new password").check();
+        await page.getByLabel("New output password").fill(betaPassword);
+        await page.getByLabel("Confirm output password").fill(betaPassword);
+        await page.getByLabel("Authorize Cloud Merge").check();
+        await page.getByLabel("Authorize Cloud output protection request").check();
+        await page.route("**/api/security/lock", async (route) => {
+            const request = captureApiRequest(route.request());
+            expect(request.body.toString("latin1")).toContain(`name="password"\r\n\r\n${betaPassword}`);
+            await route.fulfill({ status: response.status, contentType: "application/pdf", body: response.body });
+        });
+        await page.getByRole("button", { name: "Merge 2 PDFs" }).click();
+        await expect(page.getByText("Merge or output-password verification failed. No download was published.")).toBeVisible();
+        await page.goForward();
+        await expect(page).toHaveURL(/\/merge-pdf(?:\/workspace)?$/);
+        await expect(page.getByRole("button", { name: "Download File", exact: true })).toHaveCount(0);
+        expectNoProductionRequests();
+    });
+}
+
+test("M1-S2-04R a successful second Merge publishes its own protected Blob filename and transfer history", async ({ page }) => {
+    await page.route("**/api/structure/merge", async (route) => {
+        captureApiRequest(route.request());
+        await route.fulfill({ status: 200, contentType: "application/pdf", body: plainPdf });
+    });
+    await publishPlainMergeForLifecycle(page);
+    await page.getByRole("button", { name: "Auto", exact: true }).click();
+    await page.getByLabel("Upload Additional PDFs").setInputFiles({ name: "protected-new.pdf", mimeType: "application/pdf", buffer: protectedBeta });
+    const preparation = page.getByRole("dialog", { name: "Protected document detected" });
+    await preparation.getByLabel("PDF password").fill(betaPassword);
+    await preparation.getByRole("button", { name: "Unlock on this device" }).click();
+    await expect(page.getByTestId("merge-queue-file")).toHaveCount(3);
+    await page.getByText("#1 • plain-first.pdf", { exact: true }).locator("xpath=../..").getByRole("button", { name: "Remove" }).click();
+    await page.getByText("#2 • protected-new.pdf", { exact: true }).locator("xpath=../..").getByRole("button", { name: "Move file up" }).click();
+    await expect.poll(() => page.getByTestId("merge-queue-file").allTextContents()).toEqual(["protected-new.pdf", "plain-second.pdf"]);
+    await page.getByRole("button", { name: "Cloud", exact: true }).click();
+    await page.getByLabel("Protect merged output with a new password").check();
+    await page.getByLabel("New output password").fill(alphaPassword);
+    await page.getByLabel("Confirm output password").fill(alphaPassword);
+    await page.getByLabel("Authorize Cloud Merge").check();
+    await page.getByLabel("Authorize Cloud output protection request").check();
+    await page.route("**/api/security/lock", async (route) => {
+        captureApiRequest(route.request());
+        await route.fulfill({ status: 200, contentType: "application/pdf", body: protectedLockOutputAes128 });
+    });
+    const merge = page.getByRole("button", { name: "Merge 2 PDFs" });
+    await merge.evaluate((button: HTMLButtonElement) => { button.click(); button.click(); });
+    await expect(page).toHaveURL(/\/merge-pdf\/download$/);
+    const downloaded = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download File", exact: true }).click();
+    const artifact = await downloaded;
+    expect(artifact.suggestedFilename()).toBe("protected-new-merge.pdf");
+    expect(readFileSync((await artifact.path())!)).toEqual(protectedLockOutputAes128);
+    await independentlyVerifyDownload(artifact, alphaPassword);
+    const merges = apiRequests.filter((request) => request.method === "POST" && request.path === "/api/structure/merge");
+    expect(merges).toHaveLength(2);
+    expect(apiRequests.filter((request) => request.method === "POST" && request.path === "/api/security/lock")).toHaveLength(1);
+    const payload = merges[1].body.toString("latin1");
+    expect(payload.indexOf('filename="protected-new.pdf"')).toBeLessThan(payload.indexOf('filename="plain-second.pdf"'));
+    expect(payload).not.toContain('filename="plain-first.pdf"');
+    expect(payload).not.toMatch(/name="(?:password(?:_\d+)?|file_password)"/i);
+    const compress = page.getByRole("heading", { name: /Compress PDF/ }).locator("..");
+    await compress.getByRole("button", { name: "Open tool" }).click();
+    const transferred = page.getByRole("dialog", { name: "Protected document detected" });
+    await expect(transferred).toContainText("protected-new-merge.pdf");
+    await expect(transferred.getByRole("button", { name: "Device", exact: true })).toBeDisabled();
+    await transferred.getByLabel("PDF password").fill(alphaPassword);
+    await transferred.getByRole("button", { name: "Authorize Cloud unlock" }).click();
+    await expect(page).toHaveURL(/\/compress-pdf\/workspace$/);
+    await expect(page.getByRole("button", { name: "Device", exact: true })).toBeDisabled();
+    await expect(page.getByRole("status").filter({ hasText: /A Cloud request was started/ })).toBeVisible();
+    const unlock = unlockRequests();
+    expect(unlock).toHaveLength(1);
+    expectMultipartUnlock(unlock[0], "protected-new-merge.pdf", protectedLockOutputAes128, alphaPassword);
+    expectNoProductionRequests();
+});
+
 test("protected Cloud Merge publishes only after the separate new-password Lock response verifies", async ({ page }) => {
     const requests = await runMockedProtectedCloudMerge(page, {
         status: 200,
