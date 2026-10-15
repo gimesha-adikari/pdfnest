@@ -2686,3 +2686,116 @@ test("Studio V2 keeps its inspection bypass but waits for explicit Cloud session
     expect(sessionUpload?.body.toString("latin1")).not.toContain('name="password"');
     expectNoProductionRequests();
 });
+
+test("Studio V2 suppresses an export result after the active version changes", async ({ page }) => {
+    const sessionId = "synthetic-studio-export-session";
+    const documentId = "synthetic-studio-export-document";
+    const versionOne = {
+        id: "synthetic-studio-export-version-one",
+        document_id: documentId,
+        preferred_child_id: "synthetic-studio-export-version-two",
+        version_number: 1,
+        status: "ready",
+        operation_type: "initial_upload",
+        is_materialized: true,
+        created_at: "2026-10-15T00:00:00Z",
+    };
+    const versionTwo = {
+        id: "synthetic-studio-export-version-two",
+        document_id: documentId,
+        parent_version_id: versionOne.id,
+        version_number: 2,
+        status: "ready",
+        operation_type: "rotate_page",
+        is_materialized: true,
+        created_at: "2026-10-15T00:00:01Z",
+    };
+    const document = {
+        id: documentId,
+        original_filename: "synthetic-studio.pdf",
+        file_size: plainPdf.length,
+        initial_page_count: 1,
+        created_at: "2026-10-15T00:00:00Z",
+    };
+    const session = {
+        id: sessionId,
+        document_id: documentId,
+        active_version_id: versionTwo.id,
+        created_at: "2026-10-15T00:00:00Z",
+        last_accessed_at: "2026-10-15T00:00:00Z",
+        expires_at: "2026-10-16T00:00:00Z",
+    };
+    const vdm = (versionId: string) => ({
+        document_id: documentId,
+        version_id: versionId,
+        page_count: 1,
+        pages: [{
+            page_id: "synthetic-studio-export-page",
+            source_asset_id: "synthetic-studio-export-source",
+            source_page_number: 1,
+            is_blank: false,
+            dimensions: { width: 612, height: 792 },
+            rotation: 0,
+            overlays: [],
+        }],
+    });
+
+    let releaseExport = () => {};
+    let exportStarted = () => {};
+    const started = new Promise<void>((resolve) => { exportStarted = resolve; });
+    let downloadRequests = 0;
+    await page.route("**/api/studio/v1/sessions/**", async (route) => {
+        const request = route.request();
+        const url = new URL(request.url());
+        captureApiRequest(request);
+        if (request.method() === "GET" && url.pathname === `/api/studio/v1/sessions/${sessionId}`) {
+            await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ session, document, active_version: versionTwo, vdm: vdm(versionTwo.id) }) });
+            return;
+        }
+        if (request.method() === "GET" && url.pathname === `/api/studio/v1/sessions/${sessionId}/history`) {
+            await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ versions: [versionOne, versionTwo], operations: [] }) });
+            return;
+        }
+        if (request.method() === "POST" && url.pathname === `/api/studio/v1/sessions/${sessionId}/undo`) {
+            await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ version: versionOne, vdm: vdm(versionOne.id) }) });
+            return;
+        }
+        if (request.method() === "POST" && url.pathname === `/api/studio/v1/sessions/${sessionId}/export`) {
+            exportStarted();
+            await new Promise<void>((resolve) => { releaseExport = resolve; });
+            await route.fulfill({
+                status: 200,
+                contentType: "application/json",
+                body: JSON.stringify({
+                    export: { id: "synthetic-studio-export-id", document_id: documentId, version_id: versionTwo.id, export_format: "pdf", byte_size: plainPdf.length, expires_at: "2026-10-16T00:00:00Z", created_at: "2026-10-15T00:00:02Z" },
+                    file_name: "synthetic-studio.pdf",
+                    download_path: `/api/studio/v1/sessions/${sessionId}/exports/synthetic-studio-export-id/download`,
+                }),
+            });
+            return;
+        }
+        if (request.method() === "GET" && url.pathname.endsWith("/exports/synthetic-studio-export-id/download")) {
+            downloadRequests += 1;
+            await route.fulfill({ status: 200, contentType: "application/pdf", headers: { "content-disposition": "attachment; filename=synthetic-studio.pdf" }, body: plainPdf });
+            return;
+        }
+        if (request.method() === "GET" && url.pathname.endsWith("/tile")) {
+            await route.fulfill({ status: 200, contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j2ioAAAAASUVORK5CYII=", "base64") });
+            return;
+        }
+        await route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ error: "Synthetic route not configured" }) });
+    });
+
+    await page.goto(`/studio-v2?session_id=${sessionId}`);
+    await expect(page.getByRole("button", { name: "Export PDF" })).toBeVisible();
+    const exportClick = page.getByRole("button", { name: "Export PDF" }).click();
+    await started;
+    await page.getByRole("button", { name: "Undo" }).click();
+    await expect(page.locator(".studio-v2-document-copy")).toContainText("Version 1");
+    releaseExport();
+    await exportClick;
+    await expect(page.getByRole("button", { name: "Export PDF" })).toContainText("Export");
+    expect(downloadRequests).toBe(0);
+    await expect(page.locator('div[role="alert"].fixed')).toContainText("changed while this export was being prepared");
+    expectNoProductionRequests();
+});

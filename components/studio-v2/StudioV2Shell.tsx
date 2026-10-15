@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { StudioV2Header } from "./StudioV2Header";
 import { StudioV2Workspace } from "./StudioV2Workspace";
@@ -109,6 +109,26 @@ export const StudioV2Shell: React.FC = () => {
     materialize,
     discardSession,
   } = useStudioSession(sessionIdParam);
+
+  const exportMountedRef = useRef(false);
+  const exportTargetRef = useRef({
+    sessionId: session?.id,
+    documentId: session?.document_id,
+    versionId: activeVersion?.id,
+  });
+  useLayoutEffect(() => {
+    exportTargetRef.current = {
+      sessionId: session?.id,
+      documentId: session?.document_id,
+      versionId: activeVersion?.id,
+    };
+  }, [session?.id, session?.document_id, activeVersion?.id]);
+  useEffect(() => {
+    exportMountedRef.current = true;
+    return () => {
+      exportMountedRef.current = false;
+    };
+  }, []);
 
   // Local Ephemeral UI State
   const [activeTool, setActiveTool] = useState<ToolCategory>("edit");
@@ -755,11 +775,31 @@ export const StudioV2Shell: React.FC = () => {
 
   const handleExport = useCallback(async () => {
     if (!session || !activeVersion || isSaving || isExporting) return;
+    const requestedTarget = {
+      sessionId: session.id,
+      documentId: session.document_id,
+      versionId: activeVersion.id,
+    };
     await submissionGuard.run("export", async () => {
       setIsExporting(true);
       setExportError(null);
       try {
-        const result = await studioV2Api.finalizeExport(session.id);
+        const result = await studioV2Api.finalizeExport(requestedTarget.sessionId);
+        if (!exportMountedRef.current) return;
+        const exportRecord = result?.export;
+        if (!exportRecord?.id || !result.file_name ||
+            exportRecord.document_id !== requestedTarget.documentId ||
+            exportRecord.version_id !== requestedTarget.versionId) {
+          setExportError("The export response did not match the requested Studio version. Please export the current version again.");
+          return;
+        }
+        const currentTarget = exportTargetRef.current;
+        if (currentTarget.sessionId !== requestedTarget.sessionId ||
+            currentTarget.documentId !== requestedTarget.documentId ||
+            currentTarget.versionId !== requestedTarget.versionId) {
+          setExportError("The Studio version changed while this export was being prepared. Export the current version again.");
+          return;
+        }
         const href = studioV2Api.exportDownloadURL(session.id, result.export.id);
         const anchor = window.document.createElement("a");
         anchor.href = href;
@@ -769,9 +809,9 @@ export const StudioV2Shell: React.FC = () => {
         anchor.click();
         anchor.remove();
       } catch (err) {
-        setExportError(err instanceof Error ? err.message : "Export failed");
+        if (exportMountedRef.current) setExportError(err instanceof Error ? err.message : "Export failed");
       } finally {
-        setIsExporting(false);
+        if (exportMountedRef.current) setIsExporting(false);
       }
     });
   }, [session, activeVersion, isSaving, isExporting, submissionGuard]);
