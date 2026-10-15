@@ -527,6 +527,73 @@ async function waitForInteractiveApp(page: Page): Promise<void> {
     await expect.poll(() => themeToggle.getAttribute("aria-label")).not.toBe(initialLabel);
 }
 
+async function mockImageSearchablePdfTask(
+    page: Page,
+    taskId: string,
+    artifact: Buffer | string,
+    contentType = "application/pdf",
+    responseTaskId = taskId,
+    artifactGate?: { started: () => void; wait: Promise<void> },
+    artifactHttpStatus = 200,
+): Promise<string[]> {
+    const requests: string[] = [];
+    await page.route("**/api/storage/r2/presign", async (route) => {
+        const payload = JSON.parse(route.request().postData() || "{}");
+        await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+                files: (payload.files || []).map((item: { key: string; name: string; size: number; type: string }, index: number) => ({
+                    ...item,
+                    uploadUrl: `http://127.0.0.1:3999/synthetic-ocr-upload/${index}`,
+                    method: "PUT",
+                })),
+            }),
+        });
+    });
+    await page.route("**/synthetic-ocr-upload/**", async (route) => {
+        requests.push("PUT image input");
+        await route.fulfill({ status: 200, body: "" });
+    });
+    await page.route("**/api/ocr/jobs", async (route) => {
+        requests.push("POST /api/ocr/jobs");
+        await route.fulfill({ status: 202, contentType: "application/json", body: JSON.stringify({ taskId }) });
+    });
+    await page.route(`**/api/v1/tasks/${taskId}`, async (route) => {
+        requests.push("GET task status");
+        await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({ id: responseTaskId, status: "COMPLETED", progress: 100, downloadToken: "synthetic-capability" }),
+        });
+    });
+    await page.route(`**/api/v1/download/${taskId}**`, async (route) => {
+        requests.push("GET task artifact");
+        artifactGate?.started();
+        if (artifactGate) await artifactGate.wait;
+        try {
+            await route.fulfill({ status: artifactHttpStatus, contentType, body: artifact });
+        } catch {
+            // An input change aborts the in-flight result fetch; the browser may
+            // close its intercepted route before this test releases the gate.
+        }
+    });
+    return requests;
+}
+
+async function submitSyntheticSearchablePdfTask(page: Page): Promise<void> {
+    await page.goto("/image-to-searchable-pdf");
+    await waitForInteractiveApp(page);
+    await page.locator('input[type="file"]').first().setInputFiles({
+        name: "synthetic-page.png",
+        mimeType: "image/png",
+        buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j2ioAAAAASUVORK5CYII=", "base64"),
+    });
+    await expect(page).toHaveURL(/\/image-to-searchable-pdf\/workspace$/);
+    await expect(page.getByRole("button", { name: "Create Searchable PDF" })).toBeVisible();
+    await page.getByRole("button", { name: "Create Searchable PDF" }).click();
+}
+
 function unlockRequests(): ApiRequest[] {
     return apiRequests.filter((request) => request.path === "/api/security/unlock");
 }
@@ -1940,6 +2007,177 @@ test("image-to-PDF accepts image input without PDF protection inspection or a Cl
     });
     await expect(page).toHaveURL(/\/images-to-pdf\/workspace$/);
     expect(processingPosts()).toHaveLength(0);
+});
+
+test("Image to Searchable PDF rejects malformed bytes from a completed task", async ({ page }) => {
+    const taskId = "synthetic-searchable-pdf-malformed";
+    let signalArtifactRequest = () => {};
+    let releaseArtifactResponse = () => {};
+    const artifactRequested = new Promise<void>((resolve) => { signalArtifactRequest = resolve; });
+    const artifactResponseGate = new Promise<void>((resolve) => { releaseArtifactResponse = resolve; });
+    const taskRequests = await mockImageSearchablePdfTask(
+        page,
+        taskId,
+        "not a PDF",
+        "application/pdf",
+        taskId,
+        { started: signalArtifactRequest, wait: artifactResponseGate },
+    );
+    await submitSyntheticSearchablePdfTask(page);
+
+    await expect.poll(() => taskRequests.includes("POST /api/ocr/jobs")).toBe(true);
+    await expect.poll(() => taskRequests.includes("GET task artifact"), { timeout: 15_000 }).toBe(true);
+    await artifactRequested;
+    await expect(page.getByText("Processing task (99%)")).toBeVisible();
+    await expect(page.getByText("Task completed!")).toHaveCount(0);
+    releaseArtifactResponse();
+    await expect(page).toHaveURL(/\/image-to-searchable-pdf\/workspace$/);
+    await expect(page.getByRole("button", { name: "Download File" })).toHaveCount(0);
+    await expect(page.getByRole("status").getByText("The completed task did not provide a valid, readable PDF. Please retry.")).toBeVisible();
+    expect(taskRequests).toContain("GET task status");
+    expect(taskRequests.filter((request) => request === "GET task artifact")).toHaveLength(1);
+    expectNoProductionRequests();
+});
+
+test("Image to Searchable PDF publishes only a parsed PDF result for the completed task", async ({ page }, testInfo) => {
+    const taskId = "synthetic-searchable-pdf-valid";
+    const progressSockets: string[] = [];
+    page.on("websocket", (socket) => {
+        if (socket.url().includes(`/api/v1/tasks/${taskId}/progress`)) progressSockets.push(socket.url());
+    });
+    const taskRequests = await mockImageSearchablePdfTask(page, taskId, plainPdf);
+    await submitSyntheticSearchablePdfTask(page);
+
+    await expect(page).toHaveURL(/\/image-to-searchable-pdf\/download$/);
+    await expect(page.getByText("Task completed successfully!")).toBeVisible();
+    const downloadPromise = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download File", exact: true }).click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe("ocr-extracted-text.pdf");
+    const outputPath = testInfo.outputPath("searchable-output.pdf");
+    await download.saveAs(outputPath);
+    expect(readFileSync(outputPath)).toEqual(plainPdf);
+    execFileSync("qpdf", ["--check", outputPath], { stdio: "pipe" });
+    const details = execFileSync("pdfinfo", [outputPath], { encoding: "utf8" });
+    expect(details).toMatch(/^Pages:\s+2\b/m);
+    expect(taskRequests.filter((request) => request === "GET task artifact")).toHaveLength(1);
+    expect(progressSockets).toHaveLength(0);
+    expectNoProductionRequests();
+});
+
+test("Image to Searchable PDF keeps its validated result across browser Back and Forward", async ({ page }, testInfo) => {
+    const taskId = "synthetic-searchable-pdf-history";
+    const taskRequests = await mockImageSearchablePdfTask(page, taskId, plainPdf);
+    await submitSyntheticSearchablePdfTask(page);
+
+    await expect(page).toHaveURL(/\/image-to-searchable-pdf\/download$/);
+    await expect(page.getByText("Task completed successfully!")).toBeVisible();
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/image-to-searchable-pdf\/workspace$/);
+    await page.goForward();
+    await expect(page).toHaveURL(/\/image-to-searchable-pdf\/download$/);
+    await expect(page.getByText("Task completed successfully!")).toBeVisible();
+
+    const downloadPromise = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download File", exact: true }).click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe("ocr-extracted-text.pdf");
+    const outputPath = testInfo.outputPath("searchable-history-output.pdf");
+    await download.saveAs(outputPath);
+    expect(readFileSync(outputPath)).toEqual(plainPdf);
+    expect(taskRequests.filter((request) => request === "POST /api/ocr/jobs")).toHaveLength(1);
+    expect(taskRequests.filter((request) => request === "GET task artifact")).toHaveLength(1);
+    expectNoProductionRequests();
+});
+
+for (const [label, payload, contentType] of [
+    ["empty", Buffer.alloc(0), "application/pdf"],
+    ["JSON error", Buffer.from('{"error":"missing"}'), "application/json"],
+    ["binary response", Buffer.from([0, 1, 2, 3]), "application/pdf"],
+    ["password-protected PDF", protectedAlpha, "application/pdf"],
+] as const) {
+    test(`Image to Searchable PDF rejects ${label} as its readable PDF artifact`, async ({ page }) => {
+        const taskId = `synthetic-searchable-pdf-${label.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
+        const taskRequests = await mockImageSearchablePdfTask(page, taskId, payload, contentType);
+        await submitSyntheticSearchablePdfTask(page);
+
+        await expect.poll(() => taskRequests.includes("GET task artifact"), { timeout: 15_000 }).toBe(true);
+        await expect(page).toHaveURL(/\/image-to-searchable-pdf\/workspace$/);
+        await expect(page.getByRole("button", { name: "Download File" })).toHaveCount(0);
+        await expect(page.getByRole("status").getByText("The completed task did not provide a valid, readable PDF. Please retry.")).toBeVisible();
+        expectNoProductionRequests();
+    });
+}
+
+test("Image to Searchable PDF rejects a missing completed-task artifact", async ({ page }) => {
+    const taskId = "synthetic-searchable-pdf-missing-artifact";
+    const taskRequests = await mockImageSearchablePdfTask(
+        page,
+        taskId,
+        Buffer.from('{"error":"missing"}'),
+        "application/json",
+        taskId,
+        undefined,
+        404,
+    );
+    await submitSyntheticSearchablePdfTask(page);
+
+    await expect.poll(() => taskRequests.includes("GET task artifact"), { timeout: 15_000 }).toBe(true);
+    await expect(page).toHaveURL(/\/image-to-searchable-pdf\/workspace$/);
+    await expect(page.getByRole("button", { name: "Download File" })).toHaveCount(0);
+    await expect(page.getByRole("status").getByText("The completed task did not provide a valid, readable PDF. Please retry.")).toBeVisible();
+    expectNoProductionRequests();
+});
+
+test("Image to Searchable PDF ignores a completed status response for a different task ID", async ({ page }) => {
+    const taskId = "synthetic-searchable-pdf-current-task";
+    const taskRequests = await mockImageSearchablePdfTask(
+        page,
+        taskId,
+        plainPdf,
+        "application/pdf",
+        "synthetic-searchable-pdf-unrelated-task",
+    );
+    await submitSyntheticSearchablePdfTask(page);
+
+    await expect.poll(() => taskRequests.includes("GET task status"), { timeout: 15_000 }).toBe(true);
+    await expect(page).toHaveURL(/\/image-to-searchable-pdf\/workspace$/);
+    await expect(page.getByRole("button", { name: "Download File" })).toHaveCount(0);
+    expect(taskRequests).not.toContain("GET task artifact");
+    expectNoProductionRequests();
+});
+
+test("Image to Searchable PDF discards an artifact response after the image queue changes", async ({ page }) => {
+    const taskId = "synthetic-searchable-pdf-stale-result";
+    let signalArtifactRequest = () => {};
+    let releaseArtifactResponse = () => {};
+    const artifactRequested = new Promise<void>((resolve) => { signalArtifactRequest = resolve; });
+    const artifactResponseGate = new Promise<void>((resolve) => { releaseArtifactResponse = resolve; });
+    const taskRequests = await mockImageSearchablePdfTask(
+        page,
+        taskId,
+        plainPdf,
+        "application/pdf",
+        taskId,
+        { started: signalArtifactRequest, wait: artifactResponseGate },
+    );
+    await submitSyntheticSearchablePdfTask(page);
+    await expect.poll(() => taskRequests.includes("GET task artifact"), { timeout: 15_000 }).toBe(true);
+    await artifactRequested;
+
+    await page.locator('input[accept="image/*"]').last().setInputFiles({
+        name: "replacement-image.png",
+        mimeType: "image/png",
+        buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j2ioAAAAASUVORK5CYII=", "base64"),
+    });
+    releaseArtifactResponse();
+
+    await expect(page).toHaveURL(/\/image-to-searchable-pdf\/workspace$/);
+    await expect(page.getByRole("button", { name: "Download File" })).toHaveCount(0);
+    await expect(page.getByText("Searchable PDF Created!")).toHaveCount(0);
+    expect(taskRequests.filter((request) => request === "GET task artifact")).toHaveLength(1);
+    expectNoProductionRequests();
 });
 
 test("malformed PDF inspection fails closed without a processing request", async ({ page }) => {

@@ -30,6 +30,7 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { useAsyncTask } from "@/hooks/useAsyncTask";
 import { getOCRLanguages, type OCRLanguage } from "@/lib/ocr";
 import { addStoredTask } from "@/lib/taskStorage";
+import { validateReadablePdfBlob } from "@/lib/security/validateReadablePdfBlob";
 import {
     createStoragePrefix,
     createUploadSessionId,
@@ -145,30 +146,87 @@ export default function ImageToTextPdfWorkspace() {
 
     const [images, setImages] = useState<ImageItem[]>([]);
     const [isProcessingLocal, setIsProcessingLocal] = useState(false);
+    const [isValidatingResult, setIsValidatingResult] = useState(false);
     const [success, setSuccess] = useState(false);
+    const [isUploadingR2, setIsUploadingR2] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
+    const [isCancellingUpload, setIsCancellingUpload] = useState(false);
     const [sortMode, setSortMode] = useState<SortMode>("none");
+    const operationGenerationRef = useRef(0);
+    const activeTaskOperationRef = useRef<{ generation: number; taskId: string } | null>(null);
+    const resultDownloadControllerRef = useRef<AbortController | null>(null);
+    const submissionPendingRef = useRef(false);
+    const mountedRef = useRef(true);
+    const uploadAbortControllerRef = useRef<AbortController | null>(null);
+    const invalidateOperationRef = useRef<() => number>(() => 0);
+    const failTaskResultRef = useRef<((taskId: string, message: string) => void) | null>(null);
 
-    const handleTaskComplete = async (downloadUrl: string) => {
+    const handleTaskComplete = async (downloadUrl: string, completedTaskId: string) => {
+        const operation = activeTaskOperationRef.current;
+        if (
+            !mountedRef.current ||
+            !operation ||
+            operation.taskId !== completedTaskId ||
+            operation.generation !== operationGenerationRef.current
+        ) {
+            return;
+        }
+
+        setIsValidatingResult(true);
+        resultDownloadControllerRef.current?.abort();
+        const controller = new AbortController();
+        resultDownloadControllerRef.current = controller;
+
         try {
             const response = await fetch(resolveDownloadUrl(downloadUrl), {
                 credentials: "include",
+                signal: controller.signal,
             });
-            if (!response.ok) throw new Error("Could not download compiled async file payload.");
+            if (!response.ok) throw new Error("The completed task artifact is unavailable.");
 
             const responseBlob = await response.blob();
+            await validateReadablePdfBlob(responseBlob, controller.signal);
+
+            const currentOperation = activeTaskOperationRef.current;
+            if (
+                controller.signal.aborted ||
+                !mountedRef.current ||
+                currentOperation?.taskId !== completedTaskId ||
+                currentOperation.generation !== operation.generation ||
+                operationGenerationRef.current !== operation.generation
+            ) {
+                return;
+            }
 
             setDownloadData({
                 blob: responseBlob,
                 fileName: "ocr-extracted-text.pdf",
             });
 
+            setIsValidatingResult(false);
             setSuccess(true);
             setIsProcessingLocal(false);
             router.push(`/${toolId}/download`);
-        } catch (err) {
-            console.error(err);
-            handleClientError(err);
+        } catch {
+            if (controller.signal.aborted || !mountedRef.current) return;
+            const currentOperation = activeTaskOperationRef.current;
+            if (
+                currentOperation?.taskId !== completedTaskId ||
+                currentOperation.generation !== operation.generation ||
+                operationGenerationRef.current !== operation.generation
+            ) {
+                return;
+            }
+            const message = "The completed task did not provide a valid, readable PDF. Please retry.";
+            failTaskResultRef.current?.(completedTaskId, message);
+            notify(message, "error");
+            setSuccess(false);
             setIsProcessingLocal(false);
+        } finally {
+            if (mountedRef.current) setIsValidatingResult(false);
+            if (resultDownloadControllerRef.current === controller) {
+                resultDownloadControllerRef.current = null;
+            }
         }
     };
 
@@ -187,16 +245,43 @@ export default function ImageToTextPdfWorkspace() {
         registerSubmission,
         setTaskId,
         setStatus,
+        failTaskResult,
     } = useAsyncTask("image-to-text-pdf", handleTaskComplete);
 
-    const [isUploadingR2, setIsUploadingR2] = useState(false);
-    const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
-    const [isCancellingUpload, setIsCancellingUpload] = useState(false);
-    const uploadAbortControllerRef = useRef<AbortController | null>(null);
-
-    // Unmount cleanup: automatically abort any active R2 upload on navigation
     useEffect(() => {
+        failTaskResultRef.current = failTaskResult;
+    }, [failTaskResult]);
+
+    const invalidateCurrentOperation = () => {
+        operationGenerationRef.current += 1;
+        activeTaskOperationRef.current = null;
+        resultDownloadControllerRef.current?.abort();
+        resultDownloadControllerRef.current = null;
+        uploadAbortControllerRef.current?.abort();
+        submissionPendingRef.current = false;
+        resetTask();
+        setDownloadData(null);
+        setSuccess(false);
+        setIsValidatingResult(false);
+        setIsProcessingLocal(false);
+        setIsUploadingR2(false);
+        setIsCancellingUpload(false);
+        setUploadProgress(null);
+        return operationGenerationRef.current;
+    };
+    useEffect(() => {
+        invalidateOperationRef.current = invalidateCurrentOperation;
+    });
+    // Unmount invalidates callbacks and aborts active network work. A validated
+    // result already published to the shared layout remains available.
+    useEffect(() => {
+        mountedRef.current = true;
         return () => {
+            mountedRef.current = false;
+            operationGenerationRef.current += 1;
+            activeTaskOperationRef.current = null;
+            resultDownloadControllerRef.current?.abort();
+            resultDownloadControllerRef.current = null;
             if (uploadAbortControllerRef.current) {
                 uploadAbortControllerRef.current.abort();
                 uploadAbortControllerRef.current = null;
@@ -210,11 +295,23 @@ export default function ImageToTextPdfWorkspace() {
         uploadAbortControllerRef.current.abort();
     };
 
-    const isProcessing = isProcessingLocal || isSubmitting || isUploadingR2 || taskStatus === "PENDING" || taskStatus === "PROCESSING";
+    const isProcessing = isProcessingLocal || isValidatingResult || isSubmitting || isUploadingR2 || taskStatus === "PENDING" || taskStatus === "PROCESSING";
 
     const handleConversion = async () => {
+        if (!canProcess || submissionPendingRef.current) return;
+        const targetImages = [...images];
+        if (targetImages.length === 0) return;
+        const nextLang = lang.trim() || defaultLang || "auto";
+        const operationGeneration = invalidateCurrentOperation();
+        submissionPendingRef.current = true;
+
         requireAuth(async () => {
-            if (!canProcess) return;
+            if (
+                !mountedRef.current ||
+                operationGeneration !== operationGenerationRef.current
+            ) {
+                return;
+            }
 
             const controller = new AbortController();
             uploadAbortControllerRef.current = controller;
@@ -223,12 +320,10 @@ export default function ImageToTextPdfWorkspace() {
                 setIsProcessingLocal(true);
                 setIsUploadingR2(true);
                 setIsCancellingUpload(false);
-                setUploadProgress({ current: 0, total: images.length });
+                setUploadProgress({ current: 0, total: targetImages.length });
                 setSuccess(false);
 
-                const targetImages = [...images];
                 const imageFiles = targetImages.map((item) => item.file);
-                const nextLang = lang.trim() || defaultLang || "auto";
 
                 const submitFn = async () => {
                     const sessionId = createUploadSessionId();
@@ -251,6 +346,8 @@ export default function ImageToTextPdfWorkspace() {
                     if (controller.signal.aborted) {
                         throw new DOMException("Upload cancelled", "AbortError");
                     }
+
+                    if (operationGeneration !== operationGenerationRef.current) return null;
 
                     setIsUploadingR2(false);
 
@@ -277,6 +374,7 @@ export default function ImageToTextPdfWorkspace() {
                     if (controller.signal.aborted) {
                         throw new DOMException("Upload cancelled", "AbortError");
                     }
+                    if (operationGeneration !== operationGenerationRef.current) return null;
 
                     if (!jobResponse.ok) {
                         const text = await jobResponse.text().catch(() => "");
@@ -292,6 +390,10 @@ export default function ImageToTextPdfWorkspace() {
                     }
 
                     setTaskId(nextTaskId);
+                    activeTaskOperationRef.current = {
+                        generation: operationGeneration,
+                        taskId: nextTaskId,
+                    };
                     setStatus("PENDING");
                     addStoredTask(nextTaskId, "image-to-text-pdf", "PENDING");
                     return nextTaskId;
@@ -310,11 +412,16 @@ export default function ImageToTextPdfWorkspace() {
                     handleClientError(err);
                 }
             } finally {
-                uploadAbortControllerRef.current = null;
-                setIsUploadingR2(false);
-                setIsCancellingUpload(false);
-                setUploadProgress(null);
-                setIsProcessingLocal(false);
+                if (uploadAbortControllerRef.current === controller) {
+                    uploadAbortControllerRef.current = null;
+                }
+                if (mountedRef.current && operationGeneration === operationGenerationRef.current) {
+                    submissionPendingRef.current = false;
+                    setIsUploadingR2(false);
+                    setIsCancellingUpload(false);
+                    setUploadProgress(null);
+                    setIsProcessingLocal(false);
+                }
             }
         });
     };
@@ -330,8 +437,16 @@ export default function ImageToTextPdfWorkspace() {
     const [languageSearch, setLanguageSearch] = useState("");
 
     const addMoreInputRef = useRef<HTMLInputElement | null>(null);
-    const hydratedSourceRef = useRef<string>("");
+    const hydratedSourceRef = useRef<{ file: File; files: File[] } | null>(null);
     const languagePickerRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        if (!taskId) return;
+        activeTaskOperationRef.current = {
+            generation: operationGenerationRef.current,
+            taskId,
+        };
+    }, [taskId]);
 
     useEffect(() => {
         let cancelled = false;
@@ -390,13 +505,15 @@ export default function ImageToTextPdfWorkspace() {
 
     useEffect(() => {
         if (!file) {
+            if (hydratedSourceRef.current) {
+                invalidateOperationRef.current();
+            }
             setImages((prev) => {
                 revokeImageItems(prev);
                 return [];
             });
-            hydratedSourceRef.current = "";
+            hydratedSourceRef.current = null;
             setSuccess(false);
-            setTaskId("");
             setSortMode("none");
             setLang(defaultLang);
             return;
@@ -408,15 +525,24 @@ export default function ImageToTextPdfWorkspace() {
                 ? extendedFile.initialBatch
                 : [file];
 
-        const sourceKey = `${file.name}-${file.size}-${sourceFiles.length}`;
+        const previousSource = hydratedSourceRef.current;
+        const sameSource =
+            previousSource?.file === file &&
+            previousSource.files.length === sourceFiles.length &&
+            previousSource.files.every((source, index) => source === sourceFiles[index]);
 
-        if (hydratedSourceRef.current === sourceKey) return;
+        if (sameSource) return;
+        if (previousSource) invalidateOperationRef.current();
 
         const nextImages = sourceFiles.filter(isSupportedImage).map(createImageItem);
 
         if (nextImages.length === 0) {
             notify("Please select JPG, PNG, or WebP images from the main upload page.", "warning");
-            hydratedSourceRef.current = sourceKey;
+            setImages((prev) => {
+                revokeImageItems(prev);
+                return [];
+            });
+            hydratedSourceRef.current = { file, files: sourceFiles };
             return;
         }
 
@@ -425,9 +551,7 @@ export default function ImageToTextPdfWorkspace() {
             return nextImages;
         });
 
-        setSuccess(false);
-        setTaskId("");
-        hydratedSourceRef.current = sourceKey;
+        hydratedSourceRef.current = { file, files: sourceFiles };
     }, [file, defaultLang]);
 
     useEffect(() => {
@@ -482,16 +606,15 @@ export default function ImageToTextPdfWorkspace() {
     }, [languageSearch, otherLanguages]);
 
     const clearAll = () => {
+        invalidateCurrentOperation();
+        hydratedSourceRef.current = null;
         setImages((prev) => {
             revokeImageItems(prev);
             return [];
         });
         setFile(null);
-        setSuccess(false);
-        setTaskId("");
         setSortMode("none");
         setLang(defaultLang);
-        hydratedSourceRef.current = "";
         router.push(`/${toolId}`);
     };
 
@@ -505,9 +628,9 @@ export default function ImageToTextPdfWorkspace() {
             return;
         }
 
+        invalidateCurrentOperation();
         const newItems = validFiles.map(createImageItem);
         setImages((prev) => [...prev, ...newItems]);
-        setSuccess(false);
     };
 
     const handleCompactDrop = (e: DragEvent<HTMLDivElement>) => {
@@ -523,16 +646,13 @@ export default function ImageToTextPdfWorkspace() {
     };
 
     const removeImage = (id: string) => {
+        if (!images.some((item) => item.id === id)) return;
+        invalidateCurrentOperation();
         setImages((prev) => {
             const target = prev.find((item) => item.id === id);
             if (target) URL.revokeObjectURL(target.previewUrl);
 
             const updated = prev.filter((item) => item.id !== id);
-
-            if (updated.length === 0) {
-                setSuccess(false);
-                setTaskId("");
-            }
 
             return updated;
         });
@@ -542,6 +662,7 @@ export default function ImageToTextPdfWorkspace() {
         const targetIndex = direction === "up" ? index - 1 : index + 1;
         if (targetIndex < 0 || targetIndex >= images.length) return;
 
+        invalidateCurrentOperation();
         setImages((prev) => {
             const updated = [...prev];
             const temp = updated[index];
@@ -553,11 +674,16 @@ export default function ImageToTextPdfWorkspace() {
     };
 
     const applySort = (mode: SortMode) => {
-        setImages((prev) => sortItems(prev, mode));
+        const sorted = sortItems(images, mode);
+        if (sorted.some((item, index) => item.id !== images[index]?.id)) {
+            invalidateCurrentOperation();
+            setImages(sorted);
+        }
         setSortMode(mode);
     };
 
     const pickLanguage = (code: string) => {
+        if (code !== lang) invalidateCurrentOperation();
         setLang(code);
         setIsLanguageOpen(false);
         setLanguageSearch("");
@@ -851,8 +977,8 @@ export default function ImageToTextPdfWorkspace() {
                                 <div className="flex flex-col items-center justify-center space-y-3 py-4 border rounded-xl border-dashed">
                                     <PdfProgressTracker
                                         taskId={taskId}
-                                        status={taskStatus || undefined}
-                                        progress={progress}
+                                        status={isValidatingResult ? "PROCESSING" : taskStatus || undefined}
+                                        progress={isValidatingResult ? Math.min(progress, 99) : progress}
                                         error={taskError}
                                         isCancelling={isCancelling}
                                         canRestart={canRestart}
@@ -862,7 +988,6 @@ export default function ImageToTextPdfWorkspace() {
                                             resetTask();
                                             clearAll();
                                         }}
-                                        onComplete={handleTaskComplete}
                                     />
                                 </div>
                             ) : (
