@@ -2,7 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "git": {
     "deploymentEnabled": {
-      "codex/m1-s2-25r-markdown-result-ownership": false
+      "codex/m1-s2-25r-markdown-result-ownership": false,
+      "codex/m1-s2-25r-p5-persistent-markdown-error": false
     }
   }
 }
