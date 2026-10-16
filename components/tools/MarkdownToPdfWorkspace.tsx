@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { FileCode, Eye, Loader2, Sliders } from "lucide-react";
-import { notify } from "@/lib/notify";
 import { handleClientError } from "@/lib/errorHandler";
 import { useAuth } from "@/context/AuthContext";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
@@ -14,105 +13,106 @@ import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import type { ProcessingMode } from "@/lib/execution/types";
 import { ClientPdfRenderer } from "@/lib/preview/ClientPdfRenderer";
+import type { PreviewResource } from "@/lib/preview/types";
+import type { ExecutionResult } from "@/lib/execution/types";
 
 export default function MarkdownToPdfWorkspace() {
     const { requireAuth } = useAuth();
     const router = useRouter();
-    const { toolId, file, setFile, setDownloadData } = useSharedTool();
+    const { toolId, file, setFile, setDownloadData, setConversionGeneration } = useSharedTool();
 
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [isPreviewLoading, setIsPreviewLoading] = useState(false);
-    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-    const [finalBlob, setFinalBlob] = useState<Blob | null>(null);
-    const [finalFileName, setFinalFileName] = useState<string>("");
     const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
-
     const [paperSize, setPaperSize] = useState("A4");
     const [margins, setMargins] = useState({ top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 });
-    const rendererRef = useRef<ClientPdfRenderer | null>(null);
-
-    if (!rendererRef.current) {
-        rendererRef.current = new ClientPdfRenderer();
+    const [renderer] = useState(() => new ClientPdfRenderer());
+    // File object identity matters: two uploads with the same name/size are
+    // still different inputs. A fresh token also distinguishes A -> B -> A.
+    const input = useMemo(() => ({
+        file, processingMode, paperSize,
+        top: margins.top, bottom: margins.bottom, left: margins.left, right: margins.right,
+    }), [file, processingMode, paperSize, margins.top, margins.bottom, margins.left, margins.right]);
+    const latestInput = useRef<typeof input | null>(null);
+    const [attempt, setAttempt] = useState<{
+        input: typeof input;
+        settled: boolean;
+        output: { result: ExecutionResult; preview: PreviewResource; signal: AbortSignal } | null;
+    }>({ input, settled: false, output: null });
+    // Reset this component's state during render on an input change, so Save
+    // and the displayed preview cannot expose old output before effects run.
+    if (attempt.input !== input) {
+        setAttempt({ input, settled: false, output: null });
     }
+    const currentOutput = attempt.input === input ? attempt.output : null;
+    const isPreviewLoading = Boolean(file) && (attempt.input !== input || !attempt.settled);
+    const previewUrl = currentOutput?.preview.url;
 
-    const generateLiveMarkdownPreview = async (targetFile: File) => {
-        try {
-            setIsPreviewLoading(true);
+    // Update ownership at commit, before a delayed authentication continuation
+    // can act on the previous render. Unmount also invalidates continuations.
+    useLayoutEffect(() => {
+        latestInput.current = input;
+        setDownloadData(null);
+        setConversionGeneration(input);
+        return () => { latestInput.current = null; };
+    }, [input, setDownloadData, setConversionGeneration]);
 
-            const result = await ExecutionManager.run({
-                tool: "markdown-to-pdf",
-                files: [targetFile],
-                mode: processingMode,
-                params: {
-                    paperSize,
-                    marginTop: margins.top,
-                    marginBottom: margins.bottom,
-                    marginLeft: margins.left,
-                    marginRight: margins.right,
-                },
-            });
-
-            setFinalBlob(result.blob);
-            setFinalFileName(result.fileName);
-
-            // Render Page 1 to Image URL via ClientPdfRenderer
-            const previewPdfFile = new File([result.blob], "preview_rendered.pdf", { type: "application/pdf" });
-            const controller = new AbortController();
-            const previewResource = await rendererRef.current!.render(
-                {
-                    document: {
-                        id: `md_preview_${Date.now()}`,
-                        version: `${Date.now()}`,
-                        pageCount: 1,
-                        file: previewPdfFile,
+    useEffect(() => {
+        const controller = new AbortController();
+        const isCurrent = () => latestInput.current === input && !controller.signal.aborted;
+        let resource: PreviewResource | undefined;
+        const generate = async () => {
+            if (!input.file) return;
+            try {
+                const result = await ExecutionManager.run({
+                    tool: "markdown-to-pdf",
+                    files: [input.file],
+                    mode: input.processingMode,
+                    signal: controller.signal,
+                    params: {
+                        paperSize: input.paperSize,
+                        marginTop: input.top,
+                        marginBottom: input.bottom,
+                        marginLeft: input.left,
+                        marginRight: input.right,
                     },
+                });
+                if (!isCurrent()) return;
+                // Give PDF.js a unique cache identity per execution as well.
+                const previewId = crypto.randomUUID();
+                const previewPdfFile = new File([result.blob], `preview_${previewId}.pdf`, { type: "application/pdf" });
+                const preview = await renderer.render({
+                    document: { id: previewId, version: previewId, pageCount: 1, file: previewPdfFile },
                     page: 1,
                     scale: 2.0,
                     mode: "page",
-                },
-                controller.signal
-            );
-
-            if (previewUrl) {
-                window.URL.revokeObjectURL(previewUrl);
-            }
-
-            if (previewResource.url) {
-                setPreviewUrl(previewResource.url);
-            }
-        } catch (err: unknown) {
-            console.error("[MarkdownToPdfWorkspace] Live preview error:", err);
-            handleClientError(err);
-        } finally {
-            setIsPreviewLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        if (file) {
-            generateLiveMarkdownPreview(file);
-        }
-        return () => {
-            if (previewUrl) {
-                window.URL.revokeObjectURL(previewUrl);
+                }, controller.signal);
+                if (!isCurrent()) { preview.revoke?.(); return; }
+                resource = preview;
+                setAttempt({ input, settled: true, output: { result, preview, signal: controller.signal } });
+            } catch (err: unknown) {
+                if (!isCurrent()) return;
+                setAttempt({ input, settled: true, output: null });
+                setDownloadData(null);
+                handleClientError(err);
             }
         };
-    }, [file, paperSize, margins.top, margins.bottom, margins.left, margins.right, processingMode]);
+        void generate();
+        return () => {
+            controller.abort();
+            resource?.revoke?.();
+        };
+    }, [input, renderer, setDownloadData]);
 
     const handleFinalDownloadSubmission = () => {
-        requireAuth(async () => {
-            if (!finalBlob || !file) return;
-            setIsProcessing(true);
-
-            const baseName = file.name.substring(0, file.name.lastIndexOf(".")) || file.name;
-            const outputName = finalFileName || `converted_${baseName}.pdf`;
-
+        if (!currentOutput || isPreviewLoading || !input.file) return;
+        const ready = currentOutput;
+        const sourceFile = input.file;
+        requireAuth(() => {
+            if (latestInput.current !== input || ready.signal.aborted) return;
             setDownloadData({
-                blob: finalBlob,
-                fileName: outputName,
+                blob: ready.result.blob,
+                fileName: ready.result.fileName,
+                source: { file: sourceFile, generation: input },
             });
-
-            setIsProcessing(false);
             router.push(`/${toolId}/download`);
         });
     };
@@ -139,9 +139,6 @@ export default function MarkdownToPdfWorkspace() {
                                 file={file}
                                 onClear={() => {
                                     setFile(null);
-                                    if (previewUrl) window.URL.revokeObjectURL(previewUrl);
-                                    setPreviewUrl(null);
-                                    setFinalBlob(null);
                                     router.push(`/${toolId}`);
                                 }}
                             />
@@ -247,15 +244,15 @@ export default function MarkdownToPdfWorkspace() {
                             <ProcessingModeSelector
                                 mode={processingMode}
                                 onChange={setProcessingMode}
-                                disabled={isProcessing || isPreviewLoading}
+                                disabled={isPreviewLoading}
                             />
                         </div>
 
                         <PdfActionButton
                             text="Save Markdown Vector PDF"
                             loadingText="Rendering Vector PDF..."
-                            loading={isProcessing}
-                            disabled={isProcessing || !finalBlob}
+                            loading={isPreviewLoading}
+                            disabled={!currentOutput || isPreviewLoading}
                             onClick={handleFinalDownloadSubmission}
                         />
                     </div>
