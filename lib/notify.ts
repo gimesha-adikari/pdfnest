@@ -190,6 +190,13 @@ export function notifyBackendError(error: BackendError | null | undefined) {
         return;
     }
 
+    if (error.code === "MARKDOWN_RESOURCE_FORBIDDEN") {
+        // No billing description/action: the notification UI uses billing
+        // presentation for described errors. The backend explains the policy.
+        notify(error.message, "error", { title: "Markdown resource blocked" });
+        return;
+    }
+
     const session = getPlatenSession();
     const isGuest =
         session?.type === "guest" ||

@@ -6,6 +6,7 @@ import {
     useEffect,
     useMemo,
     useState,
+    useCallback,
     type ReactNode,
 } from "react";
 import { useParams, notFound } from "next/navigation";
@@ -63,13 +64,21 @@ interface ToolConfig {
     accept: string;
 }
 
+interface ToolDownloadData {
+    blob: Blob;
+    fileName: string;
+    source?: { file: File; generation: object };
+}
+
 interface ToolContextProps {
     toolId: string;
     toolConfig: ToolConfig;
     file: File | null;
     setFile: (file: File | null) => void;
-    downloadData: { blob: Blob; fileName: string } | null;
-    setDownloadData: (data: { blob: Blob; fileName: string } | null) => void;
+    downloadData: ToolDownloadData | null;
+    setDownloadData: (data: ToolDownloadData | null) => void;
+    conversionGeneration: object | null;
+    setConversionGeneration: (generation: object | null) => void;
     isLoadingConfig: boolean;
     editPdfEngine: EditPdfEditorEngine;
 }
@@ -100,7 +109,8 @@ export default function ClientToolLayout({
 
     const [fileState, setFileState] = useState<File | null>(null);
     const [activeToolHref, setActiveToolHref] = useState<string | null>(null);
-    const [downloadData, setDownloadData] = useState<{ blob: Blob; fileName: string } | null>(null);
+    const [downloadData, setDownloadData] = useState<ToolDownloadData | null>(null);
+    const [conversionGeneration, setConversionGeneration] = useState<object | null>(null);
 
     const file = activeToolHref === currentToolHref ? fileState : null;
 
@@ -166,15 +176,14 @@ export default function ClientToolLayout({
         }
     }, [currentToolHref, getToolByHref, isLoadingTools, toolId]);
 
-    const setFile = (nextFile: File | null) => {
+    const setFile = useCallback((nextFile: File | null) => {
+        if (toolId === "markdown-to-pdf") {
+            setDownloadData(null);
+            setConversionGeneration(null);
+        }
         setFileState(nextFile);
         setActiveToolHref(nextFile ? currentToolHref : null);
-    };
-
-    const clearFile = () => {
-        setFileState(null);
-        setActiveToolHref(null);
-    };
+    }, [toolId, currentToolHref]);
 
     return (
         <SharedToolContext.Provider
@@ -182,16 +191,11 @@ export default function ClientToolLayout({
                 toolId,
                 toolConfig,
                 file,
-                setFile: nextFile => {
-                    if (nextFile) {
-                        setFileState(nextFile);
-                        setActiveToolHref(currentToolHref);
-                    } else {
-                        clearFile();
-                    }
-                },
+                setFile,
                 downloadData,
                 setDownloadData,
+                conversionGeneration,
+                setConversionGeneration,
                 isLoadingConfig,
                 editPdfEngine,
             }}

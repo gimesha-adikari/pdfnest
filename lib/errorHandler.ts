@@ -8,6 +8,9 @@ export function getFriendlyErrorMessage(error: unknown): string {
 
     const err = error as any;
 
+    const backend: BackendError | undefined = err?.backend || err?.originalError?.backend;
+    if (backend) return backend.message || "Request failed.";
+
     const billing: BackendError | undefined = err?.billing || err?.originalError?.billing;
     if (billing) {
         return billing.message || "Request limit reached.";
@@ -69,6 +72,11 @@ export function getFriendlyErrorMessage(error: unknown): string {
 
 export function handleClientError(error: unknown): string {
     const err = error as any;
+    const backend: BackendError | undefined = err.backend || err.originalError?.backend;
+    if (backend?.code === "MARKDOWN_RESOURCE_FORBIDDEN") {
+        notifyBackendError(backend);
+        return backend.message;
+    }
     const billing: BackendError | undefined = err.billing || err.originalError?.billing;
     if (billing) {
         notifyBackendError(billing);
