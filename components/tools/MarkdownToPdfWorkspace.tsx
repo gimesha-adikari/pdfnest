@@ -16,6 +16,43 @@ import { ClientPdfRenderer } from "@/lib/preview/ClientPdfRenderer";
 import type { PreviewResource } from "@/lib/preview/types";
 import type { ExecutionResult } from "@/lib/execution/types";
 
+type MarkdownFailure = {
+    code: "MARKDOWN_RESOURCE_FORBIDDEN" | "CONVERSION_FAILED" | "USER_CANCELLATION";
+    title: string;
+    message: string;
+};
+
+function normalizeMarkdownFailure(error: unknown): MarkdownFailure {
+    const err = error as {
+        code?: string;
+        name?: string;
+        backend?: { code?: string };
+        originalError?: { backend?: { code?: string } };
+    } | null;
+    // Keep diagnostics out of the persistent UI. Only recognized codes select
+    // copy; server messages, paths and raw exception text are never rendered.
+    if (err?.code === "USER_CANCELLATION" || err?.name === "AbortError" || err?.name === "CanceledError") {
+        return {
+            code: "USER_CANCELLATION",
+            title: "Markdown conversion canceled",
+            message: "Upload your Markdown document again to retry.",
+        };
+    }
+    const backendCode = err?.backend?.code || err?.originalError?.backend?.code;
+    if (backendCode === "MARKDOWN_RESOURCE_FORBIDDEN") {
+        return {
+            code: "MARKDOWN_RESOURCE_FORBIDDEN",
+            title: "Markdown resource blocked",
+            message: "External image URLs and local file paths are not supported. Embed PNG or JPEG images directly in your Markdown document.",
+        };
+    }
+    return {
+        code: "CONVERSION_FAILED",
+        title: "Markdown conversion failed",
+        message: "We couldn't create a PDF from this document. Check your Markdown and upload it again to retry.",
+    };
+}
+
 export default function MarkdownToPdfWorkspace() {
     const { requireAuth } = useAuth();
     const router = useRouter();
@@ -36,13 +73,15 @@ export default function MarkdownToPdfWorkspace() {
         input: typeof input;
         settled: boolean;
         output: { result: ExecutionResult; preview: PreviewResource; signal: AbortSignal } | null;
-    }>({ input, settled: false, output: null });
+        failure: MarkdownFailure | null;
+    }>({ input, settled: false, output: null, failure: null });
     // Reset this component's state during render on an input change, so Save
     // and the displayed preview cannot expose old output before effects run.
     if (attempt.input !== input) {
-        setAttempt({ input, settled: false, output: null });
+        setAttempt({ input, settled: false, output: null, failure: null });
     }
     const currentOutput = attempt.input === input ? attempt.output : null;
+    const currentFailure = attempt.input === input ? attempt.failure : null;
     const isPreviewLoading = Boolean(file) && (attempt.input !== input || !attempt.settled);
     const previewUrl = currentOutput?.preview.url;
 
@@ -87,12 +126,17 @@ export default function MarkdownToPdfWorkspace() {
                 }, controller.signal);
                 if (!isCurrent()) { preview.revoke?.(); return; }
                 resource = preview;
-                setAttempt({ input, settled: true, output: { result, preview, signal: controller.signal } });
+                setAttempt({ input, settled: true, output: { result, preview, signal: controller.signal }, failure: null });
             } catch (err: unknown) {
                 if (!isCurrent()) return;
-                setAttempt({ input, settled: true, output: null });
+                const failure = normalizeMarkdownFailure(err);
+                setAttempt({ input, settled: true, output: null, failure });
                 setDownloadData(null);
-                handleClientError(err);
+                // Preserve policy toast delivery/expiry without echoing raw
+                // backend diagnostics. Other notification contracts stay intact.
+                handleClientError(failure.code === "MARKDOWN_RESOURCE_FORBIDDEN"
+                    ? { backend: { code: failure.code, message: failure.message } }
+                    : err);
             }
         };
         void generate();
@@ -270,15 +314,29 @@ export default function MarkdownToPdfWorkspace() {
                                 </span>
                             </div>
 
-                            <div className="relative min-h-[460px] flex items-center justify-center rounded-2xl bg-[#0f0f12] border border-[color:var(--border)] overflow-hidden shadow-inner p-4">
-                                {isPreviewLoading ? (
-                                    <div className="flex flex-col items-center gap-3">
-                                        <Loader2 className="animate-spin text-cyan-400" size={32} />
-                                        <p className="text-xs font-medium text-[color:var(--muted)]">
-                                            Formatting Vector Markdown Layout...
-                                        </p>
-                                    </div>
-                                ) : previewUrl ? (
+                            <div role="region" aria-label="Markdown conversion status" className="relative min-h-[460px] flex items-center justify-center rounded-2xl bg-[#0f0f12] border border-[color:var(--border)] overflow-hidden shadow-inner p-4">
+                                {/* The optional toast is assertive. Keep this durable
+                                    status polite and available even without its handler. */}
+                                <div role="status" aria-live="polite" aria-atomic="true" className={previewUrl ? "sr-only" : "max-w-md text-center"}>
+                                    {isPreviewLoading ? (
+                                        <div className="flex flex-col items-center gap-3">
+                                            <Loader2 aria-hidden="true" className="animate-spin text-cyan-400" size={32} />
+                                            <p className="text-xs font-medium text-zinc-300">
+                                                Formatting Vector Markdown Layout...
+                                            </p>
+                                        </div>
+                                    ) : currentFailure ? (
+                                        <>
+                                            <h3 className="text-base font-semibold text-zinc-100">{currentFailure.title}</h3>
+                                            <p className="mt-2 text-sm leading-relaxed text-zinc-300">{currentFailure.message}</p>
+                                        </>
+                                    ) : previewUrl ? (
+                                        <p>PDF preview ready.</p>
+                                    ) : (
+                                        <p className="text-xs text-zinc-300">Select options to render vector layout</p>
+                                    )}
+                                </div>
+                                {previewUrl && (
                                     <div className="relative max-w-full flex justify-center items-center">
                                         {/* eslint-disable-next-line @next/next/no-img-element */}
                                         <img
@@ -286,11 +344,6 @@ export default function MarkdownToPdfWorkspace() {
                                             alt="Markdown Layout Document Snapshot Mirror"
                                             className="max-h-[580px] w-auto rounded-lg shadow-2xl border border-[#2d2d34]"
                                         />
-                                    </div>
-                                ) : (
-                                    <div className="flex flex-col items-center gap-2 text-center text-zinc-500">
-                                        <FileCode size={36} className="opacity-40" />
-                                        <p className="text-xs">Select options to render vector layout</p>
                                     </div>
                                 )}
                             </div>
