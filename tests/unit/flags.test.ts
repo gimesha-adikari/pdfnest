@@ -21,7 +21,6 @@ import {
     parseBooleanEnv,
 } from "../../lib/execution/flags";
 import { ExecutionSafetyGate } from "../../lib/execution/ExecutionSafetyGate";
-import { ExecutionManager } from "../../lib/execution/ExecutionManager";
 
 function resetEnv() {
     delete process.env.NEXT_PUBLIC_HYBRID_ENABLE_ALL;
@@ -103,6 +102,13 @@ async function runTests() {
     process.env.NEXT_PUBLIC_HYBRID_ENABLE_ROTATE = "true";
     assert.strictEqual(isClientExecutionEnabled("rotate"), true, "Per-tool true should override global false");
     assert.strictEqual(getHybridFeatureFlagStatus("rotate").source, "per_tool_env");
+
+    resetEnv();
+    process.env.NEXT_PUBLIC_HYBRID_ENABLE_ALL = "false";
+    process.env.NEXT_PUBLIC_HYBRID_ENABLE_PDF_TO_IMAGES = "true";
+    const normalizedPerToolStatus = getHybridFeatureFlagStatus("pdf-to-images");
+    assert.strictEqual(normalizedPerToolStatus.enabled, true, "Normalized, statically referenced per-tool flag overrides global false");
+    assert.strictEqual(normalizedPerToolStatus.source, "per_tool_env");
     console.log("  ✓ Per-tool flags correctly take top precedence over global flags.");
 
     // 7. Malformed Environment Values
