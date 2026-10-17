@@ -5,7 +5,7 @@ import { createRequire } from "node:module";
 import ts from "typescript";
 import React, { act } from "react";
 import { handleClientError } from "../../lib/errorHandler";
-import type { ExecutionOptions, ExecutionResult } from "../../lib/execution/types";
+import { ExecutionError, type ExecutionOptions, type ExecutionResult } from "../../lib/execution/types";
 import type { PreviewResource } from "../../lib/preview/types";
 type Shared = ReturnType<typeof import("../../app/(site)/[toolId]/ClientToolLayout").useSharedTool>;
 type ComponentModule = { default: React.ComponentType<React.PropsWithChildren>; useSharedTool: () => Shared };
@@ -84,6 +84,7 @@ async function main() {
     const actionButton = loadComponent("components/pdf/PdfActionButton.tsx", {}).default;
     const workspace = loadComponent("components/tools/MarkdownToPdfWorkspace.tsx", {
         ...framework, ...sharedImport,
+        "@/lib/execution/types": { ExecutionError },
         "@/lib/notify": { notify: empty },
         "@/lib/errorHandler": { handleClientError: (error: unknown) => { errors.push(error); handleClientError(error); } },
         "@/context/AuthContext": { useAuth: () => ({ requireAuth: (action: () => void) => {

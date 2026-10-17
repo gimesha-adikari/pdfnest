@@ -170,7 +170,7 @@ export class ClientExecutor {
                 fontSize: params.fontSize,
                 lineHeight: params.lineHeight,
                 fileName: file.name,
-            });
+            }, options.signal);
         }
 
         // Password-protected files route to Cloud to preserve existing relock pipeline
