@@ -25,6 +25,7 @@
     "fflate": "^0.8.3",
     "file-saver": "^2.0.5",
     "isomorphic-dompurify": "^3.19.0",
+    "jpeg-js": "0.4.4",
     "jszip": "^3.10.1",
     "lucide-react": "^1.17.0",
     "marked": "^15.0.12",

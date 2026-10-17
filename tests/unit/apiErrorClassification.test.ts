@@ -80,7 +80,9 @@ async function main() {
         }
         await rejected(policy); // Set the Axios response used by the real cloud adapter.
         await assert.rejects(CloudExecutor.execute({ tool: "markdown-to-pdf", mode: "cloud",
-            files: [new File(["![x](../image.png)"], "B.md")] }), (error: ExecutionError) => {
+            // Isolate the server contract using admitted source; image policy
+            // admission is separately tested before normal routing reaches HTTP.
+            files: [new File(["# Synthetic server policy response"], "B.md")] }), (error: ExecutionError) => {
             assert.equal(error.code, "CLOUD_FAILURE");
             toasts.length = 0; handleClientError(error);
             assert.equal(toasts[0].title, "Markdown resource blocked");
