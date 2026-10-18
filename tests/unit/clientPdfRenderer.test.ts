@@ -27,6 +27,7 @@ function makeMockPdfJs(options: {
     let cancelledRender = false;
     let requestedPageNum = -1;
     let passedScale = -1;
+    let passedIntent = "";
 
     const mockPdfDoc = {
         getPage: async (pageNum: number) => {
@@ -42,7 +43,8 @@ function makeMockPdfJs(options: {
                         height: pageHeight * scale,
                     };
                 },
-                render: ({ canvasContext, viewport }: any) => {
+                render: ({ canvasContext, viewport, intent }: any) => {
+                    passedIntent = intent;
                     let onCancel: (() => void) | undefined;
                     const promise = new Promise<void>((resolve, reject) => {
                         const timer = setTimeout(() => {
@@ -96,6 +98,7 @@ function makeMockPdfJs(options: {
             cancelledRender,
             requestedPageNum,
             passedScale,
+            passedIntent,
         }),
     };
 }
@@ -166,6 +169,7 @@ async function test4_pageNumberAndScale(): Promise<void> {
 
     assert(tracker.requestedPageNum === 4, "4: page number 4 passed to getPage");
     assert(tracker.passedScale === 2.0, "4: explicit scale 2.0 respected");
+    assert(tracker.passedIntent === "display", "4: existing preview callers retain display intent");
     assert(resource.type === "image-url", "4: resource type is image-url");
     assert(typeof resource.url === "string" && resource.url.length > 0, "4: resource.url is a valid non-empty string");
     assert(createObjectURLCalls.length === initialCreateCount + 1, "4: URL.createObjectURL called with Blob");
@@ -284,6 +288,16 @@ async function test9_blobConversionFailure(): Promise<void> {
     assert(createObjectURLCalls.length === initialCreateCount, "9: URL.createObjectURL is not called if blob conversion fails");
 }
 
+async function test10_printSnapshotIntent(): Promise<void> {
+    const { mockLib, getTracker } = makeMockPdfJs();
+    const renderer = new ClientPdfRenderer({ pdfjsLoader: async () => mockLib, renderingIntent: "print" });
+    const resource = await renderer.render({
+        document: { id: "snapshot", version: "v1", pageCount: 1, file: makeMockFile() }, page: 1,
+    }, new AbortController().signal);
+    assert(getTracker().passedIntent === "print", "10: offscreen snapshots request printable PDF.js rendering");
+    resource.revoke?.();
+}
+
 async function runTests(): Promise<void> {
     const tests: Array<[string, () => Promise<void>]> = [
         ["1: identity & capabilities", test1_identityAndCapabilities],
@@ -295,6 +309,7 @@ async function runTests(): Promise<void> {
         ["7: PDF.js error propagation", test7_pdfJsErrorPropagation],
         ["8: revoke behavior & idempotency", test8_revokeBehavior],
         ["9: blob conversion failure", test9_blobConversionFailure],
+        ["10: print snapshot intent", test10_printSnapshotIntent],
     ];
 
     let passed = 0;

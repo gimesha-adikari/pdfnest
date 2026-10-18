@@ -62,7 +62,9 @@ export default function MarkdownToPdfWorkspace() {
     const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
     const [paperSize, setPaperSize] = useState("A4");
     const [margins, setMargins] = useState({ top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 });
-    const [renderer] = useState(() => new ClientPdfRenderer());
+    // This offscreen snapshot represents the generated PDF's printable output.
+    // PDF.js display intent waits for animation frames, which hidden tabs pause.
+    const [renderer] = useState(() => new ClientPdfRenderer({ renderingIntent: "print" }));
     // File object identity matters: two uploads with the same name/size are
     // still different inputs. A fresh token also distinguishes A -> B -> A.
     const input = useMemo(() => ({
