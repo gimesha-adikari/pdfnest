@@ -69,8 +69,33 @@ export class ExecutionManager {
         const flagEnabled = isClientExecutionEnabled(tool);
         const clientEligible = clientSupported && flagEnabled;
 
-        // 2. Explicit Cloud Mode OR tool not supported on client OR client execution disabled via flag -> Cloud Executor
-        if (mode === "cloud" || !clientEligible) {
+        // Explicit Device mode is a strict venue choice, regardless of allowFallback.
+        if (mode === "device" && !clientEligible) {
+            const featureFlagDisabled = clientSupported && !flagEnabled;
+            const durationMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - startTime;
+            telemetry.record({
+                toolId: tool,
+                requestedMode: "device",
+                category: "client_failure",
+                durationMs,
+                success: false,
+                fallbackOccurred: false,
+                errorCode: "UNSUPPORTED_CLIENT_OP",
+                featureFlagDisabled,
+                fileSizeMB,
+                fileCount,
+                timestamp: Date.now(),
+            });
+            throw new ExecutionError(
+                "UNSUPPORTED_CLIENT_OP",
+                !clientSupported
+                    ? `Tool '${tool}' is not supported for Device processing.`
+                    : `Device processing for '${tool}' is disabled by its client execution feature flag.`
+            );
+        }
+
+        // Explicit Cloud mode and ineligible Auto operations use CloudExecutor.
+        if (mode === "cloud" || (mode !== "device" && !clientEligible)) {
             const isFlagDisabled = clientSupported && !flagEnabled;
             const isAutoFallback = mode === "auto" && isFlagDisabled;
             try {
@@ -135,7 +160,7 @@ export class ExecutionManager {
             }
         }
 
-        // 3. Explicit Device Mode -> Client Executor (Option B fallback to cloud if file requires server relocking)
+        // 3. Explicit Device Mode -> Client Executor only; failures stay local.
         if (mode === "device") {
             const safety = ExecutionSafetyGate.evaluate(tool, files, policy, options.params);
             if (!safety.eligible) {
@@ -183,66 +208,6 @@ export class ExecutionManager {
                     fallbackOccurred: false,
                 };
             } catch (err: unknown) {
-                // If password protected file requires cloud relocking pipeline, fallback to cloud
-                const hasPassword = Boolean(options.password || (files[0] as any)?.originalPassword);
-                if (err instanceof ExecutionError && err.code === "UNSUPPORTED_CLIENT_OP" && hasPassword) {
-                    console.info("[ExecutionManager] Password-protected file detected in Device mode. Routing to Cloud relock pipeline.");
-                    const clientErrMsg = err.message;
-                    try {
-                        const blob = await CloudExecutor.execute(options);
-                        const durationMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - startTime;
-                        telemetry.record({
-                            toolId: tool,
-                            requestedMode: "device",
-                            actualMode: "cloud",
-                            category: "fallback_success",
-                            durationMs,
-                            success: true,
-                            fallbackOccurred: true,
-                            fallbackReason: clientErrMsg,
-                            featureFlagDisabled: false,
-                            fileSizeMB,
-                            fileCount,
-                            timestamp: Date.now(),
-                        });
-                        notifyHybridFallback("Password relocked file requires server processing.");
-                        return {
-                            blob,
-                            fileName: outputFileName,
-                            executionMode: "cloud",
-                            fallbackOccurred: true,
-                        };
-                    } catch (cloudErr: any) {
-                        const durationMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - startTime;
-                        telemetry.record({
-                            toolId: tool,
-                            requestedMode: "device",
-                            actualMode: "cloud",
-                            category: "cloud_failure",
-                            durationMs,
-                            success: false,
-                            fallbackOccurred: true,
-                            fallbackReason: clientErrMsg,
-                            errorCode: cloudErr?.code || "CLOUD_FAILURE",
-                            featureFlagDisabled: false,
-                            fileSizeMB,
-                            fileCount,
-                            timestamp: Date.now(),
-                        });
-                        if (cloudErr?.code === "USER_CANCELLATION" || options.signal?.aborted) {
-                            throw cloudErr;
-                        }
-                        if (cloudErr instanceof ExecutionError && cloudErr.code === "CLOUD_UNAVAILABLE") {
-                            throw new ExecutionError(
-                                "CLOUD_UNAVAILABLE",
-                                "This encrypted document requires server-side processing, but the backend service is currently unreachable.",
-                                cloudErr
-                            );
-                        }
-                        throw cloudErr;
-                    }
-                }
-
                 const durationMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - startTime;
                 const errCode = err instanceof ExecutionError ? err.code : "CLIENT_FAILURE";
                 telemetry.record({
@@ -368,7 +333,8 @@ export class ExecutionManager {
                         executionMode: "cloud",
                         fallbackOccurred: true,
                     };
-                } catch (cloudErr: any) {
+                } catch (cloudErr: unknown) {
+                    const cloudErrCode = (cloudErr as { code?: string } | null)?.code;
                     const durationMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - startTime;
                     telemetry.record({
                         toolId: tool,
@@ -379,13 +345,13 @@ export class ExecutionManager {
                         success: false,
                         fallbackOccurred: true,
                         fallbackReason: clientErrMsg,
-                        errorCode: cloudErr?.code || "CLOUD_FAILURE",
+                        errorCode: cloudErrCode || "CLOUD_FAILURE",
                         featureFlagDisabled: false,
                         fileSizeMB,
                         fileCount,
                         timestamp: Date.now(),
                     });
-                    if (cloudErr?.code === "USER_CANCELLATION" || options.signal?.aborted) {
+                    if (cloudErrCode === "USER_CANCELLATION" || options.signal?.aborted) {
                         throw cloudErr;
                     }
                     if (cloudErr instanceof ExecutionError && cloudErr.code === "CLOUD_UNAVAILABLE") {
@@ -425,7 +391,8 @@ export class ExecutionManager {
                 executionMode: "cloud",
                 fallbackOccurred: true,
             };
-        } catch (cloudErr: any) {
+        } catch (cloudErr: unknown) {
+            const cloudErrCode = (cloudErr as { code?: string } | null)?.code;
             const durationMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - startTime;
             telemetry.record({
                 toolId: tool,
@@ -436,13 +403,13 @@ export class ExecutionManager {
                 success: false,
                 fallbackOccurred: false,
                 safetyRejectionReason: safety.reason,
-                errorCode: cloudErr?.code || "CLOUD_FAILURE",
+                errorCode: cloudErrCode || "CLOUD_FAILURE",
                 featureFlagDisabled: false,
                 fileSizeMB,
                 fileCount,
                 timestamp: Date.now(),
             });
-            if (cloudErr?.code === "USER_CANCELLATION" || options.signal?.aborted) {
+            if (cloudErrCode === "USER_CANCELLATION" || options.signal?.aborted) {
                 throw cloudErr;
             }
             if (cloudErr instanceof ExecutionError && cloudErr.code === "CLOUD_UNAVAILABLE") {

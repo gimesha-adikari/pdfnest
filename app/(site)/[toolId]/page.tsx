@@ -197,6 +197,7 @@ export default function SharedUploadPage() {
                         accept={toolConfig.accept || ".pdf"}
                         multiple={toolConfig.multiple}
                         bypassEncryptionCheck={toolId === "unlock-pdf"}
+                        inputPolicy={toolId === "repair-pdf" ? "repair" : "strict"}
                     />
                 )}
             </div>

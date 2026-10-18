@@ -38,10 +38,10 @@ try {
     for (const source of ["![x][ref]\n\n[ref]: ../image.png", "![x][]\n\n[x]: https://example.invalid/x", "![x]\n\n[x]: /tmp/image.png", "> - **![x](../image.png)**", "# [![x](../image.png)](https://example.invalid)", "| image |\n|---|\n| ![x](../image.png) |", '<img src="../image.png">', '<b>text</b>', '![x](http&#58;//example.invalid/x)', '![x](http\\://example.invalid/x)']) await test(`parsed resource rejection ${source.slice(0, 50)}`, async () => {
         await assert.rejects(executeMarkdownToPdf(file(source)), policy);
     });
-    for (const mode of ["auto", "device", "cloud"] as const) for (const route of ["eligible", "flag-disabled", "safety-rejected"] as const) await test(`${mode}/${route} rejects before any cloud request`, async () => {
+    for (const destination of ["../image.png", "https://example.invalid/image.png"]) for (const mode of ["auto", "device", "cloud"] as const) for (const route of ["eligible", "flag-disabled", "safety-rejected"] as const) await test(`${destination} ${mode}/${route} rejects before any cloud request`, async () => {
         clouds = 0; process.env.NEXT_PUBLIC_HYBRID_ENABLE_MARKDOWN_TO_PDF = route === "flag-disabled" ? "false" : "true";
         ExecutionSafetyGate.evaluate = () => ({ eligible: route !== "safety-rejected", recommendedMode: "cloud", reason: "synthetic gate" });
-        await assert.rejects(ExecutionManager.run({ tool: "markdown-to-pdf", files: [file("![x](../image.png)")], mode }), policy);
+        await assert.rejects(ExecutionManager.run({ tool: "markdown-to-pdf", files: [file(`![x](${destination})`)], mode }), policy);
         assert.equal(clouds, 0);
     });
     await test("typed client policy failure cannot Auto retry through Cloud", async () => {
@@ -57,10 +57,10 @@ try {
         const result = await ExecutionManager.run({ tool: "markdown-to-pdf", files: [file("# valid")], mode });
         assert.equal(result.executionMode, mode === "cloud" ? "cloud" : "client"); assert.equal(clouds, mode === "cloud" ? 1 : 0);
     });
-    await test("valid Device with client flag disabled preserves existing Cloud route", async () => {
+    await test("valid Device with client flag disabled rejects without Cloud", async () => {
         clouds = 0; process.env.NEXT_PUBLIC_HYBRID_ENABLE_MARKDOWN_TO_PDF = "false";
-        const result = await ExecutionManager.run({ tool: "markdown-to-pdf", files: [file("# valid")], mode: "device" });
-        assert.equal(result.executionMode, "cloud"); assert.equal(clouds, 1);
+        await assert.rejects(ExecutionManager.run({ tool: "markdown-to-pdf", files: [file("# valid")], mode: "device" }), (e: unknown) => e instanceof ExecutionError && e.code === "UNSUPPORTED_CLIENT_OP");
+        assert.equal(clouds, 0);
     });
     await test("valid safety-rejected Auto uses Cloud; Device rejects", async () => {
         clouds = 0; process.env.NEXT_PUBLIC_HYBRID_ENABLE_MARKDOWN_TO_PDF = "true";
