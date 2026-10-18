@@ -1,6 +1,8 @@
 "use client";
 
 import { ExecutionError } from "../types";
+import { isolatedUnlock, type LocalUnlockOptions } from "./isolatedUnlock";
+import type { FileWithPassword } from "@/lib/types";
 import {
     PdfcpuWorkerRequest,
     PdfcpuWorkerResponse,
@@ -471,7 +473,8 @@ export async function executePdfcpuWasmAddText(
 
 export async function executePdfcpuWasmUnlock(
     pdfFile: File,
-    password?: string
+    password?: string,
+    options?: LocalUnlockOptions
 ): Promise<Blob> {
     if (!pdfFile) {
         throw new ExecutionError(
@@ -480,12 +483,19 @@ export async function executePdfcpuWasmUnlock(
         );
     }
 
-    const effectivePassword = password || (pdfFile as any).originalPassword || "";
+    const effectivePassword = password || (pdfFile as FileWithPassword).originalPassword || "";
     if (!effectivePassword) {
         throw new ExecutionError(
             "INVALID_INPUT",
             "Password is required to unlock this file."
         );
+    }
+
+    if (options) {
+        return isolatedUnlock(pdfFile, effectivePassword, () => {
+            if (customWorkerFactory) return customWorkerFactory("/wasm/pdfcpu.worker.js");
+            return new Worker("/wasm/pdfcpu.worker.js");
+        }, options);
     }
 
     const pdfBuffer = await pdfFile.arrayBuffer();
