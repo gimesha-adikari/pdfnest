@@ -57,10 +57,10 @@ try {
         const result = await ExecutionManager.run({ tool: "markdown-to-pdf", files: [file("# valid")], mode });
         assert.equal(result.executionMode, mode === "cloud" ? "cloud" : "client"); assert.equal(clouds, mode === "cloud" ? 1 : 0);
     });
-    await test("valid Device with client flag disabled preserves existing Cloud route", async () => {
+    await test("valid Device with client flag disabled rejects without Cloud", async () => {
         clouds = 0; process.env.NEXT_PUBLIC_HYBRID_ENABLE_MARKDOWN_TO_PDF = "false";
-        const result = await ExecutionManager.run({ tool: "markdown-to-pdf", files: [file("# valid")], mode: "device" });
-        assert.equal(result.executionMode, "cloud"); assert.equal(clouds, 1);
+        await assert.rejects(ExecutionManager.run({ tool: "markdown-to-pdf", files: [file("# valid")], mode: "device" }), (e: unknown) => e instanceof ExecutionError && e.code === "UNSUPPORTED_CLIENT_OP");
+        assert.equal(clouds, 0);
     });
     await test("valid safety-rejected Auto uses Cloud; Device rejects", async () => {
         clouds = 0; process.env.NEXT_PUBLIC_HYBRID_ENABLE_MARKDOWN_TO_PDF = "true";

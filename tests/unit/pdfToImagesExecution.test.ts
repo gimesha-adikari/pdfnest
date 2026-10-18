@@ -157,7 +157,7 @@ export async function runPdfToImagesExecutionTests() {
         encDoc.addPage([600, 800]);
         const encBytes = await encDoc.save();
         const encFile = new File([encBytes.buffer.slice(encBytes.byteOffset, encBytes.byteOffset + encBytes.byteLength) as ArrayBuffer], "enc.pdf", { type: "application/pdf" });
-        (encFile as any).originalPassword = "secret_pass_123";
+        (encFile as File & { originalPassword: string }).originalPassword = "secret_pass_123";
 
         const encResult = await ExecutionManager.run({
             tool: "pdf_to_images",
@@ -171,19 +171,17 @@ export async function runPdfToImagesExecutionTests() {
         assert.strictEqual(encResult.fallbackOccurred, true);
         console.log("✓ [PASS] 10. Password-protected file triggers Cloud fallback in Auto mode (Option B)");
 
-        // 11. Password-protected file in Device mode routes to Cloud relock pipeline
+        // 11. Password-protected file in Device mode rejects without Cloud processing
         cloudCalled = false;
-        const devEncResult = await ExecutionManager.run({
+        await assert.rejects(ExecutionManager.run({
             tool: "pdf_to_images",
             files: [encFile],
             params: { imageType: "jpg" },
             mode: "device",
             password: "secret_pass_123",
-        });
-        assert.strictEqual(cloudCalled, true, "Encrypted file in Device mode must route to Cloud relock");
-        assert.strictEqual(devEncResult.executionMode, "cloud");
-        assert.strictEqual(devEncResult.fallbackOccurred, true);
-        console.log("✓ [PASS] 11. Password-protected file in Device mode routes to Cloud relock pipeline");
+        }), (error: unknown) => error instanceof ExecutionError && error.code === "UNSUPPORTED_CLIENT_OP");
+        assert.strictEqual(cloudCalled, false, "Encrypted file in Device mode must never invoke CloudExecutor");
+        console.log("✓ [PASS] 11. Password-protected file in Device mode rejects with 0 cloud calls");
     } finally {
         CloudExecutor.execute = origCloudExec;
     }
@@ -198,7 +196,8 @@ export async function runPdfToImagesExecutionTests() {
             mode: "device",
         });
         assert.fail("Should have thrown error on corrupt header");
-    } catch (err: any) {
+    } catch (err: unknown) {
+        assert(err instanceof ExecutionError);
         assert.strictEqual(err.code, "INVALID_INPUT");
         console.log("✓ [PASS] 12. Invalid PDF header throws INVALID_INPUT error without Cloud fallback");
     }
@@ -233,7 +232,8 @@ export async function runPdfToImagesExecutionTests() {
             mode: "device",
         });
         assert.fail("Should have thrown error on empty files");
-    } catch (err: any) {
+    } catch (err: unknown) {
+        assert(err instanceof ExecutionError);
         assert.strictEqual(err.code, "INVALID_INPUT");
         console.log("✓ [PASS] 15. Empty files array throws INVALID_INPUT error");
     }
