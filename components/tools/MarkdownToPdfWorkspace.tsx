@@ -9,6 +9,7 @@ import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
+import { ExecutionError } from "@/lib/execution/types";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import type { ProcessingMode } from "@/lib/execution/types";
@@ -39,7 +40,7 @@ function normalizeMarkdownFailure(error: unknown): MarkdownFailure {
         };
     }
     const backendCode = err?.backend?.code || err?.originalError?.backend?.code;
-    if (backendCode === "MARKDOWN_RESOURCE_FORBIDDEN") {
+    if (backendCode === "MARKDOWN_RESOURCE_FORBIDDEN" || error instanceof ExecutionError && error.code === "MARKDOWN_RESOURCE_FORBIDDEN") {
         return {
             code: "MARKDOWN_RESOURCE_FORBIDDEN",
             title: "Markdown resource blocked",

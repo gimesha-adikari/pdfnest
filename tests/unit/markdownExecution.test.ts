@@ -1,5 +1,5 @@
 import assert from "node:assert";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, PDFName } from "pdf-lib";
 import { ClientExecutor } from "../../lib/execution/ClientExecutor";
 import { CloudExecutor } from "../../lib/execution/CloudExecutor";
 import { ExecutionManager } from "../../lib/execution/ExecutionManager";
@@ -100,17 +100,17 @@ function verifyUser(user: UserProfile): boolean {
     assert.ok(pageCount >= 8 && pageCount <= 16, `80 sections should paginate cleanly across 8-16 pages (actual: ${pageCount})`);
     console.log(`✓ TEST 4: Multi-page pagination passed (generated ${pageCount} pages for 80 sections).`);
 
-    // ─── TEST 5: Embedded Base64 Data URI Image & External URL Safety ─────────
-    // Valid 1x1 PNG data URI
-    const transparentPngDataUri = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
-    const imgMd = `# Image Demonstration\n\nEmbedded Logo:\n\n![Local Logo](${transparentPngDataUri})\n\nExternal Logo:\n\n![Cloud Image](https://example.com/logo.png)`;
-    const imgFile = new File([imgMd], "images.md", { type: "text/markdown" });
+    // ─── TEST 5: Real Embedded Image & Universal Resource Rejection ─────────
+    // Option A replaces the former deliberately successful external placeholder.
+    const pngDataUri = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAMCAIAAADkharWAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAGElEQVQokWP4z8BAEmIY1cAwGkr/sYUBAHHwv0HzzeJ/AAAAAElFTkSuQmCC";
+    const imgFile = new File([`# Image Demonstration\n\n![Local Logo](${pngDataUri})`], "images.md", { type: "text/markdown" });
     const imgPdfBlob = await executeMarkdownToPdf(imgFile, { paperSize: "letter" });
-    assert.ok(imgPdfBlob.size > 200);
-
     const imgPdfDoc = await PDFDocument.load(await imgPdfBlob.arrayBuffer());
     assert.strictEqual(imgPdfDoc.getPageCount(), 1);
-    console.log("✓ TEST 5: Embedded data URI image & safe external URL placeholder verified.");
+    assert.ok(imgPdfDoc.getPage(0).node.Resources()?.get(PDFName.of("XObject")), "Actual image XObject required");
+    await assert.rejects(executeMarkdownToPdf(new File(["![Cloud Image](https://example.invalid/logo.png)"], "external.md")),
+        (error: ExecutionError) => error.code === "MARKDOWN_RESOURCE_FORBIDDEN");
+    console.log("✓ TEST 5: Embedded raster is present; former external placeholder is now a terminal policy error.");
 
     // ─── TEST 6: ExecutionManager Device Routing & Output Naming ───────────────
     const execResult = await ExecutionManager.run({
