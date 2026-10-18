@@ -1,5 +1,6 @@
 "use client";
 
+import { prepareMarkdown } from "./document/markdownPolicy";
 import { ClientExecutor } from "./ClientExecutor";
 import { CloudExecutor } from "./CloudExecutor";
 import { ExecutionSafetyGate } from "./ExecutionSafetyGate";
@@ -55,6 +56,10 @@ export class ExecutionManager {
             throw new ExecutionError("USER_CANCELLATION", "Execution was cancelled by the user.");
         }
 
+        // Resource policy is independent of venue, flags and device capacity.
+        if (["markdown-to-pdf", "markdown_to_pdf", "md_to_pdf", "md-to-pdf", "markdown"].includes(tool)) {
+            await prepareMarkdown(files[0], options.signal);
+        }
         const primaryFile = files[0];
         const outputFileName = buildOutputFileName(tool, primaryFile.name);
         const policy: ToolPolicy = getToolPolicy(tool);
@@ -299,7 +304,7 @@ export class ExecutionManager {
                 // User input validation & auth errors (invalid PDF header, wrong password) do NOT trigger cloud fallback
                 if (
                     err instanceof ExecutionError &&
-                    (err.code === "INVALID_INPUT" || err.code === "DECRYPTION_AUTH_FAILED" || err.code === "USER_CANCELLATION")
+                    (err.code === "INVALID_INPUT" || err.code === "MARKDOWN_RESOURCE_FORBIDDEN" || err.code === "DECRYPTION_AUTH_FAILED" || err.code === "USER_CANCELLATION")
                 ) {
                     const durationMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - startTime;
                     telemetry.record({

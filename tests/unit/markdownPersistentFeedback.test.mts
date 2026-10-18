@@ -7,6 +7,7 @@ import React, { act } from "react";
 import axios, { type AxiosResponse, type InternalAxiosRequestConfig } from "axios";
 import { CloudExecutor } from "../../lib/execution/CloudExecutor";
 import { ExecutionError, type ExecutionOptions, type ExecutionResult, type ProcessingMode } from "../../lib/execution/types";
+import { prepareMarkdown } from "../../lib/execution/document/markdownPolicy";
 import { handleClientError } from "../../lib/errorHandler";
 import type { PreviewResource } from "../../lib/preview/types";
 
@@ -71,7 +72,12 @@ async function main() {
         "@/lib/editPdfEngine": { resolveEditPdfEditorEngine: () => "legacy" },
     });
     const notifications = loadModule<ComponentModule>("components/ui/GlobalNotifications.tsx", framework).default;
+    // Preserve the original P5 HTTP/Blob fixture: bypass only the new admission
+    // check when explicitly testing a backend response. P12 cases enable the
+    // actual parsed policy so local rejection traverses the same mounted UI.
+    let realPolicy = false;
     const manager = loadModule<{ ExecutionManager: { run: (options: ExecutionOptions) => Promise<ExecutionResult> } }>("lib/execution/ExecutionManager.ts", {
+        "./document/markdownPolicy": { prepareMarkdown: (file: File, signal?: AbortSignal) => realPolicy ? prepareMarkdown(file, signal) : Promise.resolve() },
         "./ClientExecutor": { ClientExecutor: { isSupported: () => false, execute: () => { throw new Error("Unexpected device execution"); } } },
         "./CloudExecutor": { CloudExecutor },
         "./ExecutionSafetyGate": { ExecutionSafetyGate: { evaluate: () => ({ eligible: false, reason: "fixture" }) } },
@@ -96,6 +102,7 @@ async function main() {
     const errors: unknown[] = [];
     const executionErrors: unknown[] = [];
     const executions: ExecutionOptions[] = [];
+    let injectedFailure: Error | null = null;
     const previewRequests: Array<ReturnType<typeof deferred<PreviewResource>>> = [];
     const revoked: string[] = [];
     let previewSequence = 0;
@@ -115,6 +122,7 @@ async function main() {
     const actionButton = loadModule<ComponentModule>("components/pdf/PdfActionButton.tsx", {}).default;
     const workspace = loadModule<ComponentModule>("components/tools/MarkdownToPdfWorkspace.tsx", {
         ...framework,
+        "@/lib/execution/types": { ExecutionError },
         "@/app/(site)/[toolId]/ClientToolLayout": layout,
         "@/lib/errorHandler": { handleClientError: (error: unknown) => { errors.push(error); return handleClientError(error); } },
         "@/context/AuthContext": { useAuth: () => ({ requireAuth: (action: () => void) => {
@@ -125,6 +133,7 @@ async function main() {
         "@/components/pdf/PdfToolHero": { default: empty },
         "@/lib/execution/ExecutionManager": { ExecutionManager: { run: (options: ExecutionOptions) => {
             executions.push(options);
+            if (injectedFailure) return Promise.reject(injectedFailure);
             return manager.ExecutionManager.run(options).catch(error => { executionErrors.push(error); throw error; });
         } } },
         "@/components/shared/ProcessingModeSelector": { ProcessingModeSelector: ({ onChange }: { onChange: typeof modeChange }) => { modeChange = onChange; return null; } },
@@ -145,7 +154,8 @@ async function main() {
     }
     async function start() {
         navigation.length = requests.length = errors.length = executionErrors.length = authCallbacks.length = executions.length = previewRequests.length = revoked.length = 0;
-        delayAuth = delayPreview = false; showNotifications = true; fakeNow = 0; timers.clear();
+        delayAuth = delayPreview = realPolicy = false; injectedFailure = null;
+        showNotifications = true; fakeNow = 0; timers.clear();
         screen = workspace; root = createRoot(document.getElementById("root")!); await render();
     }
     async function file(value: File) { await act(async () => shared.setFile(value)); }
@@ -322,6 +332,76 @@ async function main() {
         ["A to B to A keeps the first A failure obsolete", async () => {
             await file(A); await file(B); await file(A); await rejectHTTP(0); await rejectHTTP(1); assertPending();
             assert.equal(errors.length, 0); await rejectHTTP(2); assertPolicy(); assert.equal(errors.length, 1);
+        }],
+        ...(["auto", "device", "cloud"] as const).flatMap(mode => ([B, C].map(input => [
+            `parsed local policy rejects ${input.name} in ${mode} before any HTTP or fallback`, async () => {
+                realPolicy = true;
+                await act(async () => modeChange(mode));
+                await file(input); assertPolicy();
+                assert.equal(requests.length, 0, "policy admission precedes every venue route");
+                assert.equal(executions.length, 1);
+                assert.equal(errors.length, 1);
+                assert.ok(executionErrors[0] instanceof ExecutionError);
+                assert.equal((executionErrors[0] as ExecutionError).code, "MARKDOWN_RESOURCE_FORBIDDEN");
+                assert.equal(toasts().length, 1);
+                await advance(7000); assertPolicy(); assert.equal(toasts().length, 0);
+                await clickSave(); assert.deepEqual(navigation, []);
+                assert.equal(executions.length, 1, "inline error and toast expiry must not execute again");
+            },
+        ] as [string, () => Promise<void>]))),
+        ["real local policy persists without a notification handler and never publishes A's result", async () => {
+            realPolicy = true; await file(A); await succeed(0); await clickSave();
+            assert.equal(await shared.downloadData!.blob.text(), "PDF:A"); navigation.length = 0;
+            showNotifications = false; await render(); await file(B); assertPolicy();
+            assert.equal(requests.length, 1, "forbidden B never adds an HTTP request");
+            assert.equal(document.querySelector("img"), null);
+            await advance(8000); assertPolicy(); assert.equal(toasts().length, 0);
+            await clickSave(); assert.deepEqual(navigation, []);
+        }],
+        ["new valid input clears actual local policy failure and reaches a current downloadable result", async () => {
+            realPolicy = true; await file(C); assertPolicy(); await file(A); assertPending();
+            await succeed(0, "PDF:current-valid"); assert.match(inlineText(), /PDF preview ready/);
+            assert.doesNotMatch(inlineText(), /Markdown resource blocked/); await clickSave();
+            assert.equal(await shared.downloadData!.blob.text(), "PDF:current-valid");
+            assert.equal(shared.downloadData!.fileName, "converted_A.pdf");
+            assert.equal(requests.length, 1); assert.equal(executions.length, 2);
+        }],
+        ["Remove and reupload start fresh parsed-policy generations without retaining successful bytes", async () => {
+            realPolicy = true; await file(B); assertPolicy(); await remove();
+            assert.equal(region(), null); assert.equal(shared.downloadData, null);
+            assert.deepEqual(navigation, ["/markdown-to-pdf"]);
+            await file(A); assertPending(); await succeed(0); assert.equal(save().disabled, false);
+            await remove(); await file(B); assertPolicy(); assert.equal(document.querySelector("img"), null);
+            assert.equal(requests.length, 1); assert.equal(executions.length, 3);
+        }],
+        ["superseded Markdown source read cannot publish output or replace a current local policy error", async () => {
+            realPolicy = true; const reading = deferred<string>();
+            const slow = new File(["# Slow prior file"], "slow.md"); slow.text = () => reading.promise;
+            await file(slow); assertPending(); await file(B); assertPolicy();
+            await act(async () => reading.resolve("# Slow prior file")); assertPolicy();
+            assert.equal(executions[0].signal?.aborted, true);
+            assert.equal(requests.length, 0); assert.equal(errors.length, 1);
+        }],
+        ["unmount cancels the actual Markdown source read and cannot publish a late failure", async () => {
+            realPolicy = true; const reading = deferred<string>();
+            const slow = new File(["# Slow file"], "slow.md"); slow.text = () => reading.promise;
+            await file(slow); assertPending(); screen = empty; await render();
+            assert.equal(executions[0].signal?.aborted, true);
+            await act(async () => reading.resolve("![x](../image.png)"));
+            assert.equal(region(), null); assert.equal(errors.length, 0); assert.equal(requests.length, 0);
+        }],
+        ["delayed authentication cannot publish A after a real local policy rejection", async () => {
+            realPolicy = true; await file(A); await succeed(0); delayAuth = true; await clickSave();
+            await file(B); assertPolicy(); await act(async () => authCallbacks[0]());
+            assertPolicy(); assert.deepEqual(navigation, []); assert.equal(requests.length, 1);
+        }],
+        ["an arbitrary top-level policy code cannot impersonate a typed trusted local failure", async () => {
+            injectedFailure = Object.assign(new Error(policy.message), { code: policy.code });
+            await file(A);
+            assert.match(inlineText(), /Markdown conversion failed/);
+            assert.doesNotMatch(inlineText(), /Markdown resource blocked|\/private|internal\.invalid|diagnostic/);
+            assert.equal(save().disabled, true); assert.equal(shared.downloadData, null);
+            assert.equal(requests.length, 0);
         }],
     ];
     let failed = 0;
