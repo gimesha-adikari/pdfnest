@@ -2,7 +2,7 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { UploadCloud, Lock, Loader2 } from "lucide-react";
 import PasswordField from "@/components/ui/PasswordField";
-import { inspectPdf, prepareEncryptedPdf } from "@/lib/pdf/localPreparation";
+import { inspectPdf, isPdfCandidate, prepareEncryptedPdf, type PdfInputPolicy } from "@/lib/pdf/localPreparation";
 import { ExecutionError } from "@/lib/execution/types";
 
 interface PdfUploaderProps {
@@ -12,6 +12,7 @@ interface PdfUploaderProps {
     accept?: string;
     multiple?: boolean;
     bypassEncryptionCheck?: boolean;
+    inputPolicy?: PdfInputPolicy;
 }
 
 interface UploadQueue {
@@ -27,6 +28,7 @@ export default function PdfUploader({
                                         accept = "*/*",
                                         multiple = false,
                                         bypassEncryptionCheck = false,
+                                        inputPolicy = "strict",
                                     }: PdfUploaderProps) {
     const [queue, setQueue] = useState<UploadQueue | null>(null);
     const [password, setPassword] = useState("");
@@ -47,7 +49,7 @@ export default function PdfUploader({
         const processed = [...pending.processed];
         while (remaining.length && !controller.signal.aborted) {
             const file = remaining[0];
-            if (file.type === "application/pdf" && !bypassEncryptionCheck && await inspectPdf(file, controller.signal)) {
+            if (!bypassEncryptionCheck && (inputPolicy === "repair" || await isPdfCandidate(file, controller.signal)) && await inspectPdf(file, controller.signal, inputPolicy)) {
                 if (active.current === controller) setQueue({ remaining, processed, controller });
                 return;
             }
@@ -58,7 +60,7 @@ export default function PdfUploader({
         active.current = null;
         setQueue(null);
         onFilesAccepted(processed);
-    }, [bypassEncryptionCheck, onFilesAccepted]);
+    }, [bypassEncryptionCheck, inputPolicy, onFilesAccepted]);
 
     const handleFiles = useCallback(async (files: File[]) => {
         if (!files.length || active.current) return;

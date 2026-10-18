@@ -1,6 +1,7 @@
 import { test as base, expect, type Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
+import { repairablePdf } from "./helpers/repairablePdf";
 
 const fixtures = path.resolve(process.cwd(), "tests/fixtures");
 const plain = fs.readFileSync(path.join(fixtures, "normal_text.pdf"));
@@ -252,5 +253,88 @@ test("overlapping file-change submissions keep the first batch intact", async ({
     }, [...plain]);
     await selected(page, ["first-submission.pdf"]);
     await expect(page.getByText(/duplicate-submission/)).toHaveCount(0);
+    expect(audit.uploads).toEqual([]);
+});
+
+
+test("R1 Repair admits a genuinely repairable damaged PDF without preparing it on a server", async ({ page, audit }) => {
+    await page.goto("/repair-pdf");
+    await page.locator('input[type="file"]').setInputFiles({ name: "repairable.pdf", mimeType: "application/pdf", buffer: Buffer.from(repairablePdf()) });
+    await expect(page).toHaveURL(/\/repair-pdf\/workspace/);
+    expect(audit.uploads).toEqual([]);
+});
+
+test("R1 the same damaged PDF is rejected by a normal tool", async ({ page, audit }) => {
+    await page.goto("/merge-pdf");
+    await page.locator('input[type="file"]').setInputFiles({ name: "repairable.pdf", mimeType: "application/pdf", buffer: Buffer.from(repairablePdf()) });
+    await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText("corrupt or invalid");
+    await expect(page).toHaveURL(/\/merge-pdf$/);
+    expect(audit.uploads).toEqual([]);
+});
+
+for (const name of ["fake.pdf", "arbitrary.txt"]) {
+    test(`R1 Repair rejects arbitrary non-PDF content: ${name}`, async ({ page, audit }) => {
+        await page.goto("/repair-pdf");
+        await page.locator('input[type="file"]').setInputFiles({ name, mimeType: "text/plain", buffer: Buffer.from("not a PDF") });
+        await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText("not a valid PDF");
+        await expect(page).toHaveURL(/\/repair-pdf$/);
+        expect(audit.uploads).toEqual([]);
+    });
+}
+
+test("R1 encrypted Repair input with missing MIME retains local password retry", async ({ page, audit }) => {
+    await page.goto("/repair-pdf");
+    await page.locator('input[type="file"]').setInputFiles({ name: "locked.pdf", mimeType: "", buffer: encrypted });
+    await unlock(page, wrongPassword);
+    await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText("Incorrect password");
+    await unlock(page);
+    await expect(page).toHaveURL(/\/repair-pdf\/workspace/);
+    expect(audit.uploads).toEqual([]);
+});
+
+for (const mimeType of ["", "application/x-pdf", "text/plain"]) {
+    test(`R2 encrypted content requests local decryption despite MIME ${mimeType || "empty"}`, async ({ page, audit }) => {
+        await page.goto("/merge-pdf");
+        await page.locator('input[type="file"]').setInputFiles({ name: "protected.bin", mimeType, buffer: encrypted });
+        await expect(page.getByPlaceholder("Enter PDF Password")).toBeVisible();
+        await expect(page).toHaveURL(/\/merge-pdf$/);
+        await unlock(page);
+        await selected(page, ["protected.bin"]);
+        expect(audit.uploads).toEqual([]);
+    });
+}
+
+test("R2 invalid .pdf filename cannot bypass validation with missing MIME", async ({ page, audit }) => {
+    await page.goto("/merge-pdf");
+    await page.locator('input[type="file"]').setInputFiles({ name: "invalid.pdf", mimeType: "", buffer: Buffer.from("arbitrary data") });
+    await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText("not a valid PDF");
+    await expect(page).toHaveURL(/\/merge-pdf$/);
+    expect(audit.uploads).toEqual([]);
+});
+
+test("R2 unencrypted PDF with empty MIME keeps upload compatibility", async ({ page, audit }) => {
+    await page.goto("/merge-pdf");
+    await page.locator('input[type="file"]').setInputFiles({ name: "plain.pdf", mimeType: "", buffer: plain });
+    await selected(page, ["plain.pdf"]);
+    expect(audit.uploads).toEqual([]);
+});
+
+test("R2 drag-and-drop encrypted PDF with empty MIME is inspected locally", async ({ page, audit }) => {
+    await page.goto("/merge-pdf");
+    const transfer = await page.evaluateHandle(bytes => {
+        const data = new DataTransfer();
+        data.items.add(new File([new Uint8Array(bytes)], "dropped.bin", { type: "" }));
+        return data;
+    }, [...encrypted]);
+    await page.locator('input[type="file"]').locator("..").dispatchEvent("drop", { dataTransfer: transfer });
+    await unlock(page);
+    await selected(page, ["dropped.bin"]);
+    expect(audit.uploads).toEqual([]);
+});
+
+test("R2 shared uploader preserves normal Markdown input behavior", async ({ page, audit }) => {
+    await page.goto("/markdown-to-pdf");
+    await page.locator('input[type="file"]').setInputFiles({ name: "document.md", mimeType: "text/markdown", buffer: Buffer.from("# Synthetic Markdown") });
+    await expect(page).toHaveURL(/\/markdown-to-pdf\/workspace/);
     expect(audit.uploads).toEqual([]);
 });
