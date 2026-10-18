@@ -177,7 +177,7 @@ export default function ClientToolLayout({
     }, [currentToolHref, getToolByHref, isLoadingTools, toolId]);
 
     const setFile = useCallback((nextFile: File | null) => {
-        if (toolId === "markdown-to-pdf") {
+        if (toolId === "markdown-to-pdf" || toolId === "code-to-pdf") {
             setDownloadData(null);
             setConversionGeneration(null);
         }
