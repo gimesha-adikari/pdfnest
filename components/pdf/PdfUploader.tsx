@@ -1,38 +1,9 @@
 "use client";
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import { UploadCloud, Lock, Loader2 } from "lucide-react";
-import { uploadAndDownloadFile } from "@/lib/api";
 import PasswordField from "@/components/ui/PasswordField";
-const checkEncryption = async (file: File): Promise<boolean> => {
-    let loadingTask: any = null;
-    let pdfDoc: any = null;
-    try {
-        const pdfjs = await import("pdfjs-dist");
-        pdfjs.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
-
-        const arrayBuffer = await file.arrayBuffer();
-        loadingTask = pdfjs.getDocument({ data: arrayBuffer });
-        pdfDoc = await loadingTask.promise;
-        return false;
-    } catch (error: any) {
-        if (error.name === "InvalidPDFException" || error.message.includes("Invalid Root")) {
-            console.warn("File appears corrupted, skipping encryption check.");
-            return false;
-        }
-
-        if (error.name === "PasswordException") {
-            return true;
-        }
-        throw error;
-    } finally {
-        if (pdfDoc && typeof pdfDoc.destroy === "function") {
-            try { pdfDoc.destroy(); } catch {}
-        }
-        if (loadingTask && typeof loadingTask.destroy === "function") {
-            try { loadingTask.destroy(); } catch {}
-        }
-    }
-};
+import { inspectPdf, prepareEncryptedPdf } from "@/lib/pdf/localPreparation";
+import { ExecutionError } from "@/lib/execution/types";
 
 interface PdfUploaderProps {
     onFilesAccepted: (files: File[]) => void;
@@ -46,6 +17,7 @@ interface PdfUploaderProps {
 interface UploadQueue {
     remaining: File[];
     processed: File[];
+    controller: AbortController;
 }
 
 export default function PdfUploader({
@@ -60,38 +32,52 @@ export default function PdfUploader({
     const [password, setPassword] = useState("");
     const [isUnlocking, setIsUnlocking] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const handleFiles = useCallback(
-        async (files: File[]) => {
-            if (files.length === 0) return;
+    const active = useRef<AbortController | null>(null);
+    const submitting = useRef(false);
+    const [isInspecting, setIsInspecting] = useState(false);
+    useEffect(() => () => {
+        active.current?.abort();
+        active.current = null;
+    }, []);
 
-            const remaining: File[] = [];
-            const processed: File[] = [];
-
-            for (const currentFile of files) {
-                if (currentFile.type === "application/pdf" && !bypassEncryptionCheck) {
-                    try {
-                        const isEncrypted = await checkEncryption(currentFile);
-                        if (isEncrypted) {
-                            remaining.push(currentFile);
-                            continue;
-                        }
-                    } catch (err) {
-                        console.error("Encryption check failed:", err);
-                    }
-                }
-                processed.push(currentFile);
+    // Consume the original queue in order, pausing at each protected document.
+    const advance = useCallback(async (pending: UploadQueue) => {
+        const { controller } = pending;
+        const remaining = [...pending.remaining];
+        const processed = [...pending.processed];
+        while (remaining.length && !controller.signal.aborted) {
+            const file = remaining[0];
+            if (file.type === "application/pdf" && !bypassEncryptionCheck && await inspectPdf(file, controller.signal)) {
+                if (active.current === controller) setQueue({ remaining, processed, controller });
+                return;
             }
+            processed.push(file);
+            remaining.shift();
+        }
+        if (active.current !== controller || controller.signal.aborted) return;
+        active.current = null;
+        setQueue(null);
+        onFilesAccepted(processed);
+    }, [bypassEncryptionCheck, onFilesAccepted]);
 
-            if (remaining.length === 0) {
-                onFilesAccepted(processed);
-            } else {
-                setQueue({ remaining, processed });
-                setError(null);
-                setPassword("");
+    const handleFiles = useCallback(async (files: File[]) => {
+        if (!files.length || active.current) return;
+        const controller = new AbortController();
+        active.current = controller;
+        setIsInspecting(true);
+        setError(null);
+        setPassword("");
+        try {
+            await advance({ remaining: files, processed: [], controller });
+        } catch (error) {
+            if (active.current === controller && !controller.signal.aborted) {
+                active.current = null;
+                setError(error instanceof ExecutionError ? error.message : "Local PDF preparation failed. Please retry.");
             }
-        },
-        [onFilesAccepted, bypassEncryptionCheck]
-    );
+        } finally {
+            if (!controller.signal.aborted) setIsInspecting(false);
+        }
+    }, [advance]);
 
     const handleChange = useCallback(
         (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -120,46 +106,38 @@ export default function PdfUploader({
         []
     );
     const handleUnlock = useCallback(async () => {
-        if (!queue || queue.remaining.length === 0 || !password) return;
+        if (!queue || !password || submitting.current || queue.controller.signal.aborted) return;
+        const { controller } = queue;
+        submitting.current = true;
         setIsUnlocking(true);
         setError(null);
-
-        const currentLockedFile = queue.remaining[0];
-
         try {
-            const formData = new FormData();
-            formData.append("file", currentLockedFile);
-            formData.append("password", password);
-
-            const decryptedBlob = await uploadAndDownloadFile("/api/security/unlock", formData);
-
-            const unlockedFile = new File([decryptedBlob], currentLockedFile.name, {
-                type: "application/pdf"
-            });
-
-            (unlockedFile as any).originalPassword = password;
-
-            const nextProcessed = [...queue.processed, unlockedFile];
-            const nextRemaining = queue.remaining.slice(1);
-
+            const unlocked = await prepareEncryptedPdf(queue.remaining[0], password, controller.signal);
+            if (active.current !== controller) return;
             setPassword("");
-            if (nextRemaining.length === 0) {
-                onFilesAccepted(nextProcessed);
-                setQueue(null);
-            } else {
-                setQueue({ remaining: nextRemaining, processed: nextProcessed });
+            await advance({ ...queue, remaining: queue.remaining.slice(1), processed: [...queue.processed, unlocked] });
+        } catch (error) {
+            if (active.current === controller && !controller.signal.aborted) {
+                setPassword("");
+                setError(error instanceof ExecutionError ? error.message : "Local decryption failed. Please retry or cancel.");
             }
-        } catch (err) {
-            setError("Incorrect password or corrupted file.");
         } finally {
-            setIsUnlocking(false);
+            if (!controller.signal.aborted) {
+                submitting.current = false;
+                setIsUnlocking(false);
+            }
         }
-    }, [queue, password, onFilesAccepted]);
+    }, [queue, password, advance]);
 
     const handleCancelUnlock = useCallback(() => {
+        active.current?.abort();
+        active.current = null;
+        submitting.current = false;
         setQueue(null);
         setPassword("");
         setError(null);
+        setIsUnlocking(false);
+        setIsInspecting(false);
     }, []);
 
     const activeLockedFile = queue?.remaining[0];
@@ -172,11 +150,11 @@ export default function PdfUploader({
                 </div>
 
                 <p className="text-sm font-semibold text-[var(--foreground)] text-center mb-1">
-                    Protected Document Detected {queue.remaining.length > 1 && `(1 of ${queue.remaining.length})`}
+                    Protected Document Detected
                 </p>
 
                 <p className="text-xs text-[var(--muted)] text-center mb-4 max-w-sm">
-                    &quot;{activeLockedFile.name}&quot; is encrypted. Provide the document password to continue.
+                    &quot;{activeLockedFile.name}&quot; is encrypted. Provide the password to decrypt it locally in your browser.
                 </p>
 
                 <div className="w-full max-w-xs flex flex-col gap-2.5 pointer-events-auto">
@@ -194,7 +172,7 @@ export default function PdfUploader({
                     />
 
                     {error && (
-                        <span className="text-[11px] text-rose-500 text-center font-mono font-semibold">
+                        <span role="alert" className="text-[11px] text-rose-500 text-center font-mono font-semibold">
                             {error}
                         </span>
                     )}
@@ -234,7 +212,13 @@ export default function PdfUploader({
             onDragOver={handleDragOver}
             className="relative border border-dashed rounded-xl transition-all outline-none border-[var(--border)] bg-[var(--surface-card)] hover:border-[var(--accent)]/50 hover:bg-[var(--surface-hover)] overflow-hidden group shadow-sm"
         >
+            {error && <p role="alert" className="p-3 text-sm text-rose-500">{error}</p>}
+            {isInspecting && <div className="relative z-30 p-3 text-center text-sm" role="status">
+                Checking PDF locally… <button type="button" onClick={handleCancelUnlock}>Cancel All</button>
+            </div>}
             <input
+                disabled={isInspecting}
+                aria-label={title}
                 type="file"
                 accept={accept}
                 multiple={multiple}
