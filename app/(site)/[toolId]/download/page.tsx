@@ -14,10 +14,10 @@ import RepositoryAnalyzerDownload from "@/components/tools/RepositoryAnalyzerDow
 export default function SharedDownloadPage() {
     const router = useRouter();
     const { toolId, file, downloadData: storedDownload, conversionGeneration, setFile, setDownloadData } = useSharedTool();
-    // Markdown results must carry the current input and execution identity.
+    // Markdown and Code results must carry the current input and execution identity.
     // Other tool download contracts are deliberately unchanged.
     const source = storedDownload?.source;
-    const downloadData = toolId !== "markdown-to-pdf" || Boolean(
+    const downloadData = (toolId !== "markdown-to-pdf" && toolId !== "code-to-pdf") || Boolean(
         source && file && conversionGeneration &&
         source.file === file && source.generation === conversionGeneration
     ) ? storedDownload : null;

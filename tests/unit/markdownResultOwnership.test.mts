@@ -242,7 +242,7 @@ async function main() {
             },
         ] as [string, () => Promise<void>]),
         ["other tools keep their existing download contract", async () => {
-            currentToolId = "code-to-pdf"; screen = download; await render();
+            currentToolId = "rotate"; screen = download; await render();
             await act(async () => shared.setDownloadData({ blob: new Blob(["other"]), fileName: "other.pdf" }));
             assert.match(document.body.textContent!, /Task completed successfully/);
         }],
