@@ -21,3 +21,20 @@ state = toggleStudioPageSelection(pages, state.selected, "p3", false, state.anch
 assert.equal(serializeStudioPageSelection(state.selected, pages), "2,4-5");
 assert.deepEqual([...pruneStudioPageSelection(new Set(["p1", "gone"]), pages)], ["p1"]);
 console.log("Studio V2 page selection tests passed: parser, stable IDs, click, shift range, canonical sync, and pruning.");
+
+async function layoutSelectionRegression() {
+  const selection = await import("@/components/studio-v2/studioV2PageSelection");
+  assert.equal(typeof selection.pageToKeepVisibleAfterLayoutChange, "function", "page reordering must preserve the selected logical page before visible-page observation");
+  const keep = selection.pageToKeepVisibleAfterLayoutChange;
+  assert.equal(keep(["p1", "p2", "p3", "p4"], ["p1", "p2", "p4", "p3"], "p4"), "p4");
+  assert.equal(keep(["p1", "p2", "p4", "p3"], ["p1", "p4", "p2", "p3"], "p4"), "p4", "repeated Earlier must act on the same page");
+  assert.equal(keep(["p1", "p4", "p2", "p3"], ["p4", "p1", "p2", "p3"], "p4"), "p4");
+  assert.equal(keep(["p1", "p2", "p3"], ["p1", "p3"], "p3"), "p3", "keep the explicit next selection after deletion");
+  assert.equal(keep(["p1", "p2"], ["p1", "p2"], "p2"), null, "normal scrolling must not be recentered on every selection change");
+  assert.equal(keep(null, ["p1", "p2"], "p2"), null, "initial navigation keeps its existing scroll contract");
+  assert.equal(keep(["p1", "p2"], ["p1"], "p2"), null, "never scroll to a deleted page");
+  assert.equal(keep(["p1"], ["new1"], "p1"), null, "materialization must not revive old PageIDs");
+  assert.equal(keep(["p1"], ["p1", "p2"], null), null);
+  console.log("Studio page layout regression passed: stable PageID across reorder/deletion without scroll locking.");
+}
+void layoutSelectionRegression();

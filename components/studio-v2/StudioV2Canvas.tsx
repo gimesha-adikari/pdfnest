@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import {
   Hand,
   Minus,
@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import { pageToKeepVisibleAfterLayoutChange } from "./studioV2PageSelection";
 import { StudioV2OverlayDraft, StudioV2RedactionDraftBox } from "./types";
 import { StudioV2InteractiveOverlay } from "./StudioV2InteractiveOverlay";
 import { VDMPageDescriptorDTO, StudioMarkupAction, StudioMarkupBox, StudioVDMDTO } from "@/lib/studio-v2/api";
@@ -728,6 +729,21 @@ export const StudioV2Canvas: React.FC<StudioV2CanvasProps> = ({
   });
   const isDraggingRef = useRef<boolean>(false);
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  const previousPageIdsRef = useRef<readonly string[] | null>(null);
+  useLayoutEffect(() => {
+    const nextPageIds = vdm?.pages.map((page) => page.page_id) ?? [];
+    const target = pageToKeepVisibleAfterLayoutChange(
+      previousPageIdsRef.current, nextPageIds, selectedPageId ?? null,
+    );
+    previousPageIdsRef.current = nextPageIds;
+    if (!target) return;
+    // Recenter before passive visibility observers run. Ordinary user scrolling
+    // does not change page order and must remain free to update selection.
+    const page = Array.from(viewportRef.current?.querySelectorAll<HTMLElement>("[data-page-id]") ?? [])
+      .find((element) => element.dataset.pageId === target);
+    page?.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+  }, [selectedPageId, vdm?.pages]);
 
   const reportVisiblePage = useCallback(() => {
     const viewport = viewportRef.current;

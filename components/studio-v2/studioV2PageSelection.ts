@@ -60,3 +60,15 @@ export function pruneStudioPageSelection(selected: Set<string>, pages: VDMPageDe
   const valid = new Set(pages.map((page) => page.page_id));
   return new Set([...selected].filter((id) => valid.has(id)));
 }
+
+/** Layout mutations must not let the old viewport select a different page. */
+export function pageToKeepVisibleAfterLayoutChange(
+  previousPageIds: readonly string[] | null,
+  nextPageIds: readonly string[],
+  selectedPageId: string | null,
+): string | null {
+  if (!previousPageIds || !selectedPageId || !nextPageIds.includes(selectedPageId)) return null;
+  const unchanged = previousPageIds.length === nextPageIds.length &&
+    previousPageIds.every((id, index) => id === nextPageIds[index]);
+  return unchanged ? null : selectedPageId;
+}
