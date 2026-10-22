@@ -12,6 +12,8 @@ export interface R2UploadItem extends FileLike {
     method: string;
     headers?: Record<string, string>;
     publicUrl?: string;
+    withCredentials?: boolean;
+    with_credentials?: boolean;
 }
 
 export interface R2PresignResponse {
@@ -162,6 +164,7 @@ export async function requestR2PresignedUploads(
                 (item as any).public_url ||
                 (item as any).downloadUrl ||
                 (item as any).download_url,
+            withCredentials: (item.withCredentials ?? item.with_credentials) === true,
             name: item.name,
             size: item.size,
             type: item.type,
@@ -200,6 +203,7 @@ export function uploadFileToPresignedUrl(
         }
 
         xhr.open(target.method || "PUT", target.uploadUrl, true);
+        xhr.withCredentials = target.withCredentials ?? false;
 
         Object.entries(target.headers || {}).forEach(([name, value]) => {
             xhr.setRequestHeader(name, value);
