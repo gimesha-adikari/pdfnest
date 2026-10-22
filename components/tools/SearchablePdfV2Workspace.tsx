@@ -17,12 +17,12 @@ import {
     RefreshCw,
     RotateCcw,
     ShieldCheck,
-    UploadCloud,
     X,
     XCircle,
 } from "lucide-react";
 
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
+import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import OcrLanguagePicker from "@/components/tools/OcrLanguagePicker";
 import {
@@ -219,7 +219,6 @@ export default function SearchablePdfV2Workspace() {
     const [isDownloading, setIsDownloading] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const seededFileRef = useRef<File | null>(null);
-    const initialBatchRef = useRef<File[] | null>(null);
     const pollingJobRef = useRef<string | null>(null);
     const cancelRequestedRef = useRef(false);
     const resultLoadedRef = useRef<string | null>(null);
@@ -261,18 +260,22 @@ export default function SearchablePdfV2Workspace() {
     }, [artifact]);
 
     useEffect(() => {
-        if (!file || seededFileRef.current === file) return;
-        seededFileRef.current = file;
-        const handoffBatch = (file as FileWithInitialBatch).initialBatch;
-        const initialBatch = initialBatchRef.current || handoffBatch || [file];
-        initialBatchRef.current = null;
-        const supported = initialBatch.filter((item) => isSupportedImage(item, selectedFormats));
-        const nextPages = supported.map(makePage);
-        setPages(nextPages);
-        setState(nextPages.length > 0 ? "FILES_READY" : "IDLE");
-        if (supported.length !== initialBatch.length) {
-            setError("One or more files were skipped because their format is not available.");
-        }
+        // Ignore a superseded landing-page handoff before allocating previews
+        // or publishing its asynchronously accepted input into workspace state.
+        let current = true;
+        void Promise.resolve().then(() => {
+            if (!current || !file || seededFileRef.current === file) return;
+            seededFileRef.current = file;
+            const initialBatch = (file as FileWithInitialBatch).initialBatch || [file];
+            const supported = initialBatch.filter((item) => isSupportedImage(item, selectedFormats));
+            const nextPages = supported.map(makePage);
+            setPages(nextPages);
+            setState(nextPages.length > 0 ? "FILES_READY" : "IDLE");
+            if (supported.length !== initialBatch.length) {
+                setError("One or more files were skipped because their format is not available.");
+            }
+        });
+        return () => { current = false; };
     }, [file, selectedFormats]);
 
     const loadCapabilities = useCallback(async () => {
@@ -406,14 +409,13 @@ export default function SearchablePdfV2Workspace() {
         setPages((current) => [...current, ...nextPages]);
         setState("FILES_READY");
         setError(supported.length !== incoming.length ? "Some files were skipped because their format is not available." : null);
-        if (!file && supported.length > 1) initialBatchRef.current = supported;
-        setFile(file || supported[0]);
+        // Accept only the exact File objects inspected by PdfUploader.
+        // Preparation is never inferred from image MIME types or extensions.
+        if (!file) {
+            seededFileRef.current = supported[0];
+            setFile(supported[0]);
+        }
     }, [active, file, selectedFormats, setFile]);
-
-    const handleDrop = useCallback((event: React.DragEvent<HTMLDivElement>) => {
-        event.preventDefault();
-        addFiles(Array.from(event.dataTransfer.files));
-    }, [addFiles]);
 
     const handleDragEnd = useCallback((event: DragEndEvent) => {
         const { active: activeItem, over } = event;
@@ -430,9 +432,12 @@ export default function SearchablePdfV2Workspace() {
         if (active) return;
         const page = pages.find((item) => item.id === id);
         if (page) URL.revokeObjectURL(page.previewUrl);
-        setPages((current) => current.filter((item) => item.id !== id));
-        setState(pages.length > 1 ? "FILES_READY" : "IDLE");
-        if (pages.length === 1) setFile(null);
+        const remaining = pages.filter((item) => item.id !== id);
+        setPages(remaining);
+        setState(remaining.length > 0 ? "FILES_READY" : "IDLE");
+        const nextFile = remaining[0]?.file || null;
+        seededFileRef.current = nextFile;
+        setFile(nextFile);
     }, [active, pages, setFile]);
 
     const movePage = useCallback((index: number, direction: "up" | "down") => {
@@ -568,9 +573,17 @@ export default function SearchablePdfV2Workspace() {
 
                     {displayedFileNames.length > 0 && jobId && pages.length === 0 && <div className="mt-6 rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-4 text-sm" role="status" aria-live="polite"><p className="font-semibold text-[color:var(--foreground)]">Resuming your searchable PDF job</p><p className="mt-1 text-xs text-[color:var(--muted)]">The server is authoritative. Image bytes are not stored in the browser.</p><p className="mt-3 text-xs text-[color:var(--muted)]">{displayedFileNames.join(" · ")}</p></div>}
 
-                    {!active && !jobId && <div onDrop={handleDrop} onDragOver={(event) => event.preventDefault()} className="mt-7 rounded-2xl border border-dashed border-indigo-500/40 bg-indigo-500/5 p-7 text-center sm:p-10"><UploadCloud className="mx-auto text-indigo-500" size={30} /><p className="mt-3 text-sm font-semibold text-[color:var(--foreground)]">Drop images here</p><p className="mt-1 text-xs text-[color:var(--muted)]">Add multiple pages at once. You choose the order.</p><input ref={inputRef} type="file" accept={selectedFormats.length > 0 ? selectedFormats.join(",") : "image/jpeg,image/png,image/webp"} multiple className="sr-only" onChange={(event) => { addFiles(Array.from(event.target.files || [])); event.target.value = ""; }} /><button type="button" onClick={() => inputRef.current?.click()} className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white hover:bg-indigo-700"><ImagePlus size={16} /> Choose images</button></div>}
+                    {!active && !jobId && <div className="mt-7"><PdfUploader
+                        inputRef={inputRef}
+                        onFilesAccepted={addFiles}
+                        title={pages.length ? "Add more images" : "Drop images here"}
+                        description="Select supported images. You choose the page order."
+                        accept={selectedFormats.length > 0 ? selectedFormats.join(",") : "image/jpeg,image/png,image/webp"}
+                        multiple
+                        protectedFileHandling="fail-closed"
+                    /></div>}
 
-                    {pages.length > 0 && !active && !jobId && <div className="mt-7"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-sm font-bold text-[color:var(--foreground)]">Pages in order</h2><p className="mt-1 text-xs text-[color:var(--muted)]">Drag a page, or use Up and Down for keyboard-friendly reordering.</p></div><><input ref={inputRef} type="file" accept={selectedFormats.length > 0 ? selectedFormats.join(",") : "image/jpeg,image/png,image/webp"} multiple className="sr-only" onChange={(event) => { addFiles(Array.from(event.target.files || [])); event.target.value = ""; }} /><button type="button" onClick={() => inputRef.current?.click()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[color:var(--border)] px-3 py-2 text-xs font-semibold hover:border-indigo-500"><ImagePlus size={15} /> Add more</button></></div><DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}><SortableContext items={pages.map((page) => page.id)} strategy={verticalListSortingStrategy}><ol aria-label="Selected image pages" className="mt-4 grid gap-3">{pages.map((page, index) => <SortablePageCard key={page.id} page={page} index={index} disabled={active} onRemove={() => removePage(page.id)} onMove={(direction) => movePage(index, direction)} />)}</ol></SortableContext></DndContext></div>}
+                    {pages.length > 0 && !active && !jobId && <div className="mt-7"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-sm font-bold text-[color:var(--foreground)]">Pages in order</h2><p className="mt-1 text-xs text-[color:var(--muted)]">Drag a page, or use Up and Down for keyboard-friendly reordering.</p></div><><button type="button" onClick={() => inputRef.current?.click()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[color:var(--border)] px-3 py-2 text-xs font-semibold hover:border-indigo-500"><ImagePlus size={15} /> Add more</button></></div><DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}><SortableContext items={pages.map((page) => page.id)} strategy={verticalListSortingStrategy}><ol aria-label="Selected image pages" className="mt-4 grid gap-3">{pages.map((page, index) => <SortablePageCard key={page.id} page={page} index={index} disabled={active} onRemove={() => removePage(page.id)} onMove={(direction) => movePage(index, direction)} />)}</ol></SortableContext></DndContext></div>}
 
                     {!active && !jobId && <p className="mt-5 text-center text-xs text-[color:var(--muted)]">You can process this document as a guest. Sign in if you want account-based access to your history.</p>}
 
