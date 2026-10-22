@@ -18,6 +18,10 @@ export default function GoogleLoginButton({
                                           }: GoogleLoginButtonProps) {
     const { refreshSession } = useAuth();
 
+    if (process.env.NODE_ENV === "development" || !process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) {
+        return null;
+    }
+
     const handleGoogleSuccess = async (credentialResponse: any) => {
         try {
             if (!policyAccepted) {
