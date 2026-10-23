@@ -6,6 +6,7 @@ import { fetchJson } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/lib/notify";
 import { safeRedirectPath } from "@/lib/safeRedirect";
+import { isGoogleOAuthConfigured } from "@/lib/googleOAuth";
 
 interface GoogleLoginButtonProps {
     onSuccessCallback?: () => void;
@@ -18,7 +19,7 @@ export default function GoogleLoginButton({
                                           }: GoogleLoginButtonProps) {
     const { refreshSession } = useAuth();
 
-    if (process.env.NODE_ENV === "development" || !process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) {
+    if (!isGoogleOAuthConfigured(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID)) {
         return null;
     }
 

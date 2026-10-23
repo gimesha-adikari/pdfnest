@@ -5,6 +5,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/context/AuthContext";
 import { GoogleOAuthProvider } from "@react-oauth/google";
+import { isGoogleOAuthConfigured } from "@/lib/googleOAuth";
 import { WorkflowProvider } from "@/context/WorkflowContext";
 import { BackendHealthProvider } from "@/context/BackendHealthContext";
 import { getSiteUrl } from "@/lib/siteUrl";
@@ -49,7 +50,7 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-    const googleAuthEnabled = process.env.NODE_ENV !== "development" && Boolean(googleClientId);
+    const googleAuthEnabled = isGoogleOAuthConfigured(googleClientId);
 
     const appProviders = (
         <BackendHealthProvider>
