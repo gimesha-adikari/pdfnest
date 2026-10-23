@@ -12,7 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { pageToKeepVisibleAfterLayoutChange } from "./studioV2PageSelection";
+import { mostVisibleStudioPage, pageToKeepVisibleAfterLayoutChange } from "./studioV2PageSelection";
 import { StudioV2OverlayDraft, StudioV2RedactionDraftBox } from "./types";
 import { StudioV2InteractiveOverlay } from "./StudioV2InteractiveOverlay";
 import { VDMPageDescriptorDTO, StudioMarkupAction, StudioMarkupBox, StudioVDMDTO } from "@/lib/studio-v2/api";
@@ -648,7 +648,7 @@ interface StudioV2CanvasProps {
   vdm?: StudioVDMDTO | null;
   selectedPageId?: string | null;
   scrollToPageId?: string | null;
-  onPageScrollComplete?: () => void;
+  onPageScrollComplete?: (pageId: string) => void;
   onVisiblePageChange?: (pageId: string) => void;
   zoomScale: number;
   isPanning: boolean;
@@ -764,10 +764,9 @@ export const StudioV2Canvas: React.FC<StudioV2CanvasProps> = ({
           centerDistance: Math.abs((bounds.top + bounds.bottom) / 2 - viewportCenter),
         };
       })
-      .filter((page): page is { pageId: string; overlap: number; centerDistance: number } => Boolean(page.pageId) && page.overlap > 0)
-      .sort((left, right) => right.overlap - left.overlap || left.centerDistance - right.centerDistance);
+      .filter((page): page is { pageId: string; overlap: number; centerDistance: number } => Boolean(page.pageId));
 
-    const pageId = visiblePages[0]?.pageId;
+    const pageId = mostVisibleStudioPage(visiblePages);
     if (pageId) onVisiblePageChange(pageId);
   }, [onVisiblePageChange]);
 
@@ -791,7 +790,7 @@ export const StudioV2Canvas: React.FC<StudioV2CanvasProps> = ({
 
     page.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
     const frame = window.requestAnimationFrame(() => {
-      reportVisiblePage();
+      onVisiblePageChange?.(scrollToPageId);
     });
     const settleTimer = window.setTimeout(() => {
       const settledPage = Array.from(viewport.querySelectorAll<HTMLElement>("[data-page-id]")).find(
@@ -799,14 +798,14 @@ export const StudioV2Canvas: React.FC<StudioV2CanvasProps> = ({
       );
       if (!settledPage) return;
       settledPage.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
-      reportVisiblePage();
-      onPageScrollComplete?.();
+      onVisiblePageChange?.(scrollToPageId);
+      onPageScrollComplete?.(scrollToPageId);
     }, 180);
     return () => {
       window.cancelAnimationFrame(frame);
       window.clearTimeout(settleTimer);
     };
-  }, [onPageScrollComplete, pages, reportVisiblePage, scrollToPageId]);
+  }, [onPageScrollComplete, onVisiblePageChange, pages, scrollToPageId]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (isPanning || e.button === 1) {

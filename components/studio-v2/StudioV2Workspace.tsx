@@ -8,6 +8,7 @@ import { StudioV2BottomSheet } from "./StudioV2BottomSheet";
 import { SlidersHorizontal } from "lucide-react";
 import { StudioV2PageNavigator } from "./StudioV2PageNavigator";
 import { StudioV2ContextToolbar } from "./StudioV2ContextToolbar";
+import { acceptVisibleStudioPageId } from "./studioV2PageSelection";
 import { shouldDismissStudioMobileSheet } from "./studioV2PresentationState";
 import { DocumentInfo, HistoryItem, InspectorTab, StudioV2OverlayDraft, StudioV2RedactionDraftBox, ToolCategory } from "./types";
 import { StudioJobDTO, StudioMarkupAction, StudioMarkupAnalysis, StudioMarkupBox, StudioMarkupMode, StudioMetadataParameters, StudioSignatureOverlayParameters, StudioTextOverlayParameters, StudioUpdateSignatureOverlayParameters, StudioUpdateTextOverlayParameters, StudioVDMDTO } from "@/lib/studio-v2/api";
@@ -39,8 +40,8 @@ interface StudioV2WorkspaceProps {
   onRotateClockwise?: () => void;
   onRotateCounterClockwise?: () => void;
   onDeletePage?: () => void;
-  onMovePageEarlier?: () => void;
-  onMovePageLater?: () => void;
+  onMovePageEarlier?: () => void | boolean | Promise<void | boolean>;
+  onMovePageLater?: () => void | boolean | Promise<void | boolean>;
   onDuplicatePage?: () => void;
   onCropPage?: (cropBox: number[], pageIds?: string[]) => void | Promise<void>;
   cropDraft?: number[] | null;
@@ -217,14 +218,47 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
     }
   }, [vdm]);
   const handleVisiblePageChange = useCallback((pageId: string) => {
-    const pendingTarget = pendingScrollTargetRef.current;
-    if (pendingTarget && pendingTarget !== pageId) return;
-    onSelectPage?.(pageId);
+    const acceptedPageId = acceptVisibleStudioPageId(pendingScrollTargetRef.current, pageId);
+    if (acceptedPageId) onSelectPage?.(acceptedPageId);
   }, [onSelectPage]);
-  const handlePageScrollComplete = useCallback(() => {
+  const handlePageScrollComplete = useCallback((pageId: string) => {
+    if (pendingScrollTargetRef.current !== pageId) return;
     pendingScrollTargetRef.current = null;
-    setScrollToPageId(null);
+    setScrollToPageId((current) => current === pageId ? null : current);
   }, []);
+  const protectSelectedPageDuringMove = useCallback(async (
+    movePage?: () => void | boolean | Promise<void | boolean>,
+  ) => {
+    const targetPageId = selectedPageId ?? null;
+    if (!targetPageId || !movePage) return;
+    pendingScrollTargetRef.current = targetPageId;
+    try {
+      const moved = await movePage();
+      if (pendingScrollTargetRef.current !== targetPageId) return;
+      if (moved === false) {
+        pendingScrollTargetRef.current = null;
+        setScrollToPageId(null);
+        return;
+      }
+      setScrollToPageId(null);
+      window.requestAnimationFrame(() => {
+        if (pendingScrollTargetRef.current === targetPageId) setScrollToPageId(targetPageId);
+      });
+    } catch {
+      if (pendingScrollTargetRef.current === targetPageId) {
+        pendingScrollTargetRef.current = null;
+        setScrollToPageId(null);
+      }
+    }
+  }, [selectedPageId]);
+  const handleMovePageEarlier = useCallback(
+    () => protectSelectedPageDuringMove(onMovePageEarlier),
+    [onMovePageEarlier, protectSelectedPageDuringMove],
+  );
+  const handleMovePageLater = useCallback(
+    () => protectSelectedPageDuringMove(onMovePageLater),
+    [onMovePageLater, protectSelectedPageDuringMove],
+  );
   const selectedPageIndex = vdm?.pages.findIndex((page) => page.page_id === selectedPageId) ?? -1;
   const pageLabel = selectedPageIndex >= 0 ? `Page ${selectedPageIndex + 1}` : "No page";
   const renderInspector = (presentation: "desktop" | "drawer" | "sheet", onRequestClose?: () => void) => (
@@ -244,8 +278,8 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
       onRotateClockwise={onRotateClockwise}
       onRotateCounterClockwise={onRotateCounterClockwise}
       onDeletePage={onDeletePage}
-      onMovePageEarlier={onMovePageEarlier}
-      onMovePageLater={onMovePageLater}
+      onMovePageEarlier={handleMovePageEarlier}
+      onMovePageLater={handleMovePageLater}
       onDuplicatePage={onDuplicatePage}
       onAddNewPage={onAddNewPage}
       onCropPage={onCropPage}
@@ -329,8 +363,8 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
           onOpenContext={() => { if (typeof window !== "undefined" && window.innerWidth < 768) onOpenMobileSheet?.(); else setDrawerOpen(true); }}
           onOpenPages={() => { setPageNavigatorOpen(true); if (shouldDismissStudioMobileSheet("page-navigator")) onCloseMobileSheet?.(); }}
           onAddNewPage={onAddNewPage}
-          onMoveEarlier={onMovePageEarlier}
-          onMoveLater={onMovePageLater}
+          onMoveEarlier={handleMovePageEarlier}
+          onMoveLater={handleMovePageLater}
           onRotate={onRotateClockwise}
           onDuplicate={onDuplicatePage}
           onEnterEdit={onEnterEdit}

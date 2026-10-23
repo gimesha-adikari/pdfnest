@@ -518,20 +518,22 @@ export const StudioV2Shell: React.FC = () => {
 
   const handleReorderPage = useCallback(
     async (direction: -1 | 1) => {
-      if (!vdm || !selectedPage || !activeVersion) return;
+      if (!vdm || !selectedPage || !activeVersion) return false;
       const targetIndex = selectedPageIndex + direction;
-      if (selectedPageIndex < 0 || targetIndex < 0 || targetIndex >= vdm.pages.length) return;
+      if (selectedPageIndex < 0 || targetIndex < 0 || targetIndex >= vdm.pages.length) return false;
       const pageIds = vdm.pages.map((page) => page.page_id);
       [pageIds[selectedPageIndex], pageIds[targetIndex]] = [pageIds[targetIndex], pageIds[selectedPageIndex]];
       try {
-        await guardedExecuteCommand({
+        const response = await guardedExecuteCommand({
           base_version_id: activeVersion.id,
           idempotency_key: newIdempotencyKey("reorder-pages"),
           operation: "reorder_pages",
           parameters: { page_ids: pageIds },
         });
+        return Boolean(response?.vdm.pages.some((page) => page.page_id === selectedPage.page_id));
       } catch {
         // Keep the authoritative order and selected page on failure.
+        return false;
       }
     },
     [vdm, selectedPage, activeVersion, selectedPageIndex, guardedExecuteCommand, newIdempotencyKey]

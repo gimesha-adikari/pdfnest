@@ -61,6 +61,23 @@ export function pruneStudioPageSelection(selected: Set<string>, pages: VDMPageDe
   return new Set([...selected].filter((id) => valid.has(id)));
 }
 
+export function mostVisibleStudioPage(
+  candidates: Array<{ pageId: string; overlap: number; centerDistance: number }>,
+): string | null {
+  return [...candidates]
+    .filter((candidate) => candidate.overlap > 0)
+    .sort((left, right) => right.overlap - left.overlap || left.centerDistance - right.centerDistance)[0]?.pageId ?? null;
+}
+
+/** Ignore stale viewport observations until the intended page has been restored. */
+export function acceptVisibleStudioPageId(
+  pendingTargetPageId: string | null,
+  visiblePageId: string | null,
+): string | null {
+  if (!visiblePageId || (pendingTargetPageId && pendingTargetPageId !== visiblePageId)) return null;
+  return visiblePageId;
+}
+
 /** Layout mutations must not let the old viewport select a different page. */
 export function pageToKeepVisibleAfterLayoutChange(
   previousPageIds: readonly string[] | null,

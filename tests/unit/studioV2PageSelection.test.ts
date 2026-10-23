@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { pageIdsForSelection, parseStudioPageSelection, pruneStudioPageSelection, serializeStudioPageSelection, toggleStudioPageSelection } from "@/components/studio-v2/studioV2PageSelection";
+import { acceptVisibleStudioPageId, mostVisibleStudioPage, pageIdsForSelection, parseStudioPageSelection, pruneStudioPageSelection, serializeStudioPageSelection, toggleStudioPageSelection } from "@/components/studio-v2/studioV2PageSelection";
 
 const pages = Array.from({ length: 6 }, (_, index) => ({ page_id: `p${index + 1}`, source_page_number: index + 1, is_blank: false, rotation: 0, overlays: [] }));
 
@@ -35,6 +35,13 @@ async function layoutSelectionRegression() {
   assert.equal(keep(["p1", "p2"], ["p1"], "p2"), null, "never scroll to a deleted page");
   assert.equal(keep(["p1"], ["new1"], "p1"), null, "materialization must not revive old PageIDs");
   assert.equal(keep(["p1"], ["p1", "p2"], null), null);
+  assert.equal(mostVisibleStudioPage([
+    { pageId: "p2", overlap: 32, centerDistance: 58 },
+    { pageId: "p3", overlap: 128, centerDistance: 2 },
+  ]), "p3", "the DOM observer still identifies the page currently occupying the viewport");
+  assert.equal(acceptVisibleStudioPageId("p2", "p3"), null, "ignore the adjacent page while a reorder is restoring p2");
+  assert.equal(acceptVisibleStudioPageId("p2", "p2"), "p2", "accept the intended page once it is visible");
+  assert.equal(acceptVisibleStudioPageId(null, "p3"), "p3", "resume ordinary scroll-driven selection after restoration");
   console.log("Studio page layout regression passed: stable PageID across reorder/deletion without scroll locking.");
 }
 void layoutSelectionRegression();
