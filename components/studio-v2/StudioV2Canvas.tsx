@@ -782,22 +782,48 @@ export const StudioV2Canvas: React.FC<StudioV2CanvasProps> = ({
   useEffect(() => {
     if (!scrollToPageId) return;
     const viewport = viewportRef.current;
-    if (!viewport) return;
+    if (!viewport) {
+      onPageScrollComplete?.(scrollToPageId);
+      return;
+    }
     const page = Array.from(viewport.querySelectorAll<HTMLElement>("[data-page-id]")).find(
       (element) => element.dataset.pageId === scrollToPageId,
     );
-    if (!page) return;
+    if (!page) {
+      onPageScrollComplete?.(scrollToPageId);
+      return;
+    }
 
-    page.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+    try {
+      page.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+    } catch {
+      onPageScrollComplete?.(scrollToPageId);
+      return;
+    }
     const frame = window.requestAnimationFrame(() => {
+      const currentTarget = Array.from(viewport.querySelectorAll<HTMLElement>("[data-page-id]")).find(
+        (element) => element.dataset.pageId === scrollToPageId,
+      );
+      if (!currentTarget) {
+        onPageScrollComplete?.(scrollToPageId);
+        return;
+      }
       onVisiblePageChange?.(scrollToPageId);
     });
     const settleTimer = window.setTimeout(() => {
       const settledPage = Array.from(viewport.querySelectorAll<HTMLElement>("[data-page-id]")).find(
         (element) => element.dataset.pageId === scrollToPageId,
       );
-      if (!settledPage) return;
-      settledPage.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+      if (!settledPage) {
+        onPageScrollComplete?.(scrollToPageId);
+        return;
+      }
+      try {
+        settledPage.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+      } catch {
+        onPageScrollComplete?.(scrollToPageId);
+        return;
+      }
       onVisiblePageChange?.(scrollToPageId);
       onPageScrollComplete?.(scrollToPageId);
     }, 180);

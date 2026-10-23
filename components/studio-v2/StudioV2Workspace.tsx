@@ -39,7 +39,7 @@ interface StudioV2WorkspaceProps {
   onEnterEdit?: () => void;
   onRotateClockwise?: () => void;
   onRotateCounterClockwise?: () => void;
-  onDeletePage?: () => void;
+  onDeletePage?: (pageId: string) => void | Promise<void>;
   onMovePageEarlier?: () => void | boolean | Promise<void | boolean>;
   onMovePageLater?: () => void | boolean | Promise<void | boolean>;
   onDuplicatePage?: () => void;
@@ -192,6 +192,36 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
   const [pageNavigatorOpen, setPageNavigatorOpen] = useState(false);
   const [scrollToPageId, setScrollToPageId] = useState<string | null>(() => selectedPageId ?? null);
   const pendingScrollTargetRef = useRef<string | null>(selectedPageId ?? null);
+  const pendingScrollGenerationRef = useRef(0);
+  const pendingScrollTimeoutRef = useRef<number | null>(null);
+  const documentIdentityRef = useRef({
+    documentId: document.id,
+    sessionId: sessionId ?? null,
+    vdmDocumentId: vdm?.document_id ?? null,
+  });
+  const clearPendingScrollTarget = useCallback((pageId?: string) => {
+    if (pageId && pendingScrollTargetRef.current !== pageId) return;
+    pendingScrollGenerationRef.current += 1;
+    pendingScrollTargetRef.current = null;
+    if (pendingScrollTimeoutRef.current !== null) {
+      window.clearTimeout(pendingScrollTimeoutRef.current);
+      pendingScrollTimeoutRef.current = null;
+    }
+    setScrollToPageId((current) => !pageId || current === pageId ? null : current);
+  }, []);
+  const beginPendingScrollTarget = useCallback((pageId: string) => {
+    const generation = ++pendingScrollGenerationRef.current;
+    pendingScrollTargetRef.current = pageId;
+    if (pendingScrollTimeoutRef.current !== null) window.clearTimeout(pendingScrollTimeoutRef.current);
+    pendingScrollTimeoutRef.current = window.setTimeout(() => {
+      if (pendingScrollGenerationRef.current === generation) clearPendingScrollTarget(pageId);
+    }, 1500);
+    return generation;
+  }, [clearPendingScrollTarget]);
+  useEffect(() => {
+    const initialTargetPageId = pendingScrollTargetRef.current;
+    if (initialTargetPageId && pendingScrollTimeoutRef.current === null) beginPendingScrollTarget(initialTargetPageId);
+  }, [beginPendingScrollTarget]);
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia("(min-width: 768px) and (max-width: 1199.99px)").matches) return;
     const timer = window.setTimeout(() => setDrawerOpen(false), 0);
@@ -212,45 +242,57 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
     return () => window.clearTimeout(timer);
   }, [surfaceDismissRequest]);
   useEffect(() => {
-    if (pendingScrollTargetRef.current && vdm?.pages.every((page) => page.page_id !== pendingScrollTargetRef.current)) {
-      pendingScrollTargetRef.current = null;
-      setScrollToPageId(null);
-    }
-  }, [vdm]);
+    const pendingPageId = pendingScrollTargetRef.current;
+    if (pendingPageId && vdm?.pages.every((page) => page.page_id !== pendingPageId)) clearPendingScrollTarget(pendingPageId);
+  }, [clearPendingScrollTarget, vdm]);
+  useEffect(() => {
+    const currentIdentity = {
+      documentId: document.id,
+      sessionId: sessionId ?? null,
+      vdmDocumentId: vdm?.document_id ?? null,
+    };
+    const previousIdentity = documentIdentityRef.current;
+    const documentReplaced = previousIdentity.documentId !== currentIdentity.documentId ||
+      previousIdentity.sessionId !== currentIdentity.sessionId ||
+      (previousIdentity.vdmDocumentId !== null && currentIdentity.vdmDocumentId !== null && previousIdentity.vdmDocumentId !== currentIdentity.vdmDocumentId);
+    documentIdentityRef.current = currentIdentity;
+    if (documentReplaced) clearPendingScrollTarget();
+  }, [clearPendingScrollTarget, document.id, sessionId, vdm?.document_id]);
+  useEffect(() => () => {
+    pendingScrollGenerationRef.current += 1;
+    pendingScrollTargetRef.current = null;
+    if (pendingScrollTimeoutRef.current !== null) window.clearTimeout(pendingScrollTimeoutRef.current);
+  }, []);
   const handleVisiblePageChange = useCallback((pageId: string) => {
     const acceptedPageId = acceptVisibleStudioPageId(pendingScrollTargetRef.current, pageId);
     if (acceptedPageId) onSelectPage?.(acceptedPageId);
   }, [onSelectPage]);
   const handlePageScrollComplete = useCallback((pageId: string) => {
-    if (pendingScrollTargetRef.current !== pageId) return;
-    pendingScrollTargetRef.current = null;
-    setScrollToPageId((current) => current === pageId ? null : current);
-  }, []);
+    clearPendingScrollTarget(pageId);
+  }, [clearPendingScrollTarget]);
   const protectSelectedPageDuringMove = useCallback(async (
     movePage?: () => void | boolean | Promise<void | boolean>,
   ) => {
     const targetPageId = selectedPageId ?? null;
     if (!targetPageId || !movePage) return;
-    pendingScrollTargetRef.current = targetPageId;
+    const generation = beginPendingScrollTarget(targetPageId);
     try {
       const moved = await movePage();
-      if (pendingScrollTargetRef.current !== targetPageId) return;
+      if (pendingScrollGenerationRef.current !== generation || pendingScrollTargetRef.current !== targetPageId) return;
       if (moved === false) {
-        pendingScrollTargetRef.current = null;
-        setScrollToPageId(null);
+        clearPendingScrollTarget(targetPageId);
         return;
       }
       setScrollToPageId(null);
       window.requestAnimationFrame(() => {
-        if (pendingScrollTargetRef.current === targetPageId) setScrollToPageId(targetPageId);
+        if (pendingScrollGenerationRef.current === generation && pendingScrollTargetRef.current === targetPageId) {
+          setScrollToPageId(targetPageId);
+        }
       });
     } catch {
-      if (pendingScrollTargetRef.current === targetPageId) {
-        pendingScrollTargetRef.current = null;
-        setScrollToPageId(null);
-      }
+      if (pendingScrollGenerationRef.current === generation) clearPendingScrollTarget(targetPageId);
     }
-  }, [selectedPageId]);
+  }, [beginPendingScrollTarget, clearPendingScrollTarget, selectedPageId]);
   const handleMovePageEarlier = useCallback(
     () => protectSelectedPageDuringMove(onMovePageEarlier),
     [onMovePageEarlier, protectSelectedPageDuringMove],
@@ -277,7 +319,7 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
       onOpenPageNavigator={() => { setPageNavigatorOpen(true); if (shouldDismissStudioMobileSheet("page-navigator")) onCloseMobileSheet?.(); }}
       onRotateClockwise={onRotateClockwise}
       onRotateCounterClockwise={onRotateCounterClockwise}
-      onDeletePage={onDeletePage}
+      onDeletePage={selectedPageId ? () => onDeletePage?.(selectedPageId) : undefined}
       onMovePageEarlier={handleMovePageEarlier}
       onMovePageLater={handleMovePageLater}
       onDuplicatePage={onDuplicatePage}
@@ -329,7 +371,7 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
   );
 
   const navigateToPage = (pageId: string) => {
-    pendingScrollTargetRef.current = pageId;
+    beginPendingScrollTarget(pageId);
     onSelectPage?.(pageId);
     setScrollToPageId(pageId);
     setPageNavigatorOpen(false);
@@ -371,6 +413,7 @@ export const StudioV2Workspace: React.FC<StudioV2WorkspaceProps> = ({
         />
         <div className="studio-v2-canvas-stage">
         <StudioV2Canvas
+          key={`${document.id}:${sessionId ?? ""}:${vdm?.document_id ?? ""}`}
           sessionId={sessionId}
           versionId={versionId}
           previewVersionByPageId={previewVersionByPageId}
