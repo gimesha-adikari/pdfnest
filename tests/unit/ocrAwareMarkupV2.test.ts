@@ -24,7 +24,7 @@ async function runTests(): Promise<void> {
             request = new Request(input, init);
             return new Response(JSON.stringify({ job_id: "job-1", status: "QUEUED" }), { status: 202, headers: { "Content-Type": "application/json" } });
         };
-        await submitOcrAwareMarkup("underline", file, selection.text, "ocr", "eng", "#2563EB", selection);
+        await submitOcrAwareMarkup("underline", file, selection.text, "ocr", "eng", "#2563EB", selection, { idempotencyKey: "markup-test", requestId: "request-test" });
         const capturedRequest = request as Request | null;
         if (!capturedRequest) throw new Error("The markup request was not captured.");
         const body = await capturedRequest.formData();

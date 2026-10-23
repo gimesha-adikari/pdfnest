@@ -2,6 +2,7 @@ import { getBaseUrl } from "@/lib/api";
 import { markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 import type { MarkupSelectionGeometry } from "@/lib/markupSelection";
 import type { OcrTextV2Language } from "@/lib/ocrV2";
+import type { JobRequestIdentity } from "@/lib/jobSubmission";
 
 export type OcrAwareMarkupAction = "highlight" | "underline" | "strikeout";
 export type OcrAwareMarkupMode = "smart" | "ocr" | "native";
@@ -84,7 +85,8 @@ export async function submitOcrAwareMarkup(
     mode: OcrAwareMarkupMode,
     language = "eng",
     color = action === "highlight" ? "#FFFF00" : action === "underline" ? "#2563EB" : "#DC2626",
-    selection?: MarkupSelectionGeometry,
+    selection: MarkupSelectionGeometry | undefined,
+    identity: JobRequestIdentity,
 ): Promise<OcrAwareMarkupJob> {
     const form = new FormData();
     form.append("file", file);
@@ -102,8 +104,8 @@ export async function submitOcrAwareMarkup(
         body: form,
         credentials: "include",
         headers: {
-            "Idempotency-Key": `markup-v2-${crypto.randomUUID()}`,
-            "X-Request-ID": crypto.randomUUID(),
+            "Idempotency-Key": identity.idempotencyKey,
+            "X-Request-ID": identity.requestId,
         },
     });
     if (!response.ok) throw await parseError(response);
