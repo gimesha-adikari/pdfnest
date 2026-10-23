@@ -184,8 +184,12 @@ export async function runCropExecutionTests() {
         const encDoc = await PDFDocument.create();
         encDoc.addPage([600, 800]);
         const encBytes = await encDoc.save();
-        const encFile = new File([encBytes.buffer.slice(encBytes.byteOffset, encBytes.byteOffset + encBytes.byteLength) as ArrayBuffer], "enc.pdf", { type: "application/pdf" });
-        (encFile as File & { originalPassword: string }).originalPassword = "secret_pass_123";
+        const encFile = new File(
+            [encBytes.buffer.slice(encBytes.byteOffset, encBytes.byteOffset + encBytes.byteLength) as ArrayBuffer],
+            "enc.pdf",
+            { type: "application/pdf" }
+        ) as File & { originalPassword: string };
+        encFile.originalPassword = "secret_pass_123";
 
         const encResult = await ExecutionManager.run({
             tool: "crop",
@@ -199,17 +203,20 @@ export async function runCropExecutionTests() {
         assert.strictEqual(encResult.fallbackOccurred, true);
         console.log("✓ [PASS] 10. Password-protected file triggers Cloud fallback in Auto mode (Option B)");
 
-        // 11. Password-protected file in Device mode rejects without Cloud processing
+        // 11. Password-protected file in Device mode rejects locally
         cloudCalled = false;
-        await assert.rejects(ExecutionManager.run({
-            tool: "crop",
-            files: [encFile],
-            params: { box: "[10 10 200 200]" },
-            mode: "device",
-            password: "secret_pass_123",
-        }), (error: unknown) => error instanceof ExecutionError && error.code === "UNSUPPORTED_CLIENT_OP");
-        assert.strictEqual(cloudCalled, false, "Encrypted file in Device mode must never invoke CloudExecutor");
-        console.log("✓ [PASS] 11. Password-protected file in Device mode rejects with 0 cloud calls");
+        await assert.rejects(
+            ExecutionManager.run({
+                tool: "crop",
+                files: [encFile],
+                params: { box: "[10 10 200 200]" },
+                mode: "device",
+                password: "secret_pass_123",
+            }),
+            (error: unknown) => error instanceof ExecutionError && error.code === "UNSUPPORTED_CLIENT_OP"
+        );
+        assert.strictEqual(cloudCalled, false, "Encrypted file in Device mode must not route to Cloud relock");
+        console.log("✓ [PASS] 11. Password-protected file in Device mode rejects locally without Cloud");
     } finally {
         CloudExecutor.execute = origCloudExec;
     }
@@ -225,7 +232,7 @@ export async function runCropExecutionTests() {
         });
         assert.fail("Should have thrown error on corrupt header");
     } catch (err: unknown) {
-        assert(err instanceof ExecutionError);
+        assert.ok(err instanceof ExecutionError, "Invalid PDF must fail with ExecutionError");
         assert.strictEqual(err.code, "INVALID_INPUT");
         console.log("✓ [PASS] 12. Invalid PDF header throws INVALID_INPUT error without Cloud fallback");
     }
@@ -241,7 +248,7 @@ export async function runCropExecutionTests() {
         });
         assert.fail("Should have thrown error on malformed box string");
     } catch (err: unknown) {
-        assert(err instanceof ExecutionError);
+        assert.ok(err instanceof ExecutionError, "Invalid crop box must fail with ExecutionError");
         assert.strictEqual(err.code, "INVALID_INPUT");
         console.log("✓ [PASS] 13. Malformed crop box parameter throws INVALID_INPUT error");
     }
@@ -256,7 +263,7 @@ export async function runCropExecutionTests() {
         });
         assert.fail("Should have thrown error on inverted box");
     } catch (err: unknown) {
-        assert(err instanceof ExecutionError);
+        assert.ok(err instanceof ExecutionError, "Inverted crop box must fail with ExecutionError");
         assert.strictEqual(err.code, "INVALID_INPUT");
         console.log("✓ [PASS] 14. Inverted crop box coordinates (xmin > xmax) throw INVALID_INPUT error");
     }

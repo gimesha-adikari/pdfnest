@@ -13,6 +13,10 @@ import {
     ExecutionResult,
     ToolPolicy,
 } from "./types";
+import {
+    hasCloudSubmissionInitiated,
+    setPdfInputProcessingMode,
+} from "@/lib/security/pdfInputPreparation";
 
 export class ExecutionManager {
     static async run(options: ExecutionOptions): Promise<ExecutionResult> {
@@ -60,6 +64,7 @@ export class ExecutionManager {
         if (["markdown-to-pdf", "markdown_to_pdf", "md_to_pdf", "md-to-pdf", "markdown"].includes(tool)) {
             await prepareMarkdown(files[0], options.signal);
         }
+        setPdfInputProcessingMode(files, mode);
         const primaryFile = files[0];
         const outputFileName = buildOutputFileName(tool, primaryFile.name);
         const policy: ToolPolicy = getToolPolicy(tool);
@@ -68,10 +73,16 @@ export class ExecutionManager {
         const clientSupported = ClientExecutor.isSupported(tool);
         const flagEnabled = isClientExecutionEnabled(tool);
         const clientEligible = clientSupported && flagEnabled;
+        const cloudSubmissionInitiated = hasCloudSubmissionInitiated(files);
 
-        // Explicit Device mode is a strict venue choice, regardless of allowFallback.
-        if (mode === "device" && !clientEligible) {
-            const featureFlagDisabled = clientSupported && !flagEnabled;
+        // Device mode is a strict venue choice: fail closed before any cloud call.
+        if (mode === "device" && (!clientEligible || cloudSubmissionInitiated)) {
+            const featureFlagDisabled = !cloudSubmissionInitiated && clientSupported && !flagEnabled;
+            const message = cloudSubmissionInitiated
+                ? "A Cloud request was started for this input. File delivery may have occurred, so Device-only processing is unavailable for this source."
+                : !clientSupported
+                    ? `Tool '${tool}' is not supported for Device processing.`
+                    : `Device processing for '${tool}' is disabled by its client execution feature flag.`;
             const durationMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - startTime;
             telemetry.record({
                 toolId: tool,
@@ -86,12 +97,7 @@ export class ExecutionManager {
                 fileCount,
                 timestamp: Date.now(),
             });
-            throw new ExecutionError(
-                "UNSUPPORTED_CLIENT_OP",
-                !clientSupported
-                    ? `Tool '${tool}' is not supported for Device processing.`
-                    : `Device processing for '${tool}' is disabled by its client execution feature flag.`
-            );
+            throw new ExecutionError("UNSUPPORTED_CLIENT_OP", message);
         }
 
         // Explicit Cloud mode and ineligible Auto operations use CloudExecutor.
@@ -334,7 +340,7 @@ export class ExecutionManager {
                         fallbackOccurred: true,
                     };
                 } catch (cloudErr: unknown) {
-                    const cloudErrCode = (cloudErr as { code?: string } | null)?.code;
+                    const cloudErrCode = getExecutionErrorCode(cloudErr);
                     const durationMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - startTime;
                     telemetry.record({
                         toolId: tool,
@@ -392,7 +398,7 @@ export class ExecutionManager {
                 fallbackOccurred: true,
             };
         } catch (cloudErr: unknown) {
-            const cloudErrCode = (cloudErr as { code?: string } | null)?.code;
+            const cloudErrCode = getExecutionErrorCode(cloudErr);
             const durationMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - startTime;
             telemetry.record({
                 toolId: tool,
@@ -422,6 +428,15 @@ export class ExecutionManager {
             throw cloudErr;
         }
     }
+}
+
+function getExecutionErrorCode(error: unknown): string | undefined {
+    if (error instanceof ExecutionError) return error.code;
+    if (typeof error === "object" && error !== null && "code" in error) {
+        const code = (error as { code?: unknown }).code;
+        return typeof code === "string" ? code : undefined;
+    }
+    return undefined;
 }
 
 function getToolPolicy(tool: string): ToolPolicy {

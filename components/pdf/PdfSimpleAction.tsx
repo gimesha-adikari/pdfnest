@@ -9,6 +9,7 @@ import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import { useAuth } from "@/context/AuthContext";
+import { assertCloudProcessingAuthorized } from "@/lib/security/pdfInputPreparation";
 
 interface PdfSimpleActionProps {
     title: string;
@@ -41,13 +42,14 @@ export default function PdfSimpleAction({
             if (!file) return;
 
             try {
+                assertCloudProcessingAuthorized(file, toolId);
                 setIsProcessing(true);
                 setSuccess(false);
 
                 const formData = new FormData();
                 formData.append("file", file);
 
-                const responseBlob = await uploadAndDownloadFile(apiEndpoint, formData);
+                const responseBlob = await uploadAndDownloadFile(apiEndpoint, formData, undefined, undefined, "pdf");
 
                 const prefix = apiEndpoint.split('/').pop() || "processed";
 

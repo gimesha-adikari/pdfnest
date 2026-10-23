@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {ShieldAlert, Type, MousePointerSquareDashed, Trash2, Loader2} from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { assertCloudProcessingAuthorized } from "@/lib/security/pdfInputPreparation";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
@@ -44,8 +45,6 @@ export default function RedactPdfWorkspace() {
 
     useEffect(() => {
         if (!file) {
-            setPdfDoc(null);
-            setTotalPages(0);
             return;
         }
 
@@ -200,12 +199,13 @@ export default function RedactPdfWorkspace() {
             setIsProcessing(true);
 
             try {
+                assertCloudProcessingAuthorized(file, toolId);
                 const formData = new FormData();
                 formData.append("file", file);
                 formData.append("keywords", keywords.trim());
                 formData.append("boxes", JSON.stringify(drawnBoxes));
 
-                const responseBlob = await uploadAndDownloadFile("/api/security/redact-text", formData);
+                const responseBlob = await uploadAndDownloadFile("/api/security/redact-text", formData, undefined, undefined, "pdf");
 
                 setDownloadData({
                     blob: responseBlob,

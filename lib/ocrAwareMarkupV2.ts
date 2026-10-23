@@ -1,4 +1,5 @@
 import { getBaseUrl } from "@/lib/api";
+import { markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 import type { MarkupSelectionGeometry } from "@/lib/markupSelection";
 import type { OcrTextV2Language } from "@/lib/ocrV2";
 
@@ -86,6 +87,7 @@ export async function submitOcrAwareMarkup(
     form.append("routing_policy", "FAST");
     form.append("color", color);
     if (selection) form.append("selection", JSON.stringify(selection));
+    markCloudSubmissionInitiated([file]);
     const response = await fetch(endpoint(`/api/v2/ocr/markup/${action}/jobs`), {
         method: "POST",
         body: form,

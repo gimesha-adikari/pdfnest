@@ -6,6 +6,10 @@ import {
     buildPageNumbersDescription,
     buildWatermarkDescription,
 } from "./pdfcpu/pdfcpuClient";
+import {
+    assertCloudProcessingAuthorized,
+    assertCloudProcessingAuthorizedInputs,
+} from "@/lib/security/pdfInputPreparation";
 
 export class CloudExecutor {
     static async execute(options: ExecutionOptions): Promise<Blob> {
@@ -18,6 +22,16 @@ export class CloudExecutor {
         const primaryFile = files[0];
         const formData = new FormData();
         const normalizedTool = normalizeTool(tool);
+        const cloudAuthorizationTool = options.cloudAuthorizationTool ||
+            (normalizedTool === "merge" ? "merge-pdf" : undefined);
+
+        if (cloudAuthorizationTool) {
+            if (normalizedTool === "merge") {
+                assertCloudProcessingAuthorizedInputs(files, cloudAuthorizationTool);
+            } else {
+                files.forEach((file) => assertCloudProcessingAuthorized(file, cloudAuthorizationTool));
+            }
+        }
 
         // 1. Preserve existing multipart field naming ('images' for conversion, 'files' for merge/batch, 'file' for single)
         if (normalizedTool === "images_to_pdf") {
@@ -48,6 +62,7 @@ export class CloudExecutor {
             formData.append("description", description);
         } else {
             Object.entries(params || {}).forEach(([key, val]) => {
+                if (normalizedTool === "merge" && /password/i.test(key)) return;
                 if (val !== undefined && val !== null) {
                     if (typeof File !== "undefined" && val instanceof File) {
                         formData.append(key, val);
@@ -60,25 +75,43 @@ export class CloudExecutor {
             });
         }
 
-        // 3. Preserve password propagation for per-file passwords (password_0, password_1, ...) and single file_password
-        files.forEach((f, idx) => {
-            const pwd =
-                (options.passwords && options.passwords[idx]) ||
-                (f as any).originalPassword ||
-                (idx === 0 ? options.password : undefined);
-            if (pwd) {
-                formData.append(`password_${idx}`, pwd);
-                if (idx === 0) {
-                    formData.append("file_password", pwd);
+        // Lock's requested output password is already in the endpoint parameters.
+        // Rotate accepts only the prepared PDF and rotation map. The shared
+        // API helper uses the File's transient originalPassword metadata for
+        // the separate post-processing lock request, so the source password
+        // does not need to be sent to /api/structure/rotate.
+        if (normalizedTool !== "rotate" && normalizedTool !== "lock" && normalizedTool !== "merge") {
+            // Preserve password propagation for per-file passwords (password_0,
+            // password_1, ...) and the single-file file_password field.
+            files.forEach((f, idx) => {
+                const pwd =
+                    (options.passwords && options.passwords[idx]) ||
+                    (f as any).originalPassword ||
+                    (idx === 0 ? options.password : undefined);
+                if (pwd) {
+                    formData.append(`password_${idx}`, pwd);
+                    if (idx === 0) {
+                        formData.append("file_password", pwd);
+                    }
                 }
-            }
-        });
+            });
+        }
 
         // 4. Resolve backend API endpoint
         const endpoint = getEndpointForTool(tool, params);
+        const outputKind = ["pdf_to_images", "pdf_to_text", "pdf_to_markdown"].includes(normalizedTool)
+            ? "non-pdf"
+            : "pdf";
 
         try {
-            const blob = await uploadAndDownloadFile(endpoint, formData, onProgress, options.signal);
+            const blob = await uploadAndDownloadFile(
+                endpoint,
+                formData,
+                onProgress,
+                options.signal,
+                outputKind,
+                options.onCloudSubmissionInitiated,
+            );
             return blob;
         } catch (err: unknown) {
             if (

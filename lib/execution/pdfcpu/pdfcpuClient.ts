@@ -22,14 +22,14 @@ export function setWorkerFactory(factory: ((scriptUrl: string) => Worker) | null
     customWorkerFactory = factory;
 }
 
-const pendingRequests = new Map<
-    string,
-    {
-        resolve: (blob: Blob) => void;
-        reject: (error: ExecutionError) => void;
-        timeoutId?: ReturnType<typeof setTimeout>;
-    }
->();
+type PendingWorkerRequest = {
+    resolve: (blob: Blob) => void;
+    reject: (error: ExecutionError) => void;
+    timeoutId?: ReturnType<typeof setTimeout>;
+    abortCleanup?: () => void;
+};
+
+const pendingRequests = new Map<string, PendingWorkerRequest>();
 
 function getOrCreateWorker(): Worker {
     if (workerInstance) {
@@ -62,6 +62,7 @@ function getOrCreateWorker(): Worker {
         if (pending.timeoutId) {
             clearTimeout(pending.timeoutId);
         }
+        pending.abortCleanup?.();
 
         pendingRequests.delete(data.id);
 
@@ -111,8 +112,9 @@ function getOrCreateWorker(): Worker {
             event
         );
 
-        pendingRequests.forEach(({ reject, timeoutId }) => {
+        pendingRequests.forEach(({ reject, timeoutId, abortCleanup }) => {
             if (timeoutId) clearTimeout(timeoutId);
+            abortCleanup?.();
             reject(error);
         });
 
@@ -131,8 +133,9 @@ function getOrCreateWorker(): Worker {
             event
         );
 
-        pendingRequests.forEach(({ reject, timeoutId }) => {
+        pendingRequests.forEach(({ reject, timeoutId, abortCleanup }) => {
             if (timeoutId) clearTimeout(timeoutId);
+            abortCleanup?.();
             reject(error);
         });
 
@@ -471,10 +474,19 @@ export async function executePdfcpuWasmAddText(
     });
 }
 
+function isAbortSignal(
+    value: AbortSignal | LocalUnlockOptions | undefined,
+): value is AbortSignal {
+    return Boolean(
+        value && typeof value === "object" && "aborted" in value &&
+        "addEventListener" in value && typeof value.addEventListener === "function"
+    );
+}
+
 export async function executePdfcpuWasmUnlock(
     pdfFile: File,
     password?: string,
-    options?: LocalUnlockOptions
+    signalOrOptions?: AbortSignal | LocalUnlockOptions,
 ): Promise<Blob> {
     if (!pdfFile) {
         throw new ExecutionError(
@@ -491,6 +503,10 @@ export async function executePdfcpuWasmUnlock(
         );
     }
 
+    const isLegacySignal = isAbortSignal(signalOrOptions);
+    const signal = isLegacySignal ? signalOrOptions : signalOrOptions?.signal;
+    const options = isLegacySignal ? undefined : signalOrOptions;
+
     if (options) {
         return isolatedUnlock(pdfFile, effectivePassword, () => {
             if (customWorkerFactory) return customWorkerFactory("/wasm/pdfcpu.worker.js");
@@ -499,6 +515,9 @@ export async function executePdfcpuWasmUnlock(
     }
 
     const pdfBuffer = await pdfFile.arrayBuffer();
+    if (signal?.aborted) {
+        throw new ExecutionError("USER_CANCELLATION", "Local PDF preparation was cancelled.");
+    }
     validatePdfHeader(pdfBuffer);
 
     // Node.js test environment direct WASM fallback
@@ -509,32 +528,67 @@ export async function executePdfcpuWasmUnlock(
         if (workerShim) {
             const requestId = createRequestId();
             return new Promise<Blob>((resolve, reject) => {
-                const handler = (event: any) => {
-                    const data = event.data || event;
-                    if (data.id === requestId) {
+                let settled = false;
+                const cleanup = () => {
+                    if (typeof workerShim.removeEventListener === "function") {
+                        workerShim.removeEventListener("message", handler);
+                    }
+                    if (workerShim.onmessage === handler) workerShim.onmessage = null;
+                    signal?.removeEventListener("abort", abort);
+                };
+                const handler = (event: Event) => {
+                    const eventData = (event as MessageEvent<PdfcpuWorkerResponse>).data;
+                    const data = eventData || event as unknown as PdfcpuWorkerResponse;
+                    if (!settled && data.id === requestId) {
+                        settled = true;
+                        cleanup();
                         if (data.type === "success") {
                             resolve(new Blob([data.pdfBytes], { type: "application/pdf" }));
                         } else {
+                            const code: ExecutionError["code"] =
+                                data.code === "DECRYPTION_AUTH_FAILED" ||
+                                data.code === "INVALID_INPUT" ||
+                                data.code === "CLIENT_FAILURE" ||
+                                data.code === "USER_CANCELLATION"
+                                    ? data.code
+                                    : "UNSUPPORTED_CLIENT_OP";
                             reject(
                                 new ExecutionError(
-                                    (data.code as any) || "UNSUPPORTED_CLIENT_OP",
+                                    code,
                                     data.message || "Decryption failed."
                                 )
                             );
                         }
                     }
                 };
+                const abort = () => {
+                    if (settled) return;
+                    settled = true;
+                    cleanup();
+                    reject(new ExecutionError("USER_CANCELLATION", "Local PDF preparation was cancelled."));
+                };
                 if (typeof workerShim.addEventListener === "function") {
                     workerShim.addEventListener("message", handler);
                 } else if ("onmessage" in workerShim) {
                     workerShim.onmessage = handler;
                 }
-                workerShim.postMessage({
-                    id: requestId,
-                    type: "decrypt",
-                    pdfBytes: pdfBuffer,
-                    password: effectivePassword,
-                });
+                signal?.addEventListener("abort", abort, { once: true });
+                if (signal?.aborted) {
+                    abort();
+                    return;
+                }
+                try {
+                    workerShim.postMessage({
+                        id: requestId,
+                        type: "decrypt",
+                        pdfBytes: pdfBuffer,
+                        password: effectivePassword,
+                    });
+                } catch (error) {
+                    settled = true;
+                    cleanup();
+                    reject(new ExecutionError("CLIENT_FAILURE", "Failed to send decrypt data to the pdfcpu worker.", error));
+                }
             });
         }
 
@@ -570,10 +624,26 @@ export async function executePdfcpuWasmUnlock(
     const requestId = createRequestId();
 
     return new Promise<Blob>((resolve, reject) => {
-        pendingRequests.set(requestId, {
+        const pending: PendingWorkerRequest = {
             resolve,
             reject,
-        });
+        };
+        pendingRequests.set(requestId, pending);
+
+        const abort = () => {
+            if (pendingRequests.get(requestId) !== pending) return;
+            pendingRequests.delete(requestId);
+            pending.abortCleanup?.();
+            reject(new ExecutionError("USER_CANCELLATION", "Local PDF preparation was cancelled."));
+        };
+        if (signal) {
+            pending.abortCleanup = () => signal.removeEventListener("abort", abort);
+            signal.addEventListener("abort", abort, { once: true });
+            if (signal.aborted) {
+                abort();
+                return;
+            }
+        }
 
         const request: PdfcpuWorkerRequest = {
             id: requestId,
@@ -586,6 +656,7 @@ export async function executePdfcpuWasmUnlock(
             worker.postMessage(request, [pdfBuffer]);
         } catch (error) {
             pendingRequests.delete(requestId);
+            pending.abortCleanup?.();
             reject(
                 new ExecutionError(
                     "CLIENT_FAILURE",

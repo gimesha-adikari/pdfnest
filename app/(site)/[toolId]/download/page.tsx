@@ -74,6 +74,7 @@ export default function SharedDownloadPage() {
             mimeType: downloadData.blob.type || "application/pdf",
             sourceToolHref: `/${toolId}`,
             targetToolHref: nextHref,
+            provenance: downloadData.provenance,
         });
 
         setFile(null);

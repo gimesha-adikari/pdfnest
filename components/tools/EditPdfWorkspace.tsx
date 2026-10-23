@@ -13,6 +13,7 @@ import { studioVisualResolution } from "@/components/editor-v2/visualResolution"
 import { EditorLanguageControl } from "@/components/editor-v2/EditorLanguageControl";
 import { downloadEditorJob, EditorJobRecord, submitEditorCompile, submitEditorExtract, waitForEditorJob } from "@/lib/editorJobs";
 import { notify } from "@/lib/notify";
+import { assertCloudProcessingAuthorized, markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 import { handleClientError } from "@/lib/errorHandler";
 import { usePreviews } from "@/lib/preview/usePreviews";
 
@@ -102,6 +103,7 @@ export default function EditPdfWorkspace({ engine }: EditPdfWorkspaceProps = {})
       if (cancelled) return;
       setLayout(null); setError(null); setExtractJob(null);
       try {
+        assertCloudProcessingAuthorized(file, toolId || "edit-pdf");
         const form = new FormData(); form.append("file", file);
         if (useOcrV2) { form.append("ocr_v2", "true"); form.append("language_mode", language.mode); form.append("languages", language.languages.join(",")); }
         const submitted = await submitEditorExtract(form);
@@ -114,12 +116,14 @@ export default function EditPdfWorkspace({ engine }: EditPdfWorkspaceProps = {})
       } catch (err) { if (!cancelled && !controller.signal.aborted) { setError("Failed to extract the editor layout."); handleClientError(err); } }
     })();
     return () => { cancelled = true; controller.abort(); };
-  }, [file, language, useOcrV2, retryCount]);
+  }, [file, language, retryCount, toolId, useOcrV2]);
 
   const compile = (draft: EditorLayout) => void requireAuth(async () => {
     if (!file) return;
     setCompiling(true); setError(null);
     try {
+      assertCloudProcessingAuthorized(file, toolId || "edit-pdf");
+      markCloudSubmissionInitiated([file]);
       const submitted = await submitEditorCompile({ ...draft, source_tracker: sourceTracker });
       const job = await waitForEditorJob(submitted.job_id);
       if (job.status !== "succeeded") throw new Error(job.error || "Compilation failed");

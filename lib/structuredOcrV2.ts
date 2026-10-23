@@ -1,4 +1,5 @@
 import { getBaseUrl } from "@/lib/api";
+import { markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 
 export type StructuredOcrV2Profile = "DOCUMENT_EXTRACTION_V2" | "PDF_MARKDOWN_V2";
 export type StructuredOcrV2State = "IDLE" | "FILE_READY" | "SUBMITTING" | "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELLING" | "CANCELLED";
@@ -175,6 +176,7 @@ export async function createStructuredOcrV2Job(file: File, profile: StructuredOc
     if (language !== "auto") for (const code of language.split("+").filter(Boolean)) form.append("languages", code);
     form.append("routing_policy", routingPolicy);
     form.append("profile", profile);
+    markCloudSubmissionInitiated([file]);
     return requestJson<StructuredOcrV2Job>(`/api/v2/ocr/${pathFor(profile)}/jobs`, {
         method: "POST",
         headers: { "Idempotency-Key": idempotencyKey, "X-Request-ID": requestId },

@@ -27,6 +27,14 @@ import { useAsyncTask } from "@/hooks/useAsyncTask";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
+import {
+    assertCloudProcessingAuthorized,
+    authorizeCloudProcessing,
+    getInitialProcessingMode,
+    hasCloudSubmissionInitiated,
+    isCloudProcessingAuthorized,
+    requiresCloudProcessingAuthorization,
+} from "@/lib/security/pdfInputPreparation";
 
 const AUTO_LANGUAGE: OCRLanguage = { code: "auto", name: "Auto detect" };
 
@@ -34,6 +42,7 @@ export default function PdfToTextWorkspace() {
     const { requireAuth } = useAuth();
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
+    const cloudSubmissionInitiated = hasCloudSubmissionInitiated(file);
 
     const [isProcessingLocal, setIsProcessingLocal] = useState(false);
     const [localProgress, setLocalProgress] = useState(0);
@@ -41,8 +50,9 @@ export default function PdfToTextWorkspace() {
     const [localStatus, setLocalStatus] = useState<string | null>(null);
     const localAbortControllerRef = useRef<AbortController | null>(null);
     const [success, setSuccess] = useState(false);
-    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
     const [deviceOcrWarning, setDeviceOcrWarning] = useState<string | null>(null);
+    const [cloudConsentFile, setCloudConsentFile] = useState<File | null>(null);
 
     const [languages, setLanguages] = useState<OCRLanguage[]>([
         AUTO_LANGUAGE,
@@ -200,7 +210,10 @@ export default function PdfToTextWorkspace() {
 
             const responseBlob = await uploadAndDownloadFile(
                 "/api/ocr/extract-text-async",
-                formData
+                formData,
+                undefined,
+                undefined,
+                "non-pdf"
             );
 
             const jsonText = await responseBlob.text();
@@ -252,6 +265,17 @@ export default function PdfToTextWorkspace() {
     };
 
     const handleTextExtraction = async () => {
+        const processingToolId = toolId || "pdf-to-text";
+        if (
+            file &&
+            processingMode === "cloud" &&
+            requiresCloudProcessingAuthorization(file) &&
+            !isCloudProcessingAuthorized(file, processingToolId)
+        ) {
+            setCloudConsentFile(file);
+            return;
+        }
+
         requireAuth(async () => {
             if (!file) return;
 
@@ -274,6 +298,7 @@ export default function PdfToTextWorkspace() {
                 if (processingMode === "cloud") {
                     setIsProcessingLocal(false);
                     setLocalStatus(null);
+                    assertCloudProcessingAuthorized(targetFile, processingToolId);
                     await triggerCloudOcrTask(targetFile, password, selectedLang);
                     return;
                 }
@@ -356,6 +381,13 @@ export default function PdfToTextWorkspace() {
         });
     };
 
+    const authorizeCloudTextExtraction = () => {
+        if (!file || cloudConsentFile !== file) return;
+        authorizeCloudProcessing(file, toolId || "pdf-to-text");
+        setCloudConsentFile(null);
+        void handleTextExtraction();
+    };
+
     if (!file) return null;
 
     return (
@@ -364,6 +396,17 @@ export default function PdfToTextWorkspace() {
                 title="PDF to Text & OCR Extractor"
                 description="Extract native vector text layers directly on this device or convert scanned image-only PDF pages into searchable plain text."
             />
+
+            {cloudConsentFile === file && (
+                <section role="dialog" aria-labelledby="cloud-ocr-consent-title" className="mx-auto mt-6 max-w-xl rounded-2xl border border-amber-500/40 bg-amber-500/5 p-6 text-center">
+                    <h2 id="cloud-ocr-consent-title" className="text-lg font-semibold text-[color:var(--foreground)]">Authorize Cloud text extraction</h2>
+                    <p className="mt-3 text-sm text-[color:var(--muted-foreground)]">This text extraction request will send the current PDF and any associated password to Platen Cloud. Permission to unlock the PDF in Cloud does not authorize this separate OCR request.</p>
+                    <div className="mt-5 flex justify-center gap-3">
+                        <button type="button" onClick={() => setCloudConsentFile(null)} className="rounded-xl border border-[color:var(--border)] px-4 py-2 text-sm font-semibold">Cancel</button>
+                        <button type="button" onClick={authorizeCloudTextExtraction} className="rounded-xl bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white">Authorize and extract text</button>
+                    </div>
+                </section>
+            )}
 
             <div className="mt-12 rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8 shadow-lg w-full">
                 <div className="mt-4 grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -379,6 +422,7 @@ export default function PdfToTextWorkspace() {
                                 mode={processingMode}
                                 onChange={(m) => {
                                     setProcessingMode(m);
+                                    if (m !== "cloud") setCloudConsentFile(null);
                                     setDeviceOcrWarning(null);
                                 }}
                                 disabled={isProcessing}
@@ -387,11 +431,13 @@ export default function PdfToTextWorkspace() {
                             <div className="flex items-center gap-2 text-xs text-[color:var(--muted)] px-1">
                                 <Lock size={12} className="text-emerald-500 shrink-0" />
                                 <span>
-                                    {processingMode === "cloud"
-                                        ? "Cloud Mode: Full document and scanned pages processed via server-side OCR engine."
-                                        : processingMode === "device"
-                                        ? "Device Mode: Text layer extracted 100% on this device. Never leaves your browser."
-                                        : "Auto Mode: Fast on-device extraction for text PDFs; Cloud OCR fallback for scanned pages."}
+                                    {cloudSubmissionInitiated
+                                        ? "A Cloud request was started for this input. File delivery may have occurred, and changing modes cannot recall the request."
+                                        : processingMode === "cloud"
+                                            ? "Cloud Mode: Full document and scanned pages processed via server-side OCR engine."
+                                            : processingMode === "device"
+                                                ? "Device mode extracts the text layer in your browser when the local engine supports it."
+                                                : "Auto uses local text extraction when eligible and may use Cloud OCR for scanned pages."}
                                 </span>
                             </div>
                         </div>

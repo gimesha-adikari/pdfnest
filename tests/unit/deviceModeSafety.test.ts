@@ -5,6 +5,11 @@ import { CloudExecutor } from "../../lib/execution/CloudExecutor";
 import { ExecutionManager } from "../../lib/execution/ExecutionManager";
 import { telemetry } from "../../lib/execution/telemetry";
 import { ExecutionError, type ExecutionOptions } from "../../lib/execution/types";
+import {
+    hasCloudSubmissionInitiated,
+    markCloudSubmissionInitiated,
+    markPdfInputPreparation,
+} from "../../lib/security/pdfInputPreparation";
 
 async function main() {
     const pdf = await PDFDocument.create();
@@ -86,6 +91,28 @@ async function main() {
             ClientExecutor.execute = async () => { clientCalls++; throw new Error("synthetic engine crash"); };
             await rejectsLocally({ tool: "rotate", files: [file], mode: "device" }, "CLIENT_FAILURE", 1);
         });
+        await test("Device refuses an input after Cloud submission was initiated", async () => {
+            const transmitted = new File([file], "cloud-transmitted.pdf", { type: "application/pdf" });
+            markPdfInputPreparation(transmitted, {
+                sourceProtected: true,
+                bytesState: "decrypted",
+                preparedOn: "device",
+                processingMode: "device",
+                cloudSubmissionInitiated: false,
+            });
+            markCloudSubmissionInitiated([transmitted]);
+            await rejectsLocally({ tool: "rotate", files: [transmitted], mode: "device", allowFallback: true }, "UNSUPPORTED_CLIENT_OP", 0);
+            assert.equal(hasCloudSubmissionInitiated(transmitted), true);
+        });
+        await test("Device cancellation remains local even when fallback is permitted", async () => {
+            ClientExecutor.execute = async () => { clientCalls++; throw new ExecutionError("USER_CANCELLATION", "synthetic cancellation"); };
+            await rejectsLocally({ tool: "rotate", files: [file], mode: "device", allowFallback: true }, "USER_CANCELLATION", 1);
+        });
+        await test("pre-aborted Device execution makes no executor request", async () => {
+            const controller = new AbortController();
+            controller.abort();
+            await rejectsLocally({ tool: "rotate", files: [file], mode: "device", signal: controller.signal }, "USER_CANCELLATION", 0);
+        });
         for (const route of ["unsupported", "global-disabled", "tool-disabled", "engine-error", "protected", "safety-rejected"] as const) {
             await test(`Auto retains Cloud route: ${route}`, async () => {
                 const options: ExecutionOptions = { tool: route === "unsupported" ? "word_to_pdf" : "rotate", files: [file], mode: "auto" };
@@ -101,8 +128,20 @@ async function main() {
                 assert.equal(cloudOptions, options, "preserve the existing cloud execution contract");
                 assert.equal(result.fallbackOccurred, route !== "unsupported");
                 assert.equal(clientCalls, route === "engine-error" || route === "protected" ? 1 : 0);
+                if (route === "safety-rejected") assert.equal(hasCloudSubmissionInitiated(options.files), false, "a mocked executor that starts no request cannot claim transmission");
             });
         }
+        for (const code of ["INVALID_INPUT", "DECRYPTION_AUTH_FAILED", "USER_CANCELLATION"] as const) await test(`Auto does not fall back after ${code}`, async () => {
+            ClientExecutor.execute = async () => { clientCalls++; throw new ExecutionError(code, `synthetic ${code}`); };
+            await assert.rejects(
+                ExecutionManager.run({ tool: "rotate", files: [file], mode: "auto", allowFallback: true }),
+                (error: unknown) => error instanceof ExecutionError && error.code === code
+            );
+            assert.equal(cloudCalls, 0);
+            assert.equal(clientCalls, 1);
+            assert.equal(telemetry.getLastEvent()?.fallbackOccurred, false);
+            assert.equal(telemetry.getLastEvent()?.errorCode, code);
+        });
         await test("Auto allowFallback=false retains local failure", async () => {
             ClientExecutor.execute = async () => { throw new ExecutionError("CLIENT_FAILURE", "synthetic failure"); };
             await assert.rejects(ExecutionManager.run({ tool: "rotate", files: [file], mode: "auto", allowFallback: false }), (error: unknown) => error instanceof ExecutionError && error.code === "CLIENT_FAILURE");

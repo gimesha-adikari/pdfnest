@@ -13,6 +13,7 @@ import {
     PreviewResource,
     PreviewRenderer,
     PreviewError,
+    getPreviewFileIdentity,
 } from "../../lib/preview/types";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -260,7 +261,8 @@ async function test4_correctPreviewRequestConstruction(): Promise<void> {
 
     const req = renderer.lastRequest!;
     assert.ok(req, "Request should be passed to renderer");
-    assert.equal(req.document.id, "doc.pdf:500:999:application/pdf");
+    assert.equal(req.document.id, getPreviewFileIdentity(file));
+    assert.equal(req.document.file, file);
     assert.equal(req.document.version, "999");
     assert.equal(req.page, 3);
     assert.equal(req.mode, "page");

@@ -16,6 +16,7 @@ import {
     Undo2,
 } from "lucide-react";
 import { getBaseUrl } from "@/lib/api";
+import { markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 import { getFriendlyErrorMessage, handleClientError } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
@@ -141,6 +142,7 @@ async function submitStrikeoutJob(
         formData.append("file_password", filePassword.trim());
     }
 
+    markCloudSubmissionInitiated([file]);
     const response = await fetch(buildApiUrl("/api/markup/strikeout"), {
         method: "POST",
         headers: {
@@ -430,6 +432,7 @@ export default function StrikeoutTool({ baseFile, onStrikeoutFile }: StrikeoutTo
                 const maybePassword = (baseFile as CustomPdfFile).originalPassword;
                 if (maybePassword) formData.append("file_password", maybePassword);
 
+                markCloudSubmissionInitiated([baseFile]);
                 const response = await fetch(buildApiUrl("/api/structure/analyze"), {
                     method: "POST",
                     body: formData,

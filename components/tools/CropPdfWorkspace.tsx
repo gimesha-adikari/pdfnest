@@ -13,6 +13,7 @@ import { usePreview } from "@/lib/preview/usePreview";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
+import { getInitialProcessingMode } from "@/lib/security/pdfInputPreparation";
 
 interface CustomPdfFile extends File {
     originalPassword?: string;
@@ -58,7 +59,7 @@ export default function CropPdfWorkspace() {
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
-    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
 
     // Adaptive Hybrid Preview: Default to server preview online; auto-fallback to client renderer on failure or offline
     const [previewRenderer, setPreviewRenderer] = useState<"server" | "client">("server");

@@ -7,6 +7,7 @@ import { CheckCircle2, FileText, Highlighter, Languages, Loader2, RotateCcw, Shi
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import { useAuth } from "@/context/AuthContext";
 import OcrLanguagePicker from "@/components/tools/OcrLanguagePicker";
+import PdfUploader from "@/components/pdf/PdfUploader";
 import MarkupPdfPreview, { type MarkupFindState, type MarkupPreviewState, type MarkupTextSelection } from "@/components/tools/MarkupPdfPreview";
 import { fetchOcrMarkupPreview, safeOcrMarkupPreviewMessage, type OcrMarkupPreview } from "@/lib/ocrMarkupPreview";
 import { rememberOcrMarkupPreview } from "@/lib/ocrMarkupPreviewCache";
@@ -23,6 +24,7 @@ import {
     type OcrAwareMarkupJob,
     type OcrAwareMarkupMode,
 } from "@/lib/ocrAwareMarkupV2";
+import { assertCloudProcessingAuthorized } from "@/lib/security/pdfInputPreparation";
 
 const MAX_PDF_BYTES = 100 * 1024 * 1024;
 
@@ -158,13 +160,12 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
         }
     }, [job]);
 
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const nextFile = event.target.files?.[0];
+    const handleFilesAccepted = (files: File[]) => {
+        const nextFile = files[0];
         if (!nextFile) return;
         const validationError = validatePdf(nextFile);
         if (validationError) {
             setUploadError(validationError);
-            event.currentTarget.value = "";
             return;
         }
 
@@ -187,7 +188,6 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
         setFindOccurrence(0);
         setFindState({ count: 0, activeIndex: -1, current: null });
         setFile(nextFile);
-        event.currentTarget.value = "";
     };
 
     const handleTextSelected = useCallback((nextSelection: MarkupTextSelection) => {
@@ -324,6 +324,7 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
         abortRef.current = controller;
 
         try {
+            assertCloudProcessingAuthorized(file, toolId || `${action}-pdf-v2`);
             const created = await submitOcrAwareMarkup(action, file, query.trim(), mode, language, color, selectedGeometry);
             setJob(created);
             const completed = await waitForOcrAwareMarkupJob(created.job_id, setJob, controller.signal);
@@ -444,7 +445,16 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
                             {!file && <button type="button" data-testid="markup-v2-choose-pdf" onClick={openFileChooser} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-3 py-2 text-sm font-semibold text-white"><FileText size={15} /> Choose PDF</button>}
                             <span className="text-xs font-normal text-[var(--muted)]">Choose a PDF to review before applying a mark.</span>
                         </div>
-                        <input ref={fileInputRef} data-testid="markup-v2-file-input" aria-label="Choose a PDF document" type="file" accept="application/pdf,.pdf" className="sr-only" onChange={handleFileChange} />
+                        <PdfUploader
+                            inputRef={fileInputRef}
+                            onFilesAccepted={handleFilesAccepted}
+                            title="Choose a PDF document"
+                            description="Choose a PDF to review before applying a mark."
+                            accept="application/pdf,.pdf"
+                            multiple={false}
+                            protectedFileHandling="fail-closed"
+                            showDropZone={false}
+                        />
                     </div>
                     {file && <div data-testid="markup-v2-selected-file" className="rounded-xl border border-[var(--border)] bg-[var(--surface-secondary)] px-3 py-2 text-sm"><p className="truncate font-semibold text-[var(--foreground)]">{file.name}</p><p className="mt-1 text-xs text-[var(--muted)]">{formatFileSize(file.size)} · PDF selected</p></div>}
                     {uploadError && <p role="alert" data-testid="markup-v2-upload-error" className="text-xs text-red-700 dark:text-red-300">{uploadError}</p>}

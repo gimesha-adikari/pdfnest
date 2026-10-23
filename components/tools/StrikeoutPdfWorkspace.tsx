@@ -27,6 +27,7 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { usePreview } from "@/lib/preview/usePreview";
 import type { PreviewError } from "@/lib/preview/types";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
+import { assertCloudProcessingAuthorized, markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 
 interface CustomPdfFile extends File {
     originalPassword?: string;
@@ -135,8 +136,10 @@ async function submitStrikeoutJob(
     file: File,
     boxes: StrikeoutBox[],
     mode: StrikeoutMode,
-    filePassword?: string
+    filePassword?: string,
+    toolId = "strikeout-pdf"
 ): Promise<JobSubmissionResponse> {
+    assertCloudProcessingAuthorized(file, toolId);
     const formData = new FormData();
     formData.append("file", file);
     formData.append("boxes", JSON.stringify(boxes));
@@ -146,6 +149,7 @@ async function submitStrikeoutJob(
         formData.append("file_password", filePassword.trim());
     }
 
+    markCloudSubmissionInitiated([file]);
     const response = await fetch(buildApiUrl("/api/markup/strikeout"), {
         method: "POST",
         body: formData,
@@ -506,6 +510,8 @@ export default function StrikeoutPdfWorkspace() {
                     formData.append("file_password", maybePassword);
                 }
 
+                assertCloudProcessingAuthorized(file, toolId);
+                markCloudSubmissionInitiated([file]);
                 const response = await fetch(buildApiUrl("/api/structure/analyze"), {
                     method: "POST",
                     body: formData,
@@ -811,7 +817,8 @@ export default function StrikeoutPdfWorkspace() {
                         validFile,
                         validBoxes,
                         "ocr",
-                        validFile.originalPassword
+                        validFile.originalPassword,
+                        toolId || "strikeout-pdf"
                     );
 
                     setJobId(submission.job_id);

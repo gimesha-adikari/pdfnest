@@ -9,7 +9,7 @@
  * 5. Per-tool enable (NEXT_PUBLIC_HYBRID_ENABLE_ROTATE="true")
  * 6. Precedence (per-tool flag overrides global flag)
  * 7. Malformed / unknown environment variables
- * 8. ExecutionManager Cloud routing when client execution flag is disabled
+ * 8. Execution-mode routing with client execution flags
  * 9. ExecutionSafetyGate rejection overriding client-enabled feature flag
  */
 
@@ -21,13 +21,13 @@ import {
     parseBooleanEnv,
 } from "../../lib/execution/flags";
 import { ExecutionSafetyGate } from "../../lib/execution/ExecutionSafetyGate";
-import { ExecutionManager } from "../../lib/execution/ExecutionManager";
 
 function resetEnv() {
     delete process.env.NEXT_PUBLIC_HYBRID_ENABLE_ALL;
     delete process.env.NEXT_PUBLIC_HYBRID_ENABLE_ROTATE;
     delete process.env.NEXT_PUBLIC_HYBRID_ENABLE_WATERMARK;
     delete process.env.NEXT_PUBLIC_HYBRID_ENABLE_PDF_TO_IMAGES;
+    delete process.env.NEXT_PUBLIC_HYBRID_ENABLE_ADD_PAGE_NUMBERS;
 }
 
 async function runTests() {
@@ -103,6 +103,18 @@ async function runTests() {
     process.env.NEXT_PUBLIC_HYBRID_ENABLE_ROTATE = "true";
     assert.strictEqual(isClientExecutionEnabled("rotate"), true, "Per-tool true should override global false");
     assert.strictEqual(getHybridFeatureFlagStatus("rotate").source, "per_tool_env");
+
+    resetEnv();
+    process.env.NEXT_PUBLIC_HYBRID_ENABLE_ALL = "false";
+    process.env.NEXT_PUBLIC_HYBRID_ENABLE_PDF_TO_IMAGES = "true";
+    const normalizedPerToolStatus = getHybridFeatureFlagStatus("pdf-to-images");
+    assert.strictEqual(normalizedPerToolStatus.enabled, true, "Normalized, statically referenced per-tool flag overrides global false");
+    assert.strictEqual(normalizedPerToolStatus.source, "per_tool_env");
+    process.env.NEXT_PUBLIC_HYBRID_ENABLE_ADD_PAGE_NUMBERS = "false";
+    const underscoreToolStatus = getHybridFeatureFlagStatus("add_page_numbers");
+    assert.strictEqual(underscoreToolStatus.enabled, false, "Representative underscore tool identifier resolves its static per-tool flag");
+    assert.strictEqual(underscoreToolStatus.toolKey, "ADD_PAGE_NUMBERS");
+    assert.strictEqual(underscoreToolStatus.source, "per_tool_env");
     console.log("  ✓ Per-tool flags correctly take top precedence over global flags.");
 
     // 7. Malformed Environment Values
@@ -112,6 +124,12 @@ async function runTests() {
     process.env.NEXT_PUBLIC_HYBRID_ENABLE_ROTATE = "not_a_boolean";
     assert.strictEqual(getHybridFeatureFlagStatus("rotate").source, "default");
     assert.strictEqual(isClientExecutionEnabled("rotate"), true);
+    resetEnv();
+    process.env.NEXT_PUBLIC_HYBRID_ENABLE_ALL = "false";
+    process.env.NEXT_PUBLIC_HYBRID_ENABLE_ROTATE = "not_a_boolean";
+    const malformedPerToolStatus = getHybridFeatureFlagStatus("rotate");
+    assert.strictEqual(malformedPerToolStatus.enabled, false, "Malformed per-tool value falls through to a valid global value");
+    assert.strictEqual(malformedPerToolStatus.source, "global_env");
     console.log("  ✓ Malformed environment values safely fall back to defaults.");
 
     // 8. ExecutionSafetyGate Overrides Client-Enabled Flag

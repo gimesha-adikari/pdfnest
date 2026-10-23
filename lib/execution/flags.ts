@@ -48,6 +48,74 @@ export function parseBooleanEnv(value: string | undefined): boolean | undefined 
 }
 
 /**
+ * Next.js only inlines public environment variables when the property name is
+ * statically visible in source. Keep these reads literal while evaluating
+ * them at call time so unit tests and server-side callers can still set env
+ * values before resolving a flag. Add new per-tool keys here rather than
+ * constructing process.env property names; unlisted keys use global/default.
+ */
+const perToolFlagReaders: Record<string, () => string | undefined> = {
+    ADD_PAGE_NUMBERS: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_ADD_PAGE_NUMBERS,
+    ADD_TEXT: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_ADD_TEXT,
+    CODE_TO_PDF: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_CODE_TO_PDF,
+    COMPRESS: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_COMPRESS,
+    CROP: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_CROP,
+    DELETE: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_DELETE,
+    DELETE_PAGES: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_DELETE_PAGES,
+    DOCUMENT_EXTRACTION_V2: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_DOCUMENT_EXTRACTION_V2,
+    DUPLICATE: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_DUPLICATE,
+    DUPLICATE_PAGES: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_DUPLICATE_PAGES,
+    EXCEL_TO_PDF: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_EXCEL_TO_PDF,
+    GRAYSCALE: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_GRAYSCALE,
+    HIGHLIGHT: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_HIGHLIGHT,
+    HIGHLIGHT_PDF_V2: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_HIGHLIGHT_PDF_V2,
+    HTML_TO_PDF: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_HTML_TO_PDF,
+    IMAGE_TO_SEARCHABLE_PDF: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_IMAGE_TO_SEARCHABLE_PDF,
+    IMAGE_TO_TEXT: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_IMAGE_TO_TEXT,
+    IMAGE_TO_TEXT_PDF: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_IMAGE_TO_TEXT_PDF,
+    IMAGES_TO_PDF: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_IMAGES_TO_PDF,
+    INSERT_BLANK: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_INSERT_BLANK,
+    INSERT_BLANK_PAGES: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_INSERT_BLANK_PAGES,
+    LOCK: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_LOCK,
+    LOCK_PDF: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_LOCK_PDF,
+    MARKDOWN_TO_PDF: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_MARKDOWN_TO_PDF,
+    MERGE: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_MERGE,
+    METADATA: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_METADATA,
+    OCR_EXTRACT: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_OCR_EXTRACT,
+    OCR_TEXT_V2: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_OCR_TEXT_V2,
+    PDF_EDITOR: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_PDF_EDITOR,
+    PDF_TO_EXCEL: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_PDF_TO_EXCEL,
+    PDF_TO_IMAGES: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_PDF_TO_IMAGES,
+    PDF_TO_MARKDOWN: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_PDF_TO_MARKDOWN,
+    PDF_TO_MARKDOWN_V2: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_PDF_TO_MARKDOWN_V2,
+    PDF_TO_POWERPOINT: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_PDF_TO_POWERPOINT,
+    PDF_TO_TEXT: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_PDF_TO_TEXT,
+    PDF_TO_WORD: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_PDF_TO_WORD,
+    POWERPOINT_TO_PDF: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_POWERPOINT_TO_PDF,
+    PAGE_NUMBERS: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_PAGE_NUMBERS,
+    REDACT: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_REDACT,
+    REORDER: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_REORDER,
+    REORDER_PAGES: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_REORDER_PAGES,
+    REPAIR: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_REPAIR,
+    REPOSITORY_ANALYZER: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_REPOSITORY_ANALYZER,
+    ROTATE: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_ROTATE,
+    SEARCHABLE_PDF_V2: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_SEARCHABLE_PDF_V2,
+    SIGN: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_SIGN,
+    SPLIT: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_SPLIT,
+    STUDIO_V2: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_STUDIO_V2,
+    STRIKEOUT: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_STRIKEOUT,
+    STRIKEOUT_PDF_V2: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_STRIKEOUT_PDF_V2,
+    UNDERLINE: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_UNDERLINE,
+    UNDERLINE_PDF_V2: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_UNDERLINE_PDF_V2,
+    UNLOCK: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_UNLOCK,
+    UNLOCK_PDF: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_UNLOCK_PDF,
+    URL_TO_PDF: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_URL_TO_PDF,
+    WATERMARK: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_WATERMARK,
+    WORD_TO_PDF: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_WORD_TO_PDF,
+    UPDATE_METADATA: () => process.env.NEXT_PUBLIC_HYBRID_ENABLE_UPDATE_METADATA,
+};
+
+/**
  * Inspects the exact feature flag status for a given tool, including resolution source.
  *
  * Precedence Rules:
@@ -60,7 +128,7 @@ export function getHybridFeatureFlagStatus(toolId: string): FlagStatus {
     const envVarName = `NEXT_PUBLIC_HYBRID_ENABLE_${toolKey}`;
 
     // 1. Check per-tool env variable
-    const perToolRaw = process.env[envVarName];
+    const perToolRaw = perToolFlagReaders[toolKey]?.();
     const perToolParsed = parseBooleanEnv(perToolRaw);
     if (perToolParsed !== undefined) {
         return {

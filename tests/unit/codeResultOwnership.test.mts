@@ -8,6 +8,7 @@ import axios, { type InternalAxiosRequestConfig } from "axios";
 import { CloudExecutor } from "../../lib/execution/CloudExecutor";
 import { handleClientError } from "../../lib/errorHandler";
 import { ExecutionError, type ExecutionOptions, type ExecutionResult } from "../../lib/execution/types";
+import * as pdfInputPreparation from "../../lib/security/pdfInputPreparation";
 import type { PreviewResource } from "../../lib/preview/types";
 type Shared = ReturnType<typeof import("../../app/(site)/[toolId]/ClientToolLayout").useSharedTool>;
 type ComponentModule = { default: React.ComponentType<React.PropsWithChildren>; useSharedTool: () => Shared };
@@ -23,6 +24,7 @@ function loadComponent(relative: string, mocks: Record<string, unknown>) {
     const loaded = { exports: {} };
     new Function("require", "module", "exports", outputText)(
         (name: string) => {
+            if (name === "@/lib/security/pdfInputPreparation") return pdfInputPreparation;
             if (!(name in mocks)) return require(name);
             const mock = mocks[name];
             return mock && typeof mock === "object" && Object.hasOwn(mock, "default")
@@ -40,6 +42,7 @@ function deferred<T>() {
 }
 
 async function main() {
+    assert.equal(process.env.NEXT_PUBLIC_API_URL, "http://127.0.0.1:9", "ownership fixture API must stay loopback-only");
     const name = "jsdom"; // Installed by the existing DOMPurify dependency.
     const { JSDOM } = await import(name);
     const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost/code-to-pdf/workspace" });
@@ -320,15 +323,21 @@ async function main() {
         }],
         ["deployed HTTP 413 JSON-Blob travels through the real API and CloudExecutor", async () => {
             await act(async () => modeChange("cloud")); await file(B);
+            // Source modules may load Axios through CommonJS while this .mts test
+            // imports it through ESM. Patch both entry points to keep transport local.
+            const commonJsAxios = require("axios") as typeof axios;
             const originalPost = axios.post;
+            const originalCommonJsPost = commonJsAxios.post;
             const originalFetch = globalThis.fetch;
             globalThis.fetch = async () => { throw new Error("Fixture forbids network"); };
-            axios.post = (async (_url: string, form: FormData, config: InternalAxiosRequestConfig) => {
+            const mockPost = (async (_url: string, form: FormData, config: InternalAxiosRequestConfig) => {
                 assert.equal((form.get("file") as File).name, B.name);
                 throw new axios.AxiosError("Request failed with status code 413", "ERR_BAD_REQUEST", config, null,
                     { status: 413, statusText: "Content Too Large", headers: { "content-type": "application/json" }, config,
                       data: new Blob([JSON.stringify({ code: "CODE_SOURCE_TOO_LARGE", message: "synthetic /private/secret" })], {type: "application/json"}) });
             }) as typeof axios.post;
+            axios.post = mockPost;
+            commonJsAxios.post = mockPost;
             try {
                 let caught: unknown;
                 try { await CloudExecutor.execute(requests[0].options); } catch (error) { caught = error; }
@@ -337,7 +346,7 @@ async function main() {
                 assert.match(document.querySelector('[aria-label="Code conversion status"]')!.textContent!, /16 MiB/);
                 assert.doesNotMatch(document.body.textContent!, /private|secret/);
                 assert.equal(save().disabled, true);
-            } finally { axios.post = originalPost; globalThis.fetch = originalFetch; }
+            } finally { axios.post = originalPost; commonJsAxios.post = originalCommonJsPost; globalThis.fetch = originalFetch; }
         }],
         ["HTTP 413 copy persists after notifications disappear and successful retry clears it", async () => {
             await file(A); await succeed(0); await clickSave(); navigation.length = 0;

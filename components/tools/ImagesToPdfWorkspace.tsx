@@ -28,6 +28,7 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
+import { getInitialProcessingMode } from "@/lib/security/pdfInputPreparation";
 import Link from "next/link";
 
 interface CanvasItem {
@@ -82,7 +83,7 @@ export default function ImagesToPdfWorkspace() {
     const [images, setImages] = useState<File[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
-    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
 
     const [activeTab, setActiveTab] = useState<"standard" | "custom">("standard");
     const [canvasItems, setCanvasItems] = useState<CanvasItem[]>([]);

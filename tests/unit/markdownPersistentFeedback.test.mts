@@ -9,6 +9,7 @@ import { CloudExecutor } from "../../lib/execution/CloudExecutor";
 import { ExecutionError, type ExecutionOptions, type ExecutionResult, type ProcessingMode } from "../../lib/execution/types";
 import { prepareMarkdown } from "../../lib/execution/document/markdownPolicy";
 import { handleClientError } from "../../lib/errorHandler";
+import * as pdfInputPreparation from "../../lib/security/pdfInputPreparation";
 import type { PreviewResource } from "../../lib/preview/types";
 
 type Shared = ReturnType<typeof import("../../app/(site)/[toolId]/ClientToolLayout").useSharedTool>;
@@ -27,6 +28,7 @@ function loadModule<T>(relative: string, mocks: Record<string, unknown>): T {
     const loaded = { exports: {} };
     new Function("require", "module", "exports", outputText)(
         (name: string) => {
+            if (name === "@/lib/security/pdfInputPreparation") return pdfInputPreparation;
             if (!(name in mocks)) return require(name);
             const mock = mocks[name];
             return mock && typeof mock === "object" && Object.hasOwn(mock, "default")
@@ -46,6 +48,7 @@ const policyCopy = "External image URLs and local file paths are not supported. 
 const policy = { code: "MARKDOWN_RESOURCE_FORBIDDEN", message: "synthetic server detail /private/internal-file https://internal.invalid trace: secret diagnostic" };
 
 async function main() {
+    assert.equal(process.env.NEXT_PUBLIC_API_URL, "http://127.0.0.1:9", "feedback fixture API must stay loopback-only");
     const packageName = "jsdom"; // Existing DOMPurify dependency; no installation.
     const { JSDOM } = await import(packageName);
     const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost/markdown-to-pdf/workspace" });
@@ -86,12 +89,30 @@ async function main() {
         "../notify": { notifyHybridFallback: () => {} }, "./types": { ExecutionError },
     });
     const requests: Array<{ url: string; form: FormData; config: InternalAxiosRequestConfig } & ReturnType<typeof deferred<AxiosResponse<Blob>>>> = [];
+    // Source modules may load Axios through CommonJS while this .mts test imports
+    // it through ESM. Patch both entry points so the fixture cannot escape its
+    // mocked transport.
+    const commonJsAxios = require("axios") as typeof axios;
     const originalPost = axios.post;
+    const originalCommonJsPost = commonJsAxios.post;
     const originalFetch = globalThis.fetch;
-    axios.post = ((url: string, form: FormData, config: InternalAxiosRequestConfig) => {
+    const mockPost = ((url: string, form: FormData, config: InternalAxiosRequestConfig) => {
         const request = { url, form, config, ...deferred<AxiosResponse<Blob>>() };
         requests.push(request); return request.promise;
     }) as typeof axios.post;
+    axios.post = mockPost;
+    commonJsAxios.post = mockPost;
+    async function waitForRequest(index: number) {
+        const deadline = Date.now() + 5000;
+        while (!requests[index]) {
+            if (Date.now() >= deadline) {
+                const causes = executionErrors.map((error) => error instanceof Error ? `${error.name}: ${error.message}` : String(error));
+                throw new Error(`HTTP request ${index} was not dispatched; observed ${requests.length}; execution calls: ${executions.length}; execution errors: ${causes.join(" | ") || "none"}`);
+            }
+            await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0));
+        }
+        return requests[index];
+    }
     globalThis.fetch = async () => { throw new Error("P5 fixture forbids network fetch"); };
     let shared: Shared;
     let modeChange: (mode: ProcessingMode) => void;
@@ -188,15 +209,16 @@ async function main() {
         assert.equal(save().disabled, true);
     }
     async function rejectHTTP(index: number, payload: unknown = policy) {
-        const request = requests[index];
+        const request = await waitForRequest(index);
         const body = payload instanceof Blob ? payload : new Blob([JSON.stringify(payload)], { type: "application/json" });
         const error = new axios.AxiosError("Request failed with status code 400", "ERR_BAD_REQUEST", request.config, null,
             { status: 400, statusText: "Bad Request", data: body, headers: { "content-type": "application/json" }, config: request.config });
         await act(async () => request.reject(error));
     }
     async function succeed(index: number, bytes = "PDF:A") {
-        await act(async () => requests[index].resolve({ status: 200, statusText: "OK", data: new Blob([bytes], { type: "application/pdf" }),
-            headers: { "content-type": "application/pdf" }, config: requests[index].config }));
+        const request = await waitForRequest(index);
+        await act(async () => request.resolve({ status: 200, statusText: "OK", data: new Blob([bytes], { type: "application/pdf" }),
+            headers: { "content-type": "application/pdf" }, config: request.config }));
     }
     async function change(kind: "file" | "mode" | "paper" | "margin") {
         if (kind === "file") return file(A);
@@ -218,8 +240,8 @@ async function main() {
             assert.deepEqual(navigation, ["/markdown-to-pdf/download"]); assert.equal(executions.length, 1);
         }],
         ["actual Axios JSON-Blob 400 persists safely after the policy toast expires at 7000ms", async () => {
-            await file(B); assert.equal(requests[0].config.responseType, "blob");
-            assert.equal(await (requests[0].form.get("file") as File).text(), "![Local image](../image.png)");
+            await file(B); const request = await waitForRequest(0); assert.equal(request.config.responseType, "blob");
+            assert.equal(await (request.form.get("file") as File).text(), "![Local image](../image.png)");
             await rejectHTTP(0); assertPolicy(); assert.equal(toasts().length, 1); assert.equal(errors.length, 1);
             const error = executionErrors[0] as ExecutionError & { originalError: { backend: { code: string } } };
             assert.equal(error.code, "CLOUD_FAILURE"); assert.equal(error.status, 400); assert.equal(error.originalError.backend.code, policy.code);
@@ -257,7 +279,7 @@ async function main() {
         ...(["file", "mode", "paper", "margin"] as const).map(kind => [
             `${kind} change immediately clears prior error and starts exactly one replacement generation`, async () => {
                 await file(B); await rejectHTTP(0); assertPolicy(); await change(kind); assertPending();
-                assert.equal(executions.length, 2); assert.equal(requests[0].config.signal?.aborted, true);
+                assert.equal(executions.length, 2); assert.equal((await waitForRequest(0)).config.signal?.aborted, true);
                 assert.equal(shared.downloadData, null); await succeed(1, "PDF:replacement");
                 assert.doesNotMatch(inlineText(), /Markdown resource blocked/); assert.match(inlineText(), /PDF preview ready/);
                 assert.equal(save().disabled, false); assert.equal(executions.length, 2);
@@ -289,18 +311,19 @@ async function main() {
             await rejectHTTP(1); assertPolicy(); assert.equal(executions.length, 2);
         }],
         ["Remove aborts pending work and suppresses its late policy failure", async () => {
-            await file(B); await remove(); assert.equal(requests[0].config.signal?.aborted, true);
+            await file(B); await remove(); assert.equal((await waitForRequest(0)).config.signal?.aborted, true);
             await rejectHTTP(0); assert.equal(region(), null); assert.equal(errors.length, 0);
             await file(A); assertPending(); await succeed(1); assert.match(inlineText(), /PDF preview ready/);
         }],
         ["unmount suppresses pending errors and remount starts a new generation", async () => {
-            await file(B); screen = empty; await render(); assert.equal(requests[0].config.signal?.aborted, true);
+            await file(B); screen = empty; await render(); assert.equal((await waitForRequest(0)).config.signal?.aborted, true);
             await rejectHTTP(0); assert.equal(errors.length, 0); assert.equal(region(), null);
             screen = workspace; await render(); assertPending(); await rejectHTTP(1); assertPolicy();
         }],
         ["transport cancellation cannot restore old policy feedback", async () => {
             await file(B); await rejectHTTP(0); await file(A);
-            await act(async () => requests[1].reject(new axios.CanceledError("synthetic cancellation")));
+            const request = await waitForRequest(1);
+            await act(async () => request.reject(new axios.CanceledError("synthetic cancellation")));
             assert.doesNotMatch(inlineText(), /Markdown resource blocked/);
             assert.match(inlineText(), /Markdown conversion cancel[el]ed|Markdown conversion canceled/);
             assert.equal(save().disabled, true);
@@ -415,7 +438,7 @@ async function main() {
             finally { await act(async () => root.unmount()); }
         }
     } finally {
-        console.error = originalConsoleError; axios.post = originalPost; globalThis.fetch = originalFetch; dom.window.close();
+        console.error = originalConsoleError; axios.post = originalPost; commonJsAxios.post = originalCommonJsPost; globalThis.fetch = originalFetch; dom.window.close();
     }
     console.log(`Markdown persistent feedback: ${tests.length - failed}/${tests.length} passed; ${failed} failed; 0 skipped.`);
     process.exitCode = failed ? 1 : 0;

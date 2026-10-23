@@ -16,6 +16,7 @@ import { usePreviews } from "@/lib/preview/usePreviews";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
+import { getInitialProcessingMode } from "@/lib/security/pdfInputPreparation";
 
 import LazyPdfThumbnail from "@/components/pdf/LazyPdfThumbnail";
 
@@ -31,7 +32,7 @@ export default function DeletePagesWorkspace() {
     const [pageCount, setPageCount] = useState<number>(0);
     const [pagesToDelete, setPagesToDelete] = useState<Set<number>>(new Set());
     const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
-    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [isReadingTotal, setIsReadingTotal] = useState(false);

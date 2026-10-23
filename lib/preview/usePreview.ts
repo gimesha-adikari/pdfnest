@@ -11,6 +11,7 @@ import {
     PreviewRendererPreference,
     PreviewRequest,
     PreviewResult,
+    getPreviewFileIdentity,
 } from "./types";
 import { PreviewManager, PreviewHandle } from "./PreviewManager";
 import { ClientPdfRenderer } from "./ClientPdfRenderer";
@@ -128,7 +129,7 @@ export function usePreview(options: UsePreviewOptions): UsePreviewResult {
         setMetadata(null);
 
         const doc: DocumentHandle = {
-            id: `${file.name}:${file.size}:${file.lastModified}:${file.type}`,
+            id: getPreviewFileIdentity(file),
             version: String(file.lastModified),
             pageCount: 0,
             file: file,

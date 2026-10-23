@@ -13,6 +13,7 @@ import { ExecutionError } from "@/lib/execution/types";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import type { ProcessingMode } from "@/lib/execution/types";
+import { getInitialProcessingMode } from "@/lib/security/pdfInputPreparation";
 import { ClientPdfRenderer } from "@/lib/preview/ClientPdfRenderer";
 import type { PreviewResource } from "@/lib/preview/types";
 import type { ExecutionResult } from "@/lib/execution/types";
@@ -59,7 +60,7 @@ export default function MarkdownToPdfWorkspace() {
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData, setConversionGeneration } = useSharedTool();
 
-    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
     const [paperSize, setPaperSize] = useState("A4");
     const [margins, setMargins] = useState({ top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 });
     // This offscreen snapshot represents the generated PDF's printable output.

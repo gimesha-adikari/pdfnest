@@ -1,6 +1,7 @@
 "use client";
 
 import { getBaseUrl } from "@/lib/api";
+import { markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 import { abortableDelay } from "@/lib/abortableDelay";
 
 export type EditorJobStatus =
@@ -39,6 +40,13 @@ const TERMINAL = new Set<EditorJobStatus>([
 ]);
 
 export async function submitEditorExtract(formData: FormData): Promise<EditorJobSubmission> {
+    const files: File[] = [];
+    if (typeof File !== "undefined") {
+        formData.forEach((value) => {
+            if (value instanceof File) files.push(value);
+        });
+    }
+    markCloudSubmissionInitiated(files);
     const response = await fetch(`${getBaseUrl()}/api/edit/extract`, {
         method: "POST",
         body: formData,

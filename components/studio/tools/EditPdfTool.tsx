@@ -7,6 +7,7 @@ import {useAuth} from "@/context/AuthContext";
 import {notify} from "@/lib/notify";
 import {getFriendlyErrorMessage, handleClientError} from "@/lib/errorHandler";
 import {getBaseUrl} from "@/lib/api";
+import { markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 
 
 import {
@@ -156,6 +157,7 @@ export default function EditPdfTool({baseFile, onEditedFile}: EditPdfToolProps) 
                     analysisForm.append("file_password", typedFile.originalPassword);
                 }
 
+                markCloudSubmissionInitiated([baseFile]);
                 const analysisResponse = await fetch(`${getBaseUrl()}/api/structure/analyze`, {
                     method: "POST",
                     body: analysisForm,

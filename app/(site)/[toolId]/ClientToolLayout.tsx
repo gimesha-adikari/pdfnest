@@ -18,6 +18,19 @@ import { BackendOnlyToolGuard } from "@/components/pdf/BackendOnlyToolGuard";
 import { RepositoryAnalyzerProvider } from "@/context/RepositoryAnalyzerContext";
 import { getOcrV2DevelopmentRouteConfig } from "@/lib/ocrV2DevelopmentTools";
 import { type EditPdfEditorEngine, resolveEditPdfEditorEngine } from "@/lib/editPdfEngine";
+import {
+    capturePdfResultProvenance,
+    type PdfResultProvenance,
+} from "@/lib/security/pdfInputPreparation";
+
+export type ToolDownloadData = {
+    blob: Blob;
+    fileName: string;
+    provenance: PdfResultProvenance;
+    source?: { file: File; generation: object };
+};
+
+type ToolDownloadDataInput = Omit<ToolDownloadData, "provenance"> & { provenance?: PdfResultProvenance };
 
 interface ToolItem {
     title: string;
@@ -64,19 +77,13 @@ interface ToolConfig {
     accept: string;
 }
 
-interface ToolDownloadData {
-    blob: Blob;
-    fileName: string;
-    source?: { file: File; generation: object };
-}
-
 interface ToolContextProps {
     toolId: string;
     toolConfig: ToolConfig;
     file: File | null;
     setFile: (file: File | null) => void;
     downloadData: ToolDownloadData | null;
-    setDownloadData: (data: ToolDownloadData | null) => void;
+    setDownloadData: (data: ToolDownloadDataInput | null) => void;
     conversionGeneration: object | null;
     setConversionGeneration: (generation: object | null) => void;
     isLoadingConfig: boolean;
@@ -109,7 +116,18 @@ export default function ClientToolLayout({
 
     const [fileState, setFileState] = useState<File | null>(null);
     const [activeToolHref, setActiveToolHref] = useState<string | null>(null);
-    const [downloadData, setDownloadData] = useState<ToolDownloadData | null>(null);
+    const [downloadData, setDownloadDataState] = useState<ToolDownloadData | null>(null);
+
+    const setDownloadData = useCallback((data: ToolDownloadDataInput | null) => {
+        setDownloadDataState(data ? {
+            ...data,
+            provenance: data.provenance ?? capturePdfResultProvenance(
+                fileState ? [fileState] : [],
+                activeToolHref?.replace(/^\//, "") || toolId
+            ),
+        } : null);
+    }, [fileState, activeToolHref, toolId]);
+
     const [conversionGeneration, setConversionGeneration] = useState<object | null>(null);
 
     const file = activeToolHref === currentToolHref ? fileState : null;
@@ -183,7 +201,7 @@ export default function ClientToolLayout({
         }
         setFileState(nextFile);
         setActiveToolHref(nextFile ? currentToolHref : null);
-    }, [toolId, currentToolHref]);
+    }, [toolId, currentToolHref, setDownloadData]);
 
     return (
         <SharedToolContext.Provider

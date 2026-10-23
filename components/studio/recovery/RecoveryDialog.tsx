@@ -4,12 +4,14 @@ interface RecoveryDialogProps {
     open: boolean;
     onResume: () => void;
     onDiscard: () => void;
+    message?: string | null;
 }
 
 export default function RecoveryDialog({
                                            open,
                                            onResume,
                                            onDiscard,
+                                           message,
                                        }: RecoveryDialogProps) {
     if (!open) return null;
 
@@ -27,6 +29,12 @@ export default function RecoveryDialog({
                     <p className="mt-3 text-sm text-[color:var(--muted)]">
                         We found a temporary Studio recovery created less than one hour ago.
                     </p>
+
+                    {message && (
+                        <p role="status" className="mt-3 text-sm text-amber-700 dark:text-amber-300">
+                            {message}
+                        </p>
+                    )}
 
                     <div className="mt-8 flex justify-end gap-3">
 

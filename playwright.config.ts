@@ -23,6 +23,14 @@ if (fs.existsSync(dedicatedEnvFile)) {
 
 const managedTarget = Boolean(process.env.E2E_BASE_URL);
 const managedStorageState = process.env.E2E_STORAGE_STATE || undefined;
+const isolatedPrivacySuite = process.env.PLATEN_M1_PRIVACY_E2E === '1';
+const privacyAppPort = process.env.PLATEN_M1_PRIVACY_PORT || '3000';
+const privacyAppOrigin = `http://127.0.0.1:${privacyAppPort}`;
+const privacyMockApiOrigin = 'http://127.0.0.1:3999';
+
+if (isolatedPrivacySuite) {
+  process.env.PLATEN_M1_PRIVACY_APP_ORIGIN = privacyAppOrigin;
+}
 
 /**
  * PDFNest End-to-End Testing Configuration
@@ -30,6 +38,11 @@ const managedStorageState = process.env.E2E_STORAGE_STATE || undefined;
  */
 export default defineConfig({
   testDir: './tests',
+  // The Milestone 1 privacy browser suite requires explicit local API/app mocks.
+  // Keep it out of the default Playwright run unless the task verifier opts in.
+  testIgnore: process.env.PLATEN_M1_PRIVACY_E2E === '1'
+    ? []
+    : ['**/security/milestone-1/protected-input-privacy.spec.ts'],
   fullyParallel: false, // Run sequentially to avoid backend CPU/worker exhaustion
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -43,8 +56,10 @@ export default defineConfig({
     timeout: 30_000, // 30s timeout for individual assertions
   },
   use: {
-    baseURL: process.env.E2E_BASE_URL || 'http://localhost:3000',
-    ...(managedStorageState ? { storageState: managedStorageState } : {}),
+    baseURL: isolatedPrivacySuite
+      ? privacyAppOrigin
+      : process.env.E2E_BASE_URL || 'http://localhost:3000',
+    ...(!isolatedPrivacySuite && managedStorageState ? { storageState: managedStorageState } : {}),
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -57,13 +72,18 @@ export default defineConfig({
     },
   ],
 
-  ...(managedTarget
+  ...(managedTarget && !isolatedPrivacySuite
     ? {}
     : {
         webServer: {
-          command: 'npm run dev',
-          url: 'http://localhost:3000',
-          reuseExistingServer: true,
+          command: isolatedPrivacySuite
+            ? `npm run dev -- --hostname 127.0.0.1 --port ${privacyAppPort}`
+            : 'npm run dev',
+          url: isolatedPrivacySuite ? privacyAppOrigin : 'http://localhost:3000',
+          reuseExistingServer: !isolatedPrivacySuite,
+          ...(isolatedPrivacySuite
+            ? { env: { NEXT_PUBLIC_API_URL: privacyMockApiOrigin } }
+            : {}),
           timeout: 60_000,
         },
       }),

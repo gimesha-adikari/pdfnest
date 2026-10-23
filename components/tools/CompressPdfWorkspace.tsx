@@ -20,6 +20,7 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
+import { getInitialProcessingMode } from "@/lib/security/pdfInputPreparation";
 
 type CompressionLevel = "low" | "medium" | "high";
 
@@ -35,7 +36,7 @@ export default function CompressPdfWorkspace() {
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
 
-    const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
+    const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
     const [compressionLevel, setCompressionLevel] = useState<CompressionLevel>("medium");
 
     const [isProcessing, setIsProcessing] = useState(false);

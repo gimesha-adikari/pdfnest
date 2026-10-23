@@ -5,17 +5,20 @@ import PdfUploader from "@/components/pdf/PdfUploader";
 
 interface StudioWelcomeProps {
     onFilesAccepted: (files: File[]) => Promise<void>;
+    onFilesSelected: (files: File[]) => void;
     errorMessage: string | null;
 }
 
 export default function StudioWelcome({
                                           onFilesAccepted,
+                                          onFilesSelected,
                                           errorMessage,
                                       }: StudioWelcomeProps) {
     return (
         <div className="w-full rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-6 shadow-sm">
             <PdfUploader
                 onFilesAccepted={onFilesAccepted}
+                onFilesSelected={onFilesSelected}
                 title="Upload a PDF to start the Studio"
                 description="This Studio handles upload and preview as the base editing shell."
                 accept=".pdf,.pns"
