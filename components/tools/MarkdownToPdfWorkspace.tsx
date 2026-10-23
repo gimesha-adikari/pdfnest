@@ -1,119 +1,166 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { FileCode, Eye, Loader2, Sliders } from "lucide-react";
-import { notify } from "@/lib/notify";
 import { handleClientError } from "@/lib/errorHandler";
 import { useAuth } from "@/context/AuthContext";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
+import { ExecutionError } from "@/lib/execution/types";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import type { ProcessingMode } from "@/lib/execution/types";
 import { getInitialProcessingMode } from "@/lib/security/pdfInputPreparation";
 import { ClientPdfRenderer } from "@/lib/preview/ClientPdfRenderer";
+import type { PreviewResource } from "@/lib/preview/types";
+import type { ExecutionResult } from "@/lib/execution/types";
+
+type MarkdownFailure = {
+    code: "MARKDOWN_RESOURCE_FORBIDDEN" | "CONVERSION_FAILED" | "USER_CANCELLATION";
+    title: string;
+    message: string;
+};
+
+function normalizeMarkdownFailure(error: unknown): MarkdownFailure {
+    const err = error as {
+        code?: string;
+        name?: string;
+        backend?: { code?: string };
+        originalError?: { backend?: { code?: string } };
+    } | null;
+    // Keep diagnostics out of the persistent UI. Only recognized codes select
+    // copy; server messages, paths and raw exception text are never rendered.
+    if (err?.code === "USER_CANCELLATION" || err?.name === "AbortError" || err?.name === "CanceledError") {
+        return {
+            code: "USER_CANCELLATION",
+            title: "Markdown conversion canceled",
+            message: "Upload your Markdown document again to retry.",
+        };
+    }
+    const backendCode = err?.backend?.code || err?.originalError?.backend?.code;
+    if (backendCode === "MARKDOWN_RESOURCE_FORBIDDEN" || error instanceof ExecutionError && error.code === "MARKDOWN_RESOURCE_FORBIDDEN") {
+        return {
+            code: "MARKDOWN_RESOURCE_FORBIDDEN",
+            title: "Markdown resource blocked",
+            message: "External image URLs and local file paths are not supported. Embed PNG or JPEG images directly in your Markdown document.",
+        };
+    }
+    return {
+        code: "CONVERSION_FAILED",
+        title: "Markdown conversion failed",
+        message: "We couldn't create a PDF from this document. Check your Markdown and upload it again to retry.",
+    };
+}
 
 export default function MarkdownToPdfWorkspace() {
     const { requireAuth } = useAuth();
     const router = useRouter();
-    const { toolId, file, setFile, setDownloadData } = useSharedTool();
+    const { toolId, file, setFile, setDownloadData, setConversionGeneration } = useSharedTool();
 
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [isPreviewLoading, setIsPreviewLoading] = useState(false);
-    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-    const [finalBlob, setFinalBlob] = useState<Blob | null>(null);
-    const [finalFileName, setFinalFileName] = useState<string>("");
     const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
-
     const [paperSize, setPaperSize] = useState("A4");
     const [margins, setMargins] = useState({ top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 });
-    const rendererRef = useRef<ClientPdfRenderer | null>(null);
-
-    if (!rendererRef.current) {
-        rendererRef.current = new ClientPdfRenderer();
+    // This offscreen snapshot represents the generated PDF's printable output.
+    // PDF.js display intent waits for animation frames, which hidden tabs pause.
+    const [renderer] = useState(() => new ClientPdfRenderer({ renderingIntent: "print" }));
+    // File object identity matters: two uploads with the same name/size are
+    // still different inputs. A fresh token also distinguishes A -> B -> A.
+    const input = useMemo(() => ({
+        file, processingMode, paperSize,
+        top: margins.top, bottom: margins.bottom, left: margins.left, right: margins.right,
+    }), [file, processingMode, paperSize, margins.top, margins.bottom, margins.left, margins.right]);
+    const latestInput = useRef<typeof input | null>(null);
+    const [attempt, setAttempt] = useState<{
+        input: typeof input;
+        settled: boolean;
+        output: { result: ExecutionResult; preview: PreviewResource; signal: AbortSignal } | null;
+        failure: MarkdownFailure | null;
+    }>({ input, settled: false, output: null, failure: null });
+    // Reset this component's state during render on an input change, so Save
+    // and the displayed preview cannot expose old output before effects run.
+    if (attempt.input !== input) {
+        setAttempt({ input, settled: false, output: null, failure: null });
     }
+    const currentOutput = attempt.input === input ? attempt.output : null;
+    const currentFailure = attempt.input === input ? attempt.failure : null;
+    const isPreviewLoading = Boolean(file) && (attempt.input !== input || !attempt.settled);
+    const previewUrl = currentOutput?.preview.url;
 
-    const generateLiveMarkdownPreview = async (targetFile: File) => {
-        try {
-            setIsPreviewLoading(true);
+    // Update ownership at commit, before a delayed authentication continuation
+    // can act on the previous render. Unmount also invalidates continuations.
+    useLayoutEffect(() => {
+        latestInput.current = input;
+        setDownloadData(null);
+        setConversionGeneration(input);
+        return () => { latestInput.current = null; };
+    }, [input, setDownloadData, setConversionGeneration]);
 
-            const result = await ExecutionManager.run({
-                tool: "markdown-to-pdf",
-                files: [targetFile],
-                mode: processingMode,
-                params: {
-                    paperSize,
-                    marginTop: margins.top,
-                    marginBottom: margins.bottom,
-                    marginLeft: margins.left,
-                    marginRight: margins.right,
-                },
-            });
-
-            setFinalBlob(result.blob);
-            setFinalFileName(result.fileName);
-
-            // Render Page 1 to Image URL via ClientPdfRenderer
-            const previewPdfFile = new File([result.blob], "preview_rendered.pdf", { type: "application/pdf" });
-            const controller = new AbortController();
-            const previewResource = await rendererRef.current!.render(
-                {
-                    document: {
-                        id: `md_preview_${Date.now()}`,
-                        version: `${Date.now()}`,
-                        pageCount: 1,
-                        file: previewPdfFile,
+    useEffect(() => {
+        const controller = new AbortController();
+        const isCurrent = () => latestInput.current === input && !controller.signal.aborted;
+        let resource: PreviewResource | undefined;
+        const generate = async () => {
+            if (!input.file) return;
+            try {
+                const result = await ExecutionManager.run({
+                    tool: "markdown-to-pdf",
+                    files: [input.file],
+                    mode: input.processingMode,
+                    signal: controller.signal,
+                    params: {
+                        paperSize: input.paperSize,
+                        marginTop: input.top,
+                        marginBottom: input.bottom,
+                        marginLeft: input.left,
+                        marginRight: input.right,
                     },
+                });
+                if (!isCurrent()) return;
+                // Give PDF.js a unique cache identity per execution as well.
+                const previewId = crypto.randomUUID();
+                const previewPdfFile = new File([result.blob], `preview_${previewId}.pdf`, { type: "application/pdf" });
+                const preview = await renderer.render({
+                    document: { id: previewId, version: previewId, pageCount: 1, file: previewPdfFile },
                     page: 1,
                     scale: 2.0,
                     mode: "page",
-                },
-                controller.signal
-            );
-
-            if (previewUrl) {
-                window.URL.revokeObjectURL(previewUrl);
-            }
-
-            if (previewResource.url) {
-                setPreviewUrl(previewResource.url);
-            }
-        } catch (err: unknown) {
-            console.error("[MarkdownToPdfWorkspace] Live preview error:", err);
-            handleClientError(err);
-        } finally {
-            setIsPreviewLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        if (file) {
-            generateLiveMarkdownPreview(file);
-        }
-        return () => {
-            if (previewUrl) {
-                window.URL.revokeObjectURL(previewUrl);
+                }, controller.signal);
+                if (!isCurrent()) { preview.revoke?.(); return; }
+                resource = preview;
+                setAttempt({ input, settled: true, output: { result, preview, signal: controller.signal }, failure: null });
+            } catch (err: unknown) {
+                if (!isCurrent()) return;
+                const failure = normalizeMarkdownFailure(err);
+                setAttempt({ input, settled: true, output: null, failure });
+                setDownloadData(null);
+                // Preserve policy toast delivery/expiry without echoing raw
+                // backend diagnostics. Other notification contracts stay intact.
+                handleClientError(failure.code === "MARKDOWN_RESOURCE_FORBIDDEN"
+                    ? { backend: { code: failure.code, message: failure.message } }
+                    : err);
             }
         };
-    }, [file, paperSize, margins.top, margins.bottom, margins.left, margins.right, processingMode]);
+        void generate();
+        return () => {
+            controller.abort();
+            resource?.revoke?.();
+        };
+    }, [input, renderer, setDownloadData]);
 
     const handleFinalDownloadSubmission = () => {
-        requireAuth(async () => {
-            if (!finalBlob || !file) return;
-            setIsProcessing(true);
-
-            const baseName = file.name.substring(0, file.name.lastIndexOf(".")) || file.name;
-            const outputName = finalFileName || `converted_${baseName}.pdf`;
-
+        if (!currentOutput || isPreviewLoading || !input.file) return;
+        const ready = currentOutput;
+        const sourceFile = input.file;
+        requireAuth(() => {
+            if (latestInput.current !== input || ready.signal.aborted) return;
             setDownloadData({
-                blob: finalBlob,
-                fileName: outputName,
+                blob: ready.result.blob,
+                fileName: ready.result.fileName,
+                source: { file: sourceFile, generation: input },
             });
-
-            setIsProcessing(false);
             router.push(`/${toolId}/download`);
         });
     };
@@ -140,9 +187,6 @@ export default function MarkdownToPdfWorkspace() {
                                 file={file}
                                 onClear={() => {
                                     setFile(null);
-                                    if (previewUrl) window.URL.revokeObjectURL(previewUrl);
-                                    setPreviewUrl(null);
-                                    setFinalBlob(null);
                                     router.push(`/${toolId}`);
                                 }}
                             />
@@ -248,15 +292,15 @@ export default function MarkdownToPdfWorkspace() {
                             <ProcessingModeSelector
                                 mode={processingMode}
                                 onChange={setProcessingMode}
-                                disabled={isProcessing || isPreviewLoading}
+                                disabled={isPreviewLoading}
                             />
                         </div>
 
                         <PdfActionButton
                             text="Save Markdown Vector PDF"
                             loadingText="Rendering Vector PDF..."
-                            loading={isProcessing}
-                            disabled={isProcessing || !finalBlob}
+                            loading={isPreviewLoading}
+                            disabled={!currentOutput || isPreviewLoading}
                             onClick={handleFinalDownloadSubmission}
                         />
                     </div>
@@ -274,15 +318,29 @@ export default function MarkdownToPdfWorkspace() {
                                 </span>
                             </div>
 
-                            <div className="relative min-h-[460px] flex items-center justify-center rounded-2xl bg-[#0f0f12] border border-[color:var(--border)] overflow-hidden shadow-inner p-4">
-                                {isPreviewLoading ? (
-                                    <div className="flex flex-col items-center gap-3">
-                                        <Loader2 className="animate-spin text-cyan-400" size={32} />
-                                        <p className="text-xs font-medium text-[color:var(--muted)]">
-                                            Formatting Vector Markdown Layout...
-                                        </p>
-                                    </div>
-                                ) : previewUrl ? (
+                            <div role="region" aria-label="Markdown conversion status" className="relative min-h-[460px] flex items-center justify-center rounded-2xl bg-[#0f0f12] border border-[color:var(--border)] overflow-hidden shadow-inner p-4">
+                                {/* The optional toast is assertive. Keep this durable
+                                    status polite and available even without its handler. */}
+                                <div role="status" aria-live="polite" aria-atomic="true" className={previewUrl ? "sr-only" : "max-w-md text-center"}>
+                                    {isPreviewLoading ? (
+                                        <div className="flex flex-col items-center gap-3">
+                                            <Loader2 aria-hidden="true" className="animate-spin text-cyan-400" size={32} />
+                                            <p className="text-xs font-medium text-zinc-300">
+                                                Formatting Vector Markdown Layout...
+                                            </p>
+                                        </div>
+                                    ) : currentFailure ? (
+                                        <>
+                                            <h3 className="text-base font-semibold text-zinc-100">{currentFailure.title}</h3>
+                                            <p className="mt-2 text-sm leading-relaxed text-zinc-300">{currentFailure.message}</p>
+                                        </>
+                                    ) : previewUrl ? (
+                                        <p>PDF preview ready.</p>
+                                    ) : (
+                                        <p className="text-xs text-zinc-300">Select options to render vector layout</p>
+                                    )}
+                                </div>
+                                {previewUrl && (
                                     <div className="relative max-w-full flex justify-center items-center">
                                         {/* eslint-disable-next-line @next/next/no-img-element */}
                                         <img
@@ -290,11 +348,6 @@ export default function MarkdownToPdfWorkspace() {
                                             alt="Markdown Layout Document Snapshot Mirror"
                                             className="max-h-[580px] w-auto rounded-lg shadow-2xl border border-[#2d2d34]"
                                         />
-                                    </div>
-                                ) : (
-                                    <div className="flex flex-col items-center gap-2 text-center text-zinc-500">
-                                        <FileCode size={36} className="opacity-40" />
-                                        <p className="text-xs">Select options to render vector layout</p>
                                     </div>
                                 )}
                             </div>

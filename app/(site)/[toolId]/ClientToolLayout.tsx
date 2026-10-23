@@ -6,6 +6,7 @@ import {
     useEffect,
     useMemo,
     useState,
+    useCallback,
     type ReactNode,
 } from "react";
 import { useParams, notFound } from "next/navigation";
@@ -26,13 +27,10 @@ export type ToolDownloadData = {
     blob: Blob;
     fileName: string;
     provenance: PdfResultProvenance;
+    source?: { file: File; generation: object };
 };
 
-type ToolDownloadDataInput = {
-    blob: Blob;
-    fileName: string;
-    provenance?: PdfResultProvenance;
-};
+type ToolDownloadDataInput = Omit<ToolDownloadData, "provenance"> & { provenance?: PdfResultProvenance };
 
 interface ToolItem {
     title: string;
@@ -86,6 +84,8 @@ interface ToolContextProps {
     setFile: (file: File | null) => void;
     downloadData: ToolDownloadData | null;
     setDownloadData: (data: ToolDownloadDataInput | null) => void;
+    conversionGeneration: object | null;
+    setConversionGeneration: (generation: object | null) => void;
     isLoadingConfig: boolean;
     editPdfEngine: EditPdfEditorEngine;
 }
@@ -118,7 +118,7 @@ export default function ClientToolLayout({
     const [activeToolHref, setActiveToolHref] = useState<string | null>(null);
     const [downloadData, setDownloadDataState] = useState<ToolDownloadData | null>(null);
 
-    const setDownloadData = (data: ToolDownloadDataInput | null) => {
+    const setDownloadData = useCallback((data: ToolDownloadDataInput | null) => {
         setDownloadDataState(data ? {
             ...data,
             provenance: data.provenance ?? capturePdfResultProvenance(
@@ -126,7 +126,9 @@ export default function ClientToolLayout({
                 activeToolHref?.replace(/^\//, "") || toolId
             ),
         } : null);
-    };
+    }, [fileState, activeToolHref, toolId]);
+
+    const [conversionGeneration, setConversionGeneration] = useState<object | null>(null);
 
     const file = activeToolHref === currentToolHref ? fileState : null;
 
@@ -192,15 +194,14 @@ export default function ClientToolLayout({
         }
     }, [currentToolHref, getToolByHref, isLoadingTools, toolId]);
 
-    const setFile = (nextFile: File | null) => {
+    const setFile = useCallback((nextFile: File | null) => {
+        if (toolId === "markdown-to-pdf" || toolId === "code-to-pdf") {
+            setDownloadData(null);
+            setConversionGeneration(null);
+        }
         setFileState(nextFile);
         setActiveToolHref(nextFile ? currentToolHref : null);
-    };
-
-    const clearFile = () => {
-        setFileState(null);
-        setActiveToolHref(null);
-    };
+    }, [toolId, currentToolHref, setDownloadData]);
 
     return (
         <SharedToolContext.Provider
@@ -208,16 +209,11 @@ export default function ClientToolLayout({
                 toolId,
                 toolConfig,
                 file,
-                setFile: nextFile => {
-                    if (nextFile) {
-                        setFileState(nextFile);
-                        setActiveToolHref(currentToolHref);
-                    } else {
-                        clearFile();
-                    }
-                },
+                setFile,
                 downloadData,
                 setDownloadData,
+                conversionGeneration,
+                setConversionGeneration,
                 isLoadingConfig,
                 editPdfEngine,
             }}

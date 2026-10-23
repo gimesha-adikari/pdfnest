@@ -61,6 +61,7 @@ export interface SafetyGateEvaluation {
 
 export type ExecutionErrorCode =
     | "INVALID_INPUT"
+    | "MARKDOWN_RESOURCE_FORBIDDEN"
     | "DECRYPTION_AUTH_FAILED"
     | "UNSUPPORTED_CLIENT_OP"
     | "CLIENT_FAILURE"

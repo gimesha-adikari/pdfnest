@@ -5,6 +5,8 @@ import { PreviewRenderer, PreviewRequest, PreviewResource, getPreviewFileIdentit
 export interface ClientPdfRendererOptions {
     /** Optional custom loader for PDF.js library (useful for testing or custom environments) */
     pdfjsLoader?: () => Promise<any>;
+    /** Print snapshots can finish in hidden tabs without animation frames. */
+    renderingIntent?: "display" | "print";
 }
 
 /**
@@ -19,9 +21,11 @@ export class ClientPdfRenderer implements PreviewRenderer {
     };
 
     private readonly pdfjsLoader?: () => Promise<any>;
+    private readonly renderingIntent: "display" | "print";
 
     constructor(options?: ClientPdfRendererOptions) {
         this.pdfjsLoader = options?.pdfjsLoader;
+        this.renderingIntent = options?.renderingIntent ?? "display";
     }
 
     canRender(request: PreviewRequest): boolean {
@@ -181,7 +185,7 @@ export class ClientPdfRenderer implements PreviewRenderer {
             const ctx = canvas.getContext ? canvas.getContext("2d") : null;
 
             if (typeof page.render === "function") {
-                const renderTask = page.render({ canvasContext: ctx, viewport });
+                const renderTask = page.render({ canvasContext: ctx, viewport, intent: this.renderingIntent });
 
                 const onAbortRender = () => {
                     try {

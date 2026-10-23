@@ -202,6 +202,7 @@ export default function SharedUploadPage() {
                         initialFiles={transferredFiles}
                         bypassEncryptionCheck={toolId === "unlock-pdf"}
                         protectedFileHandling={protectedFileHandling}
+                        inputPolicy={toolId === "repair-pdf" ? "repair" : "strict"}
                     />
                 )}
             </div>
