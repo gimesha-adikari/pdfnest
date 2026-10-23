@@ -19,6 +19,7 @@ export interface BackendError {
 export interface ClientError extends Error {
     status?: number;
     billing?: BackendError;
+    backend?: BackendError;
     raw?: unknown;
 }
 
@@ -111,7 +112,7 @@ function parseBackendErrorPayload(payload: unknown): BackendError | null {
     if (!code && !message) return null;
 
     return {
-        code: code || "BILLING_ERROR",
+        code: code || "REQUEST_FAILED",
         message: message || "Request failed.",
         title: typeof payload.title === "string" ? payload.title : undefined,
         description: typeof payload.description === "string" ? payload.description : undefined,
@@ -134,10 +135,26 @@ function parseBackendErrorPayload(payload: unknown): BackendError | null {
 
 }
 
+function createClientError(message: string, status: number, backend: BackendError | undefined, raw: unknown): ClientError {
+    const err = new Error(message) as ClientError;
+    err.status = status;
+    err.backend = backend;
+    // Only known billing contracts may trigger quota/subscription guidance.
+    if (backend && [
+        "HOURLY_LIMIT_REACHED", "DAILY_LIMIT_REACHED", "MONTHLY_LIMIT_REACHED",
+        "CREDITS_EXHAUSTED", "SUBSCRIPTION_REQUIRED", "BILLING_ERROR",
+        "PURCHASES_DISABLED", "BILLING_POLICY_UNAVAILABLE",
+    ].includes(backend.code)) {
+        err.billing = backend;
+    }
+    err.raw = raw;
+    return err;
+}
+
 async function readResponseErrorPayload(response: {
     data: unknown;
     headers?: unknown;
-}): Promise<{ billing?: BackendError; message: string }> {
+}): Promise<{ backend?: BackendError; message: string }> {
     const data = response.data;
 
     if (data instanceof Blob) {
@@ -152,9 +169,9 @@ async function readResponseErrorPayload(response: {
 
         try {
             const parsed = JSON.parse(text);
-            const billing = parseBackendErrorPayload(parsed);
-            if (billing) {
-                return {billing, message: billing.message};
+            const backend = parseBackendErrorPayload(parsed);
+            if (backend) {
+                return {backend, message: backend.message};
             }
 
             if (isObjectLike(parsed)) {
@@ -179,9 +196,9 @@ async function readResponseErrorPayload(response: {
     if (typeof data === "string") {
         try {
             const parsed = JSON.parse(data);
-            const billing = parseBackendErrorPayload(parsed);
-            if (billing) {
-                return {billing, message: billing.message};
+            const backend = parseBackendErrorPayload(parsed);
+            if (backend) {
+                return {backend, message: backend.message};
             }
 
             if (isObjectLike(parsed)) {
@@ -202,9 +219,9 @@ async function readResponseErrorPayload(response: {
     }
 
     if (isObjectLike(data)) {
-        const billing = parseBackendErrorPayload(data);
-        if (billing) {
-            return {billing, message: billing.message};
+        const backend = parseBackendErrorPayload(data);
+        if (backend) {
+            return {backend, message: backend.message};
         }
 
         const message =
@@ -266,12 +283,7 @@ async function handleAxiosError(error: unknown): Promise<never> {
         headers: response.headers,
     });
 
-    const err = new Error(parsed.message) as ClientError;
-    err.status = response.status;
-    err.billing = parsed.billing;
-    err.raw = response.data;
-
-    throw err;
+    throw createClientError(parsed.message, response.status, parsed.backend, response.data);
 
 }
 
@@ -511,13 +523,9 @@ export async function fetchJson<T = unknown>(endpoint: string, options: RequestI
             }
         }
 
-        const billing = parseBackendErrorPayload(parsed);
-        if (billing) {
-            const err = new Error(billing.message) as ClientError;
-            err.status = response.status;
-            err.billing = billing;
-            err.raw = parsed;
-            throw err;
+        const backend = parseBackendErrorPayload(parsed);
+        if (backend) {
+            throw createClientError(backend.message, response.status, backend, parsed);
         }
 
         if (isObjectLike(parsed)) {
@@ -596,13 +604,9 @@ export async function fetchBlob(endpoint: string, options: RequestInit = {}): Pr
             }
         }
 
-        const billing = parseBackendErrorPayload(parsed);
-        if (billing) {
-            const err = new Error(billing.message) as ClientError;
-            err.status = response.status;
-            err.billing = billing;
-            err.raw = parsed;
-            throw err;
+        const backend = parseBackendErrorPayload(parsed);
+        if (backend) {
+            throw createClientError(backend.message, response.status, backend, parsed);
         }
 
         if (isObjectLike(parsed)) {

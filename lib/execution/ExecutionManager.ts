@@ -1,5 +1,6 @@
 "use client";
 
+import { prepareMarkdown } from "./document/markdownPolicy";
 import { ClientExecutor } from "./ClientExecutor";
 import { CloudExecutor } from "./CloudExecutor";
 import { ExecutionSafetyGate } from "./ExecutionSafetyGate";
@@ -59,8 +60,11 @@ export class ExecutionManager {
             throw new ExecutionError("USER_CANCELLATION", "Execution was cancelled by the user.");
         }
 
+        // Resource policy is independent of venue, flags and device capacity.
+        if (["markdown-to-pdf", "markdown_to_pdf", "md_to_pdf", "md-to-pdf", "markdown"].includes(tool)) {
+            await prepareMarkdown(files[0], options.signal);
+        }
         setPdfInputProcessingMode(files, mode);
-
         const primaryFile = files[0];
         const outputFileName = buildOutputFileName(tool, primaryFile.name);
         const policy: ToolPolicy = getToolPolicy(tool);
@@ -96,8 +100,7 @@ export class ExecutionManager {
             throw new ExecutionError("UNSUPPORTED_CLIENT_OP", message);
         }
 
-        // Explicit Cloud mode goes to CloudExecutor. Auto mode also uses cloud
-        // when the client does not support the tool or its feature flag is off.
+        // Explicit Cloud mode and ineligible Auto operations use CloudExecutor.
         if (mode === "cloud" || (mode !== "device" && !clientEligible)) {
             const isFlagDisabled = clientSupported && !flagEnabled;
             const isAutoFallback = mode === "auto" && isFlagDisabled;
@@ -163,7 +166,7 @@ export class ExecutionManager {
             }
         }
 
-        // 3. Explicit Device Mode -> Client Executor only; failures are returned to the user.
+        // 3. Explicit Device Mode -> Client Executor only; failures stay local.
         if (mode === "device") {
             const safety = ExecutionSafetyGate.evaluate(tool, files, policy, options.params);
             if (!safety.eligible) {
@@ -272,7 +275,7 @@ export class ExecutionManager {
                 // User input validation & auth errors (invalid PDF header, wrong password) do NOT trigger cloud fallback
                 if (
                     err instanceof ExecutionError &&
-                    (err.code === "INVALID_INPUT" || err.code === "DECRYPTION_AUTH_FAILED" || err.code === "USER_CANCELLATION")
+                    (err.code === "INVALID_INPUT" || err.code === "MARKDOWN_RESOURCE_FORBIDDEN" || err.code === "DECRYPTION_AUTH_FAILED" || err.code === "USER_CANCELLATION")
                 ) {
                     const durationMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - startTime;
                     telemetry.record({

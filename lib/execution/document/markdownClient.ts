@@ -1,4 +1,5 @@
-import { marked, Tokens } from "marked";
+import { type Tokens } from "marked";
+import { prepareMarkdown, checkMarkdownCancellation, type PreparedMarkdown } from "./markdownPolicy";
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "pdf-lib";
 import { ExecutionError } from "../types";
 import {
@@ -44,6 +45,7 @@ const THEME = {
 
 interface InlineSpan {
     text: string;
+    image?: Tokens.Image;
     bold?: boolean;
     italic?: boolean;
     code?: boolean;
@@ -70,7 +72,7 @@ export class MarkdownPdfEngine {
     private currentPageIndex = -1;
     private cursorY = 0;
 
-    constructor(doc: PDFDocument, options?: MarkdownToPdfOptions) {
+    constructor(doc: PDFDocument, options?: MarkdownToPdfOptions, private readonly prepared?: PreparedMarkdown, private readonly signal?: AbortSignal) {
         this.doc = doc;
         this.paperSize = parsePaperSize(options?.paperSize);
         this.margins = inchesToPoints(
@@ -212,13 +214,7 @@ export class MarkdownPdfEngine {
                 }
                 case "image": {
                     const imgToken = token as Tokens.Image;
-                    // External images rendered as safe offline indicator; data URIs handled in block flow
-                    spans.push({
-                        text: `[Image: ${imgToken.text || "image"}]`,
-                        italic: true,
-                        color: THEME.textMuted,
-                        ...state,
-                    });
+                    spans.push({ text: "", image: imgToken, ...state });
                     break;
                 }
                 case "html": {
@@ -247,7 +243,22 @@ export class MarkdownPdfEngine {
 
     // ─── Word-Wrapped Inline Text Renderer ─────────────────────────────────────
 
-    renderInlineParagraph(
+    private async renderInlineParagraph(spans: InlineSpan[], options: {
+        startX?: number; availableWidth?: number; baseFontSize?: number;
+        baseLinePitch?: number; defaultColor?: RGBColor; marginBottom?: number;
+        maxImageHeight?: number;
+    } = {}): Promise<void> {
+        let text: InlineSpan[] = [];
+        for (const span of spans) {
+            checkMarkdownCancellation(this.signal);
+            if (!span.image) { text.push(span); continue; }
+            if (text.length) { this.renderTextParagraph(text, options); text = []; }
+            await this.renderImage(span.image, options);
+        }
+        if (text.length) this.renderTextParagraph(text, options);
+    }
+
+    private renderTextParagraph(
         spans: InlineSpan[],
         options?: {
             startX?: number;
@@ -404,7 +415,7 @@ export class MarkdownPdfEngine {
 
     // ─── Markdown Block Element Renderers ──────────────────────────────────────
 
-    renderHeading(heading: Tokens.Heading): void {
+    async renderHeading(heading: Tokens.Heading): Promise<void> {
         const depth = Math.min(6, Math.max(1, heading.depth));
         const sizes = [20, 16, 14, 12, 11, 10];
         const colors = [THEME.textH1, THEME.textH2, THEME.textH3, THEME.textH4, THEME.textH5, THEME.textH6];
@@ -427,7 +438,7 @@ export class MarkdownPdfEngine {
             spans.push({ text: heading.text, bold: true, color });
         }
 
-        this.renderInlineParagraph(spans, {
+        await this.renderInlineParagraph(spans, {
             baseFontSize: fontSize,
             baseLinePitch: linePitch,
             defaultColor: color,
@@ -448,15 +459,15 @@ export class MarkdownPdfEngine {
         }
     }
 
-    renderParagraph(paragraph: Tokens.Paragraph): void {
+    async renderParagraph(paragraph: Tokens.Paragraph): Promise<void> {
         const spans = this.extractInlineSpans(paragraph.tokens as Tokens.Generic[]);
         if (spans.length === 0 && paragraph.text) {
             spans.push({ text: paragraph.text });
         }
-        this.renderInlineParagraph(spans, { marginBottom: 10 });
+        await this.renderInlineParagraph(spans, { marginBottom: 10 });
     }
 
-    renderBlockquote(quote: Tokens.Blockquote): void {
+    async renderBlockquote(quote: Tokens.Blockquote): Promise<void> {
         const quoteStartX = this.bounds.x + 14;
         const quoteWidth = this.bounds.contentWidth - 14;
         const initialY = this.cursorY;
@@ -468,14 +479,14 @@ export class MarkdownPdfEngine {
                     italic: true,
                     color: THEME.textMuted,
                 });
-                this.renderInlineParagraph(spans, {
+                await this.renderInlineParagraph(spans, {
                     startX: quoteStartX,
                     availableWidth: quoteWidth,
                     defaultColor: THEME.textMuted,
                     marginBottom: 6,
                 });
             } else {
-                this.renderToken(token);
+                await this.renderToken(token);
             }
         }
 
@@ -594,7 +605,7 @@ export class MarkdownPdfEngine {
         this.cursorY -= 12;
     }
 
-    renderList(list: Tokens.List, level = 0): void {
+    async renderList(list: Tokens.List, level = 0): Promise<void> {
         const indent = level * 16;
         const itemStartX = this.bounds.x + indent;
         const textStartX = itemStartX + 16;
@@ -629,7 +640,7 @@ export class MarkdownPdfEngine {
                     const t = child as Tokens.Text;
                     const spans = this.extractInlineSpans(t.tokens as Tokens.Generic[]);
                     if (spans.length === 0 && t.text) spans.push({ text: t.text });
-                    this.renderInlineParagraph(spans, {
+                    await this.renderInlineParagraph(spans, {
                         startX: textStartX,
                         availableWidth: textWidth,
                         marginBottom: 4,
@@ -638,15 +649,15 @@ export class MarkdownPdfEngine {
                     const p = child as Tokens.Paragraph;
                     const spans = this.extractInlineSpans(p.tokens as Tokens.Generic[]);
                     if (spans.length === 0 && p.text) spans.push({ text: p.text });
-                    this.renderInlineParagraph(spans, {
+                    await this.renderInlineParagraph(spans, {
                         startX: textStartX,
                         availableWidth: textWidth,
                         marginBottom: 4,
                     });
                 } else if (child.type === "list") {
-                    this.renderList(child as Tokens.List, level + 1);
+                    await this.renderList(child as Tokens.List, level + 1);
                 } else {
-                    this.renderToken(child);
+                    await this.renderToken(child);
                 }
             }
         }
@@ -654,7 +665,11 @@ export class MarkdownPdfEngine {
         this.cursorY -= 4;
     }
 
-    renderTable(table: Tokens.Table): void {
+    async renderTable(table: Tokens.Table): Promise<void> {
+        if ([...table.header, ...table.rows.flat()].some(cell => this.extractInlineSpans(cell.tokens as Tokens.Generic[]).some(span => span.image))) {
+            await this.renderImageTable(table);
+            return;
+        }
         const numCols = table.header.length;
         if (numCols === 0) return;
 
@@ -736,6 +751,45 @@ export class MarkdownPdfEngine {
         this.cursorY -= 12;
     }
 
+    private async renderImageTable(table: Tokens.Table): Promise<void> {
+        const columnWidth = this.bounds.contentWidth / table.header.length;
+        const textWidth = columnWidth - 12, fontSize = 9, pitch = 14;
+        if (textWidth <= 0) throw new ExecutionError("UNSUPPORTED_CLIENT_OP", "Markdown image table columns exceed local page width.");
+        for (const [row, cells] of [table.header, ...table.rows].entries()) {
+            const contents = cells.map(cell => this.extractInlineSpans(cell.tokens as Tokens.Generic[], row === 0 ? { bold: true } : {}));
+            const heights = contents.map(spans => {
+                let height = 0, lineWidth = 0, hasText = false;
+                for (const span of spans) {
+                    if (span.image) {
+                        if (hasText) { height += pitch + 4; hasText = false; lineWidth = 0; }
+                        const image = this.prepared!.images.get(span.image.href)!;
+                        height += image.height * Math.min(1, textWidth / image.width, 80 / image.height) + 12;
+                        continue;
+                    }
+                    for (const word of span.text.split(/(\s+|\n)/)) {
+                        if (!word || !hasText && /^\s+$/.test(word)) continue;
+                        const width = this.selectFont(span).widthOfTextAtSize(word, fontSize);
+                        if (word === "\n" || lineWidth && lineWidth + width > textWidth) { height += pitch; lineWidth = 0; }
+                        lineWidth += width; hasText = true;
+                    }
+                }
+                return height + (hasText ? pitch + 4 : 0) + 12;
+            });
+            const rowHeight = Math.max(26, ...heights);
+            if (rowHeight > this.bounds.contentHeight) throw new ExecutionError("UNSUPPORTED_CLIENT_OP", "Markdown table row exceeds one local page.");
+            this.ensureSpace(rowHeight);
+            const rowTop = this.cursorY;
+            const background = row === 0 ? THEME.bgTableHeader : row % 2 === 0 ? THEME.bgTableRowAlt : THEME.bgPage;
+            this.currentPage.drawRectangle({ x: this.bounds.x, y: rowTop - rowHeight, width: this.bounds.contentWidth, height: rowHeight, color: rgb(background.r, background.g, background.b) });
+            for (let column = 0; column < contents.length; column++) {
+                this.cursorY = rowTop - 6;
+                await this.renderInlineParagraph(contents[column], { startX: this.bounds.x + column * columnWidth + 6, availableWidth: textWidth, baseFontSize: fontSize, baseLinePitch: pitch, marginBottom: 4, maxImageHeight: 80 });
+            }
+            this.cursorY = rowTop - rowHeight;
+        }
+        this.cursorY -= 12;
+    }
+
     renderHr(): void {
         this.ensureSpace(16);
         const page = this.currentPage;
@@ -749,88 +803,44 @@ export class MarkdownPdfEngine {
         this.cursorY -= 16;
     }
 
-    async renderImage(imgToken: Tokens.Image): Promise<void> {
-        const href = imgToken.href || "";
-
-        // Embedded base64 Data URIs (PNG or JPEG)
-        if (href.startsWith("data:image/png;base64,") || href.startsWith("data:image/jpeg;base64,") || href.startsWith("data:image/jpg;base64,")) {
-            try {
-                const base64Data = href.substring(href.indexOf(",") + 1);
-                const binaryStr = atob(base64Data);
-                const bytes = new Uint8Array(binaryStr.length);
-                for (let i = 0; i < binaryStr.length; i++) {
-                    bytes[i] = binaryStr.charCodeAt(i);
-                }
-
-                const isPng = href.startsWith("data:image/png");
-                const embeddedImage = isPng ? await this.doc.embedPng(bytes) : await this.doc.embedJpg(bytes);
-
-                const origWidth = embeddedImage.width;
-                const origHeight = embeddedImage.height;
-                const maxWidth = this.bounds.contentWidth;
-                const maxHeight = 280;
-
-                let drawWidth = origWidth;
-                let drawHeight = origHeight;
-
-                if (drawWidth > maxWidth) {
-                    const scale = maxWidth / drawWidth;
-                    drawWidth = maxWidth;
-                    drawHeight = drawHeight * scale;
-                }
-
-                if (drawHeight > maxHeight) {
-                    const scale = maxHeight / drawHeight;
-                    drawHeight = maxHeight;
-                    drawWidth = drawWidth * scale;
-                }
-
-                this.ensureSpace(drawHeight + 14);
-                const page = this.currentPage;
-                page.drawImage(embeddedImage, {
-                    x: this.bounds.x + (this.bounds.contentWidth - drawWidth) / 2,
-                    y: this.cursorY - drawHeight,
-                    width: drawWidth,
-                    height: drawHeight,
-                });
-
-                this.cursorY -= drawHeight + 12;
-                return;
-            } catch (err) {
-                console.warn("[MarkdownPdfEngine] Failed to decode base64 image data URI:", err);
-            }
-        }
-
-        // External image URL -> Zero network requests, safe offline fallback label
-        const spans: InlineSpan[] = [
-            {
-                text: `[Image: ${imgToken.text || "image"}]`,
-                italic: true,
-                color: THEME.textMuted,
-            },
-        ];
-        this.renderInlineParagraph(spans, { marginBottom: 8 });
+    async renderImage(imgToken: Tokens.Image, options: { startX?: number; availableWidth?: number; maxImageHeight?: number } = {}): Promise<void> {
+        checkMarkdownCancellation(this.signal);
+        const image = this.prepared?.images.get(imgToken.href);
+        if (!image) throw new ExecutionError("MARKDOWN_RESOURCE_FORBIDDEN", "Unvalidated Markdown image.");
+        const embedded = image.format === "png" ? await this.doc.embedPng(image.bytes) : await this.doc.embedJpg(image.bytes);
+        checkMarkdownCancellation(this.signal);
+        const availableWidth = options.availableWidth ?? this.bounds.contentWidth;
+        const maxHeight = Math.min(options.maxImageHeight ?? 280, this.bounds.contentHeight - 14);
+        if (!(availableWidth > 0) || !(maxHeight > 0)) throw new ExecutionError("UNSUPPORTED_CLIENT_OP", "Markdown image does not fit the local page layout.");
+        const scale = Math.min(1, availableWidth / image.width, maxHeight / image.height);
+        const width = image.width * scale, height = image.height * scale;
+        this.ensureSpace(height + 14);
+        this.currentPage.drawImage(embedded, {
+            x: (options.startX ?? this.bounds.x) + (availableWidth - width) / 2,
+            y: this.cursorY - height, width, height,
+        });
+        this.cursorY -= height + 12;
     }
 
     async renderToken(token: Tokens.Generic): Promise<void> {
         switch (token.type) {
             case "heading":
-                this.renderHeading(token as Tokens.Heading);
+                await this.renderHeading(token as Tokens.Heading);
                 break;
             case "paragraph":
-                this.renderParagraph(token as Tokens.Paragraph);
+                await this.renderParagraph(token as Tokens.Paragraph);
                 break;
             case "blockquote":
-                this.renderBlockquote(token as Tokens.Blockquote);
+                await this.renderBlockquote(token as Tokens.Blockquote);
                 break;
             case "code":
                 this.renderCodeBlock(token as Tokens.Code);
                 break;
             case "list":
-                this.renderList(token as Tokens.List);
+                await this.renderList(token as Tokens.List);
                 break;
             case "table":
-                this.renderTable(token as Tokens.Table);
+                await this.renderTable(token as Tokens.Table);
                 break;
             case "hr":
                 this.renderHr();
@@ -845,7 +855,7 @@ export class MarkdownPdfEngine {
                 const raw = (token as Tokens.HTML).text || "";
                 const sanitized = raw.replace(/<[^>]*>/g, " ").trim();
                 if (sanitized) {
-                    this.renderInlineParagraph([{ text: sanitized }], { marginBottom: 6 });
+                    await this.renderInlineParagraph([{ text: sanitized }], { marginBottom: 6 });
                 }
                 break;
             }
@@ -862,38 +872,23 @@ export class MarkdownPdfEngine {
     async renderDocument(tokens: Tokens.Generic[]): Promise<void> {
         this.allocatePage();
         for (const token of tokens) {
+            checkMarkdownCancellation(this.signal);
             await this.renderToken(token);
         }
     }
 }
 
-export async function executeMarkdownToPdf(file: File, options?: MarkdownToPdfOptions): Promise<Blob> {
-    if (!file || file.size === 0) {
-        throw new ExecutionError("INVALID_INPUT", "Provided Markdown file is empty or missing.");
-    }
-
-    let markdownSource: string;
-    try {
-        markdownSource = await file.text();
-    } catch (err) {
-        throw new ExecutionError("INVALID_INPUT", "Failed to read Markdown file text content.", err);
-    }
-
-    if (!markdownSource && markdownSource !== "") {
-        throw new ExecutionError("INVALID_INPUT", "Markdown file contains no readable text content.");
-    }
-
-    // Assert font compatibility (non-Latin Unicode throws UNSUPPORTED_CLIENT_OP for Auto fallback)
-    assertLatinFontCompatibility(markdownSource);
-
-    // Lex AST
-    const tokens = marked.lexer(markdownSource, { gfm: true, breaks: false }) as Tokens.Generic[];
-
+export async function executeMarkdownToPdf(file: File, options?: MarkdownToPdfOptions, signal?: AbortSignal): Promise<Blob> {
+    const prepared = await prepareMarkdown(file, signal);
+    // Content policy precedes font fallback: unsupported resources cannot be
+    // hidden by a non-Latin source causing an Auto retry on another venue.
+    assertLatinFontCompatibility(prepared.source);
     const pdfDoc = await PDFDocument.create();
-    const engine = new MarkdownPdfEngine(pdfDoc, options);
+    const engine = new MarkdownPdfEngine(pdfDoc, options, prepared, signal);
     await engine.init();
-    await engine.renderDocument(tokens);
-
+    await engine.renderDocument(prepared.tokens as Tokens.Generic[]);
+    checkMarkdownCancellation(signal);
     const pdfBytes = await pdfDoc.save();
+    checkMarkdownCancellation(signal);
     return new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" });
 }

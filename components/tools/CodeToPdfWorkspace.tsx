@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Code, Eye, Loader2, Sliders } from "lucide-react";
-import { notify } from "@/lib/notify";
-import { getFriendlyErrorMessage, handleClientError } from "@/lib/errorHandler";
+import { handleClientError } from "@/lib/errorHandler";
 import { useAuth } from "@/context/AuthContext";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
@@ -15,105 +14,152 @@ import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelect
 import type { ProcessingMode } from "@/lib/execution/types";
 import { getInitialProcessingMode } from "@/lib/security/pdfInputPreparation";
 import { ClientPdfRenderer } from "@/lib/preview/ClientPdfRenderer";
+import type { PreviewResource } from "@/lib/preview/types";
+import type { ExecutionResult } from "@/lib/execution/types";
+import type { BackendError } from "@/lib/notify";
+
+type CodeFailure = { title: string; message: string };
+
+function normalizeCodeFailure(error: unknown): CodeFailure {
+    const err = error as {
+        status?: number;
+        backend?: { code?: string };
+        originalError?: { status?: number; backend?: { code?: string } };
+    } | null;
+    // Select fixed copy from the deployed status/code pair, never diagnostics.
+    const status = err?.status ?? err?.originalError?.status;
+    const code = err?.backend?.code ?? err?.originalError?.backend?.code;
+    if (status === 413 && code === "CODE_SOURCE_TOO_LARGE") {
+        return {
+            title: "Code source too large",
+            message: "Code files can contain at most 16 MiB of raw source. Upload a smaller file or split your code into smaller files and try again.",
+        };
+    }
+    return {
+        title: "Code conversion failed",
+        message: "We couldn't create a PDF preview from this code. Check your file and upload it again to retry.",
+    };
+}
 
 export default function CodeToPdfWorkspace() {
     const { requireAuth } = useAuth();
     const router = useRouter();
-    const { toolId, file, setFile, setDownloadData } = useSharedTool();
+    const { toolId, file, setFile, setDownloadData, setConversionGeneration } = useSharedTool();
 
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [isPreviewLoading, setIsPreviewLoading] = useState(false);
-    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-    const [finalBlob, setFinalBlob] = useState<Blob | null>(null);
-    const [finalFileName, setFinalFileName] = useState<string>("");
     const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
-
     const [paperSize, setPaperSize] = useState("A4");
     const [margins, setMargins] = useState({ top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 });
-    const rendererRef = useRef<ClientPdfRenderer | null>(null);
-
-    if (!rendererRef.current) {
-        rendererRef.current = new ClientPdfRenderer();
+    // This offscreen snapshot represents the generated PDF's printable output.
+    // PDF.js display intent waits for animation frames, which hidden tabs pause.
+    const [renderer] = useState(() => new ClientPdfRenderer({ renderingIntent: "print" }));
+    // File object identity matters: two uploads with the same name/size are
+    // still different inputs. A fresh token also distinguishes A -> B -> A.
+    const input = useMemo(() => ({
+        file, processingMode, paperSize,
+        top: margins.top, bottom: margins.bottom, left: margins.left, right: margins.right,
+    }), [file, processingMode, paperSize, margins.top, margins.bottom, margins.left, margins.right]);
+    // Only an authenticated Save transfers a completed generation to download.
+    const downloadHandoff = useRef<typeof input | null>(null);
+    const latestInput = useRef<typeof input | null>(null);
+    const [attempt, setAttempt] = useState<{
+        input: typeof input;
+        settled: boolean;
+        output: { result: ExecutionResult; preview: PreviewResource; signal: AbortSignal } | null;
+        failure: CodeFailure | null;
+    }>({ input, settled: false, output: null, failure: null });
+    // Reset this component's state during render on an input change, so Save
+    // and the displayed preview cannot expose old output before effects run.
+    if (attempt.input !== input) {
+        setAttempt({ input, settled: false, output: null, failure: null });
     }
+    const currentOutput = attempt.input === input ? attempt.output : null;
+    const currentFailure = attempt.input === input ? attempt.failure : null;
+    const isPreviewLoading = Boolean(file) && (attempt.input !== input || !attempt.settled);
+    const previewUrl = currentOutput?.preview.url;
 
-    const generateLiveCodePreview = async (targetFile: File) => {
-        try {
-            setIsPreviewLoading(true);
+    // Update ownership at commit, before a delayed authentication continuation
+    // can act on the previous render. Unmount also invalidates continuations.
+    useLayoutEffect(() => {
+        latestInput.current = input;
+        downloadHandoff.current = null;
+        setDownloadData(null);
+        setConversionGeneration(input.file ? input : null);
+        return () => {
+            latestInput.current = null;
+            // Keep the intentional Save -> download handoff, but invalidate
+            // shared output on an ordinary unmount as well as input changes.
+            if (downloadHandoff.current !== input) {
+                setDownloadData(null);
+                setConversionGeneration(null);
+            }
+        };
+    }, [input, setDownloadData, setConversionGeneration]);
 
-            const result = await ExecutionManager.run({
-                tool: "code-to-pdf",
-                files: [targetFile],
-                mode: processingMode,
-                params: {
-                    paperSize,
-                    marginTop: margins.top,
-                    marginBottom: margins.bottom,
-                    marginLeft: margins.left,
-                    marginRight: margins.right,
-                },
-            });
-
-            setFinalBlob(result.blob);
-            setFinalFileName(result.fileName);
-
-            // Render Page 1 to Image URL via ClientPdfRenderer
-            const previewPdfFile = new File([result.blob], "preview_rendered.pdf", { type: "application/pdf" });
-            const controller = new AbortController();
-            const previewResource = await rendererRef.current!.render(
-                {
-                    document: {
-                        id: `code_preview_${Date.now()}`,
-                        version: `${Date.now()}`,
-                        pageCount: 1,
-                        file: previewPdfFile,
+    useEffect(() => {
+        const controller = new AbortController();
+        const isCurrent = () => latestInput.current === input && !controller.signal.aborted;
+        let resource: PreviewResource | undefined;
+        const generate = async () => {
+            if (!input.file) return;
+            try {
+                const result = await ExecutionManager.run({
+                    tool: "code-to-pdf",
+                    files: [input.file],
+                    mode: input.processingMode,
+                    signal: controller.signal,
+                    params: {
+                        paperSize: input.paperSize,
+                        marginTop: input.top,
+                        marginBottom: input.bottom,
+                        marginLeft: input.left,
+                        marginRight: input.right,
                     },
+                });
+                if (!isCurrent()) return;
+                // Give PDF.js a unique cache identity per execution as well.
+                const previewId = crypto.randomUUID();
+                const previewPdfFile = new File([result.blob], `preview_${previewId}.pdf`, { type: "application/pdf" });
+                const preview = await renderer.render({
+                    document: { id: previewId, version: previewId, pageCount: 1, file: previewPdfFile },
                     page: 1,
                     scale: 2.0,
                     mode: "page",
-                },
-                controller.signal
-            );
-
-            if (previewUrl) {
-                window.URL.revokeObjectURL(previewUrl);
-            }
-
-            if (previewResource.url) {
-                setPreviewUrl(previewResource.url);
-            }
-        } catch (err: unknown) {
-            console.error("[CodeToPdfWorkspace] Live preview error:", err);
-            handleClientError(err);
-        } finally {
-            setIsPreviewLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        if (file) {
-            generateLiveCodePreview(file);
-        }
-        return () => {
-            if (previewUrl) {
-                window.URL.revokeObjectURL(previewUrl);
+                }, controller.signal);
+                if (!isCurrent()) { preview.revoke?.(); return; }
+                if (!preview.url) { preview.revoke?.(); throw new Error("Preview unavailable"); }
+                resource = preview;
+                setAttempt({ input, settled: true, output: { result, preview, signal: controller.signal }, failure: null });
+            } catch (err: unknown) {
+                if (!isCurrent()) return;
+                const failure = normalizeCodeFailure(err);
+                setAttempt({ input, settled: true, output: null, failure });
+                setDownloadData(null);
+                // Preserve quota/auth notifications. Rendering failures use the
+                // same safe copy in the toast and durable status.
+                const notification = err as { billing?: BackendError; originalError?: { billing?: BackendError } } | null;
+                const billing = notification?.billing ?? notification?.originalError?.billing;
+                handleClientError(billing ? { billing } : new Error(failure.message));
             }
         };
-    }, [file, paperSize, margins.top, margins.bottom, margins.left, margins.right, processingMode]);
+        void generate();
+        return () => {
+            controller.abort();
+            resource?.revoke?.();
+        };
+    }, [input, renderer, setDownloadData]);
 
     const handleFinalDownloadSubmission = () => {
-        requireAuth(async () => {
-            if (!finalBlob || !file) return;
-            setIsProcessing(true);
-
-            const baseName = file.name.substring(0, file.name.lastIndexOf(".")) || file.name;
-            const outputName = finalFileName || `converted_${baseName}.pdf`;
-
+        if (!currentOutput || isPreviewLoading || !input.file) return;
+        const ready = currentOutput;
+        const sourceFile = input.file;
+        requireAuth(() => {
+            if (latestInput.current !== input || ready.signal.aborted) return;
+            downloadHandoff.current = input;
             setDownloadData({
-                blob: finalBlob,
-                fileName: outputName,
+                blob: ready.result.blob,
+                fileName: ready.result.fileName,
+                source: { file: sourceFile, generation: input },
             });
-
-            setIsProcessing(false);
             router.push(`/${toolId}/download`);
         });
     };
@@ -140,9 +186,6 @@ export default function CodeToPdfWorkspace() {
                                 file={file}
                                 onClear={() => {
                                     setFile(null);
-                                    if (previewUrl) window.URL.revokeObjectURL(previewUrl);
-                                    setPreviewUrl(null);
-                                    setFinalBlob(null);
                                     router.push(`/${toolId}`);
                                 }}
                             />
@@ -246,15 +289,15 @@ export default function CodeToPdfWorkspace() {
                                 <ProcessingModeSelector
                                     mode={processingMode}
                                     onChange={setProcessingMode}
-                                    disabled={isProcessing || isPreviewLoading}
+                                    disabled={isPreviewLoading}
                                 />
                             </div>
 
                             <PdfActionButton
                                 text="Save Code Highlight PDF"
                                 loadingText="Rendering Vector PDF..."
-                                loading={isProcessing}
-                                disabled={isProcessing || !finalBlob}
+                                loading={isPreviewLoading}
+                                disabled={!currentOutput || isPreviewLoading}
                                 onClick={handleFinalDownloadSubmission}
                             />
                         </div>
@@ -267,30 +310,30 @@ export default function CodeToPdfWorkspace() {
                             <span>3. Real-Time Document Layout</span>
                         </h2>
 
-                        <div className="relative w-full aspect-[3/4] rounded-2xl border border-[color:var(--border)] bg-[color:var(--background)] overflow-hidden flex items-center justify-center p-4">
-                            {isPreviewLoading && (
-                                <div className="absolute inset-0 bg-[color:var(--card)]/60 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-3">
-                                    <Loader2 className="animate-spin text-indigo-500" size={32} />
-                                    <p className="text-xs font-semibold text-[color:var(--muted)] text-center">
-                                        Tokenizing code and rendering vector layout sheets...
-                                    </p>
-                                </div>
-                            )}
-
-                            {previewUrl ? (
+                        <div role="region" aria-label="Code conversion status" className="relative w-full aspect-[3/4] rounded-2xl border border-[color:var(--border)] bg-[color:var(--background)] overflow-hidden flex items-center justify-center p-4">
+                            <div role="status" aria-live="polite" aria-atomic="true" className={previewUrl ? "sr-only" : "max-w-md text-center"}>
+                                {isPreviewLoading ? (
+                                    <div className="flex flex-col items-center gap-3">
+                                        <Loader2 aria-hidden="true" className="animate-spin text-indigo-500" size={32} />
+                                        <p className="text-xs font-semibold text-[color:var(--muted)]">
+                                            Tokenizing code and rendering vector layout sheets...
+                                        </p>
+                                    </div>
+                                ) : currentFailure ? (
+                                    <>
+                                        <h3 className="text-base font-semibold">{currentFailure.title}</h3>
+                                        <p className="mt-2 text-sm leading-relaxed text-[color:var(--muted)]">{currentFailure.message}</p>
+                                    </>
+                                ) : previewUrl ? <p>PDF preview ready.</p> : <p>Select options to render code layout.</p>}
+                            </div>
+                            {previewUrl && (
                                 <div className="w-full h-full flex items-center justify-center overflow-auto shadow-inner bg-neutral-900 rounded-xl p-2">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
                                     <img
                                         src={previewUrl}
                                         alt="Code Layout Document Snapshot Mirror"
                                         className="max-w-full max-h-full object-contain rounded-md border border-neutral-700/50 shadow-2xl"
                                     />
-                                </div>
-                            ) : (
-                                <div className="text-center p-8 space-y-2">
-                                    <Code size={40} className="mx-auto text-[color:var(--border)] stroke-[1.5]" />
-                                    <p className="text-xs font-medium text-[color:var(--muted)] max-w-xs mx-auto">
-                                        Staging workspace inactive.
-                                    </p>
                                 </div>
                             )}
                         </div>

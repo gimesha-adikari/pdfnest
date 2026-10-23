@@ -5,6 +5,7 @@ import { UploadCloud, Lock, Loader2, ShieldAlert } from "lucide-react";
 import { uploadAndDownloadFile } from "@/lib/api";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ExecutionError, type ProcessingMode } from "@/lib/execution/types";
+import { inspectPdf, isPdfCandidate, type PdfInputPolicy } from "@/lib/pdf/localPreparation";
 import {
     hasCloudSubmissionInitiated,
     getPdfInputPreparation,
@@ -12,7 +13,6 @@ import {
     orderPreparedPdfInputs,
     setTransientOriginalPassword,
 } from "@/lib/security/pdfInputPreparation";
-import { inspectPdfEncryption } from "@/lib/security/inspectPdfProtection";
 import PasswordField from "@/components/ui/PasswordField";
 
 type ProtectedFileHandling =
@@ -39,13 +39,6 @@ function errorCode(error: unknown): string | undefined {
     return undefined;
 }
 
-async function isPdfFile(file: File): Promise<boolean> {
-    if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
-        return true;
-    }
-    return (await file.slice(0, 5).text()) === "%PDF-";
-}
-
 function hasPdfHeader(blob: Blob): Promise<boolean> {
     return blob.slice(0, 5).text().then((header) => header === "%PDF-");
 }
@@ -64,6 +57,7 @@ interface PdfUploaderProps {
     inputRef?: React.Ref<HTMLInputElement>;
     showDropZone?: boolean;
     initialFiles?: File[];
+    inputPolicy?: PdfInputPolicy;
 }
 
 interface UploadQueue {
@@ -87,6 +81,7 @@ export default function PdfUploader({
     inputRef,
     showDropZone = true,
     initialFiles,
+    inputPolicy = "strict",
 }: PdfUploaderProps) {
     const [queue, setQueue] = useState<UploadQueue | null>(null);
     const [sessionConsentFiles, setSessionConsentFiles] = useState<File[] | null>(null);
@@ -110,7 +105,8 @@ export default function PdfUploader({
 
         const operationId = ++operationIdRef.current;
         activeAbortRef.current?.abort();
-        activeAbortRef.current = null;
+        const controller = new AbortController();
+        activeAbortRef.current = controller;
         preparingRef.current = false;
         setQueue(null);
         setSessionConsentFiles(null);
@@ -153,27 +149,28 @@ export default function PdfUploader({
 
         try {
             for (const file of files) {
-                if (operationId !== operationIdRef.current) return;
-                if (!(await isPdfFile(file))) {
-                    plain.push(file);
-                    continue;
-                }
-
-                let encrypted: boolean;
                 try {
-                    encrypted = await inspectPdfEncryption(file);
-                } catch {
-                    if (operationId === operationIdRef.current) {
-                        setError(`Could not verify whether "${file.name}" is protected. No file was submitted. Select a valid PDF and try again.`);
+                    if (operationId !== operationIdRef.current || controller.signal.aborted) return;
+                    const candidate = inputPolicy === "repair" || await isPdfCandidate(file, controller.signal);
+                    if (!candidate) {
+                        plain.push(file);
+                        continue;
+                    }
+                    const encrypted = await inspectPdf(file, controller.signal, inputPolicy);
+                    if (operationId !== operationIdRef.current || controller.signal.aborted) return;
+                    (encrypted ? protectedFiles : plain).push(file);
+                } catch (cause: unknown) {
+                    if (operationId === operationIdRef.current && !controller.signal.aborted) {
+                        setError(cause instanceof ExecutionError
+                            ? cause.message
+                            : "Could not verify the selected document. No file was submitted. Select a valid file and try again.");
                     }
                     return;
                 }
-
-                if (operationId !== operationIdRef.current) return;
-                (encrypted ? protectedFiles : plain).push(file);
             }
         } finally {
             if (operationId === operationIdRef.current) setIsInspecting(false);
+            if (activeAbortRef.current === controller) activeAbortRef.current = null;
         }
 
         if (operationId !== operationIdRef.current) return;
@@ -218,7 +215,7 @@ export default function PdfUploader({
             });
         });
         await onFilesAccepted(accepted, { processingMode: selectedMode });
-    }, [bypassEncryptionCheck, onFilesAccepted, onFilesSelected, processingMode, protectedFileHandling]);
+    }, [bypassEncryptionCheck, inputPolicy, onFilesAccepted, onFilesSelected, processingMode, protectedFileHandling]);
 
     useEffect(() => {
         if (!initialFiles?.length || handledInitialFilesRef.current === initialFiles) return;
@@ -350,7 +347,7 @@ export default function PdfUploader({
                 type: "application/pdf",
                 lastModified: currentLockedFile.lastModified,
             });
-            if (await inspectPdfEncryption(unlockedFile)) {
+            if (await inspectPdf(unlockedFile, controller.signal)) {
                 throw new Error("PDF preparation returned an encrypted document.");
             }
             if (operationId !== operationIdRef.current || controller.signal.aborted) return;

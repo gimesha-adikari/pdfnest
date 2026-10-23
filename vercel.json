@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "codex/m1-s2-25r-markdown-result-ownership": false,
+      "codex/m1-s2-25r-p5-persistent-markdown-error": false,
+      "codex/m1-s2-25r-p12-universal-markdown-policy": false,
+      "codex/g4-nextjs-security-remediation": false,
+      "codex/g5-p12-g4-combined": false,
+      "codex/f-01-strict-device-privacy-20261018": false,
+      "codex/markdown-device-pending-20261018": false,
+      "codex/code-pdf-result-ownership": false
+    }
+  }
+}
