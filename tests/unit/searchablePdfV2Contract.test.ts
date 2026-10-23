@@ -1,4 +1,5 @@
 import assert from "assert";
+import { markPdfInputPreparation } from "@/lib/security/pdfInputPreparation";
 import {
     createSearchablePdfV2Job,
     downloadSearchablePdfV2Result,
@@ -73,6 +74,7 @@ async function runApiClientTests(): Promise<void> {
 
         const first = new File(["one"], "first.png", { type: "image/png" });
         const second = new File(["two"], "second.jpg", { type: "image/jpeg" });
+        for (const file of [first, second]) markPdfInputPreparation(file, { sourceProtected: false, bytesState: "plain", preparedOn: "none", processingMode: "auto", cloudSubmissionInitiated: false });
         const created = await createSearchablePdfV2Job([first, second], "eng", "AUTO", "idem-1", "request-1");
         assert.strictEqual(created.job_id, job.job_id);
         const submit = requests.find((item) => item.method === "POST");
@@ -80,6 +82,13 @@ async function runApiClientTests(): Promise<void> {
         assert.strictEqual(submit?.headers.get("Idempotency-Key"), "idem-1");
         assert.strictEqual(submit?.headers.get("X-Request-ID"), "request-1");
         assert.deepStrictEqual(submit?.body?.getAll("file").map((item) => (item as File).name), ["first.png", "second.jpg"]);
+
+        const submitFetch = globalThis.fetch;
+        globalThis.fetch = async () => new Response(JSON.stringify({ job_id: job.job_id, status: "QUEUED", idempotent_replay: true }), { status: 202 });
+        const replay = await createSearchablePdfV2Job([first, second], "eng", "AUTO", "idem-1", "request-1");
+        assert.deepStrictEqual(replay.progress, { completed_pages: 0, total_pages: 2, failed_pages: [], page_statuses: {}, percent: 0 });
+        assert.deepStrictEqual(replay.warnings, []);
+        globalThis.fetch = submitFetch;
 
         const status = await getSearchablePdfV2Job(job.job_id);
         assert.strictEqual(status.status, "RUNNING");

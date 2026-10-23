@@ -191,6 +191,27 @@ export function uploadFileToPresignedUrl(
             return;
         }
 
+        // The response flag grants no authority to choose a credential target.
+        // Trust only the configured backend origin, independently of the caller's
+        // presign endpoint. Local frontend/backend origins may legitimately differ.
+        const url = new URL(target.uploadUrl);
+        if (!/^https?:\/\//i.test(target.uploadUrl) || target.uploadUrl.includes("\\") ||
+            target.uploadUrl.trim() !== target.uploadUrl || url.username || url.password ||
+            (url.protocol !== "https:" && url.protocol !== "http:")) {
+            throw new Error("Upload URL must be an absolute HTTP(S) URL without credentials.");
+        }
+        if (typeof window !== "undefined" && window.location.protocol === "https:" && url.protocol !== "https:") {
+            throw new Error("Upload URL must not downgrade an HTTPS page.");
+        }
+        if (target.withCredentials === true) {
+            const backend = new URL(getBaseUrl());
+            const localHttp = url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+            if (url.origin !== backend.origin || backend.username || backend.password ||
+                (url.protocol !== "https:" && !localHttp)) {
+                throw new Error("Credentialed uploads must use the configured backend origin.");
+            }
+        }
+
         const xhr = new XMLHttpRequest();
 
         const onAbort = () => {
@@ -203,7 +224,7 @@ export function uploadFileToPresignedUrl(
         }
 
         xhr.open(target.method || "PUT", target.uploadUrl, true);
-        xhr.withCredentials = target.withCredentials ?? false;
+        xhr.withCredentials = target.withCredentials === true;
 
         Object.entries(target.headers || {}).forEach(([name, value]) => {
             xhr.setRequestHeader(name, value);

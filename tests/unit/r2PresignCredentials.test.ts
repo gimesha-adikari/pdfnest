@@ -63,6 +63,8 @@ class MockXMLHttpRequest {
 
 async function main(): Promise<void> {
     const originalFetch = globalThis.fetch;
+    const originalApi = process.env.NEXT_PUBLIC_API_URL;
+    process.env.NEXT_PUBLIC_API_URL = "https://upload.invalid";
     const originalXHR = Object.getOwnPropertyDescriptor(globalThis, "XMLHttpRequest");
     const endpoint = "https://presign.invalid/api/storage/r2/presign";
     const uploadUrl = "https://upload.invalid/local-ocr-image";
@@ -106,6 +108,8 @@ async function main(): Promise<void> {
         console.log(`PASS: ${cases.length} presign credential cases and mocked XHR uploads; no network requests`);
     } finally {
         globalThis.fetch = originalFetch;
+        if (originalApi === undefined) delete process.env.NEXT_PUBLIC_API_URL;
+        else process.env.NEXT_PUBLIC_API_URL = originalApi;
         if (originalXHR) Object.defineProperty(globalThis, "XMLHttpRequest", originalXHR);
         else Reflect.deleteProperty(globalThis, "XMLHttpRequest");
     }
