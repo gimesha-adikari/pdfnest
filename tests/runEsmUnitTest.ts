@@ -3,6 +3,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import path from "node:path";
 import { buildSync } from "esbuild";
 
+const LOOPBACK_ONLY_TESTS = new Set([
+    "codeResultOwnership.test.mts",
+    "markdownPersistentFeedback.test.mts",
+    "markdownResultOwnership.test.mts",
+]);
+
 // Keep ESM-only DOM dependencies outside tsx's CommonJS loader. esbuild is
 // supplied by the existing tsx toolchain; native Node loads external packages.
 export function runEsmUnitTest(file: string): number | null {
@@ -13,6 +19,9 @@ export function runEsmUnitTest(file: string): number | null {
             platform: "node", format: "esm", packages: "external" });
         const result = spawnSync(process.execPath, [output], {
             stdio: "inherit", cwd: path.resolve(__dirname, ".."), timeout: 120_000,
+            env: LOOPBACK_ONLY_TESTS.has(path.basename(file))
+                ? { ...process.env, NEXT_PUBLIC_API_URL: "http://127.0.0.1:9" }
+                : process.env,
         });
         if (result.error) console.error(result.error);
         return result.status;
