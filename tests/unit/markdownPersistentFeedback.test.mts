@@ -9,6 +9,7 @@ import { CloudExecutor } from "../../lib/execution/CloudExecutor";
 import { ExecutionError, type ExecutionOptions, type ExecutionResult, type ProcessingMode } from "../../lib/execution/types";
 import { prepareMarkdown } from "../../lib/execution/document/markdownPolicy";
 import { handleClientError } from "../../lib/errorHandler";
+import * as pdfInputPreparation from "../../lib/security/pdfInputPreparation";
 import type { PreviewResource } from "../../lib/preview/types";
 
 type Shared = ReturnType<typeof import("../../app/(site)/[toolId]/ClientToolLayout").useSharedTool>;
@@ -27,6 +28,7 @@ function loadModule<T>(relative: string, mocks: Record<string, unknown>): T {
     const loaded = { exports: {} };
     new Function("require", "module", "exports", outputText)(
         (name: string) => {
+            if (name === "@/lib/security/pdfInputPreparation") return pdfInputPreparation;
             if (!(name in mocks)) return require(name);
             const mock = mocks[name];
             return mock && typeof mock === "object" && Object.hasOwn(mock, "default")
@@ -46,6 +48,7 @@ const policyCopy = "External image URLs and local file paths are not supported. 
 const policy = { code: "MARKDOWN_RESOURCE_FORBIDDEN", message: "synthetic server detail /private/internal-file https://internal.invalid trace: secret diagnostic" };
 
 async function main() {
+    assert.equal(process.env.NEXT_PUBLIC_API_URL, "http://127.0.0.1:9", "feedback fixture API must stay loopback-only");
     const packageName = "jsdom"; // Existing DOMPurify dependency; no installation.
     const { JSDOM } = await import(packageName);
     const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost/markdown-to-pdf/workspace" });

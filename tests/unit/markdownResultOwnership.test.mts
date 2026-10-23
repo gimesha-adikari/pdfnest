@@ -6,6 +6,7 @@ import ts from "typescript";
 import React, { act } from "react";
 import { handleClientError } from "../../lib/errorHandler";
 import { ExecutionError, type ExecutionOptions, type ExecutionResult } from "../../lib/execution/types";
+import * as pdfInputPreparation from "../../lib/security/pdfInputPreparation";
 import type { PreviewResource } from "../../lib/preview/types";
 type Shared = ReturnType<typeof import("../../app/(site)/[toolId]/ClientToolLayout").useSharedTool>;
 type ComponentModule = { default: React.ComponentType<React.PropsWithChildren>; useSharedTool: () => Shared };
@@ -21,6 +22,7 @@ function loadComponent(relative: string, mocks: Record<string, unknown>) {
     const loaded = { exports: {} };
     new Function("require", "module", "exports", outputText)(
         (name: string) => {
+            if (name === "@/lib/security/pdfInputPreparation") return pdfInputPreparation;
             if (!(name in mocks)) return require(name);
             const mock = mocks[name];
             return mock && typeof mock === "object" && Object.hasOwn(mock, "default")
@@ -43,6 +45,9 @@ const embeddedImages = {
 };
 
 async function main() {
+    assert.equal(process.env.NEXT_PUBLIC_API_URL, "http://127.0.0.1:9", "result ownership fixture API must stay loopback-only");
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => { throw new Error("Result ownership fixture forbids network fetch"); };
     const name = "jsdom"; // Installed by the existing DOMPurify dependency.
     const { JSDOM } = await import(name);
     const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost/markdown-to-pdf/workspace" });
@@ -307,7 +312,7 @@ async function main() {
             catch (error) { failed++; console.log(`FAIL ${title}: ${(error as Error).message}`); }
             finally { await act(async () => root.unmount()); }
         }
-    } finally { console.error = previousConsoleError; dom.window.close(); }
+    } finally { console.error = previousConsoleError; globalThis.fetch = originalFetch; dom.window.close(); }
     console.log(`Markdown result ownership: ${tests.length - failed} passed, ${failed} failed`);
     if (failed) process.exitCode = 1;
 }
