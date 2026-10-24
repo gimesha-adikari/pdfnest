@@ -10,6 +10,11 @@ export interface FolderBundleResult {
 const EXCLUDED_DIRS = new Set([
     "node_modules",
     ".git",
+    ".svn",
+    ".hg",
+    ".ssh",
+    ".aws",
+    ".gnupg",
     ".next",
     "dist",
     "build",
@@ -22,42 +27,32 @@ const EXCLUDED_DIRS = new Set([
     "vendor",
 ]);
 
-const EXCLUDED_FILES = new Set([
-    ".DS_Store",
-    "Thumbs.db",
-    "npm-debug.log",
-    "yarn-error.log",
-]);
-
 export const MAX_FOLDER_FILES = 25000;
 export const MAX_FOLDER_UNCOMPRESSED_BYTES = 250 * 1024 * 1024; // 250 MB
 
+// Mirrors the Analyzer's mandatory credential exclusions. This is filename
+// filtering, not a claim that arbitrary source code contains no secrets.
 export function isPathExcluded(relativePath: string): boolean {
-    const normalized = relativePath.replace(/\\/g, "/").replace(/^\/+/, "");
-    const parts = normalized.split("/");
-
-    for (let i = 0; i < parts.length - 1; i++) {
-        if (EXCLUDED_DIRS.has(parts[i])) {
-            return true;
-        }
-    }
-
+    const parts = sanitizeRelativePath(relativePath).toLowerCase().split("/");
+    if (parts.slice(0, -1).some((part) => EXCLUDED_DIRS.has(part))) return true;
     const filename = parts[parts.length - 1];
-    if (EXCLUDED_FILES.has(filename)) {
-        return true;
-    }
-
-    return false;
+    const safeEnv = [".env.example", ".env.sample", ".env.template", ".env.dist", ".env.defaults",
+        "env.example", "env.sample", "env.template"].some((suffix) => filename.endsWith(suffix));
+    if (!safeEnv && (filename === ".env" || filename.startsWith(".env."))) return true;
+    return /\.(pem|key|p12|pfx|exe|dll|so|dylib)$/.test(filename)
+        || /^(id_rsa|id_dsa|id_ed25519|id_ecdsa)/.test(filename)
+        || ["credentials.json", "credentials", ".netrc", "_netrc", ".npmrc", ".pypirc",
+            ".git-credentials", ".ds_store", "thumbs.db", "npm-debug.log", "yarn-error.log"].includes(filename);
 }
 
 export function sanitizeRelativePath(raw: string): string {
-    const normalized = raw.replace(/\\/g, "/").replace(/^\/+/, "");
-    const segments = normalized.split("/").filter((s) => s.length > 0 && s !== ".");
-
-    if (segments.some((s) => s === "..")) {
-        throw new Error(`Unsafe directory traversal in relative path: ${raw}`);
+    const normalized = raw.replace(/\\/g, "/");
+    const segments = normalized.split("/");
+    if (!raw || /^[a-z]:/i.test(normalized) || normalized.startsWith("/")
+        || /[\x00-\x1f\x7f]/.test(raw)
+        || segments.some((part) => !part || part === "." || part === ".." || part.includes(":"))) {
+        throw new Error("Unsafe repository relative path.");
     }
-
     return segments.join("/");
 }
 
@@ -71,19 +66,24 @@ export async function bundleDirectoryToZip(
 
     // Determine root folder name
     const firstRel = files[0].webkitRelativePath || files[0].name;
-    const folderName = firstRel.replace(/\\/g, "/").split("/")[0] || "repository";
+    const folderName = sanitizeRelativePath(firstRel).split("/")[0];
 
     // 1. Filter and validate files
     const validFiles: { file: File; cleanPath: string }[] = [];
     let totalUncompressedBytes = 0;
+    const seenPaths = new Set<string>();
 
     for (const file of files) {
         const relPath = file.webkitRelativePath || file.name;
-        if (isPathExcluded(relPath)) {
+        const cleanPath = sanitizeRelativePath(relPath);
+        if (isPathExcluded(cleanPath)) {
             continue;
         }
 
-        const cleanPath = sanitizeRelativePath(relPath);
+        if (seenPaths.has(cleanPath)) {
+            throw new Error("Duplicate repository relative path.");
+        }
+        seenPaths.add(cleanPath);
         validFiles.push({ file, cleanPath });
         totalUncompressedBytes += file.size;
 

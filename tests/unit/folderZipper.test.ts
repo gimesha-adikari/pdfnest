@@ -1,7 +1,42 @@
 import { isPathExcluded, sanitizeRelativePath, bundleDirectoryToZip } from "../../lib/folderZipper";
 import assert from "node:assert";
+import { unzipSync, strFromU8 } from "fflate";
 
 async function runTests() {
+    const secrets = [".env", ".env.production", "nested/.env.local", "cert.pem", "private.KEY",
+        "id_rsa", "nested/id_ed25519", "credentials.json", ".aws/credentials", ".npmrc", ".svn/entries"];
+    for (const name of secrets) assert.equal(isPathExcluded(`repo/${name}`), true, name);
+    for (const name of [".env.example", ".env.sample", ".env.template", "nested/.env.defaults", "package.json", "src/main.ts", "tsconfig.json"]) {
+        assert.equal(isPathExcluded(`repo/${name}`), false, name);
+    }
+    for (const name of ["../secret", "a/../b", "/abs", "C:\\secret", "a//b", "a/./b", "a/secret\0", "\\\\host/share"]) {
+        assert.throws(() => sanitizeRelativePath(name), /Unsafe/, name);
+    }
+    let secretReads = 0;
+    const unsafeFiles = secrets.map((name) => {
+        const file = new File(["harmless synthetic secret"], name);
+        Object.defineProperty(file, "webkitRelativePath", { value: `repo/${name}` });
+        file.arrayBuffer = async () => { secretReads++; throw new Error("Excluded bytes read"); };
+        return file;
+    });
+    const safeFile = new File(["safe template"], ".env.example");
+    Object.defineProperty(safeFile, "webkitRelativePath", { value: "repo/.env.example" });
+    const safeBundle = await bundleDirectoryToZip([...unsafeFiles, safeFile]);
+    assert.equal(secretReads, 0);
+    const contents = unzipSync(new Uint8Array(await safeBundle.zipBlob.arrayBuffer()));
+    assert.deepEqual(Object.keys(contents), ["repo/.env.example"]);
+    assert.equal(strFromU8(contents["repo/.env.example"]), "safe template");
+    await assert.rejects(bundleDirectoryToZip(unsafeFiles), /No valid source/);
+    let safeReads = 0;
+    safeFile.arrayBuffer = async () => { safeReads++; return new ArrayBuffer(0); };
+    const traversal = new File(["unused"], "../unsafe");
+    await assert.rejects(bundleDirectoryToZip([safeFile, traversal]), /Unsafe/);
+    assert.equal(safeReads, 0, "complete validation precedes any byte reads");
+    const tooBig = new File([], "large.ts");
+    Object.defineProperty(tooBig, "size", { value: 250 * 1024 * 1024 + 1 });
+    await assert.rejects(bundleDirectoryToZip([tooBig]), /250MB/);
+    await assert.rejects(bundleDirectoryToZip(Array.from({length: 25001}, (_, i) => new File([], `${i}.ts`))), /file count/);
+
     console.log("=== RUNNING FOLDER ZIPPER UNIT TESTS ===");
 
     // Test 1: Exclusion Rules
@@ -16,7 +51,7 @@ async function runTests() {
 
     // Test 2: Path Sanitization & Traversal Protection
     assert.strictEqual(sanitizeRelativePath("src/index.ts"), "src/index.ts");
-    assert.strictEqual(sanitizeRelativePath("/src/index.ts"), "src/index.ts");
+    assert.throws(() => sanitizeRelativePath("/src/index.ts"));
     assert.strictEqual(sanitizeRelativePath("src\\components\\Button.tsx"), "src/components/Button.tsx");
 
     let traversalDetected = false;
@@ -41,7 +76,7 @@ async function runTests() {
     Object.defineProperty(mockFiles[2], "webkitRelativePath", { value: "my-project/node_modules/dummy.js" });
 
     let progressCalls = 0;
-    const result = await bundleDirectoryToZip(mockFiles, (percent, currentFile) => {
+    const result = await bundleDirectoryToZip(mockFiles, (percent) => {
         progressCalls++;
         assert.ok(percent >= 0 && percent <= 100);
     });
