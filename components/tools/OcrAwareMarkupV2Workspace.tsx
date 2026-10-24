@@ -1,6 +1,7 @@
 "use client";
+import { captureCloudPdfOutputRestoration } from "@/lib/api";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, FileText, Highlighter, Languages, Loader2, RotateCcw, ShieldCheck, Strikethrough, Underline } from "lucide-react";
 
@@ -96,6 +97,8 @@ function statusLabel(job: OcrAwareMarkupJob): string {
 export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAwareMarkupAction }) {
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
+    const currentInputRef = useRef(file);
+    useLayoutEffect(() => { currentInputRef.current = file; }, [file]);
     const { openAuthModal, isAuthenticated, isGuest, isLoading: isAuthLoading } = useAuth();
     const [query, setQuery] = useState("");
     const [mode, setMode] = useState<OcrAwareMarkupMode>("smart");
@@ -356,12 +359,14 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
         setError(null);
         setCapacityRejected(false);
         setJob(null);
+        setDownloadData(null);
+        const restoreOutput = captureCloudPdfOutputRestoration(file, toolId || `${action}-pdf-v2`);
         setIsSubmitting(true);
         setRecoveryRequired(false);
         cancelRequestedRef.current = false;
         const controller = new AbortController();
         abortRef.current = controller;
-        const isCurrent = () => mountedRef.current && !controller.signal.aborted && activityRef.current.owns(activity);
+        const isCurrent = () => mountedRef.current && currentInputRef.current === file && !controller.signal.aborted && activityRef.current.owns(activity);
         const updateJob = (next: OcrAwareMarkupJob) => { if (isCurrent()) setJob(next); };
 
         try {
@@ -382,8 +387,11 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
                 setError(safeOcrAwareMarkupMessage(completed.error?.code || completed.status));
                 return;
             }
-            const blob = await downloadOcrAwareMarkup(created.job_id);
-            if (!isCurrent()) return;
+            if (cancelRequestedRef.current) return;
+            const downloaded = await downloadOcrAwareMarkup(created.job_id);
+            if (!isCurrent() || cancelRequestedRef.current) return;
+            const blob = await restoreOutput(downloaded, controller.signal);
+            if (!isCurrent() || cancelRequestedRef.current) return;
             const suffix = action === "highlight" ? "highlighted" : action === "underline" ? "underlined" : "strikeout";
             const baseName = file.name.replace(/\.pdf$/i, "");
             setDownloadData({ blob, fileName: `${baseName}-${suffix}.pdf` });

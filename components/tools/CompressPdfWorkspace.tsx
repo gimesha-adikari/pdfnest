@@ -17,6 +17,7 @@ import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
 import { PdfProgressTracker } from "@/components/pdf/PdfProgressTracker";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
+import { usePdfOutputOperation } from "@/lib/security/usePdfOutputOperation";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
@@ -35,11 +36,14 @@ export default function CompressPdfWorkspace() {
     const { requireAuth } = useAuth();
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
+    const beginOutput = usePdfOutputOperation(file, toolId || "compress-pdf", () => setDownloadData(null));
 
     const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
     const [compressionLevel, setCompressionLevel] = useState<CompressionLevel>("medium");
 
-    const [isProcessing, setIsProcessing] = useState(false);
+    const [processingSource, setProcessingSource] = useState<File | null>(null);
+    const isProcessing = Boolean(file && processingSource === file);
+    const setIsProcessing = (value: boolean) => setProcessingSource(value ? file : null);
     const [progress, setProgress] = useState(0);
     const [statusMessage, setStatusMessage] = useState<string | null>(null);
     const [isCancelling, setIsCancelling] = useState(false);
@@ -79,10 +83,15 @@ export default function CompressPdfWorkspace() {
     };
 
     const handleCompression = async () => {
+        setDownloadData(null);
         requireAuth(async () => {
             if (!file) return;
 
+            const operation = beginOutput();
+            if (!operation) return;
             const controller = new AbortController();
+            const abort = () => controller.abort();
+            operation.signal.addEventListener("abort", abort, { once: true });
             abortControllerRef.current = controller;
 
             setIsProcessing(true);
@@ -117,6 +126,7 @@ export default function CompressPdfWorkspace() {
                     },
                 });
 
+                if (!operation.isCurrent() || controller.signal.aborted) return;
                 const outputBlob = result.blob;
                 const originalSize = (outputBlob as any).originalSize ?? file.size;
                 const compressedSize = (outputBlob as any).compressedSize ?? outputBlob.size;
@@ -140,6 +150,7 @@ export default function CompressPdfWorkspace() {
                 });
 
                 setDownloadData({
+                    provenance: operation.provenance(),
                     blob: outputBlob,
                     fileName: result.fileName || `compressed_${file.name}`,
                 });
@@ -153,6 +164,7 @@ export default function CompressPdfWorkspace() {
                 );
                 router.push(`/${toolId}/download`);
             } catch (err: any) {
+                if (!operation.isCurrent()) return;
                 if (
                     err?.name === "AbortError" ||
                     err?.code === "USER_CANCELLATION" ||
@@ -164,7 +176,9 @@ export default function CompressPdfWorkspace() {
                     handleClientError(err);
                 }
             } finally {
-                setIsProcessing(false);
+                operation.signal.removeEventListener("abort", abort);
+                if (operation.isCurrent()) setIsProcessing(false);
+                operation.finish();
                 setIsCancelling(false);
                 setProgress(0);
                 setStatusMessage(null);

@@ -70,6 +70,7 @@ export default function EditMetadataWorkspace() {
 
 
     const handleMetadataUpdate = async () => {
+        setDownloadData(null);
         requireAuth(async () => {
             if (!file) return;
 

@@ -45,6 +45,7 @@ export default function PageNumbersWorkspace() {
     });
 
     const handleNumberingProcessing = async () => {
+        setDownloadData(null);
         requireAuth(async () => {
             if (!file) return;
 

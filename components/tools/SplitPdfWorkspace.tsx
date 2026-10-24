@@ -133,6 +133,7 @@ export default function SplitPdfWorkspace() {
     }, [selectedPages]);
 
     const handleSplitProcessing = async () => {
+        setDownloadData(null);
         requireAuth(async () => {
             if (!file || selectedPages.size === 0) return;
 

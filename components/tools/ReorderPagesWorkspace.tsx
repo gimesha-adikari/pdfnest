@@ -77,6 +77,7 @@ export default function ReorderPagesWorkspace() {
     }, [file]);
 
     const handleReorderSubmission = async () => {
+        setDownloadData(null);
         requireAuth(async () => {
             if (!file || pageOrder.length === 0) return;
 

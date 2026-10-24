@@ -3,6 +3,7 @@
 import {
     createContext,
     useContext,
+    useRef,
     useEffect,
     useMemo,
     useState,
@@ -115,10 +116,12 @@ export default function ClientToolLayout({
     const currentToolHref = `/${toolId}`;
 
     const [fileState, setFileState] = useState<File | null>(null);
+    const currentInputRef = useRef<File | null>(null);
     const [activeToolHref, setActiveToolHref] = useState<string | null>(null);
     const [downloadData, setDownloadDataState] = useState<ToolDownloadData | null>(null);
 
     const setDownloadData = useCallback((data: ToolDownloadDataInput | null) => {
+        if (data && currentInputRef.current !== fileState) return;
         setDownloadDataState(data ? {
             ...data,
             provenance: data.provenance ?? capturePdfResultProvenance(
@@ -195,13 +198,14 @@ export default function ClientToolLayout({
     }, [currentToolHref, getToolByHref, isLoadingTools, toolId]);
 
     const setFile = useCallback((nextFile: File | null) => {
-        if (toolId === "markdown-to-pdf" || toolId === "code-to-pdf") {
+        currentInputRef.current = nextFile;
+        if (nextFile !== fileState || toolId === "markdown-to-pdf" || toolId === "code-to-pdf") {
             setDownloadData(null);
             setConversionGeneration(null);
         }
         setFileState(nextFile);
         setActiveToolHref(nextFile ? currentToolHref : null);
-    }, [toolId, currentToolHref, setDownloadData]);
+    }, [fileState, toolId, currentToolHref, setDownloadData]);
 
     return (
         <SharedToolContext.Provider

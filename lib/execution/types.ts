@@ -60,6 +60,7 @@ export interface SafetyGateEvaluation {
 }
 
 export type ExecutionErrorCode =
+    | "PDF_PROTECTION_RESTORE_FAILED"
     | "INVALID_INPUT"
     | "MARKDOWN_RESOURCE_FORBIDDEN"
     | "DECRYPTION_AUTH_FAILED"

@@ -18,7 +18,8 @@ import { executeMarkup } from "./markup/markupClient";
 import { executeSignPdf } from "./sign/signClient";
 import { executeCodeToPdf } from "./document/codeClient";
 import { executeMarkdownToPdf } from "./document/markdownClient";
-import { getPdfInputPreparation } from "@/lib/security/pdfInputPreparation";
+import { verifyProtectedPdfBlob } from "@/lib/security/verifyProtectedPdf";
+import { getPdfInputPreparation, getPdfOutputRestorationPassword } from "@/lib/security/pdfInputPreparation";
 
 export class ClientExecutor {
     static isSupported(tool: string): boolean {
@@ -53,6 +54,28 @@ export class ClientExecutor {
     }
 
     static async execute(options: ExecutionOptions): Promise<Blob> {
+        // Capture the expectation before any asynchronous work or mutable input metadata.
+        const tool = normalizeTool(options.tool);
+        const independentOutput = ["merge", "unlock", "lock", "pdf_to_images", "pdf_to_text", "images_to_pdf", "code_to_pdf", "markdown_to_pdf"].includes(tool);
+        const password = independentOutput ? undefined : options.password || (options.files?.[0] ? getPdfOutputRestorationPassword(options.files[0]) : undefined);
+        const blob = await this.executeOperation(options);
+        if (options.signal?.aborted) throw new ExecutionError("USER_CANCELLATION", "Execution was cancelled.");
+        // These operations have explicit independent output contracts.
+        if (!password) return blob;
+        try {
+            // Some engines preserve encryption already. Never double-lock such output.
+            try { await verifyProtectedPdfBlob(blob, password, options.signal); return blob; }
+            catch { if (options.signal?.aborted) throw new Error("cancelled"); }
+            const protectedBlob = await executePdfcpuWasmLock(new File([blob], "result.pdf", { type: "application/pdf" }), password, 128);
+            await verifyProtectedPdfBlob(protectedBlob, password, options.signal);
+            return protectedBlob;
+        } catch {
+            if (options.signal?.aborted) throw new ExecutionError("USER_CANCELLATION", "Execution was cancelled.");
+            throw new ExecutionError("PDF_PROTECTION_RESTORE_FAILED", "PDF password protection could not be restored and verified. No result is available.");
+        }
+    }
+
+    private static async executeOperation(options: ExecutionOptions): Promise<Blob> {
         const { tool, files } = options;
         const params = options.params || {};
 

@@ -275,7 +275,7 @@ export class ExecutionManager {
                 // User input validation & auth errors (invalid PDF header, wrong password) do NOT trigger cloud fallback
                 if (
                     err instanceof ExecutionError &&
-                    (err.code === "INVALID_INPUT" || err.code === "MARKDOWN_RESOURCE_FORBIDDEN" || err.code === "DECRYPTION_AUTH_FAILED" || err.code === "USER_CANCELLATION")
+                    (err.code === "PDF_PROTECTION_RESTORE_FAILED" || err.code === "INVALID_INPUT" || err.code === "MARKDOWN_RESOURCE_FORBIDDEN" || err.code === "DECRYPTION_AUTH_FAILED" || err.code === "USER_CANCELLATION")
                 ) {
                     const durationMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - startTime;
                     telemetry.record({

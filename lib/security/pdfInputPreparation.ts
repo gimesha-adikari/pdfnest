@@ -240,6 +240,16 @@ export function assertCloudProcessingAuthorizedInputs(files: readonly File[], to
     }
 }
 
+/** A decrypted source with known original protection cannot silently lose its restoration contract. */
+export function getPdfOutputRestorationPassword(file: File): string | undefined {
+    const password = (file as File & { originalPassword?: string }).originalPassword;
+    const preparation = getPdfInputPreparation(file);
+    if (!password && preparation?.sourceProtected === true && preparation.bytesState === "decrypted") {
+        throw new Error("The source password is no longer available. Reopen the original PDF before processing.");
+    }
+    return password;
+}
+
 export function setTransientOriginalPassword(file: File, password: string): void {
     Object.defineProperty(file, "originalPassword", {
         value: password,
