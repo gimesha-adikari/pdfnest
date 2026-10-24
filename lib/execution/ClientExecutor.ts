@@ -57,7 +57,12 @@ export class ClientExecutor {
         // Capture the expectation before any asynchronous work or mutable input metadata.
         const tool = normalizeTool(options.tool);
         const independentOutput = ["merge", "unlock", "lock", "pdf_to_images", "pdf_to_text", "images_to_pdf", "code_to_pdf", "markdown_to_pdf"].includes(tool);
-        const password = independentOutput ? undefined : options.password || (options.files?.[0] ? getPdfOutputRestorationPassword(options.files[0]) : undefined);
+        let password: string | undefined;
+        try {
+            password = independentOutput ? undefined : options.password || (options.files?.[0] ? getPdfOutputRestorationPassword(options.files[0]) : undefined);
+        } catch {
+            throw new ExecutionError("PDF_PROTECTION_RESTORE_FAILED", "The source password is no longer available. Reopen the original PDF before processing.");
+        }
         const blob = await this.executeOperation(options);
         if (options.signal?.aborted) throw new ExecutionError("USER_CANCELLATION", "Execution was cancelled.");
         // These operations have explicit independent output contracts.

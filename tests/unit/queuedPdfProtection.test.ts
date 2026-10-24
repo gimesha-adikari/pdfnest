@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import axios from "axios";
 import { PDFDocument } from "pdf-lib";
+import { ExecutionManager } from "../../lib/execution/ExecutionManager";
+import { CloudExecutor } from "../../lib/execution/CloudExecutor";
 import { ClientExecutor } from "../../lib/execution/ClientExecutor";
 import { captureCloudPdfOutputRestoration } from "../../lib/api";
 import { verifyProtectedPdfBlob } from "../../lib/security/verifyProtectedPdf";
@@ -57,6 +59,13 @@ async function main() {
         markPdfInputPreparation(unavailablePassword, { sourceProtected: true, bytesState: "decrypted", preparedOn: "device", processingMode: "cloud", cloudSubmissionInitiated: false });
         await assert.rejects(captureCloudPdfOutputRestoration(unavailablePassword, "edit-pdf")(plain), /could not be restored/);
         assert.equal(calls, before);
+        const originalCloud = CloudExecutor.execute;
+        let fallbacks = 0;
+        CloudExecutor.execute = async () => { fallbacks++; return plain; };
+        try {
+            await assert.rejects(ExecutionManager.run({ tool: "sign", files: [unavailablePassword], mode: "auto" }), (error: unknown) => (error as { code?: string }).code === "PDF_PROTECTION_RESTORE_FAILED");
+            assert.equal(fallbacks, 0, "missing restoration evidence cannot trigger Auto Cloud fallback");
+        } finally { CloudExecutor.execute = originalCloud; }
         const device = new File([plain], "device.pdf", { type: "application/pdf" });
         setTransientOriginalPassword(device, "expected-secret");
         markPdfInputPreparation(device, { sourceProtected: true, bytesState: "decrypted", preparedOn: "device", processingMode: "device", cloudSubmissionInitiated: false });

@@ -427,6 +427,11 @@ export async function uploadAndDownloadFile(
     const preparation = fileEntry instanceof File ? getPdfInputPreparation(fileEntry) : undefined;
     const requiresRestoration = preparation?.sourceProtected === true && preparation.bytesState === "decrypted";
 
+    if (outputKind === "pdf" && requiresRestoration && !passwordToRestore &&
+        endpointPath !== "/api/security/unlock" && endpointPath !== "/api/security/lock") {
+        throw createProtectionRestorationError();
+    }
+
     let responseBlob: Blob;
     let contentType = "";
 
