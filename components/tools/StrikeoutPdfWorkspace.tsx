@@ -16,7 +16,8 @@ import {
     MousePointer2,
     Sparkles,
 } from "lucide-react";
-import { getBaseUrl } from "@/lib/api";
+import { usePdfOutputOperation } from "@/lib/security/usePdfOutputOperation";
+import { getBaseUrl, captureCloudPdfOutputRestoration } from "@/lib/api";
 import { getFriendlyErrorMessage, handleClientError } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
@@ -252,6 +253,9 @@ export default function StrikeoutPdfWorkspace() {
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
 
+    const beginOutput = usePdfOutputOperation(file, toolId || "strikeout-pdf", () => setDownloadData(null));
+    const outputRef = useRef<(NonNullable<ReturnType<typeof beginOutput>> & { restore: ReturnType<typeof captureCloudPdfOutputRestoration> }) | null>(null);
+
     const [pdfDocument, setPdfDocument] = useState<PdfJsDocument | null>(null);
     const [currentPage, setCurrentPage] = useState<number>(1);
     const [totalPages, setTotalPages] = useState<number>(0);
@@ -263,7 +267,9 @@ export default function StrikeoutPdfWorkspace() {
     const [boxes, setBoxes] = useState<StrikeoutBox[]>([]);
     const [selectedColor, setSelectedColor] = useState<string>("#000000");
     const [activeId, setActiveId] = useState<string | null>(null);
-    const [isProcessing, setIsProcessing] = useState<boolean>(false);
+    const [processingSource, setProcessingSource] = useState<File | null>(null);
+    const isProcessing = Boolean(file && processingSource === file);
+    const setIsProcessing = (value: boolean) => setProcessingSource(value ? file : null);
     const [success, setSuccess] = useState<boolean>(false);
 
     const [strikeoutMode, setStrikeoutMode] = useState<StrikeoutMode>("smart");
@@ -640,9 +646,13 @@ export default function StrikeoutPdfWorkspace() {
 
     useEffect(() => {
         if (!jobId) return;
+        const operation = outputRef.current;
+        if (!operation?.isCurrent()) return;
 
         const controller = new AbortController();
         jobAbortRef.current = controller;
+        const abort = () => controller.abort();
+        operation.signal.addEventListener("abort", abort, { once: true });
         handledSuccessRef.current = false;
 
         const run = async () => {
@@ -673,15 +683,19 @@ export default function StrikeoutPdfWorkspace() {
                 }
                 handledSuccessRef.current = true;
 
-                const blob = await downloadJobPdf(jobId);
+                const downloaded = await downloadJobPdf(jobId);
+                if (!operation.isCurrent() || controller.signal.aborted) return;
+                const blob = await operation.restore(downloaded, operation.signal);
+                if (!operation.isCurrent() || controller.signal.aborted) return;
 
-                const fileName = (file?.name || "document.pdf").replace(/\.pdf$/i, "");
+                const fileName = (operation.file.name || "document.pdf").replace(/\.pdf$/i, "");
                 const strikeoutFile = new File([blob], `${fileName}-strikeout.pdf`, {
                     type: "application/pdf",
                 });
 
                 setDownloadData({
                     blob,
+                    provenance: operation.provenance(),
                     fileName: `${fileName}-strikeout.pdf`,
                 });
 
@@ -703,14 +717,14 @@ export default function StrikeoutPdfWorkspace() {
                 setJobId("");
                 setUploadProgress(0);
             } catch (err) {
-                if ((err as Error)?.name === "AbortError") return;
+                if (!operation.isCurrent() || (err as Error)?.name === "AbortError") return;
                 console.error(err);
                 setJobError(getFriendlyErrorMessage(err));
                 handleClientError(err);
             } finally {
-                if (!controller.signal.aborted) {
-                    setIsProcessing(false);
-                }
+                if (operation.isCurrent()) setIsProcessing(false);
+                operation.finish();
+                operation.signal.removeEventListener("abort", abort);
             }
         };
 
@@ -804,7 +818,13 @@ export default function StrikeoutPdfWorkspace() {
 
         const validFile = activeFile as CustomPdfFile;
 
+        setDownloadData(null);
+        const restore = captureCloudPdfOutputRestoration(validFile, toolId || "strikeout-pdf");
         requireAuth(async () => {
+            const current = beginOutput();
+            if (!current) return;
+            const operation = { ...current, restore };
+            outputRef.current = operation;
             try {
                 setIsProcessing(true);
                 setSuccess(false);
@@ -821,6 +841,7 @@ export default function StrikeoutPdfWorkspace() {
                         toolId || "strikeout-pdf"
                     );
 
+                    if (!operation.isCurrent()) return;
                     setJobId(submission.job_id);
                     setJob(null);
                     setUploadProgress(100);
@@ -837,13 +858,12 @@ export default function StrikeoutPdfWorkspace() {
                     },
                     mode: "auto",
                     password: validFile.originalPassword,
+                    signal: operation.signal,
                 });
 
+                if (!operation.isCurrent()) return;
                 if (result.executionMode === "client") {
                     const fileName = (file?.name || "document.pdf").replace(/\.pdf$/i, "");
-                    const struckoutFile = new File([result.blob], `${fileName}-struckout.pdf`, {
-                        type: "application/pdf",
-                    });
 
                     setDownloadData({
                         blob: result.blob,
@@ -861,7 +881,8 @@ export default function StrikeoutPdfWorkspace() {
                     setHistoryFuture([]);
                     setActiveId(null);
                     setCurrentPage(1);
-                    setFile?.(struckoutFile);
+
+                    operation.finish();
                     router.push(`/${toolId}/download`);
                     return;
                 }
@@ -873,11 +894,14 @@ export default function StrikeoutPdfWorkspace() {
                     validFile.originalPassword
                 );
 
+                if (!operation.isCurrent()) return;
                 setJobId(submission.job_id);
                 setJob(null);
                 setUploadProgress(100);
                 notify("Strikeout job queued. Waiting for worker...", "info");
             } catch (err) {
+                if (!operation.isCurrent()) return;
+                operation.finish();
                 console.error(err);
                 setJobError(getFriendlyErrorMessage(err));
                 handleClientError(err);

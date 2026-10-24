@@ -14,6 +14,7 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { DraggableSignaturePlaceholder } from "@/components/pdf/DraggableSignaturePlaceholder";
 import { usePreview } from "@/lib/preview/usePreview";
 import type { PreviewError } from "@/lib/preview/types";
+import { usePdfOutputOperation } from "@/lib/security/usePdfOutputOperation";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import type { ProcessingMode } from "@/lib/execution/types";
@@ -32,6 +33,7 @@ export default function SignPdfWorkspace() {
     const { requireAuth } = useAuth();
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
+    const beginOutput = usePdfOutputOperation(file, toolId || "sign-pdf", () => setDownloadData(null));
 
     const [pageDimensions, setPageDimensions] = useState<
         Record<number, { width: number; height: number }>
@@ -43,7 +45,9 @@ export default function SignPdfWorkspace() {
 
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
-    const [isProcessing, setIsProcessing] = useState(false);
+    const [processingSource, setProcessingSource] = useState<File | null>(null);
+    const isProcessing = Boolean(file && processingSource === file);
+    const setIsProcessing = (value: boolean) => setProcessingSource(value ? file : null);
     const [success, setSuccess] = useState(false);
     const previewContainerRef = useRef<HTMLDivElement>(null);
 
@@ -178,12 +182,15 @@ export default function SignPdfWorkspace() {
     };
 
     const handleSignDocument = async () => {
+        setDownloadData(null);
         requireAuth(async () => {
             if (!file || !signatureBlob || stamps.length === 0) {
                 notify("Please place at least one signature on the document.", "warning");
                 return;
             }
 
+            const operation = beginOutput();
+            if (!operation) return;
             try {
                 setIsProcessing(true);
                 setSuccess(false);
@@ -211,6 +218,7 @@ export default function SignPdfWorkspace() {
 
                 const result = await ExecutionManager.run({
                     tool: "sign",
+                    signal: operation.signal,
                     files: [file],
                     mode: processingMode,
                     params: {
@@ -220,7 +228,9 @@ export default function SignPdfWorkspace() {
                     password: (file as any).originalPassword,
                 });
 
+                if (!operation.isCurrent()) return;
                 setDownloadData({
+                    provenance: operation.provenance(),
                     blob: result.blob,
                     fileName: result.fileName,
                 });
@@ -228,9 +238,11 @@ export default function SignPdfWorkspace() {
                 setSuccess(true);
                 router.push(`/${toolId}/download`);
             } catch (err: any) {
+                if (!operation.isCurrent()) return;
                 notify(getFriendlyErrorMessage(err) || "Failed to sign document", "error");
             } finally {
-                setIsProcessing(false);
+                if (operation.isCurrent()) setIsProcessing(false);
+                operation.finish();
             }
         });
     };

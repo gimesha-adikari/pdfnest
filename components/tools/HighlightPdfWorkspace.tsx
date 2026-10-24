@@ -16,7 +16,8 @@ import {
     MousePointer2,
     Sparkles,
 } from "lucide-react";
-import { getBaseUrl } from "@/lib/api";
+import { usePdfOutputOperation } from "@/lib/security/usePdfOutputOperation";
+import { getBaseUrl, captureCloudPdfOutputRestoration } from "@/lib/api";
 import { getFriendlyErrorMessage, handleClientError } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
@@ -253,6 +254,9 @@ export default function HighlightPdfWorkspace() {
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
 
+    const beginOutput = usePdfOutputOperation(file, toolId || "highlight-pdf", () => setDownloadData(null));
+    const outputRef = useRef<(NonNullable<ReturnType<typeof beginOutput>> & { restore: ReturnType<typeof captureCloudPdfOutputRestoration> }) | null>(null);
+
     const [pdfDocument, setPdfDocument] = useState<PdfJsDocument | null>(null);
     const [currentPage, setCurrentPage] = useState<number>(1);
     const [totalPages, setTotalPages] = useState<number>(0);
@@ -264,7 +268,9 @@ export default function HighlightPdfWorkspace() {
     const [boxes, setBoxes] = useState<HighlightBox[]>([]);
     const [selectedColor, setSelectedColor] = useState<string>("#FFFF00");
     const [activeId, setActiveId] = useState<string | null>(null);
-    const [isProcessing, setIsProcessing] = useState<boolean>(false);
+    const [processingSource, setProcessingSource] = useState<File | null>(null);
+    const isProcessing = Boolean(file && processingSource === file);
+    const setIsProcessing = (value: boolean) => setProcessingSource(value ? file : null);
     const [success, setSuccess] = useState<boolean>(false);
 
     const [highlightMode, setHighlightMode] = useState<HighlightMode>("smart");
@@ -640,9 +646,13 @@ export default function HighlightPdfWorkspace() {
 
     useEffect(() => {
         if (!jobId) return;
+        const operation = outputRef.current;
+        if (!operation?.isCurrent()) return;
 
         const controller = new AbortController();
         jobAbortRef.current = controller;
+        const abort = () => controller.abort();
+        operation.signal.addEventListener("abort", abort, { once: true });
         handledSuccessRef.current = false;
 
         const run = async () => {
@@ -673,33 +683,34 @@ export default function HighlightPdfWorkspace() {
                 }
                 handledSuccessRef.current = true;
 
-                const blob = await downloadJobPdf(jobId);
+                const downloaded = await downloadJobPdf(jobId);
+                if (!operation.isCurrent() || controller.signal.aborted) return;
+                const blob = await operation.restore(downloaded, operation.signal);
+                if (!operation.isCurrent() || controller.signal.aborted) return;
 
-                const fileName = (file?.name || "document.pdf").replace(/\.pdf$/i, "");
-                const highlightedFile = new File([blob], `${fileName}-highlighted.pdf`, {
-                    type: "application/pdf",
-                });
+                const fileName = (operation.file.name || "document.pdf").replace(/\.pdf$/i, "");
 
                 setDownloadData({
                     blob,
+                    provenance: operation.provenance(),
                     fileName: `${fileName}-highlighted.pdf`,
                 });
 
                 await Promise.resolve();
                 router.push(`/${toolId}/download`);
 
-                await onJobFinished(highlightedFile);
+                onJobFinished();
                 setJobId("");
                 setUploadProgress(0);
             } catch (err) {
-                if ((err as Error)?.name === "AbortError") return;
+                if (!operation.isCurrent() || (err as Error)?.name === "AbortError") return;
                 console.error(err);
                 setJobError(getFriendlyErrorMessage(err));
                 handleClientError(err);
             } finally {
-                if (!controller.signal.aborted) {
-                    setIsProcessing(false);
-                }
+                if (operation.isCurrent()) setIsProcessing(false);
+                operation.finish();
+                operation.signal.removeEventListener("abort", abort);
             }
         };
 
@@ -708,30 +719,17 @@ export default function HighlightPdfWorkspace() {
         return () => controller.abort();
     }, [jobId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    async function onJobFinished(editedFile: File) {
-        await Promise.resolve();
+    function onJobFinished() {
         setSuccess(true);
-
         setJob(null);
         setJobId("");
         setUploadProgress(0);
         setJobError(null);
-
-        await Promise.resolve();
-        await Promise.resolve();
-        notify("Highlighted PDF loaded back into Studio.", "success");
-        await Promise.resolve();
         setBoxes([]);
         setHistoryPast([]);
         setHistoryFuture([]);
         setActiveId(null);
         setCurrentPage(1);
-        await onFinishedFile(editedFile);
-    }
-
-    async function onFinishedFile(editedFile: File) {
-        await Promise.resolve();
-        setFile?.(editedFile);
     }
 
     const handleContainerPointerDown = (e: PointerEvent<HTMLDivElement>) => {
@@ -812,7 +810,13 @@ export default function HighlightPdfWorkspace() {
 
         const validFile = activeFile as CustomPdfFile;
 
+        setDownloadData(null);
+        const restore = captureCloudPdfOutputRestoration(validFile, toolId || "highlight-pdf");
         requireAuth(async () => {
+            const current = beginOutput();
+            if (!current) return;
+            const operation = { ...current, restore };
+            outputRef.current = operation;
             try {
                 setIsProcessing(true);
                 setSuccess(false);
@@ -829,6 +833,7 @@ export default function HighlightPdfWorkspace() {
                         toolId || "highlight-pdf"
                     );
 
+                    if (!operation.isCurrent()) return;
                     setJobId(submission.job_id);
                     setJob(null);
                     setUploadProgress(100);
@@ -845,20 +850,20 @@ export default function HighlightPdfWorkspace() {
                     },
                     mode: "auto",
                     password: validFile.originalPassword,
+                    signal: operation.signal,
                 });
 
+                if (!operation.isCurrent()) return;
                 if (result.executionMode === "client") {
                     const fileName = (file?.name || "document.pdf").replace(/\.pdf$/i, "");
-                    const highlightedFile = new File([result.blob], `${fileName}-highlighted.pdf`, {
-                        type: "application/pdf",
-                    });
 
                     setDownloadData({
                         blob: result.blob,
                         fileName: `${fileName}-highlighted.pdf`,
                     });
 
-                    await onJobFinished(highlightedFile);
+                    onJobFinished();
+                    operation.finish();
                     router.push(`/${toolId}/download`);
                     return;
                 }
@@ -870,11 +875,14 @@ export default function HighlightPdfWorkspace() {
                     validFile.originalPassword
                 );
 
+                if (!operation.isCurrent()) return;
                 setJobId(submission.job_id);
                 setJob(null);
                 setUploadProgress(100);
                 notify("Highlight job queued. Waiting for worker...", "info");
             } catch (err) {
+                if (!operation.isCurrent()) return;
+                operation.finish();
                 console.error(err);
                 setJobError(getFriendlyErrorMessage(err));
                 handleClientError(err);

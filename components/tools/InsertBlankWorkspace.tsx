@@ -156,6 +156,7 @@ export default function InsertBlankWorkspace() {
             return;
         }
 
+        setDownloadData(null);
         requireAuth(async () => {
             try {
                 setIsProcessing(true);

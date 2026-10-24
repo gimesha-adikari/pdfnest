@@ -194,6 +194,7 @@ export default function RedactPdfWorkspace() {
     };
 
     const handleRedactionSubmit = async () => {
+        setDownloadData(null);
         requireAuth(async () => {
             if (!file) return;
             setIsProcessing(true);

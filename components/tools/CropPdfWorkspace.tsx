@@ -317,6 +317,7 @@ export default function CropPdfWorkspace() {
         if (!file) return;
         const validFile = file as CustomPdfFile;
 
+        setDownloadData(null);
         requireAuth(async () => {
             try {
                 setIsProcessing(true);

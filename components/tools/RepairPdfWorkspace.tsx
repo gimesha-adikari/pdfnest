@@ -25,6 +25,7 @@ export default function RepairPdfWorkspace() {
     const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
 
     const handleRepairDocument = async () => {
+        setDownloadData(null);
         requireAuth(async () => {
             if (!file) return;
 

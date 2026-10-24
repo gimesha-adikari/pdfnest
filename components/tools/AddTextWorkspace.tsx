@@ -277,6 +277,7 @@ export default function AddTextWorkspace() {
 
         const validFile = file as CustomPdfFile;
 
+        setDownloadData(null);
         requireAuth(async () => {
             try {
                 setIsProcessing(true);

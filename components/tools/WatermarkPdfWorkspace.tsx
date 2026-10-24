@@ -113,6 +113,7 @@ export default function WatermarkPdfWorkspace() {
     };
 
     const handleWatermarkProcessing = async () => {
+        setDownloadData(null);
         requireAuth(async () => {
             if (!file) return;
             if (watermarkType === "text" && !watermarkText.trim()) return;

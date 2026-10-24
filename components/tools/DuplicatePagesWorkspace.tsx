@@ -168,6 +168,7 @@ export default function DuplicatePagesWorkspace() {
         }
         const validFile = file as CustomPdfFile;
 
+        setDownloadData(null);
         requireAuth(async () => {
             try {
                 setIsProcessing(true);

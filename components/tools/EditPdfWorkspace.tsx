@@ -15,6 +15,8 @@ import { downloadEditorJob, EditorJobRecord, submitEditorCompile, submitEditorEx
 import { notify } from "@/lib/notify";
 import { assertCloudProcessingAuthorized, markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 import { handleClientError } from "@/lib/errorHandler";
+import { captureCloudPdfOutputRestoration } from "@/lib/api";
+import { usePdfOutputOperation } from "@/lib/security/usePdfOutputOperation";
 import { usePreviews } from "@/lib/preview/usePreviews";
 
 interface ActiveStandalonePageProps {
@@ -77,11 +79,14 @@ export default function EditPdfWorkspace({ engine }: EditPdfWorkspaceProps = {})
   const resolvedEngine = engine ?? contextEngine ?? resolveEditPdfEditorEngine();
   const useOcrV2 = resolvedEngine === "v2";
   const file = sharedFile as File | null;
+  const beginOutput = usePdfOutputOperation(file, toolId || "edit-pdf", () => setDownloadData(null));
   const [language, setLanguage] = useState<EditorLanguageChoice>(DEFAULT_EDITOR_LANGUAGE);
   const [layout, setLayout] = useState<EditorLayout | null>(null);
   const [extractJob, setExtractJob] = useState<EditorJobRecord | null>(null);
   const [sourceTracker, setSourceTracker] = useState("");
-  const [compiling, setCompiling] = useState(false);
+  const [compilingSource, setCompilingSource] = useState<File | null>(null);
+  const compiling = Boolean(file && compilingSource === file);
+  const setCompiling = (value: boolean) => setCompilingSource(value ? file : null);
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
@@ -118,25 +123,45 @@ export default function EditPdfWorkspace({ engine }: EditPdfWorkspaceProps = {})
     return () => { cancelled = true; controller.abort(); };
   }, [file, language, retryCount, toolId, useOcrV2]);
 
-  const compile = (draft: EditorLayout) => void requireAuth(async () => {
+  const compile = (draft: EditorLayout) => {
     if (!file) return;
-    setCompiling(true); setError(null);
-    try {
-      assertCloudProcessingAuthorized(file, toolId || "edit-pdf");
-      markCloudSubmissionInitiated([file]);
-      const submitted = await submitEditorCompile({ ...draft, source_tracker: sourceTracker });
-      const job = await waitForEditorJob(submitted.job_id);
-      if (job.status !== "succeeded") throw new Error(job.error || "Compilation failed");
-      const blob = await downloadEditorJob(job.id);
-      setDownloadData({ blob, fileName: `edited_${file.name}` });
-      notify("PDF compiled successfully!", "success");
-      router.replace(`/${toolId || "edit-pdf"}/download`);
-    } catch (err) {
-      const message = String(err).toLowerCase();
-      if (message.includes("source_not_found") || message.includes("nosuchkey") || message.includes("does not exist")) { notify("This editing session has expired. Please upload the PDF again.", "error"); router.replace(`/${toolId || "edit-pdf"}`); }
-      else { setError("Compilation failed."); handleClientError(err); }
-    } finally { setCompiling(false); }
-  });
+    setDownloadData(null);
+    const restoreOutput = captureCloudPdfOutputRestoration(file, toolId || "edit-pdf");
+    void requireAuth(async () => {
+      const operation = beginOutput();
+      if (!operation) return;
+      setCompiling(true); setError(null);
+      try {
+        assertCloudProcessingAuthorized(operation.file, toolId || "edit-pdf");
+        markCloudSubmissionInitiated([operation.file]);
+        const submitted = await submitEditorCompile({ ...draft, source_tracker: sourceTracker });
+        if (!operation.isCurrent()) return;
+        const job = await waitForEditorJob(submitted.job_id, undefined, operation.signal);
+        if (!operation.isCurrent()) return;
+        if (job.status !== "succeeded") throw new Error(job.error || "Compilation failed");
+        const downloaded = await downloadEditorJob(job.id);
+        if (!operation.isCurrent()) return;
+        const blob = await restoreOutput(downloaded, operation.signal);
+        if (!operation.isCurrent()) return;
+        setDownloadData({ blob, fileName: `edited_${operation.file.name}`, provenance: operation.provenance() });
+        notify("PDF compiled successfully!", "success");
+        router.replace(`/${toolId || "edit-pdf"}/download`);
+      } catch (err) {
+        if (!operation.isCurrent()) return;
+        const message = String(err).toLowerCase();
+        if (message.includes("source_not_found") || message.includes("nosuchkey") || message.includes("does not exist")) {
+          notify("This editing session has expired. Please upload the PDF again.", "error");
+          router.replace(`/${toolId || "edit-pdf"}`);
+        } else {
+          setError("Compilation or password protection verification failed. No result is available. Please retry.");
+          handleClientError(err);
+        }
+      } finally {
+        if (operation.isCurrent()) setCompiling(false);
+        operation.finish();
+      }
+    });
+  };
 
   const renderPageVisual = useCallback(
     (index: number, visual: EditorVisualContext) => {

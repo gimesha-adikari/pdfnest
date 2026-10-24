@@ -129,6 +129,7 @@ export default function DeletePagesWorkspace() {
     }, [pagesToDelete]);
 
     const handleDeleteProcessing = async () => {
+        setDownloadData(null);
         requireAuth(async () => {
             if (!file || pagesToDelete.size === 0) return;
             if (pagesToDelete.size === pageCount) {
