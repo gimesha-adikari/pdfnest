@@ -5,6 +5,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/context/AuthContext";
 import { GoogleOAuthProvider } from "@react-oauth/google";
+import { isGoogleOAuthConfigured } from "@/lib/googleOAuth";
 import { WorkflowProvider } from "@/context/WorkflowContext";
 import { BackendHealthProvider } from "@/context/BackendHealthContext";
 import { getSiteUrl } from "@/lib/siteUrl";
@@ -48,7 +49,16 @@ export default function RootLayout({
                                    }: Readonly<{
     children: React.ReactNode;
 }>) {
-    const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!;
+    const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    const googleAuthEnabled = isGoogleOAuthConfigured(googleClientId);
+
+    const appProviders = (
+        <BackendHealthProvider>
+            <AuthProvider>
+                <WorkflowProvider>{children}</WorkflowProvider>
+            </AuthProvider>
+        </BackendHealthProvider>
+    );
 
     return (
         <html
@@ -60,13 +70,9 @@ export default function RootLayout({
         >
         <body className="min-h-full overflow-x-hidden bg-[var(--background)] text-[var(--foreground)] font-sans transition-colors duration-200">
         <ThemeProvider>
-            <GoogleOAuthProvider clientId={googleClientId}>
-                <BackendHealthProvider>
-                    <AuthProvider>
-                        <WorkflowProvider>{children}</WorkflowProvider>
-                    </AuthProvider>
-                </BackendHealthProvider>
-            </GoogleOAuthProvider>
+            {googleAuthEnabled && googleClientId ? (
+                <GoogleOAuthProvider clientId={googleClientId}>{appProviders}</GoogleOAuthProvider>
+            ) : appProviders}
         </ThemeProvider>
         </body>
         </html>

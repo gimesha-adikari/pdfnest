@@ -17,14 +17,16 @@ import {
     RefreshCw,
     RotateCcw,
     ShieldCheck,
-    UploadCloud,
     X,
     XCircle,
 } from "lucide-react";
 
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
+import PdfUploader from "@/components/pdf/PdfUploader";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import OcrLanguagePicker from "@/components/tools/OcrLanguagePicker";
+import { JobSubmission, JobSubmissionRecoveryError, isConfirmedJobRejection } from "@/lib/jobSubmission";
+import { revokeCloudProcessingAuthorization } from "@/lib/security/pdfInputPreparation";
 import {
     cancelSearchablePdfV2Job,
     createSearchablePdfV2Job,
@@ -100,6 +102,7 @@ function saveStoredJob(job: StoredSearchableJob): void {
 }
 
 function displayError(error: unknown): string {
+    if (error instanceof JobSubmissionRecoveryError) return error.message;
     if (error instanceof SearchablePdfV2ApiError) return safeMessageForSearchablePdfCode(error.code);
     return "The searchable PDF could not be completed. Please try again.";
 }
@@ -134,10 +137,6 @@ function isSupportedImage(file: File, formats: string[]): boolean {
 function progressPercent(job: SearchablePdfV2JobStatus | null): number {
     const percent = job?.progress?.percent;
     return typeof percent === "number" ? Math.max(0, Math.min(100, percent)) : 0;
-}
-
-function wait(milliseconds: number): Promise<void> {
-    return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }
 
 function statusLabel(state: SearchablePdfV2State): string {
@@ -219,11 +218,11 @@ export default function SearchablePdfV2Workspace() {
     const [isDownloading, setIsDownloading] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const seededFileRef = useRef<File | null>(null);
-    const initialBatchRef = useRef<File[] | null>(null);
     const pollingJobRef = useRef<string | null>(null);
     const cancelRequestedRef = useRef(false);
     const resultLoadedRef = useRef<string | null>(null);
     const pagesRef = useRef<SearchablePage[]>([]);
+    const submissionRef = useRef(new JobSubmission());
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -261,18 +260,28 @@ export default function SearchablePdfV2Workspace() {
     }, [artifact]);
 
     useEffect(() => {
-        if (!file || seededFileRef.current === file) return;
-        seededFileRef.current = file;
-        const handoffBatch = (file as FileWithInitialBatch).initialBatch;
-        const initialBatch = initialBatchRef.current || handoffBatch || [file];
-        initialBatchRef.current = null;
-        const supported = initialBatch.filter((item) => isSupportedImage(item, selectedFormats));
-        const nextPages = supported.map(makePage);
-        setPages(nextPages);
-        setState(nextPages.length > 0 ? "FILES_READY" : "IDLE");
-        if (supported.length !== initialBatch.length) {
-            setError("One or more files were skipped because their format is not available.");
-        }
+        // Ignore a superseded landing-page handoff before allocating previews
+        // or publishing its asynchronously accepted input into workspace state.
+        let current = true;
+        void Promise.resolve().then(() => {
+            if (!current || !file || seededFileRef.current === file) return;
+            seededFileRef.current = file;
+            const initialBatch = (file as FileWithInitialBatch).initialBatch || [file];
+            const supported = initialBatch.filter((item) => isSupportedImage(item, selectedFormats));
+            for (const old of pagesRef.current) {
+                if (!supported.includes(old.file)) {
+                    revokeCloudProcessingAuthorization(old.file, "searchable-pdf-v2");
+                    URL.revokeObjectURL(old.previewUrl);
+                }
+            }
+            const nextPages = supported.map(makePage);
+            setPages(nextPages);
+            setState(nextPages.length > 0 ? "FILES_READY" : "IDLE");
+            if (supported.length !== initialBatch.length) {
+                setError("One or more files were skipped because their format is not available.");
+            }
+        });
+        return () => { current = false; };
     }, [file, selectedFormats]);
 
     const loadCapabilities = useCallback(async () => {
@@ -406,14 +415,13 @@ export default function SearchablePdfV2Workspace() {
         setPages((current) => [...current, ...nextPages]);
         setState("FILES_READY");
         setError(supported.length !== incoming.length ? "Some files were skipped because their format is not available." : null);
-        if (!file && supported.length > 1) initialBatchRef.current = supported;
-        setFile(file || supported[0]);
+        // Accept only the exact File objects inspected by PdfUploader.
+        // Preparation is never inferred from image MIME types or extensions.
+        if (!file) {
+            seededFileRef.current = supported[0];
+            setFile(supported[0]);
+        }
     }, [active, file, selectedFormats, setFile]);
-
-    const handleDrop = useCallback((event: React.DragEvent<HTMLDivElement>) => {
-        event.preventDefault();
-        addFiles(Array.from(event.dataTransfer.files));
-    }, [addFiles]);
 
     const handleDragEnd = useCallback((event: DragEndEvent) => {
         const { active: activeItem, over } = event;
@@ -429,10 +437,16 @@ export default function SearchablePdfV2Workspace() {
     const removePage = useCallback((id: string) => {
         if (active) return;
         const page = pages.find((item) => item.id === id);
-        if (page) URL.revokeObjectURL(page.previewUrl);
-        setPages((current) => current.filter((item) => item.id !== id));
-        setState(pages.length > 1 ? "FILES_READY" : "IDLE");
-        if (pages.length === 1) setFile(null);
+        if (page) {
+            revokeCloudProcessingAuthorization(page.file, "searchable-pdf-v2");
+            URL.revokeObjectURL(page.previewUrl);
+        }
+        const remaining = pages.filter((item) => item.id !== id);
+        setPages(remaining);
+        setState(remaining.length > 0 ? "FILES_READY" : "IDLE");
+        const nextFile = remaining[0]?.file || null;
+        seededFileRef.current = nextFile;
+        setFile(nextFile);
     }, [active, pages, setFile]);
 
     const movePage = useCallback((index: number, direction: "up" | "down") => {
@@ -445,6 +459,7 @@ export default function SearchablePdfV2Workspace() {
     }, [active]);
 
     const prepareRetry = useCallback(() => {
+        submissionRef.current.retryAfterTerminalFailure(job?.status);
         try { window.localStorage.removeItem(RESUME_STORAGE_KEY); } catch { /* optional storage */ }
         setJobId(null);
         setJob(null);
@@ -455,10 +470,20 @@ export default function SearchablePdfV2Workspace() {
         pollingJobRef.current = null;
         resultLoadedRef.current = null;
         cancelRequestedRef.current = false;
-    }, [pages.length]);
+    }, [job, pages.length]);
 
     const submit = useCallback(async () => {
         if (!canSubmit || !language || !capabilities) return;
+        const inputs = pages.map((page) => page.file);
+        let attempt;
+        try {
+            attempt = submissionRef.current.begin(inputs, JSON.stringify({ language, routingPolicy }));
+        } catch (cause) {
+            setState("FAILED");
+            setError(displayError(cause));
+            return;
+        }
+        if (!attempt) return;
         setState("SUBMITTING");
         setError(null);
         setErrorCodeValue(null);
@@ -468,30 +493,24 @@ export default function SearchablePdfV2Workspace() {
         pollingJobRef.current = null;
         resultLoadedRef.current = null;
         cancelRequestedRef.current = false;
-        const requestId = newSearchablePdfV2RequestIdentity();
-        const idempotencyKey = newSearchablePdfV2RequestIdentity();
         try {
-            let response: SearchablePdfV2JobStatus | null = null;
-            for (let attempt = 0; attempt < 2; attempt += 1) {
-                try {
-                    response = await createSearchablePdfV2Job(pages.map((page) => page.file), language, routingPolicy, idempotencyKey, requestId);
-                    break;
-                } catch (submitError) {
-                    const retryable = submitError instanceof SearchablePdfV2ApiError && (submitError.status === 0 || submitError.status >= 500);
-                    if (!retryable || attempt === 1) throw submitError;
-                    await wait(500);
-                }
-            }
+            const response = attempt.jobId ? await getSearchablePdfV2Job(attempt.jobId) :
+                await createSearchablePdfV2Job(inputs, language, routingPolicy, attempt.identity.idempotencyKey, attempt.identity.requestId);
             if (!response) throw new SearchablePdfV2ApiError("INVALID_ENGINE_OUTPUT", "The service returned no job reference.", 502);
             if (!isJobId(response.job_id)) throw new SearchablePdfV2ApiError("INVALID_ENGINE_OUTPUT", "The service returned an invalid job reference.", 502);
+            submissionRef.current.accepted(attempt, response.job_id);
             setJob(response);
             setJobId(response.job_id);
             setState(normalizeSearchablePdfV2State(response.status));
             persistResume(response.job_id);
         } catch (submitError) {
+            if (!attempt.jobId && isConfirmedJobRejection(submitError)) submissionRef.current.rejected(attempt);
             setState("FAILED");
             setErrorCodeValue(errorCode(submitError));
-            setError(displayError(submitError));
+            setError(isConfirmedJobRejection(submitError) ? displayError(submitError) :
+                "The submission outcome is not confirmed. Retry with the same images and settings to recover the existing operation.");
+        } finally {
+            submissionRef.current.finish(attempt);
         }
     }, [canSubmit, capabilities, language, pages, persistResume, routingPolicy]);
 
@@ -514,6 +533,8 @@ export default function SearchablePdfV2Workspace() {
     }, [job, jobId, state]);
 
     const reset = useCallback(() => {
+        if (!submissionRef.current.reset()) return;
+        for (const page of pages) revokeCloudProcessingAuthorization(page.file, "searchable-pdf-v2");
         try { window.localStorage.removeItem(RESUME_STORAGE_KEY); } catch { /* optional storage */ }
         releasePages(pages);
         setPages([]);
@@ -563,14 +584,22 @@ export default function SearchablePdfV2Workspace() {
                         <div>
                             <div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-600"><ImagePlus size={22} /></div><div><h1 className="text-lg font-bold text-[color:var(--foreground)]">Build a searchable PDF</h1><p className="mt-1 text-xs text-[color:var(--muted)]">Add images, arrange them in reading order, then start the durable server job.</p></div></div>
                         </div>
-                        {(pages.length > 0 || jobId) && state !== "SUCCEEDED" && <button type="button" onClick={reset} className="inline-flex items-center justify-center gap-2 self-start rounded-xl border border-[color:var(--border)] px-3 py-2 text-xs font-semibold hover:border-indigo-500"><RotateCcw size={14} /> Start over</button>}
+                        {(pages.length > 0 || jobId) && state !== "SUCCEEDED" && <button type="button" onClick={reset} disabled={active} className="inline-flex items-center justify-center gap-2 self-start rounded-xl border border-[color:var(--border)] px-3 py-2 text-xs font-semibold hover:border-indigo-500"><RotateCcw size={14} /> Start over</button>}
                     </div>
 
                     {displayedFileNames.length > 0 && jobId && pages.length === 0 && <div className="mt-6 rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-4 text-sm" role="status" aria-live="polite"><p className="font-semibold text-[color:var(--foreground)]">Resuming your searchable PDF job</p><p className="mt-1 text-xs text-[color:var(--muted)]">The server is authoritative. Image bytes are not stored in the browser.</p><p className="mt-3 text-xs text-[color:var(--muted)]">{displayedFileNames.join(" · ")}</p></div>}
 
-                    {!active && !jobId && <div onDrop={handleDrop} onDragOver={(event) => event.preventDefault()} className="mt-7 rounded-2xl border border-dashed border-indigo-500/40 bg-indigo-500/5 p-7 text-center sm:p-10"><UploadCloud className="mx-auto text-indigo-500" size={30} /><p className="mt-3 text-sm font-semibold text-[color:var(--foreground)]">Drop images here</p><p className="mt-1 text-xs text-[color:var(--muted)]">Add multiple pages at once. You choose the order.</p><input ref={inputRef} type="file" accept={selectedFormats.length > 0 ? selectedFormats.join(",") : "image/jpeg,image/png,image/webp"} multiple className="sr-only" onChange={(event) => { addFiles(Array.from(event.target.files || [])); event.target.value = ""; }} /><button type="button" onClick={() => inputRef.current?.click()} className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white hover:bg-indigo-700"><ImagePlus size={16} /> Choose images</button></div>}
+                    {!active && !jobId && <div className="mt-7"><PdfUploader
+                        inputRef={inputRef}
+                        onFilesAccepted={addFiles}
+                        title={pages.length ? "Add more images" : "Drop images here"}
+                        description="Select supported images. You choose the page order."
+                        accept={selectedFormats.length > 0 ? selectedFormats.join(",") : "image/jpeg,image/png,image/webp"}
+                        multiple
+                        protectedFileHandling="fail-closed"
+                    /></div>}
 
-                    {pages.length > 0 && !active && !jobId && <div className="mt-7"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-sm font-bold text-[color:var(--foreground)]">Pages in order</h2><p className="mt-1 text-xs text-[color:var(--muted)]">Drag a page, or use Up and Down for keyboard-friendly reordering.</p></div><><input ref={inputRef} type="file" accept={selectedFormats.length > 0 ? selectedFormats.join(",") : "image/jpeg,image/png,image/webp"} multiple className="sr-only" onChange={(event) => { addFiles(Array.from(event.target.files || [])); event.target.value = ""; }} /><button type="button" onClick={() => inputRef.current?.click()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[color:var(--border)] px-3 py-2 text-xs font-semibold hover:border-indigo-500"><ImagePlus size={15} /> Add more</button></></div><DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}><SortableContext items={pages.map((page) => page.id)} strategy={verticalListSortingStrategy}><ol aria-label="Selected image pages" className="mt-4 grid gap-3">{pages.map((page, index) => <SortablePageCard key={page.id} page={page} index={index} disabled={active} onRemove={() => removePage(page.id)} onMove={(direction) => movePage(index, direction)} />)}</ol></SortableContext></DndContext></div>}
+                    {pages.length > 0 && !active && !jobId && <div className="mt-7"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-sm font-bold text-[color:var(--foreground)]">Pages in order</h2><p className="mt-1 text-xs text-[color:var(--muted)]">Drag a page, or use Up and Down for keyboard-friendly reordering.</p></div><><button type="button" onClick={() => inputRef.current?.click()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[color:var(--border)] px-3 py-2 text-xs font-semibold hover:border-indigo-500"><ImagePlus size={15} /> Add more</button></></div><DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}><SortableContext items={pages.map((page) => page.id)} strategy={verticalListSortingStrategy}><ol aria-label="Selected image pages" className="mt-4 grid gap-3">{pages.map((page, index) => <SortablePageCard key={page.id} page={page} index={index} disabled={active} onRemove={() => removePage(page.id)} onMove={(direction) => movePage(index, direction)} />)}</ol></SortableContext></DndContext></div>}
 
                     {!active && !jobId && <p className="mt-5 text-center text-xs text-[color:var(--muted)]">You can process this document as a guest. Sign in if you want account-based access to your history.</p>}
 
@@ -578,12 +607,12 @@ export default function SearchablePdfV2Workspace() {
 
                     {pages.length > 0 && !active && !jobId && <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-xs text-[color:var(--muted)]">{pages.length} page{pages.length === 1 ? "" : "s"} will be submitted in exactly this order.</p><button type="button" onClick={handleSubmit} disabled={!canSubmit} className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-md hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"><ShieldCheck size={16} /> Create searchable PDF</button></div>}
 
-                    {active && <div className="mt-7 rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-5" role="status" aria-live="polite"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-bold text-[color:var(--foreground)]">{statusLabel(state)}</p><p className="mt-1 text-xs text-[color:var(--muted)]">{state === "QUEUED" ? "Your images are safely queued." : state === "CANCELLING" ? "Waiting for the server to confirm cancellation." : `Using ${selectedLanguageName || "the selected language"}.`}</p></div>{(state === "QUEUED" || state === "RUNNING") && <button type="button" onClick={() => void cancel()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-500/40 px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-500/10"><XCircle size={15} /> Cancel</button>}{state === "CANCELLING" && <span className="inline-flex items-center gap-2 text-xs font-semibold text-amber-600"><Loader2 className="animate-spin" size={15} /> Cancelling…</span>}</div><div className="mt-5" role="progressbar" aria-label="Searchable PDF page progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent(job)}><div className="flex items-center justify-between text-xs font-semibold text-[color:var(--muted)]"><span>{totalPages ? `${completedPages} of ${totalPages} pages complete` : "Preparing page progress…"}</span><span>{totalPages ? `${progressPercent(job)}%` : ""}</span></div><div className="mt-2 h-2.5 overflow-hidden rounded-full bg-[color:var(--border)]">{totalPages ? <div className="h-full rounded-full bg-indigo-600 transition-all" style={{ width: `${progressPercent(job)}%` }} /> : <div className="h-full w-1/3 animate-pulse rounded-full bg-indigo-600" />}</div>{job?.progress.current_page !== undefined && state === "RUNNING" && <p className="mt-3 text-xs text-[color:var(--muted)]">Working on page {job.progress.current_page + 1} of {totalPages}.</p>}</div></div>}
+                    {active && <div className="mt-7 rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-5" role="status" aria-live="polite"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-bold text-[color:var(--foreground)]">{statusLabel(state)}</p><p className="mt-1 text-xs text-[color:var(--muted)]">{state === "QUEUED" ? "Your images are safely queued." : state === "CANCELLING" ? "Waiting for the server to confirm cancellation." : `Using ${selectedLanguageName || "the selected language"}.`}</p></div>{(state === "QUEUED" || state === "RUNNING") && <button type="button" onClick={() => void cancel()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-500/40 px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-500/10"><XCircle size={15} /> Cancel</button>}{state === "CANCELLING" && <span className="inline-flex items-center gap-2 text-xs font-semibold text-amber-600"><Loader2 className="animate-spin" size={15} /> Cancelling…</span>}</div><div className="mt-5" role="progressbar" aria-label="Searchable PDF page progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent(job)}><div className="flex items-center justify-between text-xs font-semibold text-[color:var(--muted)]"><span>{totalPages ? `${completedPages} of ${totalPages} pages complete` : "Preparing page progress…"}</span><span>{totalPages ? `${progressPercent(job)}%` : ""}</span></div><div className="mt-2 h-2.5 overflow-hidden rounded-full bg-[color:var(--border)]">{totalPages ? <div className="h-full rounded-full bg-indigo-600 transition-all" style={{ width: `${progressPercent(job)}%` }} /> : <div className="h-full w-1/3 animate-pulse rounded-full bg-indigo-600" />}</div>{job?.progress?.current_page !== undefined && state === "RUNNING" && <p className="mt-3 text-xs text-[color:var(--muted)]">Working on page {job.progress.current_page + 1} of {totalPages}.</p>}</div></div>}
 
                     {(state === "FAILED" || state === "CANCELLED") && !artifact && <div className="mt-7 rounded-2xl border border-rose-500/25 bg-rose-500/5 p-5" role="alert"><div className="flex items-start gap-3"><AlertCircle className="mt-0.5 shrink-0 text-rose-600" size={18} /><div><p className="text-sm font-bold text-[color:var(--foreground)]">{statusLabel(state)}</p><p className="mt-1 text-sm text-[color:var(--muted)]">{error || safeMessageForSearchablePdfCode(errorCodeValue || "ENGINE_FAILURE")}</p><p className="mt-2 text-xs text-[color:var(--muted)]">No new request was started automatically.</p></div></div><button type="button" onClick={() => errorCodeValue === "INPUT_DOWNLOAD" ? reset() : pages.length > 0 ? prepareRetry() : reset()} className="mt-4 inline-flex items-center gap-2 rounded-xl border border-[color:var(--border)] px-3 py-2 text-xs font-semibold"><RefreshCw size={14} /> {errorCodeValue === "INPUT_DOWNLOAD" ? "Upload images again" : pages.length > 0 ? "Try again" : "Choose images"}</button></div>}
                 </section>
 
-                {artifact && state === "SUCCEEDED" && <section className="overflow-hidden rounded-3xl border border-[color:var(--border)] bg-[var(--card)] shadow-lg"><div className="flex flex-col gap-4 border-b border-[color:var(--border)] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6"><div className="flex items-center gap-3"><CheckCircle2 className="text-emerald-500" size={22} /><div><h2 className="text-lg font-bold text-[color:var(--foreground)]">Your searchable PDF is ready</h2><p className="mt-1 text-xs text-[color:var(--muted)]">{displayedFileNames.length} page{displayedFileNames.length === 1 ? "" : "s"} · {selectedLanguageName || "Selected language"}</p></div></div><div className="flex flex-wrap gap-2"><button type="button" onClick={download} disabled={isDownloading} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"><Download size={14} /> Download PDF</button><button type="button" onClick={reset} className="inline-flex items-center gap-2 rounded-xl border border-[color:var(--border)] px-3 py-2 text-xs font-semibold hover:border-indigo-500"><RotateCcw size={14} /> New PDF</button></div></div>{previewUrl && <div className="bg-[var(--background)] p-3 sm:p-5"><iframe title="Searchable PDF preview" src={previewUrl} className="h-[560px] w-full rounded-2xl border border-[color:var(--border)] bg-white" /></div>}<div className="border-t border-[color:var(--border)] px-5 py-4 text-xs text-[color:var(--muted)] sm:px-6">The visual pages are preserved, with searchable text added by the server.</div></section>}
+                {artifact && state === "SUCCEEDED" && <section className="overflow-hidden rounded-3xl border border-[color:var(--border)] bg-[var(--card)] shadow-lg"><div className="flex flex-col gap-4 border-b border-[color:var(--border)] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6"><div className="flex items-center gap-3"><CheckCircle2 className="text-emerald-500" size={22} /><div><h2 className="text-lg font-bold text-[color:var(--foreground)]">Your searchable PDF is ready</h2><p className="mt-1 text-xs text-[color:var(--muted)]">{displayedFileNames.length} page{displayedFileNames.length === 1 ? "" : "s"} · {selectedLanguageName || "Selected language"}</p></div></div><div className="flex flex-wrap gap-2"><button type="button" onClick={download} disabled={isDownloading} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"><Download size={14} /> Download PDF</button><button type="button" onClick={reset} disabled={active} className="inline-flex items-center gap-2 rounded-xl border border-[color:var(--border)] px-3 py-2 text-xs font-semibold hover:border-indigo-500"><RotateCcw size={14} /> New PDF</button></div></div>{previewUrl && <div className="bg-[var(--background)] p-3 sm:p-5"><iframe title="Searchable PDF preview" src={previewUrl} className="h-[560px] w-full rounded-2xl border border-[color:var(--border)] bg-white" /></div>}<div className="border-t border-[color:var(--border)] px-5 py-4 text-xs text-[color:var(--muted)] sm:px-6">The visual pages are preserved, with searchable text added by the server.</div></section>}
             </div>
         </>
     );

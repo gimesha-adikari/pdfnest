@@ -494,9 +494,10 @@ export const StudioV2Shell: React.FC = () => {
     [selectedPage, activeVersion, newIdempotencyKey, guardedExecuteCommand]
   );
 
-  const handleDeletePage = useCallback(async () => {
-    if (!selectedPage || !activeVersion || !vdm) return;
-    const selectedIndex = vdm.pages.findIndex((page) => page.page_id === selectedPage.page_id);
+  const handleDeletePage = useCallback(async (pageId: string) => {
+    if (!activeVersion || !vdm) return;
+    const selectedIndex = vdm.pages.findIndex((page) => page.page_id === pageId);
+    if (selectedIndex < 0) return;
     const plannedNextPage = vdm.pages[selectedIndex + 1] ?? vdm.pages[selectedIndex - 1] ?? null;
     setSelectedPageId(plannedNextPage?.page_id ?? null);
     try {
@@ -504,7 +505,7 @@ export const StudioV2Shell: React.FC = () => {
         base_version_id: activeVersion.id,
         idempotency_key: newIdempotencyKey("delete-page"),
         operation: "delete_pages",
-        parameters: { page_ids: [selectedPage.page_id] },
+        parameters: { page_ids: [pageId] },
       });
       if (response) {
         const nextPage = response.vdm.pages[selectedIndex] ?? response.vdm.pages[selectedIndex - 1] ?? null;
@@ -512,26 +513,28 @@ export const StudioV2Shell: React.FC = () => {
       }
     } catch {
       // Keep the existing selection and authoritative VDM on failure.
-      setSelectedPageId(selectedPage.page_id);
+      setSelectedPageId(pageId);
     }
-  }, [selectedPage, activeVersion, vdm, guardedExecuteCommand, newIdempotencyKey]);
+  }, [activeVersion, vdm, guardedExecuteCommand, newIdempotencyKey]);
 
   const handleReorderPage = useCallback(
     async (direction: -1 | 1) => {
-      if (!vdm || !selectedPage || !activeVersion) return;
+      if (!vdm || !selectedPage || !activeVersion) return false;
       const targetIndex = selectedPageIndex + direction;
-      if (selectedPageIndex < 0 || targetIndex < 0 || targetIndex >= vdm.pages.length) return;
+      if (selectedPageIndex < 0 || targetIndex < 0 || targetIndex >= vdm.pages.length) return false;
       const pageIds = vdm.pages.map((page) => page.page_id);
       [pageIds[selectedPageIndex], pageIds[targetIndex]] = [pageIds[targetIndex], pageIds[selectedPageIndex]];
       try {
-        await guardedExecuteCommand({
+        const response = await guardedExecuteCommand({
           base_version_id: activeVersion.id,
           idempotency_key: newIdempotencyKey("reorder-pages"),
           operation: "reorder_pages",
           parameters: { page_ids: pageIds },
         });
+        return Boolean(response?.vdm.pages.some((page) => page.page_id === selectedPage.page_id));
       } catch {
         // Keep the authoritative order and selected page on failure.
+        return false;
       }
     },
     [vdm, selectedPage, activeVersion, selectedPageIndex, guardedExecuteCommand, newIdempotencyKey]

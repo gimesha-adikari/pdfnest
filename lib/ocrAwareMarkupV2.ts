@@ -2,6 +2,7 @@ import { getBaseUrl } from "@/lib/api";
 import { markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 import type { MarkupSelectionGeometry } from "@/lib/markupSelection";
 import type { OcrTextV2Language } from "@/lib/ocrV2";
+import type { JobRequestIdentity } from "@/lib/jobSubmission";
 
 export type OcrAwareMarkupAction = "highlight" | "underline" | "strikeout";
 export type OcrAwareMarkupMode = "smart" | "ocr" | "native";
@@ -39,12 +40,21 @@ export class OcrAwareMarkupError extends Error {
     }
 }
 
+export function isMarkupCapacityRejection(cause: unknown): boolean {
+    return cause instanceof OcrAwareMarkupError && cause.status === 429 &&
+        ["SERVER_BUSY", "GLOBAL_CAPACITY_EXHAUSTED", "IDENTITY_CAPACITY_EXHAUSTED"].includes(cause.code);
+}
+
 function endpoint(path: string): string {
     return `${getBaseUrl().replace(/\/+$/, "")}${path}`;
 }
 
 function messageFor(code: string): string {
     switch (code) {
+        case "SERVER_BUSY":
+        case "GLOBAL_CAPACITY_EXHAUSTED":
+        case "IDENTITY_CAPACITY_EXHAUSTED":
+            return "Processing capacity is busy. Your document and selection are kept. Wait a few seconds, then try again.";
         case "AUTHENTICATION_REQUIRED": return "Sign in to apply a mark to this PDF.";
         case "TEXT_NOT_FOUND": return "The requested text was not found in the document.";
         case "WORD_GEOMETRY_NOT_AVAILABLE": return "Automatic text selection is unavailable for this document.";
@@ -75,7 +85,8 @@ export async function submitOcrAwareMarkup(
     mode: OcrAwareMarkupMode,
     language = "eng",
     color = action === "highlight" ? "#FFFF00" : action === "underline" ? "#2563EB" : "#DC2626",
-    selection?: MarkupSelectionGeometry,
+    selection: MarkupSelectionGeometry | undefined,
+    identity: JobRequestIdentity,
 ): Promise<OcrAwareMarkupJob> {
     const form = new FormData();
     form.append("file", file);
@@ -93,8 +104,8 @@ export async function submitOcrAwareMarkup(
         body: form,
         credentials: "include",
         headers: {
-            "Idempotency-Key": `markup-v2-${crypto.randomUUID()}`,
-            "X-Request-ID": crypto.randomUUID(),
+            "Idempotency-Key": identity.idempotencyKey,
+            "X-Request-ID": identity.requestId,
         },
     });
     if (!response.ok) throw await parseError(response);

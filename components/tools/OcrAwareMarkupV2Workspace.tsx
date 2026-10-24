@@ -10,11 +10,15 @@ import OcrLanguagePicker from "@/components/tools/OcrLanguagePicker";
 import PdfUploader from "@/components/pdf/PdfUploader";
 import MarkupPdfPreview, { type MarkupFindState, type MarkupPreviewState, type MarkupTextSelection } from "@/components/tools/MarkupPdfPreview";
 import { fetchOcrMarkupPreview, safeOcrMarkupPreviewMessage, type OcrMarkupPreview } from "@/lib/ocrMarkupPreview";
+import { MarkupActivityGate, markupPreviewKey } from "@/lib/markupActivity";
+import { JobSubmission, JobSubmissionRecoveryError, isConfirmedJobRejection } from "@/lib/jobSubmission";
 import { rememberOcrMarkupPreview } from "@/lib/ocrMarkupPreviewCache";
 import {
     cancelOcrAwareMarkup,
     downloadOcrAwareMarkup,
     getOcrAwareMarkupCapabilities,
+    fetchOcrAwareMarkupJob,
+    isMarkupCapacityRejection,
     OcrAwareMarkupError,
     safeOcrAwareMarkupMessage,
     submitOcrAwareMarkup,
@@ -24,7 +28,7 @@ import {
     type OcrAwareMarkupJob,
     type OcrAwareMarkupMode,
 } from "@/lib/ocrAwareMarkupV2";
-import { assertCloudProcessingAuthorized } from "@/lib/security/pdfInputPreparation";
+import { assertCloudProcessingAuthorizedInputs } from "@/lib/security/pdfInputPreparation";
 
 const MAX_PDF_BYTES = 100 * 1024 * 1024;
 
@@ -56,6 +60,7 @@ function capabilityFailure(cause: unknown): string {
 }
 
 function errorMessage(cause: unknown): string {
+    if (cause instanceof JobSubmissionRecoveryError) return cause.message;
     if (cause instanceof OcrAwareMarkupError) return safeOcrAwareMarkupMessage(cause.code);
     if (cause instanceof DOMException && cause.name === "AbortError") return "Markup processing was cancelled.";
     return "We couldn't connect to the processing service.";
@@ -103,6 +108,9 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
     const [error, setError] = useState<string | null>(null);
     const [uploadError, setUploadError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isPreviewProcessing, setIsPreviewProcessing] = useState(false);
+    const [capacityRejected, setCapacityRejected] = useState(false);
+    const [recoveryRequired, setRecoveryRequired] = useState(false);
     const [selection, setSelection] = useState<MarkupTextSelection | null>(null);
     const [previewState, setPreviewState] = useState<MarkupPreviewState>({ status: "idle", page: 1, pageCount: 0, pageHasSelectableText: false, pageHasScannedContent: false });
     const [ocrPreview, setOcrPreview] = useState<OcrMarkupPreview | null>(null);
@@ -113,6 +121,12 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
     const [findOccurrence, setFindOccurrence] = useState(0);
     const [findState, setFindState] = useState<MarkupFindState>({ count: 0, activeIndex: -1, current: null });
     const previewPageRef = useRef(1);
+    const activityRef = useRef(new MarkupActivityGate());
+    const submissionRef = useRef(new JobSubmission());
+    const mountedRef = useRef(true);
+    const cancelRequestedRef = useRef(false);
+    const previewContextRef = useRef<{ file: File | null; language: string; page: number } | null>(null);
+    const attemptedPreviewKeyRef = useRef<string | null>(null);
     const ocrPreviewCacheRef = useRef<Map<string, OcrMarkupPreview>>(new Map());
     const abortRef = useRef<AbortController | null>(null);
     const ocrPreviewRequestRef = useRef<{ key: string; controller: AbortController } | null>(null);
@@ -139,10 +153,18 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
         void loadCapabilities();
     }, [loadCapabilities]);
 
-    useEffect(() => () => {
-        abortRef.current?.abort();
-        ocrPreviewRequestRef.current?.controller.abort();
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+            abortRef.current?.abort();
+            ocrPreviewRequestRef.current?.controller.abort();
+        };
     }, []);
+
+    useEffect(() => {
+        previewContextRef.current = { file, language, page: previewState.page };
+    }, [file, language, previewState.page]);
 
     const openFileChooser = useCallback(() => {
         const input = fileInputRef.current;
@@ -161,6 +183,7 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
     }, [job]);
 
     const handleFilesAccepted = (files: File[]) => {
+        if (abortRef.current) return;
         const nextFile = files[0];
         if (!nextFile) return;
         const validationError = validatePdf(nextFile);
@@ -169,12 +192,17 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
             return;
         }
 
+        // A rejected replacement must preserve the existing uncertain operation.
+        if (!submissionRef.current.reset()) return;
+        setRecoveryRequired(false);
         cancelActiveJobWithoutAwait();
-        ocrPreviewRequestRef.current?.controller.abort();
-        ocrPreviewRequestRef.current = null;
+        // Keep an in-flight preview excluded until its actual response settles.
+        // A replacement invalidates its UI evidence without assuming termination.
+        previewContextRef.current = null;
         ocrPreviewCacheRef.current.clear();
         setUploadError(null);
         setError(null);
+        setCapacityRejected(false);
         setJob(null);
         setSelection(null);
         setQuery("");
@@ -233,6 +261,7 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
     }, [findState.activeIndex, findState.count]);
 
     const handleLanguageChange = useCallback((value: string) => {
+        previewContextRef.current = null;
         setLanguage(value);
         setOcrPreview(null);
         setOcrPreviewStatus("idle");
@@ -249,27 +278,10 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
 
     useEffect(() => {
         const previewFile = file;
-        if (!previewFile || !capabilities || !isAuthenticated || isAuthLoading) {
-            ocrPreviewRequestRef.current?.controller.abort();
-            ocrPreviewRequestRef.current = null;
-            return;
-        }
-        if (!previewState.pageHasScannedContent) {
-            // A page transition from scanned to native must cancel any page-
-            // scoped OCR request that is no longer relevant. The native text
-            // layer remains usable; stale OCR state must not arrive later and
-            // overwrite the active page's selection surface.
-            ocrPreviewRequestRef.current?.controller.abort();
-            ocrPreviewRequestRef.current = null;
-            return;
-        }
+        const finalActive = isSubmitting || recoveryRequired || Boolean(job && ["QUEUED", "RUNNING"].includes(job.status));
+        if (!previewFile || !capabilities || !isAuthenticated || isAuthLoading || finalActive || !previewState.pageHasScannedContent) return;
 
-        const previewKey = `${previewFile.name}:${previewFile.size}:${previewFile.lastModified}:${previewFile.type}:${language}:${previewState.page}`;
-        const activeRequest = ocrPreviewRequestRef.current;
-        if (activeRequest && activeRequest.key !== previewKey) {
-            activeRequest.controller.abort();
-            ocrPreviewRequestRef.current = null;
-        }
+        const previewKey = markupPreviewKey(previewFile, language, previewState.page);
         const cachedPreview = ocrPreviewCacheRef.current.get(previewKey);
         if (cachedPreview) {
             setOcrPreview((current) => {
@@ -280,17 +292,24 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
             setOcrPreviewError(null);
             return;
         }
-        if (ocrPreviewRequestRef.current?.key === previewKey) return;
-
+        // A failed preview is not automatically retried on a state rerender.
+        if (attemptedPreviewKeyRef.current === previewKey) return;
+        const activity = activityRef.current.begin("preview");
+        if (!activity) return;
+        attemptedPreviewKeyRef.current = previewKey;
         const controller = new AbortController();
         ocrPreviewRequestRef.current = { key: previewKey, controller };
-        // The OCR preview is scoped to the selected document and language. It
-        // may be refreshed without discarding the PDF or its native preview.
+        setIsPreviewProcessing(true);
         setOcrPreviewStatus("loading");
         setOcrPreviewError(null);
+        const isCurrent = () => {
+            const context = previewContextRef.current;
+            return mountedRef.current && !controller.signal.aborted && activityRef.current.owns(activity) &&
+                context?.file === previewFile && context.language === language && context.page === previewState.page;
+        };
         void fetchOcrMarkupPreview(previewFile, language, previewState.page - 1, controller.signal)
             .then((next) => {
-                if (controller.signal.aborted || ocrPreviewRequestRef.current?.controller !== controller) return;
+                if (!isCurrent()) return;
                 rememberOcrMarkupPreview(ocrPreviewCacheRef.current, previewKey, next);
                 setOcrPreview((current) => {
                     const pages = [...(current?.pages || []).filter((item) => item.page_number !== previewState.page), ...next.pages];
@@ -299,68 +318,111 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
                 setOcrPreviewStatus("ready");
             })
             .catch((cause: unknown) => {
-                if (controller.signal.aborted || ocrPreviewRequestRef.current?.controller !== controller) return;
+                if (!isCurrent()) return;
                 setOcrPreview((current) => current ? { ...current, pages: current.pages.filter((item) => item.page_number !== previewState.page) } : null);
                 setOcrPreviewStatus("error");
                 setOcrPreviewError(safeOcrMarkupPreviewMessage(cause));
             })
             .finally(() => {
                 if (ocrPreviewRequestRef.current?.controller === controller) ocrPreviewRequestRef.current = null;
+                if (activityRef.current.finish(activity) && mountedRef.current) setIsPreviewProcessing(false);
             });
-    }, [capabilities, file, isAuthLoading, isAuthenticated, language, previewState.page, previewState.pageCount, previewState.pageHasScannedContent]);
+    }, [capabilities, file, isAuthLoading, isAuthenticated, language, previewState.page, previewState.pageCount, previewState.pageHasScannedContent, isSubmitting, isPreviewProcessing, job, recoveryRequired]);
 
     const submit = useCallback(async () => {
         const selectedGeometry = selection?.geometry;
-        if (!file || (!query.trim() && !selectedGeometry) || !capabilities) return;
+        if (!file || (!query.trim() && !selectedGeometry) || !capabilities ||
+            isSubmitting || (!recoveryRequired && job && ["QUEUED", "RUNNING"].includes(job.status)) ||
+            previewState.status === "idle" || previewState.status === "loading" ||
+            (previewState.pageHasScannedContent && ocrPreviewStatus === "idle")) return;
         if (!isAuthenticated) {
             openAuthModal("login");
             return;
         }
-
+        // Synchronous guard also protects form submission and double clicks
+        // before React has rendered either busy flag.
+        const activity = activityRef.current.begin("submission");
+        if (!activity) return;
+        let attempt;
+        try {
+            assertCloudProcessingAuthorizedInputs([file], toolId || `${action}-pdf-v2`);
+            attempt = submissionRef.current.begin([file], JSON.stringify({ action, query: query.trim(), mode, language, color, selection: selectedGeometry }));
+        } catch (cause) {
+            setError(errorMessage(cause));
+            activityRef.current.finish(activity);
+            return;
+        }
+        if (!attempt) { activityRef.current.finish(activity); return; }
         setError(null);
+        setCapacityRejected(false);
         setJob(null);
         setIsSubmitting(true);
+        setRecoveryRequired(false);
+        cancelRequestedRef.current = false;
         const controller = new AbortController();
         abortRef.current = controller;
+        const isCurrent = () => mountedRef.current && !controller.signal.aborted && activityRef.current.owns(activity);
+        const updateJob = (next: OcrAwareMarkupJob) => { if (isCurrent()) setJob(next); };
 
         try {
-            assertCloudProcessingAuthorized(file, toolId || `${action}-pdf-v2`);
-            const created = await submitOcrAwareMarkup(action, file, query.trim(), mode, language, color, selectedGeometry);
-            setJob(created);
-            const completed = await waitForOcrAwareMarkupJob(created.job_id, setJob, controller.signal);
-            setJob(completed);
+            const created = attempt.jobId ? await fetchOcrAwareMarkupJob(attempt.jobId) :
+                await submitOcrAwareMarkup(action, file, query.trim(), mode, language, color, selectedGeometry, attempt.identity);
+            if (!created || typeof created.job_id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(created.job_id)) {
+                throw new OcrAwareMarkupError("INVALID_ENGINE_OUTPUT", "Invalid job reference.", 202);
+            }
+            submissionRef.current.accepted(attempt, created.job_id);
+            if (!isCurrent()) return;
+            updateJob(created);
+            if (cancelRequestedRef.current) await cancelOcrAwareMarkup(created.job_id);
+            const completed = await waitForOcrAwareMarkupJob(created.job_id, updateJob, controller.signal);
+            if (!isCurrent()) return;
+            updateJob(completed);
             if (completed.status !== "SUCCEEDED") {
+                submissionRef.current.rejected(attempt);
                 setError(safeOcrAwareMarkupMessage(completed.error?.code || completed.status));
                 return;
             }
             const blob = await downloadOcrAwareMarkup(created.job_id);
+            if (!isCurrent()) return;
             const suffix = action === "highlight" ? "highlighted" : action === "underline" ? "underlined" : "strikeout";
-            const baseName = (file?.name || "document.pdf").replace(/\.pdf$/i, "");
-            const fileName = `${baseName}-${suffix}.pdf`;
-            setDownloadData({ blob, fileName });
+            const baseName = file.name.replace(/\.pdf$/i, "");
+            setDownloadData({ blob, fileName: `${baseName}-${suffix}.pdf` });
             router.push(`/${toolId || `${action}-pdf-v2`}/download`);
         } catch (cause) {
-            if (!(cause instanceof DOMException && cause.name === "AbortError")) setError(errorMessage(cause));
+            const rejected = !attempt.jobId && isConfirmedJobRejection(cause);
+            if (rejected) submissionRef.current.rejected(attempt);
+            if (isCurrent()) {
+                setRecoveryRequired(!rejected);
+                setCapacityRejected(isMarkupCapacityRejection(cause));
+                setError(isMarkupCapacityRejection(cause)
+                    ? safeOcrAwareMarkupMessage("SERVER_BUSY") : rejected ? errorMessage(cause) :
+                        `${errorMessage(cause)} Recover retries the same operation; your document and mark are kept.`);
+            }
         } finally {
+            submissionRef.current.finish(attempt);
             if (abortRef.current === controller) abortRef.current = null;
-            setIsSubmitting(false);
+            if (activityRef.current.finish(activity) && mountedRef.current) setIsSubmitting(false);
         }
-    }, [action, capabilities, color, file, isAuthenticated, language, mode, openAuthModal, query, router, selection?.geometry, setDownloadData, toolId]);
+    }, [action, capabilities, color, file, isAuthenticated, language, mode, openAuthModal, query, router, selection?.geometry, setDownloadData, toolId, isSubmitting, job, previewState.status, previewState.pageHasScannedContent, ocrPreviewStatus, recoveryRequired]);
 
     const cancel = useCallback(async () => {
-        abortRef.current?.abort();
+        // Keep polling/exclusion until the accepted job reports a terminal state.
+        cancelRequestedRef.current = true;
+        const controller = abortRef.current;
         if (job && ["QUEUED", "RUNNING"].includes(job.status)) {
             try {
                 const cancelled = await cancelOcrAwareMarkup(job.job_id);
-                setJob(cancelled);
+                if (mountedRef.current && abortRef.current === controller) setJob(cancelled);
             } catch {
-                setError("We couldn't cancel this markup job.");
+                if (mountedRef.current && abortRef.current === controller) setError("We couldn't cancel this markup job.");
             }
         }
-        setIsSubmitting(false);
     }, [job]);
 
     const startOver = useCallback(() => {
+        if (abortRef.current) return;
+        if (!submissionRef.current.reset()) return;
+        setRecoveryRequired(false);
         cancelActiveJobWithoutAwait();
         setFile(null);
         setQuery("");
@@ -373,8 +435,7 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
         setOcrPreview(null);
         setOcrPreviewStatus("idle");
         setOcrPreviewError(null);
-        ocrPreviewRequestRef.current?.controller.abort();
-        ocrPreviewRequestRef.current = null;
+        previewContextRef.current = null;
         ocrPreviewCacheRef.current.clear();
         setFindQuery("");
         setSubmittedFindQuery("");
@@ -386,7 +447,7 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
     const meta = LABELS[action];
     const Icon = ICONS[action];
     const availableModes = (capabilities?.modes || DEFAULT_MODES).filter((item, index, values) => values.indexOf(item) === index);
-    const active = isSubmitting || Boolean(job && ["QUEUED", "RUNNING"].includes(job.status));
+    const active = isSubmitting || (!recoveryRequired && Boolean(job && ["QUEUED", "RUNNING"].includes(job.status)));
     const canShowOcrPreview = isAuthenticated && !isAuthLoading && Boolean(capabilities);
     const visibleOcrPreview = canShowOcrPreview ? ocrPreview : null;
     const visibleOcrPreviewStatus = canShowOcrPreview ? ocrPreviewStatus : "idle";
@@ -394,6 +455,8 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
     const hasSelectedGeometry = Boolean(selection?.geometry);
     const disabledReason = isSubmitting
         ? "Processing…"
+        : isPreviewProcessing || previewState.status === "loading" || (file && previewState.status === "idle") || (previewState.pageHasScannedContent && ocrPreviewStatus === "idle")
+            ? "Preparing selectable text… Your selection is kept. Apply your mark when preview processing finishes."
         : !file
             ? "Choose a PDF first."
             : uploadError
@@ -425,7 +488,7 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
                                 <h2 className="text-base font-semibold text-[var(--foreground)]">Review your document</h2>
                                 <p className="mt-1 text-xs text-[var(--muted)]">Check the page and drag across selectable text before you apply a mark.</p>
                             </div>
-                            {file && <button type="button" data-testid="markup-v2-choose-another" onClick={openFileChooser} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-semibold"><RotateCcw size={14} /> Choose another PDF</button>}
+                            {file && <button type="button" data-testid="markup-v2-choose-another" onClick={openFileChooser} disabled={active} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-semibold"><RotateCcw size={14} /> Choose another PDF</button>}
                         </div>
                         <div className="mt-4">
                             <MarkupPdfPreview file={file} ocrPreview={visibleOcrPreview} ocrPreviewStatus={visibleOcrPreviewStatus} ocrPreviewError={visibleOcrPreviewError} findQuery={submittedFindQuery} activeFindOccurrence={findOccurrence} onTextSelected={handleTextSelected} onFindStateChange={handleFindStateChange} onStateChange={handlePreviewStateChange} />
@@ -442,7 +505,7 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
                     <div className="block text-sm font-medium text-[var(--foreground)]">
                         <span>PDF document</span>
                         <div className="mt-2 flex flex-wrap items-center gap-3">
-                            {!file && <button type="button" data-testid="markup-v2-choose-pdf" onClick={openFileChooser} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-3 py-2 text-sm font-semibold text-white"><FileText size={15} /> Choose PDF</button>}
+                            {!file && <button type="button" data-testid="markup-v2-choose-pdf" onClick={openFileChooser} disabled={active} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-3 py-2 text-sm font-semibold text-white"><FileText size={15} /> Choose PDF</button>}
                             <span className="text-xs font-normal text-[var(--muted)]">Choose a PDF to review before applying a mark.</span>
                         </div>
                         <PdfUploader
@@ -501,9 +564,9 @@ export default function OcrAwareMarkupV2Workspace({ action }: { action: OcrAware
                     {!isAuthLoading && !isAuthenticated && <div className="rounded-xl border border-amber-300/60 bg-amber-500/5 px-3 py-3 text-xs text-[var(--muted)]"><p className="flex items-center gap-2 font-semibold text-[var(--foreground)]"><ShieldCheck size={14} /> Sign in to continue when guest access is unavailable.</p><button type="button" onClick={() => openAuthModal("login")} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-indigo-500/40 px-3 py-2 text-xs font-semibold text-indigo-700 dark:text-indigo-300">Sign in</button></div>}
 
                     <div className="flex flex-wrap gap-3">
-                        <button data-testid="markup-v2-submit" type="submit" disabled={!canSubmit || active} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{isSubmitting ? <Loader2 className="animate-spin" size={16} /> : <Icon size={16} />}{isSubmitting ? "Processing" : `${meta.verb} text`}</button>
+                        <button data-testid="markup-v2-submit" type="submit" disabled={!canSubmit || active} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{isSubmitting ? <Loader2 className="animate-spin" size={16} /> : <Icon size={16} />}{isSubmitting ? "Processing" : recoveryRequired ? `Recover ${meta.verb.toLowerCase()}` : capacityRejected ? `Retry ${meta.verb.toLowerCase()}` : `${meta.verb} text`}</button>
                         {active && <button data-testid="markup-v2-cancel" type="button" onClick={() => void cancel()} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-4 py-2 text-sm font-semibold">Cancel processing</button>}
-                        <button data-testid="markup-v2-reset" type="button" onClick={startOver} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-4 py-2 text-sm"><RotateCcw size={16} /> Start over</button>
+                        <button data-testid="markup-v2-reset" type="button" onClick={startOver} disabled={active} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-4 py-2 text-sm"><RotateCcw size={16} /> Start over</button>
                     </div>
                     {disabledReason && <p data-testid="markup-v2-disabled-reason" className="text-xs text-[var(--muted)]">{disabledReason}</p>}
 

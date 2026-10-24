@@ -1,4 +1,5 @@
 import { getBaseUrl } from "@/lib/api";
+import { assertCloudProcessingAuthorizedInputs, getPdfInputPreparation, hasProtectedPdfInputLineage, markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 
 export type SearchablePdfV2State =
     | "IDLE"
@@ -204,6 +205,15 @@ export async function createSearchablePdfV2Job(
     idempotencyKey: string,
     requestId: string,
 ): Promise<SearchablePdfV2JobStatus> {
+    // Assert the exact ordered payload, never the first input's initialBatch.
+    try {
+        assertCloudProcessingAuthorizedInputs(files, "searchable-pdf-v2");
+        if (files.some((file) => hasProtectedPdfInputLineage(file) || getPdfInputPreparation(file)?.bytesState === "encrypted")) {
+            throw new Error("Protected input is not supported by this route.");
+        }
+    } catch (cause) {
+        throw new SearchablePdfV2ApiError("INVALID_INPUT", cause instanceof Error ? cause.message : "Input is not authorized.", 400);
+    }
     const form = new FormData();
     for (const file of files) form.append("file", file);
     form.append("language", language);
@@ -211,7 +221,8 @@ export async function createSearchablePdfV2Job(
     if (language !== "auto") for (const code of language.split("+")) form.append("languages", code);
     form.append("routing_policy", routingPolicy);
 
-    return requestJson<SearchablePdfV2JobStatus>("/api/v2/ocr/searchable-pdf/jobs", {
+    markCloudSubmissionInitiated(files);
+    const job = await requestJson<SearchablePdfV2JobStatus>("/api/v2/ocr/searchable-pdf/jobs", {
         method: "POST",
         headers: {
             "Idempotency-Key": idempotencyKey,
@@ -219,6 +230,13 @@ export async function createSearchablePdfV2Job(
         },
         body: form,
     });
+    // ReplaySearchableJob intentionally returns a small durable acknowledgment.
+    // Polling supplies progress; render the acknowledgment safely until then.
+    return {
+        ...job,
+        progress: job.progress ?? { completed_pages: 0, total_pages: files.length, failed_pages: [], page_statuses: {}, percent: 0 },
+        warnings: job.warnings ?? [],
+    };
 }
 
 export async function getSearchablePdfV2Job(jobId: string): Promise<SearchablePdfV2JobStatus> {
