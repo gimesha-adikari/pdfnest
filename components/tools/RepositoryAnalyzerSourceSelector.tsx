@@ -370,6 +370,7 @@ export default function RepositoryAnalyzerSourceSelector() {
                 {/* Tab 2: Local Directory */}
                 {activeTab === "local" && (
                     <div className="mt-6 space-y-5">
+                        <p className="text-xs text-[color:var(--muted-foreground)]">The filtered repository archive is uploaded for cloud processing. Review source files for embedded secrets before continuing.</p>
                         <input
                             ref={folderInputRef}
                             type="file"
@@ -394,7 +395,7 @@ export default function RepositoryAnalyzerSourceSelector() {
                                     Select local project folder
                                 </h3>
                                 <p className="mt-1 text-xs text-[color:var(--muted-foreground)]">
-                                    Files are scanned locally without executing build scripts
+                                    Known credential files and build dependencies are filtered locally. The filtered archive is uploaded for cloud analysis; no build scripts are executed.
                                 </p>
                             </button>
                         ) : (
@@ -450,6 +451,7 @@ export default function RepositoryAnalyzerSourceSelector() {
                 {/* Tab 3: ZIP Archive */}
                 {activeTab === "zip" && (
                     <div className="mt-6 space-y-5">
+                        <p className="text-xs text-[color:var(--muted-foreground)]">Your ZIP is uploaded as provided for cloud processing. It is not sanitized in your browser. Remove credentials and sensitive files before uploading.</p>
                         <input
                             ref={zipInputRef}
                             type="file"
