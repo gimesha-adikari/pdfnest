@@ -61,12 +61,13 @@ async function main() {
     const router = { push: (url: string) => navigation.push(url), replace: (url: string) => navigation.push(url) };
     const tools = { getToolByHref: () => ({ title: "Markdown", accept: ".md" }), tools: [], isLoading: false };
     const framework = {
-        "next/navigation": { useRouter: () => router, useParams: () => ({ toolId: "markdown-to-pdf" }) },
+        "next/navigation": { useRouter: () => router, useParams: () => ({ toolId: "markdown-to-pdf" }), usePathname: () => "/markdown-to-pdf/workspace" },
         "lucide-react": new Proxy({}, { get: () => empty }),
         "@/context/ToolContext": { useTools: () => tools },
     };
     const layout = loadModule<LayoutModule>("app/(site)/[toolId]/ClientToolLayout.tsx", {
         ...framework,
+        "@/context/AuthContext": { useAuth: () => ({ cancelPendingAction: empty }) },
         "@/components/SEO/ToolFAQ": { default: empty }, "@/components/SEO/ToolSchema": { default: empty },
         "@/lib/iconResolver": { resolveIcon: () => empty },
         "@/components/pdf/BackendOnlyToolGuard": { BackendOnlyToolGuard: wrapper },

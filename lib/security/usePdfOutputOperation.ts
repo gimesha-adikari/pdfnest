@@ -11,7 +11,11 @@ export function usePdfOutputOperation(file: File | null, toolId: string, clearRe
         currentFile.current = file;
         active.current?.abort();
         active.current = null;
-        return () => { active.current?.abort(); active.current = null; };
+        return () => {
+            currentFile.current = null;
+            active.current?.abort();
+            active.current = null;
+        };
     }, [file]);
     return () => {
         if (!file || currentFile.current !== file || active.current) return null;

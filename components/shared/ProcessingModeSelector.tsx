@@ -1,7 +1,7 @@
 "use client";
 
 import { Cpu, HardDrive, Zap, CloudOff } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import { ProcessingMode, ToolPolicy } from "@/lib/execution/types";
 import { useBackendHealth } from "@/context/BackendHealthContext";
 import {useAuth} from "@/context/AuthContext";
@@ -24,12 +24,14 @@ export function ProcessingModeSelector({
     cloudSubmissionInitiated,
 }: ProcessingModeSelectorProps) {
     const { status } = useBackendHealth();
-    const {billingPolicy} = useAuth();
+    const {billingPolicy, cancelPendingAction} = useAuth();
     const { file } = useSharedTool();
     const submissionStarted = cloudSubmissionInitiated ?? hasCloudSubmissionInitiated(file);
     const effectiveMode = submissionStarted && mode === "device" ? "cloud" : mode;
     const isCloudOffline = status === "offline";
     const isCloudOnly = toolPolicy === "BACKEND_ONLY" || toolPolicy === "SECURITY_CRITICAL_BACKEND";
+
+    useLayoutEffect(() => cancelPendingAction, [cancelPendingAction]);
 
     useEffect(() => {
         if (submissionStarted && mode === "device") onChange("cloud");
@@ -37,6 +39,7 @@ export function ProcessingModeSelector({
 
     const requestModeChange = (nextMode: ProcessingMode) => {
         if (nextMode === "device" && submissionStarted) return;
+        if (nextMode !== mode) cancelPendingAction();
         onChange(nextMode);
     };
 
