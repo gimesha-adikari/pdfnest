@@ -1,3 +1,4 @@
+import { FILE_RETENTION_COPY } from "@/lib/fileRetentionCopy";
 import { TOTAL_TOOL_COUNT } from "@/lib/toolsData";
 
 export interface SubscribeContent {
@@ -131,7 +132,7 @@ export const fallbackSubscribeContent: SubscribeContent = {
         "Files are processed securely and automatically removed after processing.",
 
     securityTags:
-        "Temporary processing,Secure transfers,Automatic cleanup,No permanent storage",
+        "Temporary processing,Session and export retention,Workflow-specific expiry,Separate physical cleanup",
 
     ctaGuestTitle:
         "Create a free account and start using Platen PDF today.",
@@ -181,7 +182,7 @@ export const fallbackSubscribeContent: SubscribeContent = {
         },
         {
             "q":"Are my files stored?",
-            "a":"No. Files are processed temporarily in ephemeral sandboxes and automatically deleted after processing."
+            "a":${JSON.stringify(FILE_RETENTION_COPY.summary)}
         }
     ]`,
 };

@@ -1,3 +1,4 @@
+import { FILE_RETENTION_COPY } from "@/lib/fileRetentionCopy";
 import Link from "next/link";
 import {
     FileText,
@@ -178,7 +179,7 @@ export default function TermsPage() {
                                     <div>
                                         <p className="font-semibold">File privacy</p>
                                         <p className="text-sm text-[color:var(--muted)]">
-                                            Uploaded and generated files are deleted after processing.
+                                            {FILE_RETENTION_COPY.summary}
                                         </p>
                                     </div>
                                 </div>
@@ -238,12 +239,13 @@ export default function TermsPage() {
 
                     <SectionCard icon={Clock3} title="4. File Processing and Retention" accent="indigo">
                         <p>
-                            Uploaded files and generated files are automatically and permanently deleted within
-                            30 minutes of processing unless a shorter period applies.
+                            {FILE_RETENTION_COPY.processing}
                         </p>
                         <p>
-                            This retention window exists only to complete the requested processing task and support
-                            temporary delivery of results.
+                            {FILE_RETENTION_COPY.exports}
+                        </p>
+                        <p>
+                            {FILE_RETENTION_COPY.cleanup}
                         </p>
                     </SectionCard>
 

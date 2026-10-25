@@ -1,5 +1,7 @@
 "use client";
 
+import { FILE_RETENTION_COPY } from "@/lib/fileRetentionCopy";
+
 import React, {useEffect, useState} from "react";
 import Link from "next/link";
 import {useRouter} from "next/navigation";
@@ -439,7 +441,7 @@ export default function SubscribePage() {
                         {getBullets(content.securityTags).map((tag, i) => (
                             <div key={i}
                                  className="p-4 bg-[var(--card)]/30 border border-[color:var(--border)] rounded-2xl">
-                                ✓ {tag}
+                                ✓ {tag.toLowerCase() === "no permanent storage" ? "Workflow-specific retention" : tag.toLowerCase() === "automatic cleanup" ? "Separate physical cleanup" : tag}
                             </div>
                         ))}
                     </div>
@@ -471,7 +473,7 @@ export default function SubscribePage() {
                                             isOpen ? "max-h-40 border-t border-[color:var(--border)] p-5 bg-[color:var(--background)]/20" : "max-h-0"
                                         }`}
                                     >
-                                        <p className="text-xs sm:text-sm text-[color:var(--muted)] leading-relaxed font-medium">{faq.a}</p>
+                                        <p className="text-xs sm:text-sm text-[color:var(--muted)] leading-relaxed font-medium">{faq.q === "Are my files stored?" ? FILE_RETENTION_COPY.summary : faq.a}</p>
                                     </div>
                                 </div>
                             );

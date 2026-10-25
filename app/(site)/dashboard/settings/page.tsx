@@ -647,8 +647,9 @@ export default function SettingsPage() {
                     </div>
 
                     <p className="text-sm text-red-500/80">
-                        Once you delete your account, there is no going back. All your uploaded documents,
-                        usage history, and personal data will be permanently removed.
+                        Account deletion removes access to your account. Personal information is handled under our
+                        Privacy Policy, including its retention exceptions. Documents and exports follow their
+                        workflow-specific retention and cleanup rules; account deletion does not confirm physical erasure.
                     </p>
 
                     <button

@@ -1,8 +1,9 @@
+import { FILE_RETENTION_COPY } from "@/lib/fileRetentionCopy";
 export default function PdfFeatures() {
     const features = [
         {
-            title: "Zero Trust Privacy",
-            description: "Files are processed in isolated memory and never stored permanently.",
+            title: "File Privacy and Retention",
+            description: FILE_RETENTION_COPY.summary,
         },
         {
             title: "Instant Execution",

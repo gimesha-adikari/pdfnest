@@ -51,7 +51,7 @@ export function normalizeTool(rawTool: any): ToolItem | null {
         .map(normalizePublicHref)
         .filter((relatedHref) => !isHiddenOcrV2PublicHref(relatedHref));
 
-    return {
+    const normalized = {
         ID: rawTool.ID || rawTool.id,
         title,
         description,
@@ -82,6 +82,23 @@ export function normalizeTool(rawTool: any): ToolItem | null {
         toolPolicy: rawTool.toolPolicy || rawTool.ToolPolicy || staticFallback?.toolPolicy,
         offlineReason: rawTool.offlineReason || rawTool.OfflineReason || staticFallback?.offlineReason || staticFallback?.capability?.offlineReason,
     } as ToolItem;
+
+    // Capability copy must match the shipped image-based converter, including
+    // when older CMS records still advertise editable text or vector objects.
+    if (publicHref.toLowerCase() === "/pdf-to-powerpoint" && staticFallback) {
+        return {
+            ...normalized,
+            title: staticFallback.title,
+            description: staticFallback.description,
+            seoTitle: staticFallback.seoTitle,
+            seoDescription: staticFallback.seoDescription,
+            intent: staticFallback.intent,
+            keywords: staticFallback.keywords,
+            features: staticFallback.features,
+            faq: staticFallback.faq,
+        };
+    }
+    return normalized;
 }
 
 export function getToolCanonicalKey(tool: ToolItem): string {

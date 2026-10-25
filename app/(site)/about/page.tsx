@@ -1,5 +1,7 @@
 "use client";
 
+import { FILE_RETENTION_COPY } from "@/lib/fileRetentionCopy";
+
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import {
@@ -65,7 +67,7 @@ export default function AboutPage() {
         SectionSubtitle: "Designed with privacy, performance, and simplicity as first principles.",
         HighlightsJson: JSON.stringify([
             { title: "Client-Side Processing", description: "Standard operations execute 100% locally in your browser using WASM." },
-            { title: "Privacy First", description: "Zero document telemetry. Files are never stored permanently." },
+            { title: "Privacy First", description: FILE_RETENTION_COPY.summary },
             { title: "Universal Compatibility", description: "Works on desktop, mobile, and tablets with equal speed." },
         ]),
         StudioTitle: "Platen Studio Architecture",
@@ -84,8 +86,8 @@ export default function AboutPage() {
             "Zero-latency Pagination",
             "Lossless Asset Handling"
         ]),
-        SecurityTitle: "Security & Privacy Guarantee",
-        SecurityDescription: "We strictly protect user data. All processing sandboxes clear cache automatically, and no uploaded document content is permanently stored.",
+        SecurityTitle: "File Privacy and Retention",
+        SecurityDescription: FILE_RETENTION_COPY.summary,
         RoadmapTitle: "Platform Capabilities",
         RoadmapDescription: "Continuously expanding PDF engine utilities.",
         RoadmapJson: JSON.stringify(["Fast OCR Engine", "Batch Conversion", "High-DPI Render", "Cloudflare R2 Sync"]),
@@ -93,7 +95,12 @@ export default function AboutPage() {
         MissionDescription: "Provide high-performance document tools accessible anywhere without compromising user privacy or file security."
     };
 
-    const activeData = { ...fallbackData, ...(data || {}) };
+    // Keep source-supported retention copy authoritative over older CMS promises.
+    const activeData = {
+        ...fallbackData, ...(data || {}),
+        SecurityTitle: fallbackData.SecurityTitle,
+        SecurityDescription: FILE_RETENTION_COPY.summary,
+    };
 
     const uniqueCategories = new Set(
         toolsList.length > 0
@@ -205,7 +212,7 @@ export default function AboutPage() {
                                     {resolveAboutHighlightTitle(item, resolvedToolCount)}
                                 </h3>
                                 <p className="text-sm leading-7 text-[color:var(--muted)]">
-                                    {item.description}
+                                    {item.title === "Privacy First" ? FILE_RETENTION_COPY.summary : item.description}
                                 </p>
                             </div>
                         ))}
