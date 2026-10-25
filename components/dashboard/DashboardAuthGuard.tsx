@@ -11,7 +11,7 @@ interface DashboardAuthGuardProps {
 }
 
 export default function DashboardAuthGuard({ children }: DashboardAuthGuardProps) {
-    const { isLoggedIn, isLoading } = useAuth();
+    const { isLoggedIn, isLoading, reauthenticationRequired } = useAuth();
     const router = useRouter();
     const pathname = usePathname();
 
@@ -20,9 +20,9 @@ export default function DashboardAuthGuard({ children }: DashboardAuthGuardProps
             const targetPath = pathname || "/dashboard";
             const search = typeof window !== "undefined" ? window.location.search : "";
             const returnTo = safeRedirectPath(`${targetPath}${search}`);
-            router.replace(`/login?callbackUrl=${encodeURIComponent(returnTo)}`);
+            router.replace(reauthenticationRequired ? "/login?passwordChanged=1" : `/login?callbackUrl=${encodeURIComponent(returnTo)}`);
         }
-    }, [isLoading, isLoggedIn, pathname, router]);
+    }, [isLoading, isLoggedIn, pathname, router, reauthenticationRequired]);
 
     if (isLoading || !isLoggedIn) {
         return (

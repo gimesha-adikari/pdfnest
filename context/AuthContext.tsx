@@ -39,6 +39,8 @@ interface AuthContextType {
     refreshSession: () => Promise<void>;
     ensureGuestSession: () => Promise<void>;
     logout: () => Promise<void>;
+    signOutAfterPasswordChange: () => void;
+    reauthenticationRequired: boolean;
 
     isAuthModalOpen: boolean;
     authModalView: AuthModalView;
@@ -89,6 +91,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
     const [authModalView, setAuthModalView] = useState<AuthModalView>("login");
 
+    const sessionRequest = useRef(0);
+    const [reauthenticationRequired, setReauthenticationRequired] = useState(false);
     const pendingAction = useRef<(() => void) | null>(null);
 
     const applyGuest = useCallback((session: SessionResponse) => {
@@ -112,6 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const applyUser = useCallback((session: SessionResponse) => {
+        setReauthenticationRequired(false);
         dispatchSession({ type: "apply", session });
 
         setIsAuthenticated(true);
@@ -136,10 +141,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const refreshSession = useCallback(async () => {
+        const request = ++sessionRequest.current;
         setIsLoading(true);
 
         try {
             const session = await fetchJson<SessionResponse>("/auth/session");
+            if (request !== sessionRequest.current) return;
 
             if (session.type === "user" && session.user) {
                 applyUser(session);
@@ -148,6 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
             setAuthAvailability("available");
         } catch (err) {
+            if (request !== sessionRequest.current) return;
             console.warn("Session refresh failed; backend or auth service unavailable:", err);
 
             setAuthAvailability("unavailable");
@@ -159,12 +167,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             syncWindowSession(null);
         } finally {
-            setIsLoading(false);
-
-            const action = pendingAction.current;
-            if (action) {
-                pendingAction.current = null;
-                action();
+            if (request === sessionRequest.current) {
+                setIsLoading(false);
+                const action = pendingAction.current;
+                if (action) {
+                    pendingAction.current = null;
+                    action();
+                }
             }
         }
     }, [applyGuest, applyUser]);
@@ -176,6 +185,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await refreshSession();
     }, [isGuest, isLoggedIn, refreshSession]);
 
+    const invalidateSession = useCallback((passwordChanged = false) => {
+        // Fence in-flight session responses before clearing current identity.
+        sessionRequest.current++;
+        pendingAction.current = null;
+        dispatchSession({ type: "clear" });
+        setIsAuthenticated(false);
+        setIsLoggedIn(false);
+        setIsGuest(false);
+        setIsLoading(false);
+        setIsAuthModalOpen(false);
+        setAuthAvailability("available");
+        setReauthenticationRequired(passwordChanged);
+        syncWindowSession(null);
+    }, []);
+
+    const signOutAfterPasswordChange = useCallback(() => invalidateSession(true), [invalidateSession]);
+
     const logout = useCallback(async () => {
         try {
             await fetchJson("/auth/logout", {
@@ -185,17 +211,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 console.warn("Logout request failed; clearing the local session anyway:", err);
             });
         } finally {
-            dispatchSession({ type: "clear" });
-
-            setIsAuthenticated(false);
-            setIsLoggedIn(false);
-            setIsGuest(false);
-
-            syncWindowSession(null);
+            invalidateSession();
 
             await refreshSession();
         }
-    }, [refreshSession]);
+    }, [invalidateSession, refreshSession]);
 
     const requireAuth = useCallback(
         (action: () => void) => {
@@ -271,6 +291,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             refreshSession,
             ensureGuestSession,
             logout,
+            signOutAfterPasswordChange,
+            reauthenticationRequired,
             isAuthModalOpen,
             authModalView,
             openAuthModal,
@@ -291,6 +313,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             isLoading,
             isLoggedIn,
             logout,
+            signOutAfterPasswordChange,
+            reauthenticationRequired,
             openAuthModal,
             refreshSession,
             requireAuth,

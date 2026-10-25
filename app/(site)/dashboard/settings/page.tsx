@@ -47,6 +47,7 @@ export default function SettingsPage() {
         subscription,
         billingPolicy,
         logout,
+        signOutAfterPasswordChange,
     } = useAuth();
     const router = useRouter();
 
@@ -133,7 +134,9 @@ export default function SettingsPage() {
                 })
             });
 
-            notify("Password updated successfully!", "success");
+            signOutAfterPasswordChange();
+            router.replace("/login?passwordChanged=1");
+            notify("Password updated. All sessions were signed out. Sign in with your new password.", "success");
             setPasswords({ current: "", new: "", confirm: "" });
             setPasswordError(null);
         } catch (err: unknown) {

@@ -44,7 +44,7 @@ async function main() {
     );
     assert.match(
         pageSource,
-        /notify\("Password updated successfully!", "success"\)/,
+        /notify\("Password updated\. All sessions were signed out\. Sign in with your new password\.", "success"\)/,
         "the successful password path must remain present"
     );
 
