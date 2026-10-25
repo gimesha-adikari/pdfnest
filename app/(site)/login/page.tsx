@@ -24,6 +24,7 @@ function LoginContent() {
     const callbackUrl = safeRedirectPath(searchParams.get("callbackUrl"));
     const verified = searchParams.get("verified");
     const reset = searchParams.get("reset");
+    const passwordChanged = searchParams.get("passwordChanged");
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -47,7 +48,10 @@ function LoginContent() {
         if (reset === "1") {
             setSuccess("Password reset successfully. You can now sign in.");
         }
-    }, [reset, verified]);
+        if (passwordChanged === "1") {
+            setSuccess("Password updated. All sessions were signed out. Sign in with your new password.");
+        }
+    }, [reset, verified, passwordChanged]);
 
     useEffect(() => {
         if (!isAuthLoading && isLoggedIn) {
