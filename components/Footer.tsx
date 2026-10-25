@@ -350,7 +350,7 @@ export default function Footer() {
                         </span>
 
                         <div className="mt-1 flex items-center gap-2">
-                            <div className="h-2 w-2 animate-pulse rounded-full bg-emerald-500"/>
+                            <div className="h-2 w-2 rounded-full bg-[var(--muted)]"/>
 
                             <span
                                 className="
@@ -360,7 +360,7 @@ export default function Footer() {
                                     text-[var(--muted)]
                                 "
                             >
-                                All Systems Operational
+                                Service availability varies
                             </span>
                         </div>
 
@@ -373,7 +373,7 @@ export default function Footer() {
                                 text-[var(--muted-foreground)]
                             "
                         >
-                            Zero-trust sandbox ready.
+                            This is not a live service monitor.
                         </div>
                     </div>
                 </div>

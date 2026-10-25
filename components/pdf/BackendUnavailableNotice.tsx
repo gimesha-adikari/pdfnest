@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { CloudOff, RefreshCw, ArrowLeft, Cpu } from "lucide-react";
+import { CloudOff, RefreshCw, ArrowLeft, Cpu, Loader2 } from "lucide-react";
 import { useBackendHealth } from "@/context/BackendHealthContext";
 
 interface BackendUnavailableNoticeProps {
@@ -19,7 +19,8 @@ export default function BackendUnavailableNotice({
     suggestedAlternative,
     onRetry,
 }: BackendUnavailableNoticeProps) {
-    const { checkHealth } = useBackendHealth();
+    const { status, checkHealth } = useBackendHealth();
+    const isPending = status === "unknown" || status === "checking";
     const [isRetrying, setIsRetrying] = useState(false);
 
     const handleRetry = async () => {
@@ -32,21 +33,28 @@ export default function BackendUnavailableNotice({
         }
     };
 
+    if (status === "online") return null;
+
     return (
         <div
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
             data-testid="backend-unavailable-execution-panel"
-            className="rounded-3xl border border-amber-500/30 bg-amber-500/5 p-6 sm:p-8 text-center space-y-4 my-6 animate-in fade-in"
+            className={`rounded-3xl border p-6 sm:p-8 text-center space-y-4 my-6 animate-in fade-in ${isPending ? "border-[color:var(--border)] bg-[color:var(--card)]" : "border-amber-500/30 bg-amber-500/5"}`}
         >
-            <div className="mx-auto w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500">
-                <CloudOff size={24} />
+            <div className={`mx-auto w-12 h-12 rounded-2xl flex items-center justify-center ${isPending ? "text-[color:var(--muted)]" : "bg-amber-500/10 text-amber-500"}`}>
+                {isPending ? <Loader2 size={24} className="animate-spin" aria-hidden="true" /> : <CloudOff size={24} aria-hidden="true" />}
             </div>
 
             <div className="space-y-2 max-w-md mx-auto">
                 <h3 className="text-lg font-bold text-[color:var(--foreground)]">
-                    Service Temporarily Unavailable
+                    {isPending ? "Checking service availability…" : "Service Temporarily Unavailable"}
                 </h3>
                 <p className="text-xs text-[color:var(--muted)] leading-relaxed">
-                    {toolName} requires the PDFNest backend processing service, which is currently offline or unreachable.
+                    {isPending
+                        ? `${toolName} requires backend processing. Please wait while availability is checked.`
+                        : `${toolName} requires the PDFNest backend processing service, which is currently offline or unreachable.`}
                 </p>
             </div>
 
@@ -54,11 +62,11 @@ export default function BackendUnavailableNotice({
                 <button
                     type="button"
                     onClick={handleRetry}
-                    disabled={isRetrying}
+                    disabled={isRetrying || isPending}
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 text-white font-semibold text-xs transition hover:brightness-105 disabled:opacity-50 shadow-sm cursor-pointer"
                 >
                     <RefreshCw size={13} className={isRetrying ? "animate-spin" : ""} />
-                    <span>{isRetrying ? "Reconnecting..." : "Retry Connection"}</span>
+                    <span>{isPending ? "Checking…" : isRetrying ? "Reconnecting..." : "Retry Connection"}</span>
                 </button>
 
                 <Link

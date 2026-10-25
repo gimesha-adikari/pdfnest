@@ -16,7 +16,6 @@ import {
     ArrowRight,
     Paperclip,
     CircleHelp,
-    CheckCircle2,
     Calendar,
     Loader2,
 } from "lucide-react";
@@ -326,17 +325,17 @@ export default function ContactForm() {
                         </div>
                     </div>
 
-                    <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-7">
+                    <div className="rounded-3xl border border-[color:var(--border)] bg-[color:var(--card)] p-7">
                         <div className="flex items-center gap-3">
-                            <CheckCircle2 className="h-6 w-6 text-emerald-500" />
+                            <CircleHelp className="h-6 w-6 text-[color:var(--muted-foreground)]" />
                             <h3 className="text-xl font-bold">System Status</h3>
                         </div>
                         <div className="mt-5 flex items-center gap-3">
-                            <span className="h-3 w-3 rounded-full bg-emerald-500" />
-                            <span className="font-medium">All systems operational</span>
+                            <span className="h-3 w-3 rounded-full bg-[color:var(--muted-foreground)]" />
+                            <span className="font-medium">Service availability varies</span>
                         </div>
                         <p className="mt-4 text-sm leading-7 text-[color:var(--muted-foreground)]">
-                            API, authentication, and PDF processing services are operating normally.
+                            This page is not a live service monitor. If a tool is unavailable, try again later or contact support.
                         </p>
                     </div>
                 </aside>
