@@ -13,7 +13,11 @@ interface BackendHealthContextType extends BackendHealthState {
 const BackendHealthContext = createContext<BackendHealthContextType | undefined>(undefined);
 
 export function BackendHealthProvider({ children }: { children: React.ReactNode }) {
-    const [state, setState] = useState<BackendHealthState>(() => backendHealth.getState());
+    // Use the same pending snapshot for SSR and the first hydration render.
+    // The subscription picks up the current browser tracker state after mount.
+    const [state, setState] = useState<BackendHealthState>({
+        status: "unknown", isAvailable: false, lastChecked: null, error: null,
+    });
     const pathname = usePathname();
 
     useEffect(() => {
@@ -22,7 +26,7 @@ export function BackendHealthProvider({ children }: { children: React.ReactNode 
         });
 
         // Perform initial check on mount if status is unknown
-        if (state.status === "unknown") {
+        if (backendHealth.getState().status === "unknown") {
             void backendHealth.checkHealth();
         }
 
@@ -68,11 +72,11 @@ export function useBackendHealth() {
     if (!context) {
         // Fallback for SSR or non-wrapped components
         return {
-            status: "online" as BackendStatus,
-            isAvailable: true,
+            status: "unknown" as BackendStatus,
+            isAvailable: false,
             lastChecked: null,
             error: null,
-            checkHealth: async () => true,
+            checkHealth: async () => false,
             markOffline: () => {},
             markOnline: () => {},
         };

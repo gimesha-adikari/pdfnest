@@ -4,6 +4,7 @@ export type BackendStatus = "online" | "offline" | "checking" | "unknown";
 
 export interface BackendHealthState {
     status: BackendStatus;
+    /** Only confirmed online health permits backend-dependent execution. */
     isAvailable: boolean;
     lastChecked: number | null;
     error: string | null;
@@ -45,7 +46,7 @@ class BackendHealthTracker {
     public getState(): BackendHealthState {
         return {
             status: this.status,
-            isAvailable: this.status === "online" || this.status === "unknown",
+            isAvailable: this.status === "online",
             lastChecked: this.lastChecked,
             error: this.lastError,
         };
@@ -97,7 +98,7 @@ class BackendHealthTracker {
      * This deliberately does not schedule polling while the application is idle.
      */
     public maybeRecover(): Promise<boolean> {
-        if (this.status !== "offline") return Promise.resolve(this.status !== "checking");
+        if (this.status !== "offline") return Promise.resolve(this.status === "online");
         if (this.lastChecked && Date.now() - this.lastChecked < this.recoveryCooldownMs) {
             return Promise.resolve(false);
         }
@@ -111,7 +112,7 @@ class BackendHealthTracker {
      */
     public async checkHealth(force = false): Promise<boolean> {
         if (typeof window === "undefined") {
-            return true;
+            return false;
         }
 
         // Respect cooldown unless forced

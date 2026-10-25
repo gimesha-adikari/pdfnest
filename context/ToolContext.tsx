@@ -92,7 +92,7 @@ export function ToolProvider({
         const requiresBackend = !isToolAvailableOffline(tool);
         return {
             requiresBackend,
-            isExecutable: status !== "offline" || !requiresBackend,
+            isExecutable: status === "online" || !requiresBackend,
         };
     }, [status]);
 

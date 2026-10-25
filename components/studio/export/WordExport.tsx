@@ -23,15 +23,16 @@ function downloadBlob(blob: Blob, fileName: string) {
 
 export default function WordExport({ file, onExportedFile }: StudioExportProps) {
     const { requireAuth } = useAuth();
-    const { isAvailable } = useBackendHealth();
+    const { isAvailable, status } = useBackendHealth();
     const isCloudOffline = !isAvailable;
+    const isChecking = status === "unknown" || status === "checking";
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
 
     const handleExport = () => {
         if (isCloudOffline) {
-            notify("Word conversion requires cloud services, which are currently offline. Please use PDF Export instead.", "warning");
+            notify(isChecking ? "Checking service availability. Please wait before exporting Word." : "Word conversion requires cloud services, which are currently offline. Please use PDF Export instead.", "warning");
             return;
         }
 
@@ -107,7 +108,7 @@ export default function WordExport({ file, onExportedFile }: StudioExportProps) 
                 <div className="flex items-start gap-2.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-900 dark:text-amber-200">
                     <CloudOff size={16} className="text-amber-500 mt-0.5 shrink-0" />
                     <div>
-                        <p className="font-semibold">Cloud Conversion Unavailable</p>
+                        <p className="font-semibold">{isChecking ? "Checking service availability…" : "Cloud Conversion Unavailable"}</p>
                         <p className="mt-0.5 text-[11px] text-amber-800/80 dark:text-amber-300/80">
                             Word conversion requires server-side processing. You can switch to PDF format to export immediately on your device.
                         </p>
@@ -134,7 +135,7 @@ export default function WordExport({ file, onExportedFile }: StudioExportProps) 
                 className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
                 {isProcessing ? <Loader2 size={16} className="animate-spin" /> : isCloudOffline ? <CloudOff size={16} /> : <FileText size={16} />}
-                {isProcessing ? "Exporting..." : isCloudOffline ? "Word Export Offline (Use PDF Export)" : "Export Word (.docx)"}
+                {isProcessing ? "Exporting..." : isChecking ? "Checking service availability…" : isCloudOffline ? "Word Export Offline (Use PDF Export)" : "Export Word (.docx)"}
             </button>
         </div>
     );

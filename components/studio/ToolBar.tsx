@@ -195,13 +195,15 @@ export default function StudioToolBar({
                                           onUndo,
                                           onRedo,
                                       }: StudioToolBarProps) {
-    const { isAvailable } = useBackendHealth();
+    const { isAvailable, status } = useBackendHealth();
     const isCloudOffline = !isAvailable;
 
     const handleSelectTool = (toolId: StudioToolId, toolLabel: string) => {
         if (isCloudOffline && STUDIO_BACKEND_TOOLS.has(toolId)) {
             notify(
-                `${toolLabel} requires cloud processing, which is currently unavailable. Offline editing tools (Rotate, Split, Organize, Watermark, Numbers, Text) remain fully usable.`,
+                status === "unknown" || status === "checking"
+                    ? "Checking service availability. Please wait before using cloud tools."
+                    : `${toolLabel} requires cloud processing, which is currently unavailable. Offline editing tools (Rotate, Split, Organize, Watermark, Numbers, Text) remain fully usable.`,
                 "warning"
             );
             return;
