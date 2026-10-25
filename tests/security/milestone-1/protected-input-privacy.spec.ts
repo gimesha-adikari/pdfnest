@@ -1730,6 +1730,69 @@ test("a duplicate or stale protected Merge result cannot publish after the queue
     expectNoProductionRequests();
 });
 
+for (const workspace of [
+    { route: "compress-pdf", action: "Optimize and Compress PDF" },
+    { route: "pdf-to-text", action: "Extract Text via Cloud OCR" },
+]) test(`deferred ${workspace.route} Cloud action cannot submit after Device selection`, async ({ page }) => {
+    const releaseAuth = delayAuthSessionResponses();
+    await page.goto(`/${workspace.route}`);
+    await waitForInteractiveApp(page);
+    await chooseFile(page, "plain-two-pages.pdf", plainPdf);
+    await expect(page).toHaveURL(new RegExp(`/${workspace.route}/workspace$`));
+    await page.getByRole("button", { name: "Cloud", exact: true }).click();
+    await page.getByRole("button", { name: workspace.action, exact: true }).click();
+    await expect.poll(() => apiRequests.filter(request => request.path.endsWith("/auth/session")).length).toBeGreaterThan(1);
+    expect(processingPosts()).toHaveLength(0);
+    await page.getByRole("button", { name: "Device", exact: true }).click();
+    releaseAuth();
+    await expect.poll(() => page.evaluate(() => Boolean(
+        (window as Window & { __PLATEN_SESSION__?: { authenticated: boolean } }).__PLATEN_SESSION__?.authenticated
+    ))).toBe(true);
+    await expect(page.getByRole("button", { name: "Device", exact: true })).toHaveAttribute("aria-pressed", "true");
+    expect(processingPosts()).toHaveLength(0);
+    expectNoProductionRequests();
+});
+
+test("deferred image upload discards a removed image before authentication completes", async ({ page }) => {
+    const releaseAuth = delayAuthSessionResponses();
+    await page.goto("/images-to-pdf");
+    await waitForInteractiveApp(page);
+    const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0ioAAAAASUVORK5CYII=", "base64");
+    await page.locator('input[type="file"]').first().setInputFiles([
+        { name: "first.png", mimeType: "image/png", buffer: png },
+        { name: "second.png", mimeType: "image/png", buffer: png },
+    ]);
+    await expect(page).toHaveURL(/\/images-to-pdf\/workspace$/);
+    await page.getByRole("button", { name: "Cloud", exact: true }).click();
+    await page.getByRole("button", { name: "Compile 2 Images into PDF", exact: true }).click();
+    await expect.poll(() => apiRequests.filter(request => request.path.endsWith("/auth/session")).length).toBeGreaterThan(1);
+    await page.getByTitle("Remove Image", { exact: true }).first().click();
+    releaseAuth();
+    await expect(page.getByRole("button", { name: "Compile 1 Image into PDF", exact: true })).toBeEnabled();
+    await expect.poll(() => authSessionResponsesFulfilled).toBeGreaterThan(1);
+    expect(processingPosts()).toHaveLength(0);
+    expectNoProductionRequests();
+});
+
+test("deferred Unlock discards a cleared password before authentication completes", async ({ page }) => {
+    const releaseAuth = delayAuthSessionResponses();
+    await page.goto("/unlock-pdf");
+    await waitForInteractiveApp(page);
+    await chooseFile(page, "protected-alpha.pdf", protectedAlpha);
+    await expect(page).toHaveURL(/\/unlock-pdf\/workspace$/);
+    const password = page.getByPlaceholder("Enter the password to decrypt the file");
+    await password.fill(alphaPassword);
+    await page.getByRole("button", { name: "Cloud", exact: true }).click();
+    await page.getByRole("button", { name: "Remove Security and Unlock PDF", exact: true }).click();
+    await expect.poll(() => apiRequests.filter(request => request.path.endsWith("/auth/session")).length).toBeGreaterThan(1);
+    await password.fill("");
+    releaseAuth();
+    await expect.poll(() => authSessionResponsesFulfilled).toBeGreaterThan(1);
+    await expect(password).toHaveValue("");
+    expect(processingPosts()).toHaveLength(0);
+    expectNoProductionRequests();
+});
+
 test("a Merge submission deferred for authentication is discarded after queue and consent changes", async ({ page }) => {
     const releaseAuth = delayAuthSessionResponses();
     await page.goto("/merge-pdf");

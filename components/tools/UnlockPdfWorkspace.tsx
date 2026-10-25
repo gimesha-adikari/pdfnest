@@ -21,7 +21,7 @@ function formatMB(bytes: number) {
 }
 
 export default function UnlockPdfWorkspace() {
-    const { requireAuth } = useAuth();
+    const { requireAuth, cancelPendingAction } = useAuth();
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
     const cloudSubmissionInitiated = hasCloudSubmissionInitiated(file);
@@ -120,6 +120,7 @@ export default function UnlockPdfWorkspace() {
                             <PasswordField
                                 value={password}
                                 onChange={(e) => {
+                                    cancelPendingAction();
                                     setPassword(e.target.value);
                                     if (errorMessage) setErrorMessage(null);
                                 }}

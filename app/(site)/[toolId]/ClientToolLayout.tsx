@@ -5,12 +5,14 @@ import {
     useContext,
     useRef,
     useEffect,
+    useLayoutEffect,
     useMemo,
     useState,
     useCallback,
     type ReactNode,
 } from "react";
-import { useParams, notFound } from "next/navigation";
+import { useParams, usePathname, notFound } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 import { useTools } from "@/context/ToolContext";
 import ToolFAQ from "@/components/SEO/ToolFAQ";
 import ToolSchema from "@/components/SEO/ToolSchema";
@@ -110,6 +112,14 @@ export default function ClientToolLayout({
 }: ClientToolLayoutProps) {
     const editPdfEngine = resolveEditPdfEditorEngine(initialEditPdfEngine ?? process.env.EDIT_PDF_EDITOR_ENGINE);
     const params = useParams();
+    const pathname = usePathname();
+    const { cancelPendingAction } = useAuth();
+    useLayoutEffect(() => {
+        // Persistent tool layouts can survive workspace -> download navigation.
+        // Invalidate delayed actions on that transition as well as unmount.
+        cancelPendingAction();
+        return cancelPendingAction;
+    }, [pathname, cancelPendingAction]);
     const { getToolByHref, tools: allTools, isLoading: isLoadingTools } = useTools();
     const rawToolId = params?.toolId;
     const toolId = Array.isArray(rawToolId) ? rawToolId[0] : rawToolId || "";
@@ -198,6 +208,7 @@ export default function ClientToolLayout({
     }, [currentToolHref, getToolByHref, isLoadingTools, toolId]);
 
     const setFile = useCallback((nextFile: File | null) => {
+        if (nextFile !== currentInputRef.current) cancelPendingAction();
         currentInputRef.current = nextFile;
         if (nextFile !== fileState || toolId === "markdown-to-pdf" || toolId === "code-to-pdf") {
             setDownloadData(null);
@@ -205,7 +216,7 @@ export default function ClientToolLayout({
         }
         setFileState(nextFile);
         setActiveToolHref(nextFile ? currentToolHref : null);
-    }, [fileState, toolId, currentToolHref, setDownloadData]);
+    }, [fileState, toolId, currentToolHref, setDownloadData, cancelPendingAction]);
 
     return (
         <SharedToolContext.Provider

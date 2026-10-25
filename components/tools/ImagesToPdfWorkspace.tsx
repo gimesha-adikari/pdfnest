@@ -76,6 +76,7 @@ function formatFileSize(bytes: number): string {
 export default function ImagesToPdfWorkspace() {
     const {
         requireAuth,
+        cancelPendingAction,
     } = useAuth();
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
@@ -354,6 +355,7 @@ export default function ImagesToPdfWorkspace() {
     };
 
     const handleFilesSelection = async (acceptedFiles: File[]) => {
+        cancelPendingAction();
         const startIdx = images.length;
         setImages((prev) => [...prev, ...acceptedFiles]);
         setSuccess(false);
@@ -396,6 +398,7 @@ export default function ImagesToPdfWorkspace() {
     };
 
     const removeImageElement = (indexToRemove: number) => {
+        cancelPendingAction();
         const updatedImages = images.filter((_, idx) => idx !== indexToRemove);
         setImages(updatedImages);
 
@@ -426,6 +429,7 @@ export default function ImagesToPdfWorkspace() {
 
     const moveImageElement = (fromIndex: number, toIndex: number) => {
         if (toIndex < 0 || toIndex >= images.length || fromIndex === toIndex) return;
+        cancelPendingAction();
 
         const nextImages = [...images];
         const [movedImage] = nextImages.splice(fromIndex, 1);

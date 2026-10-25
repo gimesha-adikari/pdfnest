@@ -46,6 +46,7 @@ interface AuthContextType {
     authModalView: AuthModalView;
     openAuthModal: (view?: AuthModalView) => void;
     requireAuth: (action: () => void) => void;
+    cancelPendingAction: () => void;
     requireLogin: (action: () => void) => void;
     closeAuthModal: () => void;
     handleAuthModalSuccess: () => void;
@@ -94,6 +95,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const sessionRequest = useRef(0);
     const [reauthenticationRequired, setReauthenticationRequired] = useState(false);
     const pendingAction = useRef<(() => void) | null>(null);
+    // A delayed sign-in must not revive a document action whose venue, input
+    // or workspace changed while authentication was being checked.
+    const cancelPendingAction = useCallback(() => {
+        pendingAction.current = null;
+    }, []);
 
     const applyGuest = useCallback((session: SessionResponse) => {
         dispatchSession({ type: "apply", session });
@@ -297,6 +303,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             authModalView,
             openAuthModal,
             requireAuth,
+            cancelPendingAction,
             requireLogin,
             closeAuthModal,
             handleAuthModalSuccess,
@@ -318,6 +325,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             openAuthModal,
             refreshSession,
             requireAuth,
+            cancelPendingAction,
             requireLogin,
             subscription,
             billingPolicy,
