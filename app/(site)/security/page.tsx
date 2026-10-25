@@ -1,3 +1,4 @@
+import { FILE_RETENTION_COPY } from "@/lib/fileRetentionCopy";
 import Link from "next/link";
 import {
     ShieldCheck,
@@ -35,8 +36,8 @@ export default function SecurityPage() {
 
                 <p className="mt-5 max-w-3xl text-lg leading-8 text-[color:var(--muted-foreground)]">
                     We design Platen PDF with security in mind—from encrypted
-                    connections and secure authentication to automatic file
-                    deletion and continuous infrastructure protection.
+                    connections and secure authentication to workflow-specific file
+                    retention and cleanup.
                 </p>
 
                 <div className="mt-8 flex flex-wrap gap-4">
@@ -65,8 +66,8 @@ export default function SecurityPage() {
                         {
                             icon: Clock3,
                             color: "text-emerald-500",
-                            title: "Auto File Deletion",
-                            text: "Files are removed within 30 minutes after processing.",
+                            title: "File Retention and Cleanup",
+                            text: FILE_RETENTION_COPY.summary,
                         },
                         {
                             icon: Shield,
@@ -130,7 +131,7 @@ export default function SecurityPage() {
                             "Infrastructure monitoring and logging",
                             "Protection against abuse and malicious activity",
                             "Temporary file storage only when necessary",
-                            "Automatic file deletion after processing",
+                            "Workflow-specific retention and cleanup",
                             "Continuous security improvements",
                         ].map((item) => (
                             <div
@@ -158,11 +159,13 @@ export default function SecurityPage() {
                     </div>
 
                     <p className="leading-8 text-[color:var(--muted-foreground)]">
-                        Uploaded and generated files are intended to be
-                        temporary. Unless a shorter retention period applies,
-                        files are automatically deleted within
-                        <strong> 30 minutes </strong>
-                        after processing.
+                        {FILE_RETENTION_COPY.processing}
+                    </p>
+                    <p className="mt-4 leading-8 text-[color:var(--muted-foreground)]">
+                        {FILE_RETENTION_COPY.exports}
+                    </p>
+                    <p className="mt-4 leading-8 text-[color:var(--muted-foreground)]">
+                        {FILE_RETENTION_COPY.cleanup}
                     </p>
 
                     <div className="mt-8 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-6">
@@ -175,9 +178,8 @@ export default function SecurityPage() {
                                 </h3>
 
                                 <p className="mt-2 leading-7 text-[color:var(--muted-foreground)]">
-                                    We retain uploaded files only for as long
-                                    as necessary to process your request and
-                                    deliver the resulting document.
+                                    Processing files, active session assets and downloadable exports have different lifecycles.
+                                    See our Privacy Policy for file handling and your separate account-data rights.
                                 </p>
                             </div>
                         </div>

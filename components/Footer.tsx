@@ -1,5 +1,7 @@
 "use client";
 
+import { FILE_RETENTION_COPY } from "@/lib/fileRetentionCopy";
+
 import Link from "next/link";
 import Logo from "@/components/ui/Logo";
 import {useAuth} from "@/context/AuthContext";
@@ -98,9 +100,7 @@ export default function Footer() {
                         </Link>
 
                         <p className="max-w-sm text-xs leading-relaxed text-[var(--muted-foreground)]">
-                            Files are processed in secure, isolated sandbox
-                            environments and automatically purged. Precision
-                            document infrastructure.
+                            {FILE_RETENTION_COPY.summary}
                         </p>
 
                         <p className="font-mono text-[11px] text-[var(--muted-foreground)]">

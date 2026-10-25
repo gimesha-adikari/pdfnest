@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import ts from "typescript";
+import * as retentionCopy from "../../lib/fileRetentionCopy";
 import React, { act } from "react";
 import { renderToString, renderToStaticMarkup } from "react-dom/server";
 
@@ -41,6 +42,7 @@ const guard = load<{
 });
 const empty = () => null;
 const common = {
+    "@/lib/fileRetentionCopy": retentionCopy,
     "@/context/BackendHealthContext": health,
     "next/link": { __esModule: true, default: ({ children, href }: React.PropsWithChildren<{ href: string }>) => React.createElement("a", { href }, children) },
     "lucide-react": new Proxy({}, { get: () => empty }),

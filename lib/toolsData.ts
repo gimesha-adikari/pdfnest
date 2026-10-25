@@ -1181,20 +1181,21 @@ const BASE_NAV_TOOLS_FALLBACK: ToolItem[] = [
         ]
     },
     {
+        features: ["One slide per PDF page", "Image-based slide content", "Rearrange slides and add new content in PowerPoint"],
         title: "PDF to PowerPoint",
-        description: "Transform presentation data frames back into entirely editable Microsoft PowerPoint pitch layout slides structures.",
+        description: "Create a PowerPoint PPTX with one slide per PDF page, using a slide-sized image of each page. Text and graphics within the images are not individually editable.",
         href: "/pdf-to-powerpoint",
         category: "convert",
         capability: { clientExecutable: false, workspaceOffline: false, requiresBackend: true, offlineReason: "Requires server-side PowerPoint conversion engine" },
         clientCapable: false,
         toolPolicy: "BACKEND_ONLY",
         seoTitle: "Convert PDF to PowerPoint Online Free",
-        seoDescription: "Turn your PDF pages into fully editable PowerPoint slides for your next presentation.",
-        intent: "Users want to rebuild presentation slides from a PDF file.",
+        seoDescription: "Convert PDF to PowerPoint PPTX with one image-based slide per page. Text and graphics within each page image are not individually editable.",
+        intent: "Users want to present PDF pages as image-based PowerPoint slides.",
         keywords: [
-            "rebuild pptx files sequences",
-            "extract vector presentation decks",
-            "convert slides from document books"
+            "pdf to powerpoint",
+            "pdf pages to image-based slides",
+            "pdf to pptx"
         ],
         related: [
             "/powerpoint-to-pdf",
@@ -1205,11 +1206,11 @@ const BASE_NAV_TOOLS_FALLBACK: ToolItem[] = [
         faq: [
             {
                 question: "Can I edit the slides in PowerPoint after conversion?",
-                answer: "Yes, the PDF presentation data frames are converted back into entirely editable text and graphic shape structures in PowerPoint."
+                answer: "Each PDF page becomes a slide-sized image. Text and graphics within that image are not individually editable. You can rearrange the slides and add new text, shapes or other content in PowerPoint."
             },
             {
                 question: "Are images in the PDF transferred to the presentation?",
-                answer: "Yes, all vector graphics, raster images, and text are accurately extracted and placed onto the appropriate sequence layout slides."
+                answer: "The converter renders each PDF page as a PNG image and places it on a slide, producing one slide per PDF page. Images, text and graphics remain part of that page image, rather than separate PowerPoint objects."
             }
         ]
     },

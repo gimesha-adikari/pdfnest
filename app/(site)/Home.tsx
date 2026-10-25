@@ -1,5 +1,7 @@
 "use client";
 
+import { FILE_RETENTION_COPY } from "@/lib/fileRetentionCopy";
+
 import Link from "next/link";
 import {useEffect, useMemo, useState} from "react";
 import {
@@ -499,28 +501,28 @@ export default function Home() {
                         </div>
                     </section>
 
-                    {/* Isolated Execution Environments / Security First */}
+                    {/* File handling and workflow-specific retention */}
                     <section className="py-16 border-t border-[var(--border)]">
                         <div className="bg-[var(--surface-card)] border border-[var(--border)] rounded-xl p-6 sm:p-10 flex flex-col md:flex-row items-center justify-between gap-8 shadow-sm">
                             <div className="md:w-1/2 space-y-4">
                                 <div className="inline-flex items-center gap-2">
                                     <Shield className="text-rose-500" size={16} />
                                     <span className="font-mono text-xs uppercase tracking-wider text-rose-500 font-semibold">
-                                        Zero Trust Architecture
+                                        File Handling
                                     </span>
                                 </div>
                                 <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--foreground)]">
-                                    Isolated Execution Environments.
+                                    Processing and File Retention.
                                 </h2>
                                 <p className="text-xs sm:text-sm text-[var(--muted)] leading-relaxed">
-                                    Files are processed in secure, isolated containers and automatically purged immediately after completion. Platen is engineered with privacy and security as core principles.
+                                    {FILE_RETENTION_COPY.summary}
                                 </p>
                                 <div>
                                     <Link
                                         href="/security"
                                         className="text-xs font-mono text-[var(--foreground)] border-b border-[var(--foreground)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition-colors pb-0.5"
                                     >
-                                        Read Architecture Details →
+                                        Read File Handling Details →
                                     </Link>
                                 </div>
                             </div>
@@ -531,16 +533,13 @@ export default function Home() {
                                     <div className="w-2.5 h-2.5 rounded-full bg-rose-500/80" />
                                     <div className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
                                     <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
-                                    <span className="ml-2">system.log</span>
+                                    <span className="ml-2">Studio file lifecycle (illustration)</span>
                                 </div>
                                 <div className="space-y-1">
-                                    <div>&gt; INIT secure_sandbox_environment</div>
-                                    <div className="text-[var(--accent-muted)]">&gt; STATUS: <span className="text-[var(--terminal-foreground)]">SANDBOX_ENABLED</span></div>
-                                    <div>&gt; ALLOCATE ephemeral_storage_volume</div>
-                                    <div className="text-[var(--accent-muted)]">&gt; STATUS: <span className="text-[var(--terminal-foreground)]">EPHEMERAL_STORAGE_ACTIVE</span></div>
-                                    <div>&gt; PROCESS document_payload</div>
-                                    <div>&gt; PURGE memory_cache</div>
-                                    <div className="text-rose-400">&gt; DESTRUCT data_blocks_complete</div>
+                                    <div>1. Process the requested document</div>
+                                    <div>2. Keep active session and export files</div>
+                                    <div>3. Expire access according to the workflow</div>
+                                    <div>4. Handle cleanup separately; retry when needed</div>
                                 </div>
                             </div>
                         </div>

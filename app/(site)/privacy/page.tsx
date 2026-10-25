@@ -1,3 +1,4 @@
+import { FILE_RETENTION_COPY } from "@/lib/fileRetentionCopy";
 import ContactCard from "@/components/legal/ContactCard";
 import { EMAILS, LEGAL_OPERATOR } from "@/lib/constants";
 
@@ -182,11 +183,11 @@ export default function PrivacyPolicyPage() {
                                 </p>
                                 <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/8 p-4">
                                     <p className="font-medium text-foreground">
-                                        Uploaded files and generated files are automatically and permanently deleted within{" "}
-                                        <span className="font-bold text-indigo-500">30 minutes</span> of processing unless a shorter
-                                        period applies.
+                                        {FILE_RETENTION_COPY.processing}
                                     </p>
                                 </div>
+                                <p className="text-muted-foreground">{FILE_RETENTION_COPY.exports}</p>
+                                <p className="text-muted-foreground">{FILE_RETENTION_COPY.cleanup}</p>
                             </div>
                         </section>
 
