@@ -16,7 +16,7 @@ import { mostVisibleStudioPage, pageToKeepVisibleAfterLayoutChange } from "./stu
 import { StudioV2OverlayDraft, StudioV2RedactionDraftBox } from "./types";
 import { StudioV2InteractiveOverlay } from "./StudioV2InteractiveOverlay";
 import { VDMPageDescriptorDTO, StudioMarkupAction, StudioMarkupBox, StudioVDMDTO } from "@/lib/studio-v2/api";
-import { fetchTileBlobUrl } from "@/lib/studio-v2/tileClient";
+import { fetchTileBlobUrl, StudioTileRequestError } from "@/lib/studio-v2/tileClient";
 import {
   canonicalStudioV2CropToVisibleRect,
   clampStudioV2Rect,
@@ -145,6 +145,7 @@ const PageTileRenderer: React.FC<PageTileRendererProps> = ({
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [hasError, setHasError] = useState<boolean>(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [editingTextOverlayId, setEditingTextOverlayId] = useState<string | null>(null);
   const [isVisible, setIsVisible] = useState<boolean>(
     isSelected || page.is_blank || Boolean(page.parent_page_id)
@@ -200,6 +201,7 @@ const PageTileRenderer: React.FC<PageTileRendererProps> = ({
 
     setIsLoading(true);
     setHasError(false);
+    setPreviewError(null);
 
     try {
       // Calculate quality scale factor based on zoom (clamp between 1.0 and 2.5 for crisp DPI)
@@ -223,6 +225,7 @@ const PageTileRenderer: React.FC<PageTileRendererProps> = ({
         setIsLoading(false);
         return;
       }
+      setPreviewError(err instanceof StudioTileRequestError && err.code === "PREVIEW_SOURCE_TOO_LARGE" ? err.message : null);
       setHasError(true);
       setIsLoading(false);
     }
@@ -622,8 +625,8 @@ const PageTileRenderer: React.FC<PageTileRendererProps> = ({
       {hasError && (
         <div className="absolute inset-0 bg-red-950/20 border border-red-800/40 flex flex-col items-center justify-center gap-2 p-4 text-center">
           <AlertTriangle className="w-6 h-6 text-red-400" />
-          <span className="text-xs text-red-200 font-medium">
-            Failed to render page preview
+          <span role="alert" className="text-xs text-red-200 font-medium">
+            {previewError || "Failed to render page preview"}
           </span>
           <button
             onClick={(e) => {

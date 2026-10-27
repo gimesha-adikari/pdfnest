@@ -1129,6 +1129,7 @@ export const StudioV2Shell: React.FC = () => {
         isCreating={lifecycle === "creating"}
         error={error}
         onUpload={createSessionFromUpload}
+        onFilesSelected={enterStudio}
       />
     );
   }
