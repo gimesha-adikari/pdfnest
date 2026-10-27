@@ -1,3 +1,5 @@
+import { studioSourceErrorMessage } from "./sourceAdmission";
+
 const rawBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
 const API_BASE_URL = rawBaseUrl.endsWith("/api")
   ? `${rawBaseUrl}/studio/v1`
@@ -24,12 +26,14 @@ const MAX_BUSY_RETRIES = 1;
 
 export class StudioTileRequestError extends Error {
   readonly status: number;
+  readonly code?: string;
   readonly retryAfterMs: number | null;
 
-  constructor(status: number, statusText: string, retryAfterMs: number | null) {
-    super(`Tile request failed: status=${status} ${statusText}`);
+  constructor(status: number, statusText: string, retryAfterMs: number | null, code?: string) {
+    super(studioSourceErrorMessage(code) || `Tile request failed: status=${status} ${statusText}`);
     this.name = "StudioTileRequestError";
     this.status = status;
+    this.code = code;
     this.retryAfterMs = retryAfterMs;
   }
 }
@@ -259,7 +263,9 @@ export async function fetchTileBlobUrl(
         await delay(retryMs ?? 2000, requestSignal);
         continue;
       }
-      throw new StudioTileRequestError(response.status, response.statusText, retryMs);
+      const payload: unknown = await response.json().catch(() => null);
+      const code = payload && typeof payload === "object" && "code" in payload && typeof payload.code === "string" ? payload.code : undefined;
+      throw new StudioTileRequestError(response.status, response.statusText, retryMs, code);
     }
   }, options?.signal);
 }

@@ -195,7 +195,8 @@ export function useStudioSession(initialSessionId?: string | null) {
               : "Failed to create Studio document from the uploaded PDF"
           );
           setSyncStatus("error");
-          setLifecycle("error");
+          // A rejected upload has no session to refetch. Keep the picker recoverable.
+          setLifecycle("entry");
         }
         throw err;
       }

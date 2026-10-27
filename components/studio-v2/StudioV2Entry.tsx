@@ -3,11 +3,13 @@
 import React, { useCallback } from "react";
 import { FileUp, Loader2 } from "lucide-react";
 import PdfUploader from "@/components/pdf/PdfUploader";
+import { validateStudioPdfSourceFile } from "@/lib/studio-v2/sourceAdmission";
 
 interface StudioV2EntryProps {
   isCreating: boolean;
   error: string | null;
   onUpload: (file: File) => Promise<unknown>;
+  onFilesSelected?: () => void;
 }
 
 // The entry page is intentionally narrow: it collects a real PDF and hands it
@@ -16,6 +18,7 @@ export const StudioV2Entry: React.FC<StudioV2EntryProps> = ({
   isCreating,
   error,
   onUpload,
+  onFilesSelected,
 }) => {
   const onFilesAccepted = useCallback(
     (files: File[]) => {
@@ -52,7 +55,9 @@ export const StudioV2Entry: React.FC<StudioV2EntryProps> = ({
         ) : (
           <PdfUploader
             title="Upload or drop a PDF"
-            description="PDF documents only. Studio will inspect the source before opening it."
+            description="PDF source files up to 50 MiB. Studio will inspect the source before opening it."
+            validateFile={validateStudioPdfSourceFile}
+            onFilesSelected={onFilesSelected}
             accept="application/pdf,.pdf"
             multiple={false}
             bypassEncryptionCheck

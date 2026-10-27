@@ -1,6 +1,7 @@
 import axios, { AxiosError } from "axios";
 import type { EditorLayout } from "@/components/editor-v2/model";
 import { markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
+import { studioPdfSourceIssue, studioSourceErrorMessage } from "./sourceAdmission";
 
 const rawBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
 const normalizedBaseUrl = rawBaseUrl.endsWith("/api")
@@ -505,24 +506,24 @@ export interface CheckoutRequest {
 
 export class StudioApiError extends Error {
   status: number;
-  constructor(message: string, status: number = 500) {
+  readonly code?: string;
+  constructor(message: string, status: number = 500, code?: string) {
     super(message);
     this.name = "StudioApiError";
     this.status = status;
+    this.code = code;
   }
 }
 
 export class StudioJobClientError extends StudioApiError {
   readonly phase: StudioJobFailurePhase;
   readonly category: StudioJobFailureCategory;
-  readonly code?: string;
 
   constructor(message: string, phase: StudioJobFailurePhase, category: StudioJobFailureCategory, status = 500, code?: string) {
-    super(message, status);
+    super(message, status, code);
     this.name = "StudioJobClientError";
     this.phase = phase;
     this.category = category;
-    this.code = code;
   }
 }
 
@@ -560,18 +561,24 @@ export function studioJobErrorInfo(err: unknown, phase: StudioJobFailurePhase) {
   return { category: normalized.category, status: normalized.status, code: normalized.code };
 }
 
-function handleAxiosError(err: unknown): never {
+function assertStudioPdfSource(file: File): void {
+  const issue = studioPdfSourceIssue(file);
+  if (issue) throw new StudioApiError(issue.message, issue.status, issue.code);
+}
+
+function handleAxiosError(err: unknown, sourceAdmission = false): never {
   if (axios.isAxiosError(err)) {
-    const axiosErr = err as AxiosError<{ error?: string }>;
+    const axiosErr = err as AxiosError<{ error?: unknown; code?: unknown }>;
     const status = axiosErr.response?.status || 500;
-    const msg =
-      axiosErr.response?.data?.error ||
-      axiosErr.message ||
-      "Studio API request failed";
-    throw new StudioApiError(msg, status);
+    const data = axiosErr.response?.data;
+    const code = typeof data?.code === "string" ? data.code : axiosErr.code;
+    const msg = studioSourceErrorMessage(code) || (sourceAdmission
+      ? "Studio could not accept this PDF source. Your file may already have been uploaded. Try again or choose another PDF."
+      : typeof data?.error === "string" ? data.error : axiosErr.message || "Studio API request failed");
+    throw new StudioApiError(msg, status, code);
   }
   if (err instanceof Error) {
-    throw new StudioApiError(err.message, 500);
+    throw new StudioApiError(sourceAdmission ? "Studio could not accept this PDF source. Your file may already have been uploaded. Try again or choose another PDF." : err.message, 500);
   }
   throw new StudioApiError("An unexpected error occurred", 500);
 }
@@ -585,11 +592,12 @@ export const studioV2Api = {
       );
       return res.data;
     } catch (err) {
-      return handleAxiosError(err);
+      return handleAxiosError(err, Boolean(req.source_r2_key));
     }
   },
 
   async createSessionFromUpload(file: File): Promise<StudioSessionResponse> {
+    assertStudioPdfSource(file);
     const form = new FormData();
     form.append("file", file, file.name);
     markCloudSubmissionInitiated([file]);
@@ -601,11 +609,12 @@ export const studioV2Api = {
       );
       return res.data;
     } catch (err) {
-      return handleAxiosError(err);
+      return handleAxiosError(err, true);
     }
   },
 
   async uploadAsset(sessionId: string, file: File): Promise<StudioAssetUploadResponse> {
+    assertStudioPdfSource(file);
     const form = new FormData();
     form.append("file", file, file.name);
     markCloudSubmissionInitiated([file]);
@@ -617,7 +626,7 @@ export const studioV2Api = {
       );
       return res.data;
     } catch (err) {
-      return handleAxiosError(err);
+      return handleAxiosError(err, true);
     }
   },
 

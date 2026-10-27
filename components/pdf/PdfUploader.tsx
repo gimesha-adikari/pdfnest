@@ -58,6 +58,8 @@ interface PdfUploaderProps {
     showDropZone?: boolean;
     initialFiles?: File[];
     inputPolicy?: PdfInputPolicy;
+    /** Optional synchronous admission check, before inspection or Cloud consent. */
+    validateFile?: (file: File) => string | null;
 }
 
 interface UploadQueue {
@@ -82,6 +84,7 @@ export default function PdfUploader({
     showDropZone = true,
     initialFiles,
     inputPolicy = "strict",
+    validateFile,
 }: PdfUploaderProps) {
     const [queue, setQueue] = useState<UploadQueue | null>(null);
     const [sessionConsentFiles, setSessionConsentFiles] = useState<File[] | null>(null);
@@ -113,6 +116,16 @@ export default function PdfUploader({
         setPassword("");
         setError(null);
         onFilesSelected?.(files);
+        const validationError = files.map((file) => validateFile?.(file)).find(Boolean);
+        if (validationError) {
+            controller.abort();
+            activeAbortRef.current = null;
+            setIsInspecting(false);
+            setIsPreparing(false);
+            setActivePreparationMode(null);
+            setError(validationError);
+            return;
+        }
 
         const selectedMode = processingMode;
 
@@ -215,7 +228,7 @@ export default function PdfUploader({
             });
         });
         await onFilesAccepted(accepted, { processingMode: selectedMode });
-    }, [bypassEncryptionCheck, inputPolicy, onFilesAccepted, onFilesSelected, processingMode, protectedFileHandling]);
+    }, [bypassEncryptionCheck, inputPolicy, onFilesAccepted, onFilesSelected, processingMode, protectedFileHandling, validateFile]);
 
     useEffect(() => {
         if (!initialFiles?.length || handledInitialFilesRef.current === initialFiles) return;

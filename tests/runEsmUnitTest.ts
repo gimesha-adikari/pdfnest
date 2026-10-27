@@ -7,6 +7,7 @@ const LOOPBACK_ONLY_TESTS = new Set([
     "codeResultOwnership.test.mts",
     "markdownPersistentFeedback.test.mts",
     "markdownResultOwnership.test.mts",
+    "studioSourceSelection.test.mts",
 ]);
 
 // Keep ESM-only DOM dependencies outside tsx's CommonJS loader. esbuild is

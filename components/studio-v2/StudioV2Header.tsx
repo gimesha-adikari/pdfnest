@@ -27,6 +27,7 @@ import { StudioV2SplitSelector } from "./StudioV2SplitSelector";
 import { StudioV2CompressPanel } from "./StudioV2CompressPanel";
 import type { StudioCompressMetrics, StudioCompressStatus } from "./studioV2Compress";
 import Logo from "@/components/ui/Logo";
+import { validateStudioPdfSourceFile } from "@/lib/studio-v2/sourceAdmission";
 import { pageIdsForSelection, parseStudioPageSelection, pruneStudioPageSelection, serializeStudioPageSelection, toggleStudioPageSelection } from "./studioV2PageSelection";
 
 interface StudioV2HeaderProps {
@@ -224,7 +225,13 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
 
   const handleMergeFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
     if (files.length === 0 || !onUploadMergeAsset) return;
+    const validationError = files.map(validateStudioPdfSourceFile).find(Boolean);
+    if (validationError) {
+      setMergeUploadError(validationError);
+      return;
+    }
     await submissionGuard.run("upload:merge", async () => {
       setMergeUploadError(null);
       setIsUploadingMergeAsset(true);
@@ -649,7 +656,7 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
           <div className="rounded border border-[#292D35] bg-[#101216] p-3">
             <div className="mb-1 text-xs font-semibold text-[#D8DCE3]">Merge PDF</div>
             <p className="mb-2 text-[11px] leading-4 text-[#9AA1AD]">
-              Queue whole PDF blocks, including the current document, then apply the ordered merge.
+              Queue whole PDF blocks, including the current document, then apply the ordered merge. PDF source files up to 50 MiB each.
             </p>
             <label htmlFor="studio-secondary-pdf" className="sr-only">
               Secondary PDF
@@ -680,7 +687,7 @@ export const StudioV2Header: React.FC<StudioV2HeaderProps> = ({
             <div className="mt-2 flex justify-end">
               <button type="button" onClick={() => { setMergeQueue(createMergeQueue()); setMergeUploadError(null); if (mergeInputRef.current) mergeInputRef.current.value = ""; }} disabled={mergeQueue.length === 1 || isUploadingMergeAsset || isMaterializing} className="text-[11px] text-[#9AA1AD] disabled:opacity-40">Clear uploads</button>
             </div>
-            {mergeUploadError && <p className="mt-2 text-[11px] text-red-300">{mergeUploadError}</p>}
+            {mergeUploadError && <p role="alert" className="mt-2 text-[11px] text-red-300">{mergeUploadError}</p>}
             <button
               type="button"
               onClick={() => void submitMerge()}
