@@ -5,6 +5,7 @@ import ts from "typescript";
 import React, { act } from "react";
 import { unzipSync } from "fflate";
 import * as folderZipper from "../../lib/folderZipper";
+import * as pdfInputPreparation from "../../lib/security/pdfInputPreparation";
 
 const require = createRequire(import.meta.url);
 const { outputText } = ts.transpileModule(fs.readFileSync("components/tools/RepositoryAnalyzerSourceSelector.tsx", "utf8"), {
@@ -17,6 +18,7 @@ Object.assign(globalThis, { window: dom.window, document: dom.window.document,
     HTMLElement: dom.window.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true });
 globalThis.fetch = async () => { throw new Error("Unexpected network request in fixture"); };
 let uploads = 0, reads = 0, secretReads = 0, sessions = 0;
+let stagedFile: File | null = null;
 const alerts: unknown[] = [];
 globalThis.alert = (message: unknown) => { alerts.push(message); };
 let release!: () => void;
@@ -26,9 +28,10 @@ const complete = new Promise<void>((resolve) => { uploaded = resolve; });
 const mocks: Record<string, unknown> = {
     "next/navigation": { useRouter: () => ({ push() {} }) },
     "lucide-react": new Proxy({}, { get: () => () => null }),
-    "@/app/(site)/[toolId]/ClientToolLayout": { useSharedTool: () => ({ toolId: "repository-analyzer", setFile() {} }) },
+    "@/app/(site)/[toolId]/ClientToolLayout": { useSharedTool: () => ({ toolId: "repository-analyzer", setFile(f: File | null) { stagedFile = f; } }) },
     "@/context/RepositoryAnalyzerContext": { useRepositoryAnalyzer: () => ({ reset() {}, createZipSession() { sessions++; }, createGitSession() {} }) },
     "@/lib/folderZipper": folderZipper,
+    "@/lib/security/pdfInputPreparation": pdfInputPreparation,
     "@/lib/analyzerUploader": { uploadArchiveToStorage: async (blob: Blob) => {
         uploads++;
         assert.equal(reads, 1); assert.equal(secretReads, 0);
@@ -38,7 +41,7 @@ const mocks: Record<string, unknown> = {
     } },
 };
 const loaded = { exports: {} };
-new Function("require", "module", "exports", outputText)((id: string) => id in mocks ? mocks[id] : require(id), loaded, loaded.exports);
+new Function("require", "module", "exports", outputText)((id: string) => id === "@/lib/security/pdfInputPreparation" ? pdfInputPreparation : id in mocks ? mocks[id] : require(id), loaded, loaded.exports);
 const Selector = (loaded.exports as { default: React.ComponentType }).default;
 const { createRoot } = await import("react-dom/client");
 const root = createRoot(document.getElementById("root")!);
@@ -62,6 +65,16 @@ await act(async () => button("Continue to Scoping").click());
 assert.equal(uploads, 0, "no upload begins while bundling is incomplete");
 await act(async () => { release(); await complete; });
 assert.equal(uploads, 1); assert.equal(sessions, 1); assert.equal(secretReads, 0);
+assert.ok(stagedFile, "synthetic placeholder file is staged");
+assert.equal((stagedFile as File).type, "application/x-repository");
+assert.equal((stagedFile as File).size, 0);
+const prep = pdfInputPreparation.getPdfInputPreparation(stagedFile);
+assert.equal(prep?.sourceProtected, false);
+assert.equal(prep?.bytesState, "plain");
+assert.equal(prep?.preparedOn, "device");
+assert.equal(prep?.derivedFromProtectedInput, false);
+assert.equal(prep?.transferredFromTool, false);
+assert.equal(pdfInputPreparation.isSyntheticRepositoryPlaceholder(stagedFile), true);
 await select([secret]);
 await act(async () => button("Continue to Scoping").click());
 assert.equal(uploads, 1, "no upload or fallback on filtering failure");

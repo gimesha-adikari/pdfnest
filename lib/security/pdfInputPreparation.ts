@@ -278,3 +278,50 @@ export function hasCloudSubmissionInitiated(files: File | File[] | null | undefi
         );
     });
 }
+
+/**
+ * Confirms whether a file is an authorized synthetic placeholder for URL capture,
+ * requiring positive, explicit clean preparation metadata from approved creation paths,
+ * zero byte content, no protected lineage, no cross-tool transfer, and
+ * valid URL placeholder identifiers. Missing, unchecked, real, or transferred files return false.
+ */
+export function isSyntheticUrlPlaceholder(file: File | null | undefined): boolean {
+    if (!file) return false;
+    if (file.size !== 0) return false;
+
+    const prep = getPdfInputPreparation(file);
+    if (!prep) return false;
+    if (prep.sourceProtected !== false) return false;
+    if (prep.bytesState !== "plain") return false;
+    if (prep.preparedOn !== "device") return false;
+    if (prep.derivedFromProtectedInput === true) return false;
+    if (prep.transferredFromTool === true) return false;
+
+    const targetUrl = (file as { targetUrl?: unknown }).targetUrl;
+    const hasTargetUrl = typeof targetUrl === "string" && targetUrl.trim().length > 0;
+    const isNamedPlaceholder = file.name === "placeholder.pdf" || file.name === "url-capture.pdf";
+
+    return hasTargetUrl || isNamedPlaceholder;
+}
+
+/**
+ * Confirms whether a file is an authorized synthetic placeholder for repository analysis,
+ * requiring positive, explicit clean preparation metadata from approved creation paths,
+ * zero byte content, repository mime type, and no protected or transferred lineage.
+ * Missing, unchecked, real, or transferred files return false.
+ */
+export function isSyntheticRepositoryPlaceholder(file: File | null | undefined): boolean {
+    if (!file) return false;
+    if (file.size !== 0) return false;
+    if (file.type !== "application/x-repository") return false;
+
+    const prep = getPdfInputPreparation(file);
+    if (!prep) return false;
+    if (prep.sourceProtected !== false) return false;
+    if (prep.bytesState !== "plain") return false;
+    if (prep.preparedOn !== "device") return false;
+    if (prep.derivedFromProtectedInput === true) return false;
+    if (prep.transferredFromTool === true) return false;
+
+    return true;
+}

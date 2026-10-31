@@ -8,6 +8,8 @@ import {
     getPdfInputPreparation,
     hasCloudSubmissionInitiated,
     isCloudProcessingAuthorized,
+    isSyntheticRepositoryPlaceholder,
+    isSyntheticUrlPlaceholder,
     markCloudSubmissionInitiated,
     markPdfInputPreparation,
     orderPreparedPdfInputs,
@@ -240,5 +242,174 @@ assert.throws(
     /explicit Cloud processing authorization/i,
     "result provenance requires fresh consent for the destination route"
 );
+
+// Security regression tests: synthetic URL placeholder and repository placeholder validation
+// 1. Synthetic URL placeholder validations
+const missingMetaUrlFile = new File([], "url-capture.pdf", { type: "application/pdf" });
+Object.assign(missingMetaUrlFile, { targetUrl: "https://example.com/document" });
+assert.equal(isSyntheticUrlPlaceholder(missingMetaUrlFile), false, "missing metadata must fail closed for URL capture");
+
+const uncheckedMetaUrlFile = new File([], "url-capture.pdf", { type: "application/pdf" });
+Object.assign(uncheckedMetaUrlFile, { targetUrl: "https://example.com/document" });
+markPdfInputPreparation(uncheckedMetaUrlFile, {
+    sourceProtected: "unchecked",
+    bytesState: "unchecked",
+    preparedOn: "none",
+    processingMode: "auto",
+    cloudSubmissionInitiated: false,
+});
+assert.equal(isSyntheticUrlPlaceholder(uncheckedMetaUrlFile), false, "unchecked metadata must fail closed for URL capture");
+
+const cleanUrlFile = new File([], "url-capture.pdf", { type: "application/pdf" });
+Object.assign(cleanUrlFile, { targetUrl: "https://example.com/document" });
+markPdfInputPreparation(cleanUrlFile, {
+    sourceProtected: false,
+    bytesState: "plain",
+    preparedOn: "device",
+    processingMode: "cloud",
+    cloudSubmissionInitiated: false,
+    derivedFromProtectedInput: false,
+    transferredFromTool: false,
+});
+assert.equal(isSyntheticUrlPlaceholder(cleanUrlFile), true, "clean synthetic URL placeholder is recognized");
+
+const missingMetaPlaceholder = new File([], "placeholder.pdf", { type: "application/pdf" });
+assert.equal(isSyntheticUrlPlaceholder(missingMetaPlaceholder), false, "missing metadata must fail closed for placeholder.pdf");
+
+const cleanPlaceholderFile = new File([], "placeholder.pdf", { type: "application/pdf" });
+markPdfInputPreparation(cleanPlaceholderFile, {
+    sourceProtected: false,
+    bytesState: "plain",
+    preparedOn: "device",
+    processingMode: "cloud",
+    cloudSubmissionInitiated: false,
+    derivedFromProtectedInput: false,
+    transferredFromTool: false,
+});
+assert.equal(isSyntheticUrlPlaceholder(cleanPlaceholderFile), true, "clean named placeholder.pdf with explicit metadata is recognized");
+
+const nonZeroUrlFile = new File(["%PDF-1.7 actual content"], "url-capture.pdf", { type: "application/pdf" });
+Object.assign(nonZeroUrlFile, { targetUrl: "https://example.com/document" });
+markPdfInputPreparation(nonZeroUrlFile, {
+    sourceProtected: false,
+    bytesState: "plain",
+    preparedOn: "device",
+    processingMode: "cloud",
+    cloudSubmissionInitiated: false,
+});
+assert.equal(isSyntheticUrlPlaceholder(nonZeroUrlFile), false, "non-zero byte PDF must never pass as synthetic URL placeholder");
+
+const protectedUrlFile = new File([], "url-capture.pdf", { type: "application/pdf" });
+Object.assign(protectedUrlFile, { targetUrl: "https://example.com/document" });
+markPdfInputPreparation(protectedUrlFile, {
+    sourceProtected: true,
+    bytesState: "plain",
+    preparedOn: "device",
+    processingMode: "cloud",
+    cloudSubmissionInitiated: false,
+});
+assert.equal(isSyntheticUrlPlaceholder(protectedUrlFile), false, "protected input cannot be synthetic URL placeholder");
+
+const derivedUrlFile = new File([], "url-capture.pdf", { type: "application/pdf" });
+Object.assign(derivedUrlFile, { targetUrl: "https://example.com/document" });
+markPdfInputPreparation(derivedUrlFile, {
+    sourceProtected: false,
+    bytesState: "plain",
+    preparedOn: "device",
+    processingMode: "cloud",
+    cloudSubmissionInitiated: false,
+    derivedFromProtectedInput: true,
+});
+assert.equal(isSyntheticUrlPlaceholder(derivedUrlFile), false, "derived protected input cannot be synthetic URL placeholder");
+
+const transferredUrlFile = new File([], "url-capture.pdf", { type: "application/pdf" });
+Object.assign(transferredUrlFile, { targetUrl: "https://example.com/document" });
+markPdfInputPreparation(transferredUrlFile, {
+    sourceProtected: false,
+    bytesState: "plain",
+    preparedOn: "device",
+    processingMode: "cloud",
+    cloudSubmissionInitiated: false,
+    transferredFromTool: true,
+});
+assert.equal(isSyntheticUrlPlaceholder(transferredUrlFile), false, "cross-tool transfer cannot be synthetic URL placeholder");
+
+// 2. Synthetic Repository placeholder validations
+const missingMetaRepoFile = new File([], "my-repo", { type: "application/x-repository" });
+assert.equal(isSyntheticRepositoryPlaceholder(missingMetaRepoFile), false, "missing metadata must fail closed for repo placeholder");
+
+const uncheckedMetaRepoFile = new File([], "my-repo", { type: "application/x-repository" });
+markPdfInputPreparation(uncheckedMetaRepoFile, {
+    sourceProtected: "unchecked",
+    bytesState: "unchecked",
+    preparedOn: "none",
+    processingMode: "auto",
+    cloudSubmissionInitiated: false,
+});
+assert.equal(isSyntheticRepositoryPlaceholder(uncheckedMetaRepoFile), false, "unchecked metadata must fail closed for repo placeholder");
+
+const cleanRepoFile = new File([], "my-repo", { type: "application/x-repository" });
+markPdfInputPreparation(cleanRepoFile, {
+    sourceProtected: false,
+    bytesState: "plain",
+    preparedOn: "device",
+    processingMode: "cloud",
+    cloudSubmissionInitiated: false,
+    derivedFromProtectedInput: false,
+    transferredFromTool: false,
+});
+assert.equal(isSyntheticRepositoryPlaceholder(cleanRepoFile), true, "clean synthetic repo placeholder is recognized");
+
+const nonZeroRepoFile = new File(["ZIP content"], "my-repo", { type: "application/x-repository" });
+markPdfInputPreparation(nonZeroRepoFile, {
+    sourceProtected: false,
+    bytesState: "plain",
+    preparedOn: "device",
+    processingMode: "cloud",
+    cloudSubmissionInitiated: false,
+});
+assert.equal(isSyntheticRepositoryPlaceholder(nonZeroRepoFile), false, "non-zero repo file cannot be synthetic placeholder");
+
+const wrongTypeRepoFile = new File([], "my-repo.pdf", { type: "application/pdf" });
+markPdfInputPreparation(wrongTypeRepoFile, {
+    sourceProtected: false,
+    bytesState: "plain",
+    preparedOn: "device",
+    processingMode: "cloud",
+    cloudSubmissionInitiated: false,
+});
+assert.equal(isSyntheticRepositoryPlaceholder(wrongTypeRepoFile), false, "PDF MIME type cannot be synthetic repository placeholder");
+
+const protectedRepoFile = new File([], "my-repo", { type: "application/x-repository" });
+markPdfInputPreparation(protectedRepoFile, {
+    sourceProtected: true,
+    bytesState: "plain",
+    preparedOn: "device",
+    processingMode: "cloud",
+    cloudSubmissionInitiated: false,
+});
+assert.equal(isSyntheticRepositoryPlaceholder(protectedRepoFile), false, "protected input cannot be synthetic repo placeholder");
+
+const derivedRepoFile = new File([], "my-repo", { type: "application/x-repository" });
+markPdfInputPreparation(derivedRepoFile, {
+    sourceProtected: false,
+    bytesState: "plain",
+    preparedOn: "device",
+    processingMode: "cloud",
+    cloudSubmissionInitiated: false,
+    derivedFromProtectedInput: true,
+});
+assert.equal(isSyntheticRepositoryPlaceholder(derivedRepoFile), false, "derived protected input cannot be synthetic repo placeholder");
+
+const transferredRepoFile = new File([], "my-repo", { type: "application/x-repository" });
+markPdfInputPreparation(transferredRepoFile, {
+    sourceProtected: false,
+    bytesState: "plain",
+    preparedOn: "device",
+    processingMode: "cloud",
+    cloudSubmissionInitiated: false,
+    transferredFromTool: true,
+});
+assert.equal(isSyntheticRepositoryPlaceholder(transferredRepoFile), false, "transferred file cannot be synthetic repo placeholder");
 
 console.log("PASS: transient PDF preparation mode, protection state, password scoping, and Cloud provenance");

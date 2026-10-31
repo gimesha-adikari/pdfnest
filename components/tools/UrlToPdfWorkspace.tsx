@@ -12,6 +12,7 @@ import { PdfProgressTracker } from "@/components/pdf/PdfProgressTracker";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { useAsyncTask } from "@/hooks/useAsyncTask";
 import { isPublicHttpUrl } from "@/lib/safeUrl";
+import { markPdfInputPreparation } from "@/lib/security/pdfInputPreparation";
 
 export default function UrlToPdfWorkspace() {
     const { requireAuth } = useAuth();
@@ -36,7 +37,17 @@ export default function UrlToPdfWorkspace() {
                 setUrl(ingestedUrl);
             }
         } else {
-            setFile(new File([], "placeholder.pdf", { type: "application/pdf" }));
+            const placeholder = new File([], "placeholder.pdf", { type: "application/pdf" });
+            markPdfInputPreparation(placeholder, {
+                sourceProtected: false,
+                bytesState: "plain",
+                preparedOn: "device",
+                processingMode: "cloud",
+                cloudSubmissionInitiated: false,
+                derivedFromProtectedInput: false,
+                transferredFromTool: false,
+            });
+            setFile(placeholder);
         }
     }, [file, setFile, url]);
 
