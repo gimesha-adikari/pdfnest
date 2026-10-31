@@ -281,16 +281,21 @@ export function hasCloudSubmissionInitiated(files: File | File[] | null | undefi
 
 /**
  * Confirms whether a file is an authorized synthetic placeholder for URL capture,
- * verifying zero byte content, no protected lineage, no cross-tool transfer, and
- * valid URL placeholder identifiers. Real PDFs and derived/transferred files return false.
+ * requiring positive, explicit clean preparation metadata from approved creation paths,
+ * zero byte content, no protected lineage, no cross-tool transfer, and
+ * valid URL placeholder identifiers. Missing, unchecked, real, or transferred files return false.
  */
 export function isSyntheticUrlPlaceholder(file: File | null | undefined): boolean {
     if (!file) return false;
     if (file.size !== 0) return false;
+
     const prep = getPdfInputPreparation(file);
-    if (prep?.derivedFromProtectedInput === true) return false;
-    if (prep?.sourceProtected === true) return false;
-    if (prep?.transferredFromTool === true) return false;
+    if (!prep) return false;
+    if (prep.sourceProtected !== false) return false;
+    if (prep.bytesState !== "plain") return false;
+    if (prep.preparedOn !== "device") return false;
+    if (prep.derivedFromProtectedInput === true) return false;
+    if (prep.transferredFromTool === true) return false;
 
     const targetUrl = (file as { targetUrl?: unknown }).targetUrl;
     const hasTargetUrl = typeof targetUrl === "string" && targetUrl.trim().length > 0;
@@ -301,15 +306,22 @@ export function isSyntheticUrlPlaceholder(file: File | null | undefined): boolea
 
 /**
  * Confirms whether a file is an authorized synthetic placeholder for repository analysis,
- * verifying zero byte content, repository mime type, and no protected or transferred lineage.
+ * requiring positive, explicit clean preparation metadata from approved creation paths,
+ * zero byte content, repository mime type, and no protected or transferred lineage.
+ * Missing, unchecked, real, or transferred files return false.
  */
 export function isSyntheticRepositoryPlaceholder(file: File | null | undefined): boolean {
     if (!file) return false;
     if (file.size !== 0) return false;
-    const prep = getPdfInputPreparation(file);
-    if (prep?.derivedFromProtectedInput === true) return false;
-    if (prep?.sourceProtected === true) return false;
-    if (prep?.transferredFromTool === true) return false;
+    if (file.type !== "application/x-repository") return false;
 
-    return file.type === "application/x-repository";
+    const prep = getPdfInputPreparation(file);
+    if (!prep) return false;
+    if (prep.sourceProtected !== false) return false;
+    if (prep.bytesState !== "plain") return false;
+    if (prep.preparedOn !== "device") return false;
+    if (prep.derivedFromProtectedInput === true) return false;
+    if (prep.transferredFromTool === true) return false;
+
+    return true;
 }
