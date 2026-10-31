@@ -56,6 +56,8 @@ import {
     authorizeCloudProcessing,
     hasCloudSubmissionInitiated,
     isCloudProcessingAuthorized,
+    isSyntheticRepositoryPlaceholder,
+    isSyntheticUrlPlaceholder,
     requiresCloudProcessingAuthorization,
 } from "@/lib/security/pdfInputPreparation";
 
@@ -99,7 +101,12 @@ export default function SharedWorkspacePage() {
         authorizedFile === file || isCloudProcessingAuthorized(file, toolId)
     );
 
+    const isCleanSyntheticPlaceholder =
+        (toolId === "url-to-pdf" && isSyntheticUrlPlaceholder(file)) ||
+        (toolId === "repository-analyzer" && isSyntheticRepositoryPlaceholder(file));
+
     if (
+        !isCleanSyntheticPlaceholder &&
         file &&
         protectedPdfPolicy === "unqualified" &&
         inputRequiresAuthorization

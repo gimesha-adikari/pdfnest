@@ -278,3 +278,38 @@ export function hasCloudSubmissionInitiated(files: File | File[] | null | undefi
         );
     });
 }
+
+/**
+ * Confirms whether a file is an authorized synthetic placeholder for URL capture,
+ * verifying zero byte content, no protected lineage, no cross-tool transfer, and
+ * valid URL placeholder identifiers. Real PDFs and derived/transferred files return false.
+ */
+export function isSyntheticUrlPlaceholder(file: File | null | undefined): boolean {
+    if (!file) return false;
+    if (file.size !== 0) return false;
+    const prep = getPdfInputPreparation(file);
+    if (prep?.derivedFromProtectedInput === true) return false;
+    if (prep?.sourceProtected === true) return false;
+    if (prep?.transferredFromTool === true) return false;
+
+    const targetUrl = (file as { targetUrl?: unknown }).targetUrl;
+    const hasTargetUrl = typeof targetUrl === "string" && targetUrl.trim().length > 0;
+    const isNamedPlaceholder = file.name === "placeholder.pdf" || file.name === "url-capture.pdf";
+
+    return hasTargetUrl || isNamedPlaceholder;
+}
+
+/**
+ * Confirms whether a file is an authorized synthetic placeholder for repository analysis,
+ * verifying zero byte content, repository mime type, and no protected or transferred lineage.
+ */
+export function isSyntheticRepositoryPlaceholder(file: File | null | undefined): boolean {
+    if (!file) return false;
+    if (file.size !== 0) return false;
+    const prep = getPdfInputPreparation(file);
+    if (prep?.derivedFromProtectedInput === true) return false;
+    if (prep?.sourceProtected === true) return false;
+    if (prep?.transferredFromTool === true) return false;
+
+    return file.type === "application/x-repository";
+}
