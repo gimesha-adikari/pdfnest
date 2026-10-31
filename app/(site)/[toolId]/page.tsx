@@ -123,11 +123,20 @@ export default function SharedUploadPage() {
         e.preventDefault();
         if (!urlInput.trim()) return;
 
-        const virtualFile = new File([], "url_placeholder.pdf", {
+        const virtualFile = new File([], "url-capture.pdf", {
             type: "application/pdf",
         }) as ExtendedFile;
 
         virtualFile.targetUrl = urlInput.trim();
+        markPdfInputPreparation(virtualFile, {
+            sourceProtected: false,
+            bytesState: "plain",
+            preparedOn: "device",
+            processingMode: "cloud",
+            cloudSubmissionInitiated: false,
+            derivedFromProtectedInput: false,
+            transferredFromTool: false,
+        });
 
         handledTransferRef.current = true;
         setFile(virtualFile);

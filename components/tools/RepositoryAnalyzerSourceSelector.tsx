@@ -16,6 +16,7 @@ import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import { useRepositoryAnalyzer } from "@/context/RepositoryAnalyzerContext";
 import { uploadArchiveToStorage } from "@/lib/analyzerUploader";
 import { bundleDirectoryToZip } from "@/lib/folderZipper";
+import { markPdfInputPreparation } from "@/lib/security/pdfInputPreparation";
 
 type SourceTab = "git" | "local" | "zip";
 
@@ -109,6 +110,15 @@ export default function RepositoryAnalyzerSourceSelector() {
             const virtualFile = new File([], repoName, {
                 type: "application/x-repository",
             });
+            markPdfInputPreparation(virtualFile, {
+                sourceProtected: false,
+                bytesState: "plain",
+                preparedOn: "device",
+                processingMode: "cloud",
+                cloudSubmissionInitiated: false,
+                derivedFromProtectedInput: false,
+                transferredFromTool: false,
+            });
             setFile(virtualFile);
             router.push(`/${toolId}/workspace`);
         } catch (err: unknown) {
@@ -192,6 +202,15 @@ export default function RepositoryAnalyzerSourceSelector() {
             const virtualFile = new File([], uploadRes.repositoryName, {
                 type: "application/x-repository",
             });
+            markPdfInputPreparation(virtualFile, {
+                sourceProtected: false,
+                bytesState: "plain",
+                preparedOn: "device",
+                processingMode: "cloud",
+                cloudSubmissionInitiated: false,
+                derivedFromProtectedInput: false,
+                transferredFromTool: false,
+            });
             setFile(virtualFile);
             router.push(`/${toolId}/workspace`);
         } catch (err: unknown) {
@@ -227,6 +246,15 @@ export default function RepositoryAnalyzerSourceSelector() {
 
             const virtualFile = new File([], uploadRes.repositoryName, {
                 type: "application/x-repository",
+            });
+            markPdfInputPreparation(virtualFile, {
+                sourceProtected: false,
+                bytesState: "plain",
+                preparedOn: "device",
+                processingMode: "cloud",
+                cloudSubmissionInitiated: false,
+                derivedFromProtectedInput: false,
+                transferredFromTool: false,
             });
             setFile(virtualFile);
             router.push(`/${toolId}/workspace`);
