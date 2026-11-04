@@ -15,7 +15,7 @@ import {
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import { useRepositoryAnalyzer } from "@/context/RepositoryAnalyzerContext";
 import { uploadArchiveToStorage } from "@/lib/analyzerUploader";
-import { bundleDirectoryToZip } from "@/lib/folderZipper";
+import { bundleDirectoryToZip, sanitizeZipArchive } from "@/lib/folderZipper";
 import { markPdfInputPreparation } from "@/lib/security/pdfInputPreparation";
 
 type SourceTab = "git" | "local" | "zip";
@@ -44,6 +44,10 @@ export default function RepositoryAnalyzerSourceSelector() {
     // 3. ZIP File State
     const zipInputRef = useRef<HTMLInputElement | null>(null);
     const [selectedZip, setSelectedZip] = useState<File | null>(null);
+    const uploadAbortRef = useRef<AbortController | null>(null);
+    const [additionalExclusions, setAdditionalExclusions] = useState("");
+
+    const exclusionPatterns = () => additionalExclusions.split(/\r?\n/).map((pattern) => pattern.trim()).filter(Boolean);
 
     // Format file sizes
     const formatFileSize = (bytes: number): string => {
@@ -175,6 +179,8 @@ export default function RepositoryAnalyzerSourceSelector() {
 
     const handleLocalSubmit = async () => {
         if (!selectedFolder) return;
+        const controller = new AbortController();
+        uploadAbortRef.current = controller;
         setIsSubmitting(true);
         setBundlingProgress("Preparing directory files...");
 
@@ -184,7 +190,8 @@ export default function RepositoryAnalyzerSourceSelector() {
                 selectedFolder.files,
                 (percent, currentFile) => {
                     setBundlingProgress(`${currentFile} (${percent}%)`);
-                }
+                },
+                { excludedPaths: exclusionPatterns(), signal: controller.signal },
             );
 
             setBundlingProgress("Uploading repository archive...");
@@ -193,8 +200,12 @@ export default function RepositoryAnalyzerSourceSelector() {
             const uploadRes = await uploadArchiveToStorage(
                 zipBlob,
                 `${folderName}.zip`,
-                folderName
+                folderName,
+                controller.signal,
             );
+
+            uploadAbortRef.current = null;
+            setBundlingProgress("Creating Analyzer session...");
 
             // 3. Create Analyzer Session with verified canonical storageKey
             await createZipSession(uploadRes.storageKey, uploadRes.repositoryName);
@@ -214,9 +225,12 @@ export default function RepositoryAnalyzerSourceSelector() {
             setFile(virtualFile);
             router.push(`/${toolId}/workspace`);
         } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : "Failed to bundle or upload folder.";
-            alert(msg);
+            if (!(err instanceof DOMException && err.name === "AbortError")) {
+                const msg = err instanceof Error ? err.message : "Failed to bundle or upload folder.";
+                alert(msg);
+            }
         } finally {
+            if (uploadAbortRef.current === controller) uploadAbortRef.current = null;
             setIsSubmitting(false);
             setBundlingProgress(null);
         }
@@ -234,12 +248,23 @@ export default function RepositoryAnalyzerSourceSelector() {
 
     const handleZipSubmit = async () => {
         if (!selectedZip) return;
+        const controller = new AbortController();
+        uploadAbortRef.current = controller;
         setIsSubmitting(true);
         const cleanName = selectedZip.name.replace(/\.zip$/i, "") || "repository";
 
         try {
-            // 1. Upload ZIP atomically to authoritative storage
-            const uploadRes = await uploadArchiveToStorage(selectedZip, selectedZip.name, cleanName);
+            setBundlingProgress("Filtering repository archive locally...");
+            const sanitized = await sanitizeZipArchive(selectedZip, {
+                excludedPaths: exclusionPatterns(),
+                signal: controller.signal,
+            });
+            if (controller.signal.aborted) throw new DOMException("Repository upload cancelled", "AbortError");
+            setBundlingProgress("Uploading filtered repository archive...");
+            const uploadRes = await uploadArchiveToStorage(sanitized.zipBlob, `${cleanName}.zip`, cleanName, controller.signal);
+
+            uploadAbortRef.current = null;
+            setBundlingProgress("Creating Analyzer session...");
 
             // 2. Create Session with verified canonical storageKey
             await createZipSession(uploadRes.storageKey, uploadRes.repositoryName);
@@ -259,10 +284,14 @@ export default function RepositoryAnalyzerSourceSelector() {
             setFile(virtualFile);
             router.push(`/${toolId}/workspace`);
         } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : "Failed to upload or initialize ZIP session.";
-            alert(msg);
+            if (!(err instanceof DOMException && err.name === "AbortError")) {
+                const msg = err instanceof Error ? err.message : "Failed to filter, upload or initialize ZIP session.";
+                alert(msg);
+            }
         } finally {
+            if (uploadAbortRef.current === controller) uploadAbortRef.current = null;
             setIsSubmitting(false);
+            setBundlingProgress(null);
         }
     };
 
@@ -398,7 +427,12 @@ export default function RepositoryAnalyzerSourceSelector() {
                 {/* Tab 2: Local Directory */}
                 {activeTab === "local" && (
                     <div className="mt-6 space-y-5">
-                        <p className="text-xs text-[color:var(--muted-foreground)]">The filtered repository archive is uploaded for cloud processing. Review source files for embedded secrets before continuing.</p>
+                        <p className="text-xs text-[color:var(--muted-foreground)]">The selected folder is filtered on this device before its archive is uploaded for cloud processing. Review source files for embedded secrets before continuing.</p>
+                        <div className="space-y-2">
+                            <label htmlFor="repository-additional-exclusions" className="block text-xs font-semibold text-[color:var(--foreground)]">Additional paths to exclude</label>
+                            <textarea id="repository-additional-exclusions" value={additionalExclusions} onChange={(event) => setAdditionalExclusions(event.target.value)} disabled={isSubmitting} rows={3} placeholder="private-data/&#10;*.local" className="w-full rounded-lg border border-[color:var(--border)] bg-[var(--background)] p-3 font-mono text-xs text-[color:var(--foreground)]" />
+                            <p className="text-xs text-[color:var(--muted-foreground)]">One relative ignore pattern per line. Repository .gitignore files, nested rules, and these exclusions are applied before file contents are added.</p>
+                        </div>
                         <input
                             ref={folderInputRef}
                             type="file"
@@ -451,7 +485,8 @@ export default function RepositoryAnalyzerSourceSelector() {
                                     </button>
                                 </div>
 
-                                <div className="flex justify-end pt-2">
+                                <div className="flex justify-end gap-2 pt-2">
+                                    {isSubmitting && <button type="button" onClick={() => uploadAbortRef.current?.abort()} className="rounded-xl border border-[color:var(--border)] px-4 py-3 text-sm font-semibold text-[color:var(--foreground)]">Cancel</button>}
                                     <button
                                         type="button"
                                         onClick={handleLocalSubmit}
@@ -479,7 +514,12 @@ export default function RepositoryAnalyzerSourceSelector() {
                 {/* Tab 3: ZIP Archive */}
                 {activeTab === "zip" && (
                     <div className="mt-6 space-y-5">
-                        <p className="text-xs text-[color:var(--muted-foreground)]">Your ZIP is uploaded as provided for cloud processing. It is not sanitized in your browser. Remove credentials and sensitive files before uploading.</p>
+                        <p className="text-xs text-[color:var(--muted-foreground)]">The ZIP is inspected and filtered on this device before its sanitized archive is uploaded for cloud processing. Excluded file contents are not decompressed into the outgoing archive.</p>
+                        <div className="space-y-2">
+                            <label htmlFor="repository-additional-exclusions" className="block text-xs font-semibold text-[color:var(--foreground)]">Additional paths to exclude</label>
+                            <textarea id="repository-additional-exclusions" value={additionalExclusions} onChange={(event) => setAdditionalExclusions(event.target.value)} disabled={isSubmitting} rows={3} placeholder="private-data/&#10;*.local" className="w-full rounded-lg border border-[color:var(--border)] bg-[var(--background)] p-3 font-mono text-xs text-[color:var(--foreground)]" />
+                            <p className="text-xs text-[color:var(--muted-foreground)]">One relative ignore pattern per line. Repository .gitignore files, nested rules, and these exclusions are applied before file contents are added.</p>
+                        </div>
                         <input
                             ref={zipInputRef}
                             type="file"
@@ -500,8 +540,8 @@ export default function RepositoryAnalyzerSourceSelector() {
                                 <h3 className="mt-4 text-sm font-semibold text-[color:var(--foreground)]">
                                     Select repository ZIP archive
                                 </h3>
-                                <p className="mt-1 text-xs text-[color:var(--muted-foreground)]">
-                                    Max archive size: 250 MB
+                                    <p className="mt-1 text-xs text-[color:var(--muted-foreground)]">
+                                        Max compressed archive size: 250 MB; excluded members are filtered locally.
                                 </p>
                             </button>
                         ) : (
@@ -529,7 +569,8 @@ export default function RepositoryAnalyzerSourceSelector() {
                                     </button>
                                 </div>
 
-                                <div className="flex justify-end pt-2">
+                                <div className="flex justify-end gap-2 pt-2">
+                                    {isSubmitting && <button type="button" onClick={() => uploadAbortRef.current?.abort()} className="rounded-xl border border-[color:var(--border)] px-4 py-3 text-sm font-semibold text-[color:var(--foreground)]">Cancel</button>}
                                     <button
                                         type="button"
                                         onClick={handleZipSubmit}

@@ -25,8 +25,10 @@ function getBackendBaseUrl(): string {
 export async function uploadArchiveToStorage(
     file: File | Blob,
     fileName: string,
-    repositoryName?: string
+    repositoryName?: string,
+    signal?: AbortSignal,
 ): Promise<AnalyzerUploadResult> {
+    if (signal?.aborted) throw new DOMException("Repository upload cancelled", "AbortError");
     const safeName = fileName.endsWith(".zip") ? fileName : `${fileName}.zip`;
     const cleanRepoName = repositoryName || safeName.replace(/\.zip$/i, "") || "repository";
 
@@ -42,10 +44,11 @@ export async function uploadArchiveToStorage(
         const presigned = await requestR2PresignedUploads([fileLike], {
             purpose: "repository_analyzer",
             prefix: "repositories/raw",
+            signal,
         });
 
         if (presigned && presigned[0]?.uploadUrl && presigned[0]?.key) {
-            await uploadFileToPresignedUrl(uploadableFile, presigned[0]);
+            await uploadFileToPresignedUrl(uploadableFile, presigned[0], signal);
             return {
                 storageKey: presigned[0].key,
                 fileName: safeName,
@@ -54,6 +57,7 @@ export async function uploadArchiveToStorage(
             };
         }
     } catch {
+        if (signal?.aborted) throw new DOMException("Repository upload cancelled", "AbortError");
         // R2 not configured or presign failed -> fall through to direct multipart backend upload
     }
 
@@ -71,6 +75,7 @@ export async function uploadArchiveToStorage(
             method: "POST",
             credentials: "include",
             body: formData,
+            signal,
         });
     } catch (networkErr: unknown) {
         const msg = networkErr instanceof Error ? networkErr.message : "Network error";
