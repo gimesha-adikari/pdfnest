@@ -33,7 +33,7 @@ export default function SharedUploadPage() {
         file,
         isLoadingConfig,
     } = useSharedTool();
-    const { isExecutable } = useBackendOnlyToolAvailability();
+    const { isExecutable, unavailableService } = useBackendOnlyToolAvailability();
 
     const { pendingTransfer, consumeTransfer } = useWorkflow();
     const router = useRouter();
@@ -166,7 +166,7 @@ export default function SharedUploadPage() {
 
             <div className="mx-auto max-w-5xl px-4 py-8">
                 {!isExecutable ? (
-                    <BackendUnavailableNotice toolName={toolConfig.name} />
+                    <BackendUnavailableNotice toolName={toolConfig.name} availabilityService={unavailableService ?? "backend"} />
                 ) : toolId === "repository-analyzer" ? (
                     <RepositoryAnalyzerSourceSelector />
                 ) : toolId === "url-to-pdf" ? (

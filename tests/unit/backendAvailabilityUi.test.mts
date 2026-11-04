@@ -26,6 +26,17 @@ function deferred() {
 const requests: Array<{ url: string; request: ReturnType<typeof deferred> }> = [];
 globalThis.fetch = async (input) => {
     const url = String(input);
+    if (url.endsWith("/api/health/worker")) {
+        return new Response(JSON.stringify({
+            status: "ready",
+            capabilities: {
+                document_processing: true,
+                ocr: true,
+                office_to_pdf: true,
+                pdf_to_office: true,
+            },
+        }), { status: 200 });
+    }
     assert.match(url, /^http:\/\/127\.0\.0\.1:9\/api\/(health|ready)$/, "no document or hosted request permitted");
     const request = deferred(); requests.push({ url, request }); return request.promise;
 };
@@ -42,10 +53,15 @@ const health = load<typeof import("../../context/BackendHealthContext")>("contex
     "@/lib/health/backendHealth": tracker, "next/navigation": { usePathname: () => "/pdf-to-word" },
 });
 const guard = load<{
-    BackendOnlyToolGuard: React.ComponentType<React.PropsWithChildren<{ toolPolicy?: import("../../lib/execution/types").ToolPolicy }>>;
+    BackendOnlyToolGuard: React.ComponentType<React.PropsWithChildren<{ toolPolicy?: import("../../lib/execution/types").ToolPolicy; toolId: string }>>;
     useBackendOnlyToolAvailability: typeof import("../../components/pdf/BackendOnlyToolGuard").useBackendOnlyToolAvailability;
 }>("components/pdf/BackendOnlyToolGuard.tsx", {
     "@/context/BackendHealthContext": health,
+    "@/lib/health/workerAvailability": {
+        requiredWorkerCapability: () => null,
+        isToolExecutable: ({ toolPolicy, backendAvailable }: { toolPolicy?: string; backendAvailable: boolean }) =>
+            !(["BACKEND_ONLY", "SECURITY_CRITICAL_BACKEND"].includes(toolPolicy ?? "") && !backendAvailable),
+    },
 });
 const empty = () => null;
 const common = {
@@ -87,8 +103,8 @@ function App() {
     return React.createElement(health.BackendHealthProvider, null,
         React.createElement(Banner),
         React.createElement(catalog.ToolProvider, { initialTools: registry.NAV_TOOLS_FALLBACK }, React.createElement(CatalogProbe)),
-        React.createElement(guard.BackendOnlyToolGuard, { toolPolicy: "BACKEND_ONLY" }, React.createElement(Surface)),
-        React.createElement(guard.BackendOnlyToolGuard, { toolPolicy: "CLIENT_PREFERRED" }, React.createElement(LocalSurface)),
+        React.createElement(guard.BackendOnlyToolGuard, { toolPolicy: "BACKEND_ONLY", toolId: "grayscale" }, React.createElement(Surface)),
+        React.createElement(guard.BackendOnlyToolGuard, { toolPolicy: "CLIENT_PREFERRED", toolId: "merge-pdf" }, React.createElement(LocalSurface)),
     );
 }
 function LocalSurface() {

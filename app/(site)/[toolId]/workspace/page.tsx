@@ -64,7 +64,7 @@ import {
 export default function SharedWorkspacePage() {
     const router = useRouter();
     const { toolId, toolConfig, file, setFile, isLoadingConfig } = useSharedTool();
-    const { isExecutable } = useBackendOnlyToolAvailability();
+    const { isExecutable, unavailableService } = useBackendOnlyToolAvailability();
     const [authorizedFile, setAuthorizedFile] = useState<File | null>(null);
     const protectedPdfPolicy = getProtectedPdfRoutePolicy(toolId);
 
@@ -90,7 +90,7 @@ export default function SharedWorkspacePage() {
         return (
             <PdfToolLayout>
                 <div className="mx-auto max-w-5xl px-4 py-8">
-                    <BackendUnavailableNotice toolName={toolConfig.name} />
+                    <BackendUnavailableNotice toolName={toolConfig.name} availabilityService={unavailableService ?? "backend"} />
                 </div>
             </PdfToolLayout>
         );

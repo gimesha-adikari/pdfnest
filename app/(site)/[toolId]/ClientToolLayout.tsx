@@ -235,6 +235,7 @@ export default function ClientToolLayout({
         >
             <BackendOnlyToolGuard
                 toolPolicy={toolPolicyValue}
+                toolId={toolId}
             >
                 <ToolSchema toolHref={`/${toolId}`} />
                 {toolId === "repository-analyzer" ? (
