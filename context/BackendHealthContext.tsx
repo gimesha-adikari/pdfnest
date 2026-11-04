@@ -16,7 +16,9 @@ export function BackendHealthProvider({ children }: { children: React.ReactNode 
     // Use the same pending snapshot for SSR and the first hydration render.
     // The subscription picks up the current browser tracker state after mount.
     const [state, setState] = useState<BackendHealthState>({
-        status: "unknown", isAvailable: false, lastChecked: null, error: null,
+        status: "unknown", isAvailable: false, networkReachable: null,
+        liveness: "unknown", readiness: "unknown", workerReadiness: "unknown",
+        lastChecked: null, error: null,
     });
     const pathname = usePathname();
 
@@ -74,6 +76,10 @@ export function useBackendHealth() {
         return {
             status: "unknown" as BackendStatus,
             isAvailable: false,
+            networkReachable: null,
+            liveness: "unknown" as const,
+            readiness: "unknown" as const,
+            workerReadiness: "unknown" as const,
             lastChecked: null,
             error: null,
             checkHealth: async () => false,

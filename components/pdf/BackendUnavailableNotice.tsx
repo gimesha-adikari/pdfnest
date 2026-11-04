@@ -19,8 +19,9 @@ export default function BackendUnavailableNotice({
     suggestedAlternative,
     onRetry,
 }: BackendUnavailableNoticeProps) {
-    const { status, checkHealth } = useBackendHealth();
+    const { status, error, checkHealth } = useBackendHealth();
     const isPending = status === "unknown" || status === "checking";
+    const isDegraded = status === "degraded";
     const [isRetrying, setIsRetrying] = useState(false);
 
     const handleRetry = async () => {
@@ -49,12 +50,14 @@ export default function BackendUnavailableNotice({
 
             <div className="space-y-2 max-w-md mx-auto">
                 <h3 className="text-lg font-bold text-[color:var(--foreground)]">
-                    {isPending ? "Checking service availability…" : "Service Temporarily Unavailable"}
+                    {isPending ? "Checking service availability…" : isDegraded ? "Cloud processing is temporarily unavailable" : "Service Temporarily Unavailable"}
                 </h3>
                 <p className="text-xs text-[color:var(--muted)] leading-relaxed">
                     {isPending
                         ? `${toolName} requires backend processing. Please wait while availability is checked.`
-                        : `${toolName} requires the PDFNest backend processing service, which is currently offline or unreachable.`}
+                        : isDegraded
+                            ? `${toolName} requires backend dependencies that are currently not ready. Device processing remains available where supported.`
+                            : `${toolName} requires the PDFNest backend processing service, which is currently unreachable.${error ? ` ${error}` : ""}`}
                 </p>
             </div>
 

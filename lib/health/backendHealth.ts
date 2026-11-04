@@ -1,11 +1,20 @@
 import { getBaseUrl } from "@/lib/api";
 
-export type BackendStatus = "online" | "offline" | "checking" | "unknown";
+export type BackendStatus = "online" | "degraded" | "offline" | "checking" | "unknown";
+export type ProbeState = "unknown" | "healthy" | "unhealthy" | "ready" | "not_ready";
 
 export interface BackendHealthState {
     status: BackendStatus;
-    /** Only confirmed online health permits backend-dependent execution. */
+    /** Backend-dependent execution is allowed only after readiness is confirmed. */
     isAvailable: boolean;
+    /** Whether an HTTP response from the backend host was received. */
+    networkReachable: boolean | null;
+    /** Process liveness from /api/health. */
+    liveness: "unknown" | "healthy" | "unhealthy";
+    /** Required Backend dependencies from /api/ready (currently PostgreSQL and Redis). */
+    readiness: "unknown" | "ready" | "not_ready";
+    /** No public browser-safe Worker readiness probe is currently exposed. */
+    workerReadiness: "unknown";
     lastChecked: number | null;
     error: string | null;
 }
@@ -14,31 +23,32 @@ type HealthListener = (state: BackendHealthState) => void;
 
 class BackendHealthTracker {
     private status: BackendStatus = "unknown";
+    private networkReachable: boolean | null = null;
+    private liveness: BackendHealthState["liveness"] = "unknown";
+    private readiness: BackendHealthState["readiness"] = "unknown";
     private lastChecked: number | null = null;
     private lastError: string | null = null;
+    private consecutiveTransportFailures = 0;
     private listeners: Set<HealthListener> = new Set();
     private inFlightCheck: Promise<boolean> | null = null;
-    private cooldownMs = 15000; // 15s cooldown between automatic health checks
-    private recoveryCooldownMs = 60000; // Retry only after a user-driven recovery signal.
+    private cooldownMs = 15000;
+    private recoveryCooldownMs = 60000;
     private listenersInitialized = false;
 
     constructor() {
-        if (typeof window !== "undefined") {
-            this.initBrowserListeners();
-        }
+        if (typeof window !== "undefined") this.initBrowserListeners();
     }
 
     private initBrowserListeners() {
         if (this.listenersInitialized || typeof window === "undefined") return;
         this.listenersInitialized = true;
 
-        window.addEventListener("online", () => {
-            console.info("[BackendHealth] Browser online event detected. Checking backend...");
-            void this.checkHealth(true);
-        });
-
+        window.addEventListener("online", () => void this.checkHealth(true));
         window.addEventListener("offline", () => {
-            console.warn("[BackendHealth] Browser offline event detected.");
+            this.consecutiveTransportFailures = Math.max(2, this.consecutiveTransportFailures + 1);
+            this.networkReachable = false;
+            this.liveness = "unknown";
+            this.readiness = "unknown";
             this.setState("offline", "Browser network connection is offline");
         });
     }
@@ -46,7 +56,11 @@ class BackendHealthTracker {
     public getState(): BackendHealthState {
         return {
             status: this.status,
-            isAvailable: this.status === "online",
+            isAvailable: this.status === "online" && this.readiness === "ready",
+            networkReachable: this.networkReachable,
+            liveness: this.liveness,
+            readiness: this.readiness,
+            workerReadiness: "unknown",
             lastChecked: this.lastChecked,
             error: this.lastError,
         };
@@ -55,19 +69,13 @@ class BackendHealthTracker {
     public subscribe(listener: HealthListener): () => void {
         this.listeners.add(listener);
         listener(this.getState());
-        return () => {
-            this.listeners.delete(listener);
-        };
+        return () => this.listeners.delete(listener);
     }
 
     private notify() {
         const state = this.getState();
         this.listeners.forEach((listener) => {
-            try {
-                listener(state);
-            } catch (e) {
-                console.error("[BackendHealth] Error in listener:", e);
-            }
+            try { listener(state); } catch (e) { console.error("[BackendHealth] Error in listener:", e); }
         });
     }
 
@@ -76,91 +84,106 @@ class BackendHealthTracker {
         this.status = status;
         this.lastError = error;
         this.lastChecked = Date.now();
-        if (changed) {
+        if (changed) this.notify();
+    }
+
+    public markOffline(reason?: string) {
+        this.networkReachable = false;
+        this.liveness = "unknown";
+        this.readiness = "unknown";
+        this.consecutiveTransportFailures = Math.max(2, this.consecutiveTransportFailures + 1);
+        this.setState("offline", reason || "Backend service unreachable");
+    }
+
+    /**
+     * API responses can prove that the host answered, but cannot prove dependency
+     * readiness. Only the paired health/readiness probes can authorize execution.
+     */
+    public markOnline() {
+        this.networkReachable = true;
+        if (this.liveness === "healthy" && this.readiness === "ready") {
+            this.consecutiveTransportFailures = 0;
+            this.setState("online", null);
+        } else {
             this.notify();
         }
     }
 
-    public markOffline(reason?: string) {
-        this.setState("offline", reason || "Backend service unreachable");
-    }
-
-    public markOnline() {
-        if (this.status !== "online") {
-            this.setState("online", null);
-        } else {
-            this.lastChecked = Date.now();
-        }
-    }
-
-    /**
-     * Recover only after an explicit user-driven signal (navigation, tab focus, or retry).
-     * This deliberately does not schedule polling while the application is idle.
-     */
+    /** Navigation and foregrounding are low-frequency recovery signals. */
     public maybeRecover(): Promise<boolean> {
-        if (this.status !== "offline") return Promise.resolve(this.status === "online");
-        if (this.lastChecked && Date.now() - this.lastChecked < this.recoveryCooldownMs) {
-            return Promise.resolve(false);
-        }
+        if (this.status === "online") return Promise.resolve(true);
+        if (this.lastChecked && Date.now() - this.lastChecked < this.recoveryCooldownMs) return Promise.resolve(false);
         return this.checkHealth(true);
     }
 
     /**
-     * Checks backend health via /api/health endpoint.
-     * Deduplicates concurrent requests and respects cooldown to avoid request storms.
-     * Never throws - returns boolean indicating whether backend is reachable.
+     * Verify process liveness and dependency readiness. A transient transport
+     * failure leaves the UI in a checking state once; repeated failures are shown
+     * as offline. The cooldown and in-flight promise prevent polling storms.
      */
     public async checkHealth(force = false): Promise<boolean> {
-        if (typeof window === "undefined") {
-            return false;
-        }
-
-        // Respect cooldown unless forced
-        if (!force && this.lastChecked && Date.now() - this.lastChecked < this.cooldownMs) {
-            return this.status === "online";
-        }
-
-        // Return existing in-flight check if one is running
-        if (this.inFlightCheck) {
-            return this.inFlightCheck;
-        }
+        if (typeof window === "undefined") return false;
+        if (!force && this.lastChecked && Date.now() - this.lastChecked < this.cooldownMs) return this.getState().isAvailable;
+        if (this.inFlightCheck) return this.inFlightCheck;
 
         const runCheck = async (): Promise<boolean> => {
-            const prevStatus = this.status;
-            if (prevStatus === "unknown") {
+            if (this.status === "unknown" || this.status === "offline" || this.status === "degraded") {
                 this.status = "checking";
                 this.notify();
             }
 
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 4000);
-
+            const headers = { Accept: "application/json" };
+            const base = getBaseUrl();
             try {
-                const url = `${getBaseUrl()}/api/health`;
-                const response = await fetch(url, {
-                    method: "GET",
-                    headers: { Accept: "application/json" },
-                    signal: controller.signal,
-                    cache: "no-store",
-                });
+                const [livenessResponse, readinessResponse] = await Promise.all([
+                    fetch(`${base}/api/health`, { method: "GET", headers, signal: controller.signal, cache: "no-store" }),
+                    fetch(`${base}/api/ready`, { method: "GET", headers, signal: controller.signal, cache: "no-store" }),
+                ]);
                 clearTimeout(timeoutId);
+                this.networkReachable = true;
+                this.liveness = livenessResponse.ok ? "healthy" : "unhealthy";
+                this.readiness = "not_ready";
 
-                if (response.ok) {
-                    this.setState("online", null);
-                    return true;
-                } else if (response.status >= 502 && response.status <= 504) {
-                    this.setState("offline", `Service unavailable (HTTP ${response.status})`);
-                    return false;
-                } else {
-                    // Other HTTP responses still mean the backend is reachable
-                    this.setState("online", null);
-                    return true;
+                if (livenessResponse.ok && readinessResponse.ok) {
+                    let readinessBody: unknown = null;
+                    try { readinessBody = await readinessResponse.json(); } catch { /* A malformed readiness response fails closed. */ }
+                    if (readinessBody && typeof readinessBody === "object" && "ready" in readinessBody && readinessBody.ready === true) {
+                        this.readiness = "ready";
+                        this.consecutiveTransportFailures = 0;
+                        this.setState("online", null);
+                        return true;
+                    }
                 }
-            } catch (err: any) {
+
+                this.consecutiveTransportFailures = 0;
+                const detail = !livenessResponse.ok
+                    ? `Liveness probe failed (HTTP ${livenessResponse.status})`
+                    : !readinessResponse.ok
+                        ? `Required backend dependencies are not ready (HTTP ${readinessResponse.status})`
+                        : "Readiness probe did not confirm required dependencies";
+                this.setState("degraded", detail);
+                return false;
+            } catch (err: unknown) {
                 clearTimeout(timeoutId);
-                const isAbort = err?.name === "AbortError";
-                const errorMsg = isAbort ? "Health check timed out" : (err?.message || "Network error connecting to backend");
-                this.setState("offline", errorMsg);
+                this.networkReachable = false;
+                this.liveness = "unknown";
+                this.readiness = "unknown";
+                this.consecutiveTransportFailures++;
+                const isObjectError = typeof err === "object" && err !== null;
+                const errorName = err instanceof Error
+                    ? err.name
+                    : isObjectError && "name" in err
+                        ? String(err.name)
+                        : "";
+                const errorMessage = err instanceof Error
+                    ? err.message
+                    : isObjectError && "message" in err
+                        ? String(err.message)
+                        : "Network error connecting to backend";
+                const errorMsg = errorName === "AbortError" ? "Health check timed out" : errorMessage;
+                this.setState(this.consecutiveTransportFailures >= 2 ? "offline" : "checking", errorMsg);
                 return false;
             } finally {
                 this.inFlightCheck = null;
