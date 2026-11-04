@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { FILE_RETENTION_COPY } from "@/lib/fileRetentionCopy";
 import { BookOpen, Check, ChevronLeft, ChevronRight, FileText, MoreHorizontal, Pencil, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { studioV2Api, studioV2PageTileURL, StudioSessionSummaryDTO } from "@/lib/studio-v2/api";
 import { useAuth } from "@/context/AuthContext";
@@ -79,7 +80,7 @@ export default function StudioSessions({ compact = false }: { compact?: boolean 
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" role="presentation">
         <div role="dialog" aria-modal="true" aria-labelledby="studio-session-dialog-title" className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--surface-elevated)] p-6 shadow-2xl">
           <div className="flex items-start justify-between gap-4">
-            <div><h2 id="studio-session-dialog-title" className="text-lg font-black">{dialog.kind === "delete" ? "Delete session?" : "Rename session"}</h2>{dialog.kind === "delete" && <p className="mt-2 text-sm text-[var(--muted-foreground)]">This will permanently remove the saved Studio session. Your exported PDFs will not be affected.</p>}</div>
+            <div><h2 id="studio-session-dialog-title" className="text-lg font-black">{dialog.kind === "delete" ? "Delete session?" : "Rename session"}</h2>{dialog.kind === "delete" && <p className="mt-2 text-sm text-[var(--muted-foreground)]">{FILE_RETENTION_COPY.studioSessionRemoval}</p>}</div>
             <button onClick={() => setDialog(null)} aria-label="Close dialog"><X size={18}/></button>
           </div>
           {dialog.kind === "rename" && <input autoFocus value={title} onChange={(event) => setTitle(event.target.value)} maxLength={255} className="mt-5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-card)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />}

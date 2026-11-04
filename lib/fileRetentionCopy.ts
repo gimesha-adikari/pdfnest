@@ -4,4 +4,5 @@ export const FILE_RETENTION_COPY = {
     processing: "Cloud workflows use temporary processing files. Studio sessions can also retain source files, edits and snapshots while the session is active.",
     exports: "Some Studio exports can remain available for up to 24 hours, subject to session expiry. This is a download-access limit, not a physical-deletion deadline.",
     cleanup: "Cleanup follows each workflow's expiry and removal rules. Deletion failures may be retried, and storage-provider retention restrictions can delay physical deletion. Expired access or scheduled cleanup does not confirm physical erasure; no single deletion deadline applies to all workflows.",
+    studioSessionRemoval: "This removes the saved Studio session and schedules its stored files for cleanup. Storage-provider retention can delay physical deletion. Your exported PDFs will not be affected.",
 } as const;

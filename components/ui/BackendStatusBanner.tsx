@@ -5,12 +5,13 @@ import { CloudOff, RefreshCw, X } from "lucide-react";
 import { useBackendHealth } from "@/context/BackendHealthContext";
 
 export default function BackendStatusBanner() {
-    const { status, isAvailable, checkHealth } = useBackendHealth();
+    const { status, checkHealth } = useBackendHealth();
     const [dismissed, setDismissed] = useState(false);
     const [isRetrying, setIsRetrying] = useState(false);
 
-    // Only show when explicitly offline and not dismissed
-    if (status !== "offline" || dismissed) {
+    // A backend that responds but cannot serve dependent requests is degraded,
+    // while a single failed network probe remains in a transient checking state.
+    if ((status !== "offline" && status !== "degraded") || dismissed) {
         return null;
     }
 
@@ -34,7 +35,11 @@ export default function BackendStatusBanner() {
                 <div className="flex items-center gap-2 font-medium">
                     <CloudOff size={15} className="text-amber-500 shrink-0" />
                     <span>
-                        <strong>PDFNest cloud service is offline.</strong> Local browser tools are fully functional.
+                        {status === "degraded" ? (
+                            <><strong>PDFNest cloud processing is temporarily unavailable.</strong> Required backend dependencies are not ready. Local browser tools remain available.</>
+                        ) : (
+                            <><strong>PDFNest cloud service is unreachable.</strong> Local browser tools remain available.</>
+                        )}
                     </span>
                 </div>
 

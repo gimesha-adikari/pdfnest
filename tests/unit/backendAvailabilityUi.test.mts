@@ -23,11 +23,18 @@ function deferred() {
     let resolve!: (response: Response) => void;
     return { promise: new Promise<Response>(yes => { resolve = yes; }), resolve: (value: Response) => resolve(value) };
 }
-const requests: ReturnType<typeof deferred>[] = [];
+const requests: Array<{ url: string; request: ReturnType<typeof deferred> }> = [];
 globalThis.fetch = async (input) => {
-    assert.equal(String(input), "http://127.0.0.1:9/api/health", "no document or hosted request permitted");
-    const request = deferred(); requests.push(request); return request.promise;
+    const url = String(input);
+    assert.match(url, /^http:\/\/127\.0\.0\.1:9\/api\/(health|ready)$/, "no document or hosted request permitted");
+    const request = deferred(); requests.push({ url, request }); return request.promise;
 };
+function resolveProbePair(start: number, readyBody: { ready: boolean }, readyStatus = 200) {
+    assert.ok(requests[start].url.endsWith("/api/health"));
+    assert.ok(requests[start + 1].url.endsWith("/api/ready"));
+    requests[start].request.resolve(new Response(JSON.stringify({ status: "healthy" }), { status: 200 }));
+    requests[start + 1].request.resolve(new Response(JSON.stringify(readyBody), { status: readyStatus }));
+}
 const tracker = load<{ backendHealth: typeof import("../../lib/health/backendHealth").backendHealth }>(
     "lib/health/backendHealth.ts", { "@/lib/api": { getBaseUrl: () => "http://127.0.0.1:9" } },
 );
@@ -101,20 +108,34 @@ const { hydrateRoot } = await import("react-dom/client");
 const hydrationErrors: unknown[] = [];
 let root!: ReturnType<typeof hydrateRoot>;
 await act(async () => { root = hydrateRoot(document.getElementById("root")!, React.createElement(App), { onRecoverableError: error => hydrationErrors.push(error) }); });
-assert.equal(requests.length, 1);
+assert.equal(requests.length, 2);
 assert.equal(tracker.backendHealth.getState().status, "checking");
 assert.match(document.body.textContent!, /Checking service availability/);
 assert.doesNotMatch(document.body.textContent!, /Service Temporarily Unavailable/);
 assert.equal(document.getElementById("submit"), null, "pending must not expose cloud submission");
-assert.equal(document.getElementById("backend-status-banner"), null, "banner remains offline-only");
+assert.equal(document.getElementById("backend-status-banner"), null, "transient checking does not claim an outage");
 assert.equal((document.getElementById("local") as HTMLButtonElement).disabled, false);
 assert.equal(submissions, 0);
 assert.equal((document.getElementById("catalog-cloud") as HTMLButtonElement).disabled, true);
 assert.equal((document.getElementById("catalog-local") as HTMLButtonElement).disabled, false);
-await act(async () => requests[0].resolve(new Response("ok", { status: 200 })));
+await act(async () => resolveProbePair(0, { ready: false }, 503));
+assert.equal(tracker.backendHealth.getState().status, "degraded");
+assert.equal(tracker.backendHealth.getState().networkReachable, true);
+assert.equal(tracker.backendHealth.getState().liveness, "healthy");
+assert.equal(tracker.backendHealth.getState().readiness, "not_ready");
+assert.equal(document.getElementById("submit"), null, "ready dependencies are required for cloud tools");
+assert.equal((document.getElementById("local") as HTMLButtonElement).disabled, false, "Device processing remains available");
+assert.match(document.body.textContent!, /Required backend dependencies are not ready/);
+assert.doesNotMatch(document.body.textContent!, /PDFNest cloud service is unreachable/);
+assert.notEqual(document.getElementById("backend-status-banner"), null);
+assert.equal((document.getElementById("catalog-local") as HTMLButtonElement).disabled, false);
+assert.equal((document.getElementById("catalog-cloud") as HTMLButtonElement).disabled, true);
+await act(async () => (Array.from(document.querySelectorAll("button")).find(button => button.textContent?.includes("Retry"))!).click());
+assert.equal(requests.length, 4, "manual retry probes liveness and readiness together");
+await act(async () => resolveProbePair(2, { ready: true }));
 assert.ok(document.getElementById("submit"));
 assert.equal((document.getElementById("catalog-cloud") as HTMLButtonElement).disabled, false);
-assert.doesNotMatch(document.body.textContent!, /Checking service availability|Service Temporarily Unavailable/);
+assert.doesNotMatch(document.body.textContent!, /Checking service availability|Cloud processing is temporarily unavailable/);
 await act(async () => tracker.backendHealth.markOffline("Synthetic outage"));
 assert.equal((document.getElementById("catalog-cloud") as HTMLButtonElement).disabled, true);
 assert.equal((document.getElementById("catalog-local") as HTMLButtonElement).disabled, false);
@@ -122,9 +143,9 @@ assert.match(document.body.textContent!, /Service Temporarily Unavailable/);
 assert.ok(document.getElementById("backend-status-banner"));
 assert.equal(document.getElementById("submit"), null);
 assert.equal((document.getElementById("local") as HTMLButtonElement).disabled, false);
-await act(async () => (Array.from(document.querySelectorAll("button")).find(button => button.textContent === "Retry Connection")!).click());
-assert.equal(requests.length, 2, "one explicit retry, no polling");
-await act(async () => requests[1].resolve(new Response("ok", { status: 200 })));
+await act(async () => (Array.from(document.querySelectorAll("button")).find(button => button.textContent === "Retry")!).click());
+assert.equal(requests.length, 6, "one explicit retry, no polling");
+await act(async () => resolveProbePair(4, { ready: true }));
 assert.ok(document.getElementById("submit"));
 assert.equal((document.getElementById("catalog-cloud") as HTMLButtonElement).disabled, false);
 assert.equal(document.querySelector('[data-testid="backend-unavailable-execution-panel"]'), null);
@@ -137,7 +158,7 @@ await act(async () => root.unmount());
 document.getElementById("root")!.innerHTML = ssr;
 await act(async () => { root = hydrateRoot(document.getElementById("root")!, React.createElement(App), { onRecoverableError: error => hydrationErrors.push(error) }); });
 assert.ok(document.getElementById("submit"));
-assert.equal(requests.length, 2);
+assert.equal(requests.length, 6);
 assert.equal(hydrationErrors.length, 0);
 await act(async () => root.unmount());
 // An unwrapped component must not manufacture a healthy backend.
@@ -148,7 +169,7 @@ const Footer = load<{ default: React.ComponentType }>("components/Footer.tsx", {
     "@/components/ui/Logo": { __esModule: true, default: empty },
 }).default;
 const Contact = load<{ default: React.ComponentType }>("components/contact/ContactForm.tsx", { ...common, "@/lib/api": { submitContactTicket: () => { throw new Error("Unexpected submission"); } } }).default;
-for (const status of ["unknown", "checking", "online", "offline"] as const) {
+for (const status of ["unknown", "checking", "online", "degraded", "offline"] as const) {
     tracker.backendHealth.setState(status);
     for (const Component of [Footer, Contact]) {
         const text = renderToStaticMarkup(React.createElement(Component));
@@ -157,4 +178,4 @@ for (const status of ["unknown", "checking", "online", "offline"] as const) {
     }
 }
 dom.window.close();
-console.log("PASS: actual provider/guard/notice/banner hydration, pending exclusion, local availability, recovery and truthful static copy");
+console.log("PASS: actual provider/guard/notice/banner hydration, degraded readiness, Device availability, recovery and truthful static copy");
