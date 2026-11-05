@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
     ShieldCheck,
@@ -17,6 +17,7 @@ import { resolveDownloadUrl, uploadAndDownloadFile } from "@/lib/api";
 import { handleClientError } from "@/lib/errorHandler";
 import { notify } from "@/lib/notify";
 import { useAuth } from "@/context/AuthContext";
+import { useBackendHealth } from "@/context/BackendHealthContext";
 import { useSharedTool } from "@/app/(site)/[toolId]/ClientToolLayout";
 import PdfFileInfo from "@/components/pdf/PdfFileInfo";
 import PdfActionButton from "@/components/pdf/PdfActionButton";
@@ -25,6 +26,7 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { getOCRLanguages, type OCRLanguage } from "@/lib/ocr";
 import { useAsyncTask } from "@/hooks/useAsyncTask";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
+import { guardWorkerCapabilitySubmission, isWorkerCapabilityAvailable } from "@/lib/health/workerAvailability";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
 import {
@@ -40,6 +42,14 @@ const AUTO_LANGUAGE: OCRLanguage = { code: "auto", name: "Auto detect" };
 
 export default function PdfToTextWorkspace() {
     const { requireAuth } = useAuth();
+    const {
+        isAvailable: backendAvailable,
+        status: backendStatus,
+        workerReadiness,
+        workerCapabilities,
+        checkHealth,
+        checkWorkerHealth,
+    } = useBackendHealth();
     const router = useRouter();
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
     const cloudSubmissionInitiated = hasCloudSubmissionInitiated(file);
@@ -53,6 +63,25 @@ export default function PdfToTextWorkspace() {
     const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
     const [deviceOcrWarning, setDeviceOcrWarning] = useState<string | null>(null);
     const [cloudConsentFile, setCloudConsentFile] = useState<File | null>(null);
+    const [cloudOcrUnavailable, setCloudOcrUnavailable] = useState(false);
+    const canUseCloudOcr = backendAvailable && isWorkerCapabilityAvailable("ocr", workerReadiness, workerCapabilities);
+    const isCheckingCloudOcr = backendStatus === "checking" || workerReadiness === "checking";
+    const cloudOcrAvailabilityRef = useRef({ backendAvailable, workerReadiness, workerCapabilities, processingMode });
+    useLayoutEffect(() => {
+        cloudOcrAvailabilityRef.current = { backendAvailable, workerReadiness, workerCapabilities, processingMode };
+    }, [backendAvailable, workerReadiness, workerCapabilities, processingMode]);
+
+    const canSubmitCloudOcrNow = () => {
+        const current = cloudOcrAvailabilityRef.current;
+        return current.processingMode !== "device" && current.backendAvailable &&
+            isWorkerCapabilityAvailable("ocr", current.workerReadiness, current.workerCapabilities);
+    };
+
+    const cloudOcrPreflight = () => {
+        const available = canSubmitCloudOcrNow();
+        if (!available) setCloudOcrUnavailable(true);
+        return available;
+    };
 
     const [languages, setLanguages] = useState<OCRLanguage[]>([
         AUTO_LANGUAGE,
@@ -198,6 +227,9 @@ export default function PdfToTextWorkspace() {
     const isProcessing = isProcessingLocal || isSubmitting || taskStatus === "PENDING" || taskStatus === "PROCESSING";
 
     const triggerCloudOcrTask = async (targetFile: File, password?: string, selectedLang: string = "eng") => {
+        if (!cloudOcrPreflight()) return;
+        setCloudOcrUnavailable(false);
+
         const submitFn = async () => {
             const formData = new FormData();
             formData.append("file", targetFile);
@@ -226,7 +258,13 @@ export default function PdfToTextWorkspace() {
             }
         };
 
-        registerSubmission(submitFn);
+        const guardedSubmitFn = guardWorkerCapabilitySubmission(
+            canSubmitCloudOcrNow,
+            submitFn,
+            () => setCloudOcrUnavailable(true),
+        );
+
+        registerSubmission(guardedSubmitFn);
 
         const formData = new FormData();
         formData.append("file", targetFile);
@@ -235,7 +273,7 @@ export default function PdfToTextWorkspace() {
         }
         formData.append("lang", selectedLang);
 
-        await submitTask("/api/ocr/extract-text-async", formData, submitFn);
+        await submitTask("/api/ocr/extract-text-async", formData, guardedSubmitFn, cloudOcrPreflight);
     };
 
     const handleCancelLocal = () => {
@@ -261,6 +299,7 @@ export default function PdfToTextWorkspace() {
         setFile(null);
         setSuccess(false);
         setDeviceOcrWarning(null);
+        setCloudOcrUnavailable(false);
         router.push(`/${toolId}`);
     };
 
@@ -383,6 +422,11 @@ export default function PdfToTextWorkspace() {
 
     const authorizeCloudTextExtraction = () => {
         if (!file || cloudConsentFile !== file) return;
+        if (!canUseCloudOcr) {
+            setCloudOcrUnavailable(true);
+            setCloudConsentFile(null);
+            return;
+        }
         authorizeCloudProcessing(file, toolId || "pdf-to-text");
         setCloudConsentFile(null);
         void handleTextExtraction();
@@ -403,7 +447,7 @@ export default function PdfToTextWorkspace() {
                     <p className="mt-3 text-sm text-[color:var(--muted-foreground)]">This text extraction request will send the current PDF and any associated password to Platen Cloud. Permission to unlock the PDF in Cloud does not authorize this separate OCR request.</p>
                     <div className="mt-5 flex justify-center gap-3">
                         <button type="button" onClick={() => setCloudConsentFile(null)} className="rounded-xl border border-[color:var(--border)] px-4 py-2 text-sm font-semibold">Cancel</button>
-                        <button type="button" onClick={authorizeCloudTextExtraction} className="rounded-xl bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white">Authorize and extract text</button>
+                        <button type="button" onClick={authorizeCloudTextExtraction} disabled={!canUseCloudOcr} className="rounded-xl bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">Authorize and extract text</button>
                     </div>
                 </section>
             )}
@@ -424,9 +468,28 @@ export default function PdfToTextWorkspace() {
                                     setProcessingMode(m);
                                     if (m !== "cloud") setCloudConsentFile(null);
                                     setDeviceOcrWarning(null);
+                                    setCloudOcrUnavailable(false);
                                 }}
                                 disabled={isProcessing}
                             />
+                            {((processingMode === "cloud" && !canUseCloudOcr) || (cloudOcrUnavailable && !canUseCloudOcr)) && (
+                                <div role="status" aria-live="polite" className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-[color:var(--muted)]">
+                                    <p>{isCheckingCloudOcr
+                                        ? "Checking Cloud OCR availability…"
+                                        : "Cloud OCR is temporarily unavailable or could not be confirmed. Device text extraction remains available."}</p>
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            await checkHealth(true);
+                                            await checkWorkerHealth(true);
+                                        }}
+                                        disabled={isCheckingCloudOcr}
+                                        className="mt-2 rounded-lg border border-[color:var(--border)] px-3 py-1.5 font-semibold disabled:opacity-50"
+                                    >
+                                        {isCheckingCloudOcr ? "Checking…" : "Check Cloud OCR availability"}
+                                    </button>
+                                </div>
+                            )}
 
                             <div className="flex items-center gap-2 text-xs text-[color:var(--muted)] px-1">
                                 <Lock size={12} className="text-emerald-500 shrink-0" />
@@ -570,7 +633,7 @@ export default function PdfToTextWorkspace() {
                                 text={processingMode === "cloud" ? "Extract Text via Cloud OCR" : "Extract Text"}
                                 loadingText="Extracting text layers..."
                                 loading={isProcessing && !taskId}
-                                disabled={!file || isProcessing}
+                                disabled={!file || isProcessing || (processingMode === "cloud" && !canUseCloudOcr)}
                                 onClick={handleTextExtraction}
                             />
 

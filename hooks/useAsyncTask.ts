@@ -250,7 +250,8 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
     const submitTask = async (
         endpoint: string,
         formData: FormData,
-        submitFn?: () => Promise<string | null>
+        submitFn?: () => Promise<string | null>,
+        canSubmit?: () => boolean,
     ): Promise<string | null> => {
         setTaskId("");
         setStatus(null);
@@ -267,6 +268,14 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
 
         for (let attempt = 0; attempt < 5; attempt++) {
             try {
+                if (canSubmit && !canSubmit()) {
+                    setIsSubmitting(false);
+                    setError("Service availability changed before the request was sent.");
+                    setStatus("FAILED");
+                    idempotencyKeyRef.current = "";
+                    return null;
+                }
+
                 const submittedFiles: File[] = [];
                 if (typeof File !== "undefined") {
                     formData.forEach((value) => {

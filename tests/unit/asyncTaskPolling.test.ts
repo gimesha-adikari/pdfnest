@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { useAsyncTask } from "../../hooks/useAsyncTask";
+import { guardWorkerCapabilitySubmission } from "../../lib/health/workerAvailability";
 
 // Minimal DOM surface for a hook-only React root, matching existing hook tests.
 class Element {
@@ -60,6 +61,84 @@ async function main() {
         assert.ok(requests.every(request => request.credentials === "include"), "submission and status retain owner cookies");
     } finally {
         await act(async () => root.unmount());
+    }
+
+    // A long Retry-After must recheck capability immediately before the next POST.
+    const preflightStarted = deferred<void>();
+    let preflightAllowed = true;
+    let guardedPostCount = 0;
+    globalThis.fetch = async (_url, init = {}) => {
+        if (init.method === "POST") {
+            guardedPostCount += 1;
+            preflightStarted.resolve();
+            return new Response(null, { status: 409, headers: { "Retry-After": "1" } });
+        }
+        throw new Error("Unexpected request in readiness preflight test");
+    };
+    let preflightHook!: ReturnType<typeof useAsyncTask>;
+    function PreflightHarness() {
+        preflightHook = useAsyncTask("preflight-tool", () => {});
+        return null;
+    }
+    const preflightRoot = createRoot(documentMock.createElement() as unknown as HTMLElement);
+    try {
+        await act(async () => preflightRoot.render(React.createElement(PreflightHarness)));
+        let pendingSubmission!: Promise<string | null>;
+        await act(async () => {
+            pendingSubmission = preflightHook.submitTask("/api/ocr", new FormData(), undefined, () => preflightAllowed);
+            await preflightStarted.promise;
+        });
+        preflightAllowed = false;
+        await act(async () => { await pendingSubmission; });
+        assert.equal(guardedPostCount, 1, "readiness loss during Retry-After must prevent the next POST");
+        assert.equal(preflightHook.status, "FAILED");
+    } finally {
+        await act(async () => preflightRoot.unmount());
+    }
+
+    // restartTask reuses a saved callback, so that callback itself must read current state.
+    const currentCloudState = { ready: true, mode: "auto", uploads: 0, blocked: 0 };
+    const savedCloudSubmission = guardWorkerCapabilitySubmission(
+        () => currentCloudState.ready && currentCloudState.mode !== "device",
+        async () => `retry-task-${++currentCloudState.uploads}`,
+        () => { currentCloudState.blocked += 1; },
+    );
+    let retryHook!: ReturnType<typeof useAsyncTask>;
+    function RetryHarness() {
+        retryHook = useAsyncTask("retry-tool", () => {});
+        return null;
+    }
+    const retryRoot = createRoot(documentMock.createElement() as unknown as HTMLElement);
+    try {
+        await act(async () => retryRoot.render(React.createElement(RetryHarness)));
+        await act(async () => {
+            retryHook.registerSubmission(savedCloudSubmission);
+            retryHook.setStatus("FAILED");
+        });
+        let retryId: string | null = null;
+        await act(async () => { retryId = await retryHook.restartTask(); });
+        assert.equal(retryId, "retry-task-1");
+
+        currentCloudState.ready = false;
+        await act(async () => retryHook.setStatus("FAILED"));
+        await act(async () => { retryId = await retryHook.restartTask(); });
+        assert.equal(retryId, null);
+        assert.equal(currentCloudState.uploads, 1, "Worker loss must block the saved Cloud retry");
+
+        currentCloudState.ready = true;
+        currentCloudState.mode = "device";
+        await act(async () => retryHook.setStatus("FAILED"));
+        await act(async () => { retryId = await retryHook.restartTask(); });
+        assert.equal(retryId, null);
+        assert.equal(currentCloudState.uploads, 1, "switching to Device must block the saved Cloud retry");
+
+        currentCloudState.mode = "auto";
+        await act(async () => retryHook.setStatus("FAILED"));
+        await act(async () => { retryId = await retryHook.restartTask(); });
+        assert.equal(retryId, "retry-task-2", "availability recovery restores the Auto Cloud fallback retry");
+        assert.equal(currentCloudState.blocked, 2);
+    } finally {
+        await act(async () => retryRoot.unmount());
     }
 
     // Polling and the cancel/completion race can both observe the same
