@@ -37,6 +37,20 @@ export function isWorkerCapabilityAvailable(
     return workerReadiness === "ready" && workerCapabilities?.[capability] === true;
 }
 
+export function guardWorkerCapabilitySubmission(
+    canSubmit: () => boolean,
+    submit: () => Promise<string | null>,
+    onUnavailable: () => void,
+): () => Promise<string | null> {
+    return async () => {
+        if (!canSubmit()) {
+            onUnavailable();
+            throw new Error("Cloud OCR is not available in the current service or processing mode.");
+        }
+        return submit();
+    };
+}
+
 export function isToolExecutable(input: {
     toolId: string;
     toolPolicy?: ToolPolicy;

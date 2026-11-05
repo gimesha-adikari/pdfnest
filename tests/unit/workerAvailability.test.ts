@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { isToolExecutable, isWorkerCapabilityAvailable, requiredWorkerCapability } from "@/lib/health/workerAvailability";
+import { guardWorkerCapabilitySubmission, isToolExecutable, isWorkerCapabilityAvailable, requiredWorkerCapability } from "@/lib/health/workerAvailability";
 
 const noCapabilities = null;
 
@@ -31,3 +31,35 @@ assert.equal(isWorkerCapabilityAvailable("ocr", "unknown", null), false);
 assert.equal(isWorkerCapabilityAvailable("ocr", "ready", ocrReady), true, "OCR capability becomes available after readiness recovery");
 
 console.log("Device, Backend-only, Worker-dependent, offline, and recovered capability gates passed. ✓");
+
+async function testSavedCloudOcrSubmissionRechecksCurrentAvailability() {
+    const current = { ready: true, mode: "auto", uploads: 0, blocked: 0 };
+    const savedSubmission = guardWorkerCapabilitySubmission(
+        () => current.ready && current.mode !== "device",
+        async () => {
+            current.uploads += 1;
+            return "synthetic-task";
+        },
+        () => { current.blocked += 1; },
+    );
+
+    assert.equal(await savedSubmission(), "synthetic-task");
+    current.ready = false;
+    await assert.rejects(savedSubmission, /Cloud OCR is not available/);
+    assert.equal(current.uploads, 1, "readiness loss must block a saved retry before upload");
+
+    current.ready = true;
+    current.mode = "device";
+    await assert.rejects(savedSubmission, /Cloud OCR is not available/);
+    assert.equal(current.uploads, 1, "switching to Device must block a saved Cloud retry");
+
+    current.mode = "auto";
+    assert.equal(await savedSubmission(), "synthetic-task", "a ready Auto-mode fallback may retry Cloud OCR");
+    assert.equal(current.uploads, 2);
+    assert.equal(current.blocked, 2);
+}
+
+testSavedCloudOcrSubmissionRechecksCurrentAvailability().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+});

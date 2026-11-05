@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
     ShieldCheck,
@@ -26,7 +26,7 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { getOCRLanguages, type OCRLanguage } from "@/lib/ocr";
 import { useAsyncTask } from "@/hooks/useAsyncTask";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
-import { isWorkerCapabilityAvailable } from "@/lib/health/workerAvailability";
+import { guardWorkerCapabilitySubmission, isWorkerCapabilityAvailable } from "@/lib/health/workerAvailability";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
 import {
@@ -66,6 +66,22 @@ export default function PdfToTextWorkspace() {
     const [cloudOcrUnavailable, setCloudOcrUnavailable] = useState(false);
     const canUseCloudOcr = backendAvailable && isWorkerCapabilityAvailable("ocr", workerReadiness, workerCapabilities);
     const isCheckingCloudOcr = backendStatus === "checking" || workerReadiness === "checking";
+    const cloudOcrAvailabilityRef = useRef({ backendAvailable, workerReadiness, workerCapabilities, processingMode });
+    useLayoutEffect(() => {
+        cloudOcrAvailabilityRef.current = { backendAvailable, workerReadiness, workerCapabilities, processingMode };
+    }, [backendAvailable, workerReadiness, workerCapabilities, processingMode]);
+
+    const canSubmitCloudOcrNow = () => {
+        const current = cloudOcrAvailabilityRef.current;
+        return current.processingMode !== "device" && current.backendAvailable &&
+            isWorkerCapabilityAvailable("ocr", current.workerReadiness, current.workerCapabilities);
+    };
+
+    const cloudOcrPreflight = () => {
+        const available = canSubmitCloudOcrNow();
+        if (!available) setCloudOcrUnavailable(true);
+        return available;
+    };
 
     const [languages, setLanguages] = useState<OCRLanguage[]>([
         AUTO_LANGUAGE,
@@ -211,10 +227,7 @@ export default function PdfToTextWorkspace() {
     const isProcessing = isProcessingLocal || isSubmitting || taskStatus === "PENDING" || taskStatus === "PROCESSING";
 
     const triggerCloudOcrTask = async (targetFile: File, password?: string, selectedLang: string = "eng") => {
-        if (!canUseCloudOcr) {
-            setCloudOcrUnavailable(true);
-            return;
-        }
+        if (!cloudOcrPreflight()) return;
         setCloudOcrUnavailable(false);
 
         const submitFn = async () => {
@@ -245,7 +258,13 @@ export default function PdfToTextWorkspace() {
             }
         };
 
-        registerSubmission(submitFn);
+        const guardedSubmitFn = guardWorkerCapabilitySubmission(
+            canSubmitCloudOcrNow,
+            submitFn,
+            () => setCloudOcrUnavailable(true),
+        );
+
+        registerSubmission(guardedSubmitFn);
 
         const formData = new FormData();
         formData.append("file", targetFile);
@@ -254,7 +273,7 @@ export default function PdfToTextWorkspace() {
         }
         formData.append("lang", selectedLang);
 
-        await submitTask("/api/ocr/extract-text-async", formData, submitFn);
+        await submitTask("/api/ocr/extract-text-async", formData, guardedSubmitFn, cloudOcrPreflight);
     };
 
     const handleCancelLocal = () => {
