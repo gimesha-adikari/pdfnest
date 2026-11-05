@@ -6,6 +6,7 @@ import { backendHealth, BackendHealthState, BackendStatus } from "@/lib/health/b
 
 interface BackendHealthContextType extends BackendHealthState {
     checkHealth: (force?: boolean) => Promise<boolean>;
+    checkWorkerHealth: (force?: boolean) => Promise<void>;
     markOffline: (reason?: string) => void;
     markOnline: () => void;
 }
@@ -18,7 +19,7 @@ export function BackendHealthProvider({ children }: { children: React.ReactNode 
     const [state, setState] = useState<BackendHealthState>({
         status: "unknown", isAvailable: false, networkReachable: null,
         liveness: "unknown", readiness: "unknown", workerReadiness: "unknown",
-        lastChecked: null, error: null,
+        workerCapabilities: null, lastChecked: null, error: null,
     });
     const pathname = usePathname();
 
@@ -56,6 +57,7 @@ export function BackendHealthProvider({ children }: { children: React.ReactNode 
         () => ({
             ...state,
             checkHealth: (force = true) => backendHealth.checkHealth(force),
+            checkWorkerHealth: (force = false) => backendHealth.checkWorkerHealth(force),
             markOffline: (reason?: string) => backendHealth.markOffline(reason),
             markOnline: () => backendHealth.markOnline(),
         }),
@@ -80,9 +82,11 @@ export function useBackendHealth() {
             liveness: "unknown" as const,
             readiness: "unknown" as const,
             workerReadiness: "unknown" as const,
+            workerCapabilities: null,
             lastChecked: null,
             error: null,
             checkHealth: async () => false,
+            checkWorkerHealth: async () => {},
             markOffline: () => {},
             markOnline: () => {},
         };

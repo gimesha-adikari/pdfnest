@@ -2,6 +2,14 @@ import { getBaseUrl } from "@/lib/api";
 
 export type BackendStatus = "online" | "degraded" | "offline" | "checking" | "unknown";
 export type ProbeState = "unknown" | "healthy" | "unhealthy" | "ready" | "not_ready";
+export type WorkerReadiness = "unknown" | "checking" | "ready" | "not_ready";
+
+export interface WorkerCapabilities {
+    document_processing: boolean;
+    ocr: boolean;
+    office_to_pdf: boolean;
+    pdf_to_office: boolean;
+}
 
 export interface BackendHealthState {
     status: BackendStatus;
@@ -13,8 +21,10 @@ export interface BackendHealthState {
     liveness: "unknown" | "healthy" | "unhealthy";
     /** Required Backend dependencies from /api/ready (currently PostgreSQL and Redis). */
     readiness: "unknown" | "ready" | "not_ready";
-    /** No public browser-safe Worker readiness probe is currently exposed. */
-    workerReadiness: "unknown";
+    /** Sanitized Worker readiness, obtained through the Backend's signed probe. */
+    workerReadiness: WorkerReadiness;
+    /** Capabilities may be null when the Backend cannot authenticate or reach Worker. */
+    workerCapabilities: WorkerCapabilities | null;
     lastChecked: number | null;
     error: string | null;
 }
@@ -26,6 +36,8 @@ class BackendHealthTracker {
     private networkReachable: boolean | null = null;
     private liveness: BackendHealthState["liveness"] = "unknown";
     private readiness: BackendHealthState["readiness"] = "unknown";
+    private workerReadiness: WorkerReadiness = "unknown";
+    private workerCapabilities: WorkerCapabilities | null = null;
     private lastChecked: number | null = null;
     private lastError: string | null = null;
     private consecutiveTransportFailures = 0;
@@ -34,6 +46,8 @@ class BackendHealthTracker {
     private cooldownMs = 15000;
     private recoveryCooldownMs = 60000;
     private listenersInitialized = false;
+    private workerLastCheckedAt: number | null = null;
+    private workerCooldownMs = 60_000;
 
     constructor() {
         if (typeof window !== "undefined") this.initBrowserListeners();
@@ -49,6 +63,8 @@ class BackendHealthTracker {
             this.networkReachable = false;
             this.liveness = "unknown";
             this.readiness = "unknown";
+            this.workerReadiness = "unknown";
+            this.workerCapabilities = null;
             this.setState("offline", "Browser network connection is offline");
         });
     }
@@ -60,7 +76,8 @@ class BackendHealthTracker {
             networkReachable: this.networkReachable,
             liveness: this.liveness,
             readiness: this.readiness,
-            workerReadiness: "unknown",
+            workerReadiness: this.workerReadiness,
+            workerCapabilities: this.workerCapabilities,
             lastChecked: this.lastChecked,
             error: this.lastError,
         };
@@ -91,6 +108,8 @@ class BackendHealthTracker {
         this.networkReachable = false;
         this.liveness = "unknown";
         this.readiness = "unknown";
+        this.workerReadiness = "unknown";
+        this.workerCapabilities = null;
         this.consecutiveTransportFailures = Math.max(2, this.consecutiveTransportFailures + 1);
         this.setState("offline", reason || "Backend service unreachable");
     }
@@ -111,7 +130,10 @@ class BackendHealthTracker {
 
     /** Navigation and foregrounding are low-frequency recovery signals. */
     public maybeRecover(): Promise<boolean> {
-        if (this.status === "online") return Promise.resolve(true);
+        if (this.status === "online") {
+            void this.checkWorkerHealth();
+            return Promise.resolve(true);
+        }
         if (this.lastChecked && Date.now() - this.lastChecked < this.recoveryCooldownMs) return Promise.resolve(false);
         return this.checkHealth(true);
     }
@@ -136,6 +158,7 @@ class BackendHealthTracker {
             const timeoutId = setTimeout(() => controller.abort(), 4000);
             const headers = { Accept: "application/json" };
             const base = getBaseUrl();
+            void this.checkWorkerHealth();
             try {
                 const [livenessResponse, readinessResponse] = await Promise.all([
                     fetch(`${base}/api/health`, { method: "GET", headers, signal: controller.signal, cache: "no-store" }),
@@ -192,6 +215,73 @@ class BackendHealthTracker {
 
         this.inFlightCheck = runCheck();
         return this.inFlightCheck;
+    }
+
+    public checkWorkerHealth(force = false): Promise<void> {
+        if (typeof window === "undefined") return Promise.resolve();
+        if (!force && this.workerLastCheckedAt && Date.now() - this.workerLastCheckedAt < this.workerCooldownMs) {
+            return this.workerProbeInFlight ?? Promise.resolve();
+        }
+        return this.refreshWorkerReadiness(getBaseUrl());
+    }
+
+    private workerProbeInFlight: Promise<void> | null = null;
+
+    private refreshWorkerReadiness(base: string): Promise<void> {
+        if (this.workerProbeInFlight) return this.workerProbeInFlight;
+        this.workerLastCheckedAt = Date.now();
+        const run = async () => {
+            this.workerReadiness = "checking";
+            this.workerCapabilities = null;
+            this.notify();
+
+            const controller = new AbortController();
+            let timeoutId: ReturnType<typeof setTimeout> | undefined;
+            try {
+                timeoutId = setTimeout(() => controller.abort(), 3000);
+                const response = await fetch(`${base}/api/health/worker`, {
+                    method: "GET",
+                    headers: { Accept: "application/json" },
+                    signal: controller.signal,
+                    cache: "no-store",
+                });
+                const body: unknown = await response.json();
+                if (!body || typeof body !== "object" || !("status" in body) || !("capabilities" in body)) {
+                    throw new Error("Invalid Worker readiness response");
+                }
+                const status = body.status;
+                const capabilities = body.capabilities;
+                if (
+                    (status !== "ready" && status !== "not_ready") ||
+                    !capabilities || typeof capabilities !== "object" ||
+                    !("document_processing" in capabilities) || typeof capabilities.document_processing !== "boolean" ||
+                    !("ocr" in capabilities) || typeof capabilities.ocr !== "boolean" ||
+                    !("office_to_pdf" in capabilities) || typeof capabilities.office_to_pdf !== "boolean" ||
+                    !("pdf_to_office" in capabilities) || typeof capabilities.pdf_to_office !== "boolean"
+                ) {
+                    throw new Error("Invalid Worker readiness response");
+                }
+                this.workerReadiness = status;
+                this.workerCapabilities = {
+                    document_processing: capabilities.document_processing,
+                    ocr: capabilities.ocr,
+                    office_to_pdf: capabilities.office_to_pdf,
+                    pdf_to_office: capabilities.pdf_to_office,
+                };
+            } catch {
+                // Transport and Backend-to-Worker authentication failures leave
+                // Worker availability unknown without changing Backend status.
+                this.workerReadiness = "unknown";
+                this.workerCapabilities = null;
+            } finally {
+                if (timeoutId !== undefined) clearTimeout(timeoutId);
+                this.notify();
+                this.workerProbeInFlight = null;
+            }
+        };
+
+        this.workerProbeInFlight = run();
+        return this.workerProbeInFlight;
     }
 }
 

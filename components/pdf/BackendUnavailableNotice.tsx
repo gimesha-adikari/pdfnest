@@ -7,6 +7,7 @@ import { useBackendHealth } from "@/context/BackendHealthContext";
 
 interface BackendUnavailableNoticeProps {
     toolName?: string;
+    availabilityService?: "backend" | "worker";
     suggestedAlternative?: {
         name: string;
         href: string;
@@ -16,25 +17,30 @@ interface BackendUnavailableNoticeProps {
 
 export default function BackendUnavailableNotice({
     toolName = "This tool",
+    availabilityService = "backend",
     suggestedAlternative,
     onRetry,
 }: BackendUnavailableNoticeProps) {
-    const { status, error, checkHealth } = useBackendHealth();
-    const isPending = status === "unknown" || status === "checking";
-    const isDegraded = status === "degraded";
+    const { status, error, workerReadiness, checkHealth, checkWorkerHealth } = useBackendHealth();
+    const isWorker = availabilityService === "worker";
+    const isPending = isWorker
+        ? workerReadiness === "checking"
+        : status === "unknown" || status === "checking";
+    const isDegraded = isWorker ? workerReadiness === "not_ready" : status === "degraded";
     const [isRetrying, setIsRetrying] = useState(false);
 
     const handleRetry = async () => {
         setIsRetrying(true);
         try {
             await checkHealth(true);
+            if (isWorker) await checkWorkerHealth(true);
             onRetry?.();
         } finally {
             setIsRetrying(false);
         }
     };
 
-    if (status === "online") return null;
+    if (isWorker ? workerReadiness === "ready" : status === "online") return null;
 
     return (
         <div
@@ -54,10 +60,14 @@ export default function BackendUnavailableNotice({
                 </h3>
                 <p className="text-xs text-[color:var(--muted)] leading-relaxed">
                     {isPending
-                        ? `${toolName} requires backend processing. Please wait while availability is checked.`
-                        : isDegraded
-                            ? `${toolName} requires backend dependencies that are currently not ready. Device processing remains available where supported.`
-                            : `${toolName} requires the PDFNest backend processing service, which is currently unreachable.${error ? ` ${error}` : ""}`}
+                        ? `${toolName} requires ${isWorker ? "a Worker document-processing capability" : "backend processing"}. Please wait while availability is checked.`
+                        : isWorker
+                            ? workerReadiness === "not_ready"
+                                ? `${toolName} requires a Worker document-processing capability that is currently not ready. Other Backend services are evaluated separately. Device processing remains available where supported.`
+                                : `${toolName} requires a Worker document-processing capability whose readiness could not be confirmed. Other Backend services are evaluated separately. Device processing remains available where supported.`
+                            : isDegraded
+                                ? `${toolName} requires backend dependencies that are currently not ready. Device processing remains available where supported.`
+                                : `${toolName} requires the PDFNest backend processing service, which is currently unreachable.${error ? ` ${error}` : ""}`}
                 </p>
             </div>
 
