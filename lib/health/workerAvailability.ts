@@ -1,5 +1,5 @@
 import { type ToolPolicy } from "@/lib/execution/types";
-import { type WorkerCapabilities } from "@/lib/health/backendHealth";
+import { type WorkerCapabilities, type WorkerReadiness } from "@/lib/health/backendHealth";
 
 export type WorkerCapability = keyof WorkerCapabilities;
 
@@ -27,6 +27,14 @@ const WORKER_CAPABILITY_BY_TOOL: Record<string, WorkerCapability> = {
 
 export function requiredWorkerCapability(toolId: string): WorkerCapability | null {
     return WORKER_CAPABILITY_BY_TOOL[toolId.trim().toLowerCase().replaceAll("-", "_")] ?? null;
+}
+
+export function isWorkerCapabilityAvailable(
+    capability: WorkerCapability,
+    workerReadiness: WorkerReadiness,
+    workerCapabilities: WorkerCapabilities | null,
+): boolean {
+    return workerReadiness === "ready" && workerCapabilities?.[capability] === true;
 }
 
 export function isToolExecutable(input: {
