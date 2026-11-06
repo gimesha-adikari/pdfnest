@@ -278,7 +278,11 @@ export default function MarkupPdfPreview({
                 frame.style.aspectRatio = `${viewport.width} / ${viewport.height}`;
                 const textContent = await pageProxy.getTextContent();
                 const textItems = textContent.items
-                    .filter((item): item is PdfTextItem => "str" in item && typeof item.str === "string" && Boolean(item.str.trim()));
+                    // Keep whitespace-only items so their indices stay aligned with
+                    // PDF.js text-layer spans. Find matching filters blank text while
+                    // retaining these source indices for geometry mapping.
+                    .filter((item): item is PdfTextItem => "str" in item && typeof item.str === "string");
+                const hasSelectableText = textItems.some((item) => Boolean(item.str.trim()));
                 const text = textItems.map((item) => item.str).join(" ").replace(/\s+/g, " ").trim();
                 let imageContent = false;
                 try {
@@ -288,8 +292,8 @@ export default function MarkupPdfPreview({
                 }
                 setPageText(text);
                 setNativeTextItems(textItems);
-                setPageHasSelectableText(textItems.length > 0);
-                setPageHasScannedContent(imageContent || textItems.length === 0);
+                setPageHasSelectableText(hasSelectableText);
+                setPageHasScannedContent(imageContent || !hasSelectableText);
 
                 textLayerElement.style.position = "absolute";
                 textLayerElement.style.inset = "0";
@@ -299,7 +303,7 @@ export default function MarkupPdfPreview({
                 textLayerElement.style.wordSpacing = "normal";
                 textLayerElement.style.transformOrigin = "0 0";
                 textLayerElement.style.zIndex = "2";
-                textLayerElement.style.pointerEvents = selectionEnabled && textItems.length > 0 ? "auto" : "none";
+                textLayerElement.style.pointerEvents = selectionEnabled && hasSelectableText ? "auto" : "none";
 
                 if (!pdfjsLib.TextLayer) throw new Error("PDF text selection is unavailable");
                 textLayer = new pdfjsLib.TextLayer({
