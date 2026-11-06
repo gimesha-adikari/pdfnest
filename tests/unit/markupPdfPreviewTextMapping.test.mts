@@ -162,9 +162,52 @@ async function main(): Promise<void> {
     assert.equal(whitespaceStates.at(-1)?.pageHasSelectableText, false);
     assert.equal(whitespaceStates.at(-1)?.pageHasScannedContent, true);
     await act(async () => whitespaceOnly.root.unmount());
+
+    const ocrStates: Array<{ count: number; activeIndex: number; current: { text: string; source: string } | null }> = [];
+    const ocrPreview = await renderPreview([textItem("IMAGE PAGE")], {
+        findQuery: "SCAN",
+        ocrPreviewStatus: "ready",
+        ocrPreview: {
+            schema_version: "1.0",
+            profile: "MARKUP_V2",
+            status: "ready",
+            page_count: 1,
+            pages: [{
+                page_index: 0,
+                page_number: 1,
+                page_id: "synthetic-ocr-page",
+                width: 612,
+                height: 792,
+                rotation: 0,
+                coordinate_space: "pdf-user-space",
+                classification: "scanned",
+                kind: "image",
+                selection_mode: "ocr",
+                status: "ready",
+                has_selectable_text: false,
+                word_count: 1,
+                reading_order: ["synthetic-ocr-word"],
+                words: [{ id: "synthetic-ocr-word", text: "SCAN", x: 72, y: 700, width: 35, height: 12, order: 0 }],
+                language: {},
+            }],
+        },
+        onFindStateChange: (state: (typeof ocrStates)[number]) => ocrStates.push(state),
+    });
+    assert.ok(ocrPreview.layer, "OCR mode continues to render the underlying PDF text layer");
+    assert.equal(ocrPreview.layer!.style.pointerEvents, "none", "OCR selection stays on the OCR word layer");
+    const ocrWord = document.querySelector('[data-testid="markup-pdf-ocr-word"]') as HTMLElement | null;
+    assert.ok(ocrWord, "OCR mode renders a selectable OCR word overlay");
+    assert.equal(ocrWord!.dataset.findMatch, "true", "OCR Find continues to highlight the matched word");
+    assert.equal(ocrWord!.style.pointerEvents, "auto");
+    assert.deepEqual(ocrStates.at(-1), {
+        count: 1,
+        activeIndex: 0,
+        current: { text: "SCAN", page: 1, source: "ocr" },
+    });
+    await act(async () => ocrPreview.root.unmount());
     dom.window.close();
 
-    console.log("PASS: mounted MarkupPdfPreview aligns synthetic PDF.js text items and rendered spans, highlights both phrase segments, preserves native selection, and rejects whitespace-only text as selectable");
+    console.log("PASS: mounted MarkupPdfPreview aligns synthetic PDF.js text items and rendered spans, highlights both phrase segments, preserves native selection and OCR Find, and rejects whitespace-only text as selectable");
 }
 
 void main().catch((error) => {
