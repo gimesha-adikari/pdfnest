@@ -253,6 +253,30 @@ async function main() {
             await act(async () => progressRoot.unmount());
         }
     }
+
+    let forbiddenStatusRequests = 0;
+    globalThis.fetch = async (_url, init = {}) => {
+        if (init.method === "POST") return Response.json({ task_id: "revoked-task" });
+        forbiddenStatusRequests += 1;
+        return Response.json({ error: "task access revoked" }, { status: 403 });
+    };
+    let revokedHook!: ReturnType<typeof useAsyncTask>;
+    function RevokedHarness() {
+        revokedHook = useAsyncTask("revoked-tool", () => {});
+        return null;
+    }
+    const revokedRoot = createRoot(documentMock.createElement() as unknown as HTMLElement);
+    try {
+        await act(async () => revokedRoot.render(React.createElement(RevokedHarness)));
+        await act(async () => { await revokedHook.submitTask("/api/test", new FormData()); });
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 1100)); });
+        assert.equal(revokedHook.status, "FAILED");
+        assert.match(revokedHook.error || "", /access.*denied|revoked/i, "403 revocation must be presented as an authorization result");
+        assert.doesNotMatch(revokedHook.error || "", /lost contact/i);
+        assert.equal(forbiddenStatusRequests, 1, "a definitive authorization denial must stop status polling");
+    } finally {
+        await act(async () => revokedRoot.unmount());
+    }
     console.log("Async task owner credentials, queued polling and reload recovery passed.");
 }
 

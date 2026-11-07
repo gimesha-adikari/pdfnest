@@ -25,6 +25,9 @@ import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
 import { ProcessingMode } from "@/lib/execution/types";
 import { getInitialProcessingMode } from "@/lib/security/pdfInputPreparation";
+import { getDefaultTextPosition } from "@/lib/pdf/defaultTextPosition";
+import { renderPdfPageToCanvas } from "@/lib/pdf/renderPdfPage";
+import { awaitRasterStage } from "@/lib/execution/images/rasterLifecycle";
 
 interface CustomPdfFile extends File {
     originalPassword?: string;
@@ -68,6 +71,7 @@ export default function AddTextWorkspace() {
     const [currentPage, setCurrentPage] = useState<number>(1);
     const [totalPages, setTotalPages] = useState<number>(0);
     const [isRenderingCanvas, setIsRenderingCanvas] = useState<boolean>(false);
+    const [previewError, setPreviewError] = useState<string | null>(null);
 
     // Matrix Scaling State (Maps HTML pixels -> PDF Points natively)
     const [pdfDimensions, setPdfDimensions] = useState({ width: 0, height: 0 });
@@ -76,6 +80,7 @@ export default function AddTextWorkspace() {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const renderTaskRef = useRef<PdfJsRenderTask | null>(null);
+    const loadingTaskRef = useRef<{ destroy: () => void } | null>(null);
 
     // Document Editor State
     const [elements, setElements] = useState<TextElement[]>([]);
@@ -102,87 +107,103 @@ export default function AddTextWorkspace() {
     const activeElement = elements.find((el) => el.id === activeId);
 
     useEffect(() => {
-        if (!file) {
-            setPdfDocument(null);
-            setTotalPages(0);
-            setCurrentPage(1);
-            return;
-        }
-
+        let isCancelled = false;
+        const controller = new AbortController();
         const loadPdf = async () => {
+            if (!file) {
+                setPdfDocument(null);
+                setIsRenderingCanvas(false);
+                setPreviewError(null);
+                setPdfDimensions({ width: 0, height: 0 });
+                setDisplayDimensions({ width: 0, height: 0 });
+                setTotalPages(0);
+                setCurrentPage(1);
+                return;
+            }
+
             try {
                 setIsRenderingCanvas(true);
-                const pdfjsLib = await import("pdfjs-dist");
+                setPreviewError(null);
+                const pdfjsLib = await awaitRasterStage(import("pdfjs-dist"), "starting the PDF preview", { signal: controller.signal });
                 pdfjsLib.GlobalWorkerOptions.workerSrc = window.location.origin + "/pdf.worker.mjs";
 
-                const arrayBuffer = await file.arrayBuffer();
+                const arrayBuffer = await awaitRasterStage(file.arrayBuffer(), "reading the PDF", { signal: controller.signal });
                 const typedArray = new Uint8Array(arrayBuffer);
                 const loadingTask = pdfjsLib.getDocument({ data: typedArray });
-                const pdf = await loadingTask.promise;
+                loadingTaskRef.current = loadingTask;
+                const pdf = await awaitRasterStage(loadingTask.promise, "loading the PDF", {
+                    signal: controller.signal,
+                    onCancel: () => { void loadingTask.destroy(); },
+                });
+                if (isCancelled) return;
+                loadingTaskRef.current = null;
 
                 setPdfDocument(pdf as unknown as PdfJsDocument);
                 setTotalPages(pdf.numPages);
                 setCurrentPage(1);
             } catch (err) {
+                if (isCancelled || controller.signal.aborted) return;
                 console.error("Failed to parse document context:", err);
+                setPreviewError((err as Error)?.name === "RasterStageTimeoutError"
+                    ? "PDF preview loading timed out. Try uploading the document again."
+                    : "Could not load the PDF preview. Check that the file is valid and unlocked.");
             } finally {
-                setIsRenderingCanvas(false);
+                if (!isCancelled) setIsRenderingCanvas(false);
             }
         };
 
-        loadPdf();
+        void loadPdf();
+        return () => {
+            isCancelled = true;
+            controller.abort();
+            try { loadingTaskRef.current?.destroy(); } catch {}
+            loadingTaskRef.current = null;
+        };
     }, [file]);
 
     useEffect(() => {
-        if (!pdfDocument || !canvasRef.current) return;
+        if (!pdfDocument || !canvasRef.current) {
+            setIsRenderingCanvas(false);
+            return;
+        }
+
+        const canvas = canvasRef.current;
+        let isCancelled = false;
+        const controller = new AbortController();
 
         const renderPage = async () => {
+            setIsRenderingCanvas(true);
+            setPreviewError(null);
+            let activeRenderTask: PdfJsRenderTask | null = null;
             try {
-                setIsRenderingCanvas(true);
-
                 if (renderTaskRef.current) renderTaskRef.current.cancel();
-
-                const page = await pdfDocument.getPage(currentPage);
-                const canvas = canvasRef.current;
-                if (!canvas) return;
-
-                const ctx = canvas.getContext("2d");
-                if (!ctx) return;
-
-                const baseViewport = page.getViewport({ scale: 1.0 });
-                const renderViewport = page.getViewport({ scale: 1.5 });
-
-                canvas.width = renderViewport.width;
-                canvas.height = renderViewport.height;
-
-                const renderTask = page.render({
-                    canvasContext: ctx,
-                    viewport: renderViewport,
+                const dimensions = await renderPdfPageToCanvas(pdfDocument, currentPage, canvas, {
+                    signal: controller.signal,
+                    onTask: (task) => {
+                        if (task) {
+                            activeRenderTask = task;
+                            renderTaskRef.current = task;
+                        } else if (renderTaskRef.current === activeRenderTask) {
+                            renderTaskRef.current = null;
+                        }
+                    },
                 });
-                renderTaskRef.current = renderTask;
-
-                await renderTask.promise;
-                renderTaskRef.current = null;
-
-                setTimeout(() => {
-                    if (canvasRef.current) {
-                        setPdfDimensions({ width: baseViewport.width, height: baseViewport.height });
-                        setDisplayDimensions({
-                            width: canvasRef.current.clientWidth,
-                            height: canvasRef.current.clientHeight,
-                        });
-                    }
-                }, 0);
+                if (isCancelled) return;
+                setPdfDimensions({ width: dimensions.pageWidth, height: dimensions.pageHeight });
+                setDisplayDimensions({ width: dimensions.displayWidth, height: dimensions.displayHeight });
             } catch (err: unknown) {
-                if ((err as Error)?.name !== "RenderingCancelledException") {
-                    console.error("Canvas raster skipped:", err);
-                }
+                if (isCancelled || controller.signal.aborted || (err as Error)?.name === "RenderingCancelledException") return;
+                console.error("Canvas raster failed:", err);
+                setPreviewError("The page preview could not be rendered. Change pages or upload the PDF again to retry.");
             } finally {
-                setIsRenderingCanvas(false);
+                if (!isCancelled) {
+                    renderTaskRef.current = null;
+                    setIsRenderingCanvas(false);
+                }
             }
         };
 
-        renderPage();
+        void renderPage();
 
         const updateDisplaySize = () => {
             if (canvasRef.current) {
@@ -195,6 +216,8 @@ export default function AddTextWorkspace() {
 
         window.addEventListener("resize", updateDisplaySize);
         return () => {
+            isCancelled = true;
+            controller.abort();
             window.removeEventListener("resize", updateDisplaySize);
             if (renderTaskRef.current) renderTaskRef.current.cancel();
         };
@@ -239,14 +262,16 @@ export default function AddTextWorkspace() {
 
     // Box Controls
     const addTextBox = () => {
+        if (!pdfDimensions.width || !pdfDimensions.height || isRenderingCanvas || previewError) return;
         const newId = Math.random().toString(36).substring(7);
+        const position = getDefaultTextPosition(pdfDimensions.width, pdfDimensions.height, 24);
         const newElement: TextElement = {
             id: newId,
             text: "Type here...",
-            x: 50,
-            y: 50,
+            x: position.x,
+            y: position.y,
             page: currentPage,
-            fontSize: 24,
+            fontSize: position.fontSize,
             color: "#000000",
         };
         setElements([...elements, newElement]);
@@ -318,7 +343,7 @@ export default function AddTextWorkspace() {
         <>
             <PdfToolHero
                 title="Add Text to PDF"
-                description="Drag, drop, and type. Place text boxes anywhere on your document pages effortlessly like a real editor."
+                description="New text boxes start in the lower page margin, where their placement is easy to preview. Drag a box anywhere, including over existing content, before exporting."
             />
 
             <div className="mt-12 w-full rounded-3xl border border-[color:var(--border)] bg-[var(--card)] p-8 shadow-lg">
@@ -341,12 +366,15 @@ export default function AddTextWorkspace() {
                                 </h3>
 
                                 <button
+                                    type="button"
                                     onClick={addTextBox}
+                                    disabled={isRenderingCanvas || !pdfDimensions.width || Boolean(previewError)}
                                     className="flex items-center gap-1 rounded-lg bg-indigo-500 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white shadow transition hover:bg-indigo-600"
                                 >
                                     <Plus size={12} /> Add Box
                                 </button>
                             </div>
+                            <p className="text-xs text-[color:var(--muted)]">New boxes start in the lower margin. Drag them to any placement, including intentional overlaps.</p>
 
                             {activeElement ? (
                                 <div className="animate-fadeIn space-y-4">
@@ -418,7 +446,7 @@ export default function AddTextWorkspace() {
                             text="Stamp Text onto Document"
                             loadingText="Rendering Vector Blocks..."
                             loading={isProcessing}
-                            disabled={isProcessing || isRenderingCanvas || elements.length === 0}
+                            disabled={isProcessing || isRenderingCanvas || Boolean(previewError) || elements.length === 0}
                             onClick={handleTextProcessing}
                         />
                     </div>
@@ -469,6 +497,11 @@ export default function AddTextWorkspace() {
                                 className="relative max-w-full rounded border border-[color:var(--border)] bg-[var(--card)] shadow-xl"
                                 onClick={(e) => e.stopPropagation()}
                             >
+                                {previewError && (
+                                    <div role="alert" className="absolute inset-0 z-30 flex items-center justify-center bg-red-500/10 p-6 text-center text-sm text-red-700">
+                                        {previewError}
+                                    </div>
+                                )}
                                 <canvas
                                     ref={canvasRef}
                                     className="block h-auto max-w-full rounded pointer-events-none"

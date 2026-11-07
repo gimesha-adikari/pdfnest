@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck, Loader2, FileArchive, RefreshCw, Image as ImageIcon } from "lucide-react";
 import { handleClientError } from "@/lib/errorHandler";
@@ -11,7 +11,7 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { ProcessingModeSelector } from "@/components/shared/ProcessingModeSelector";
-import { ProcessingMode } from "@/lib/execution/types";
+import { ExecutionError, ProcessingMode } from "@/lib/execution/types";
 import { getInitialProcessingMode } from "@/lib/security/pdfInputPreparation";
 
 type ImageTypeOption = {
@@ -49,16 +49,23 @@ export default function PdfToImagesWorkspace() {
     const { toolId, file, setFile, setDownloadData } = useSharedTool();
 
     const [isProcessing, setIsProcessing] = useState(false);
+    const [processingPercent, setProcessingPercent] = useState(0);
     const [success, setSuccess] = useState(false);
+    const processingControllerRef = useRef<AbortController | null>(null);
     const [imageType, setImageType] = useState<ImageTypeOption["value"]>("jpg");
     const [processingMode, setProcessingMode] = useState<ProcessingMode>(() => getInitialProcessingMode(file));
+
+    useEffect(() => () => processingControllerRef.current?.abort(), []);
 
     const selectedOption =
         IMAGE_TYPE_OPTIONS.find((option) => option.value === imageType) ?? IMAGE_TYPE_OPTIONS[0];
 
     const resetTool = () => {
+        processingControllerRef.current?.abort();
+        processingControllerRef.current = null;
         setFile(null);
         setSuccess(false);
+        setProcessingPercent(0);
         setImageType("jpg");
         router.push(`/${toolId}`);
     };
@@ -67,8 +74,11 @@ export default function PdfToImagesWorkspace() {
         requireAuth(async () => {
             if (!file) return;
 
+            const controller = new AbortController();
+            processingControllerRef.current = controller;
             try {
                 setIsProcessing(true);
+                setProcessingPercent(1);
                 setSuccess(false);
 
                 const result = await ExecutionManager.run({
@@ -79,6 +89,8 @@ export default function PdfToImagesWorkspace() {
                     },
                     mode: processingMode,
                     password: (file as any).originalPassword,
+                    signal: controller.signal,
+                    onProgress: setProcessingPercent,
                 });
 
                 const zipDownloadName = `${file.name.replace(/\.pdf$/i, "")}-${imageType}-images.zip`;
@@ -91,9 +103,12 @@ export default function PdfToImagesWorkspace() {
                 setSuccess(true);
                 router.push(`/${toolId}/download`);
             } catch (err) {
-                console.error(err);
-                handleClientError(err);
+                if (!controller.signal.aborted && !(err instanceof ExecutionError && err.code === "USER_CANCELLATION")) {
+                    console.error(err);
+                    handleClientError(err);
+                }
             } finally {
+                processingControllerRef.current = null;
                 setIsProcessing(false);
             }
         });
@@ -193,9 +208,22 @@ export default function PdfToImagesWorkspace() {
                                 <p className="text-sm font-bold text-[color:var(--foreground)]">
                                     Rasterizing Pages as {selectedOption.label}...
                                 </p>
+                                <div className="w-full max-w-xs" role="progressbar" aria-label="Image extraction progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={processingPercent}>
+                                    <div className="h-1.5 overflow-hidden rounded-full bg-indigo-500/15">
+                                        <div className="h-full rounded-full bg-indigo-500 transition-[width]" style={{ width: `${processingPercent}%` }} />
+                                    </div>
+                                    <p className="mt-1 text-xs">{processingPercent}%</p>
+                                </div>
                                 <p className="text-xs max-w-xs">
                                     File layers are safely being flattened into individual image files inside a ZIP container.
                                 </p>
+                                <button
+                                    type="button"
+                                    onClick={() => processingControllerRef.current?.abort()}
+                                    className="rounded-lg border border-[color:var(--border)] px-3 py-1.5 text-xs font-semibold hover:border-red-500 hover:text-red-600"
+                                >
+                                    Cancel extraction
+                                </button>
                             </div>
                         ) : (
                             <div className="space-y-4 text-[color:var(--muted)] flex flex-col items-center">

@@ -11,6 +11,13 @@ import { notify, notifyBackendError } from "@/lib/notify";
 import { getBaseUrl } from "@/lib/api";
 import { markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 
+class TaskStatusRequestError extends Error {
+    constructor(readonly status: number) {
+        super(`Status request failed (${status})`);
+        this.name = "TaskStatusRequestError";
+    }
+}
+
 export type TaskStatus =
     | "PENDING"
     | "QUEUED"
@@ -43,6 +50,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
     const [error, setError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
+    const [hasSubmission, setHasSubmission] = useState(false);
 
     const idempotencyKeyRef = useRef<string>("");
     const onCompleteRef = useRef(onComplete);
@@ -154,7 +162,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
                 }
 
                 if (!res.ok) {
-                    handlePollFailure(new Error(`Status request failed (${res.status})`));
+                    handlePollFailure(new TaskStatusRequestError(res.status));
                     return;
                 }
 
@@ -214,6 +222,13 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
         // surfaced instead of leaving the UI polling forever.
         const handlePollFailure = (err: unknown) => {
             if (!isMounted || activeTaskIdRef.current !== taskId) return;
+            if (err instanceof TaskStatusRequestError && (err.status === 401 || err.status === 403)) {
+                const message = "Access to this task was denied or revoked.";
+                setStatus("FAILED");
+                setError(message);
+                removeStoredTask(taskId);
+                return;
+            }
             consecutiveFailures += 1;
             console.warn(`Task status poll failed (attempt ${consecutiveFailures}):`, err);
 
@@ -245,6 +260,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
 
     const registerSubmission = (submitFn: () => Promise<string | null>) => {
         lastSubmissionRef.current = submitFn;
+        setHasSubmission(true);
     };
 
     const submitTask = async (
@@ -261,6 +277,7 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
 
         if (submitFn) {
             lastSubmissionRef.current = submitFn;
+            setHasSubmission(true);
         }
 
         // Retries reuse this key; a later user submission must not reuse its result.
@@ -496,9 +513,10 @@ export function useAsyncTask(toolName: string, onComplete?: (downloadUrl: string
         setIsCancelling(false);
         idempotencyKeyRef.current = "";
         lastSubmissionRef.current = null;
+        setHasSubmission(false);
     };
 
-    const canRestart = (status === "FAILED" || status === "CANCELLED") && Boolean(lastSubmissionRef.current);
+    const canRestart = (status === "FAILED" || status === "CANCELLED") && hasSubmission;
 
     return {
         taskId,

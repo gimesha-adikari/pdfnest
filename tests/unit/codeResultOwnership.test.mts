@@ -7,6 +7,7 @@ import React, { act } from "react";
 import axios, { type InternalAxiosRequestConfig } from "axios";
 import { CloudExecutor } from "../../lib/execution/CloudExecutor";
 import { handleClientError } from "../../lib/errorHandler";
+import { triggerBlobDownload } from "../../lib/blobDownload";
 import { ExecutionError, type ExecutionOptions, type ExecutionResult } from "../../lib/execution/types";
 import * as pdfInputPreparation from "../../lib/security/pdfInputPreparation";
 import type { PreviewResource } from "../../lib/preview/types";
@@ -111,6 +112,7 @@ async function main() {
     }).default;
     const download = loadComponent("app/(site)/[toolId]/download/page.tsx", {
         ...framework, ...sharedImport,
+        "@/lib/blobDownload": { triggerBlobDownload },
         "@/context/WorkflowContext": { useWorkflow: () => ({ setPendingTransfer: empty, clearTransfer: empty }) },
         "@/components/pdf/PdfToolLayout": { default: wrapper },
         "@/lib/toolSuggestions": { getSuggestedNextTools: () => [] },

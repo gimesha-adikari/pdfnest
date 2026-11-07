@@ -113,7 +113,7 @@ export class ClientExecutor {
         }
 
         if (normalizedTool === "pdf_to_images") {
-            return await executePdfToImages(file, params, originalPassword);
+            return await executePdfToImages(file, params, originalPassword, options.signal, options.onProgress);
         }
 
         if (normalizedTool === "pdf_to_text") {
