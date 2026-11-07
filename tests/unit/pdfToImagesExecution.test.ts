@@ -1,6 +1,5 @@
 import assert from "assert";
 import { PDFDocument } from "pdf-lib";
-import { unzipSync } from "fflate";
 import { ClientExecutor } from "@/lib/execution/ClientExecutor";
 import { CloudExecutor } from "@/lib/execution/CloudExecutor";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
@@ -35,78 +34,15 @@ export async function runPdfToImagesExecutionTests() {
     assert.strictEqual(ClientExecutor.isSupported("pdf-to-png"), true);
     console.log("✓ [PASS] 1. ClientExecutor.isSupported evaluates true for all 8 aliases");
 
-    // 2. JPEG conversion produces valid ZIP with 3-digit zero-padded names
+    // 2. Node/SSR has no real canvas and must not synthesize successful output.
     const testFile1 = await createTestPdf(3);
-    const blob1 = await ClientExecutor.execute({
-        tool: "pdf_to_images",
-        files: [testFile1],
-        params: { imageType: "jpg" },
-        mode: "device",
-    });
-    assert.strictEqual(blob1.type, "application/zip");
-    const zipBytes1 = new Uint8Array(await blob1.arrayBuffer());
-    const unzipped1 = unzipSync(zipBytes1);
-    const fileKeys1 = Object.keys(unzipped1).sort();
-    assert.deepStrictEqual(fileKeys1, ["page-001.jpg", "page-002.jpg", "page-003.jpg"]);
-    console.log("✓ [PASS] 2. JPEG conversion produces valid ZIP containing page-001.jpg, page-002.jpg, page-003.jpg");
+    await assert.rejects(
+        ClientExecutor.execute({ tool: "pdf_to_images", files: [testFile1], params: { imageType: "jpg" }, mode: "device" }),
+        (error: unknown) => error instanceof ExecutionError && error.code === "UNSUPPORTED_CLIENT_OP",
+    );
+    console.log("✓ [PASS] 2. Non-browser execution does not return placeholder raster bytes");
 
-    // 3. PNG conversion produces valid ZIP with page-001.png
-    const testFile2 = await createTestPdf(2);
-    const blob2 = await ClientExecutor.execute({
-        tool: "pdf_to_images",
-        files: [testFile2],
-        params: { imageType: "png" },
-        mode: "device",
-    });
-    const unzipped2 = unzipSync(new Uint8Array(await blob2.arrayBuffer()));
-    const fileKeys2 = Object.keys(unzipped2).sort();
-    assert.deepStrictEqual(fileKeys2, ["page-001.png", "page-002.png"]);
-    console.log("✓ [PASS] 3. PNG conversion produces valid ZIP containing page-001.png, page-002.png");
-
-    // 4. Grayscale PNG conversion
-    const testFile3 = await createTestPdf(1);
-    const blob3 = await ClientExecutor.execute({
-        tool: "pdf_to_images",
-        files: [testFile3],
-        params: { imageType: "pnggray" },
-        mode: "device",
-    });
-    const unzipped3 = unzipSync(new Uint8Array(await blob3.arrayBuffer()));
-    assert.ok(unzipped3["page-001.png"] !== undefined);
-    console.log("✓ [PASS] 4. Grayscale PNG produces valid ZIP containing page-001.png");
-
-    // 5. Monochrome PNG conversion
-    const testFile4 = await createTestPdf(1);
-    const blob4 = await ClientExecutor.execute({
-        tool: "pdf_to_images",
-        files: [testFile4],
-        params: { imageType: "pngmono" },
-        mode: "device",
-    });
-    const unzipped4 = unzipSync(new Uint8Array(await blob4.arrayBuffer()));
-    assert.ok(unzipped4["page-001.png"] !== undefined);
-    console.log("✓ [PASS] 5. Monochrome PNG produces valid ZIP containing page-001.png");
-
-    // 6. 5-page document produces 5 distinct entries
-    const testFile5 = await createTestPdf(5);
-    const blob5 = await ClientExecutor.execute({
-        tool: "pdf_to_images",
-        files: [testFile5],
-        params: { imageType: "jpg" },
-        mode: "device",
-    });
-    const unzipped5 = unzipSync(new Uint8Array(await blob5.arrayBuffer()));
-    assert.strictEqual(Object.keys(unzipped5).length, 5);
-    assert.deepStrictEqual(Object.keys(unzipped5).sort(), [
-        "page-001.jpg",
-        "page-002.jpg",
-        "page-003.jpg",
-        "page-004.jpg",
-        "page-005.jpg",
-    ]);
-    console.log("✓ [PASS] 6. 5-page PDF produces exactly 5 sequentially numbered images in flat ZIP");
-
-    // 7. Auto mode executes locally with 0 cloud calls on safe input
+    // 3. Auto mode can fall back in this Node-only harness when browser Canvas is unavailable.
     let cloudCalled = false;
     const origCloudExec = CloudExecutor.execute;
     CloudExecutor.execute = async () => {
@@ -122,22 +58,17 @@ export async function runPdfToImagesExecutionTests() {
             params: { imageType: "jpg" },
             mode: "auto",
         });
-        assert.strictEqual(cloudCalled, false, "Auto mode must not call CloudExecutor for safe PDF");
-        assert.strictEqual(autoResult.executionMode, "client");
-        assert.strictEqual(autoResult.fallbackOccurred, false);
-        console.log("✓ [PASS] 7. Auto mode executes 100% locally with 0 cloud calls");
+        assert.strictEqual(cloudCalled, true, "Auto mode may fall back when this non-browser harness lacks Canvas");
+        assert.strictEqual(autoResult.executionMode, "cloud");
+        assert.strictEqual(autoResult.fallbackOccurred, true);
+        console.log("✓ [PASS] 3. Auto mode reports browser-unavailable fallback in the Node harness");
 
-        // 8. Device mode executes locally with 0 cloud calls
+        // 4. Device mode remains local-only and rejects unsupported non-browser execution.
         cloudCalled = false;
-        const devResult = await ExecutionManager.run({
-            tool: "pdf_to_images",
-            files: [autoFile],
-            params: { imageType: "png" },
-            mode: "device",
-        });
+        await assert.rejects(ExecutionManager.run({ tool: "pdf_to_images", files: [autoFile], params: { imageType: "png" }, mode: "device" }),
+            (error: unknown) => error instanceof ExecutionError && error.code === "UNSUPPORTED_CLIENT_OP");
         assert.strictEqual(cloudCalled, false, "Device mode must not call CloudExecutor");
-        assert.strictEqual(devResult.executionMode, "client");
-        console.log("✓ [PASS] 8. Device mode executes 100% locally with 0 cloud calls");
+        console.log("✓ [PASS] 4. Device mode rejects without routing the input to Cloud");
 
         // 9. Explicit Cloud mode invokes CloudExecutor
         cloudCalled = false;
@@ -149,7 +80,7 @@ export async function runPdfToImagesExecutionTests() {
         });
         assert.strictEqual(cloudCalled, true, "Cloud mode must call CloudExecutor");
         assert.strictEqual(cloudResult.executionMode, "cloud");
-        console.log("✓ [PASS] 9. Explicit Cloud mode invokes CloudExecutor");
+        console.log("✓ [PASS] 5. Explicit Cloud mode invokes CloudExecutor");
 
         // 10. Password-protected file triggers Cloud fallback in Auto mode (Option B)
         cloudCalled = false;
@@ -215,20 +146,11 @@ export async function runPdfToImagesExecutionTests() {
     assert.strictEqual(safetyEval.eligible, false, "26MB file must exceed client safety gate");
     console.log("✓ [PASS] 13. ExecutionSafetyGate rejects 26MB file for local execution");
 
-    // 14. Magic ZIP header signature verification
+    // 14. Non-browser mode cannot claim a ZIP exists without real rendered images.
     const testFile6 = await createTestPdf(1);
-    const blob6 = await ClientExecutor.execute({
-        tool: "pdf_to_images",
-        files: [testFile6],
-        params: { imageType: "jpg" },
-        mode: "device",
-    });
-    const zipBytes6 = new Uint8Array(await blob6.arrayBuffer());
-    assert.strictEqual(zipBytes6[0], 0x50); // 'P'
-    assert.strictEqual(zipBytes6[1], 0x4b); // 'K'
-    assert.strictEqual(zipBytes6[2], 0x03);
-    assert.strictEqual(zipBytes6[3], 0x04);
-    console.log("✓ [PASS] 14. Output ZIP starts with standard PK\x03\x04 signature");
+    await assert.rejects(ClientExecutor.execute({ tool: "pdf_to_images", files: [testFile6], params: { imageType: "jpg" }, mode: "device" }),
+        (error: unknown) => error instanceof ExecutionError && error.code === "UNSUPPORTED_CLIENT_OP");
+    console.log("✓ [PASS] 14. No placeholder image archive is returned without a browser canvas");
 
     // 15. Empty files array throws INVALID_INPUT
     try {
@@ -246,6 +168,6 @@ export async function runPdfToImagesExecutionTests() {
     }
 
     console.log("\n=================================================");
-    console.log(" PDF TO IMAGES TEST SUMMARY: 15 PASSED, 0 FAILED ");
+    console.log(" PDF TO IMAGES TEST SUMMARY: 11 PASSED, 0 FAILED ");
     console.log("=================================================\n");
 }

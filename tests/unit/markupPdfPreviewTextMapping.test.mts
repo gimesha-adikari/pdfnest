@@ -25,8 +25,8 @@ type SyntheticPdfTextItem = {
     hasEOL: boolean;
 };
 
-function textItem(str: string): SyntheticPdfTextItem {
-    return { str, dir: "ltr", transform: [1, 0, 0, 1, 72, 700], width: str.length * 8, height: 12, fontName: "F1", hasEOL: false };
+function textItem(str: string, hasEOL = false): SyntheticPdfTextItem {
+    return { str, dir: "ltr", transform: [1, 0, 0, 1, 72, 700], width: str.length * 8, height: 12, fontName: "F1", hasEOL };
 }
 
 let activeItems: SyntheticPdfTextItem[] = [];
@@ -40,6 +40,11 @@ class SyntheticTextLayer {
             const span = document.createElement("span");
             span.textContent = item.str;
             this.options.container.append(span);
+            if (item.hasEOL) {
+                const lineBreak = document.createElement("br");
+                lineBreak.setAttribute("role", "presentation");
+                this.options.container.append(lineBreak);
+            }
         }
     }
 
@@ -116,7 +121,7 @@ async function main(): Promise<void> {
     const findStates: Array<{ count: number; activeIndex: number; current: { text: string; source: string } | null }> = [];
     const previewStates: Array<{ status: string; pageHasSelectableText: boolean; pageHasScannedContent: boolean }> = [];
     const rendered = await renderPreview(
-        [textItem("PLATEN"), textItem(" "), textItem("PDF")],
+        [textItem("PLATEN", true), textItem(" "), textItem("PDF")],
         {
             findQuery: "PLATEN PDF",
             onFindStateChange: (state: (typeof findStates)[number]) => findStates.push(state),
@@ -125,7 +130,7 @@ async function main(): Promise<void> {
     );
 
     assert.ok(rendered.layer, "the mounted PDF preview renders its native text layer");
-    const spans = Array.from(rendered.layer!.children) as HTMLElement[];
+    const spans = Array.from(rendered.layer!.querySelectorAll(":scope > span")) as HTMLElement[];
     assert.deepEqual(spans.map((span) => ({
         index: span.dataset.textItemIndex,
         text: span.textContent,
@@ -144,6 +149,9 @@ async function main(): Promise<void> {
     assert.ok(spans[2].style.backgroundColor, "the second visible phrase segment receives the active-match highlight");
     assert.equal(rendered.layer!.getAttribute("aria-label"), "Selectable PDF text");
     assert.equal(rendered.layer!.style.pointerEvents, "auto", "native text selection remains enabled for ordinary PDF text");
+    const lineBreak = rendered.layer!.querySelector(":scope > br");
+    assert.ok(lineBreak, "PDF.js line breaks remain in the text layer");
+    assert.equal(lineBreak!.getAttribute("data-text-item-index"), null, "non-text presentation elements must not consume a PDF.js text-item index");
     assert.deepEqual(findStates.at(-1), {
         count: 1,
         activeIndex: 0,

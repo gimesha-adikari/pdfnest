@@ -10,6 +10,7 @@ import { useTools } from "@/context/ToolContext";
 import PdfToolLayout from "@/components/pdf/PdfToolLayout";
 import { getSuggestedNextTools } from "@/lib/toolSuggestions";
 import RepositoryAnalyzerDownload from "@/components/tools/RepositoryAnalyzerDownload";
+import { triggerBlobDownload } from "@/lib/blobDownload";
 
 export default function SharedDownloadPage() {
     const router = useRouter();
@@ -47,14 +48,7 @@ export default function SharedDownloadPage() {
     if (!downloadData) return null;
 
     const triggerDownload = () => {
-        const downloadUrl = window.URL.createObjectURL(downloadData.blob);
-        const link = document.createElement("a");
-        link.href = downloadUrl;
-        link.download = downloadData.fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(downloadUrl);
+        triggerBlobDownload(downloadData.blob, downloadData.fileName);
     };
 
     const startOver = () => {

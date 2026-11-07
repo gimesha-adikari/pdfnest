@@ -27,6 +27,8 @@ import PdfActionButton from "@/components/pdf/PdfActionButton";
 import PdfToolHero from "@/components/pdf/PdfToolHero";
 import { usePreview } from "@/lib/preview/usePreview";
 import type { PreviewError } from "@/lib/preview/types";
+import { renderPdfPageToCanvas } from "@/lib/pdf/renderPdfPage";
+import { awaitRasterStage } from "@/lib/execution/images/rasterLifecycle";
 import { ExecutionManager } from "@/lib/execution/ExecutionManager";
 import { assertCloudProcessingAuthorized, markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 
@@ -290,6 +292,7 @@ export default function HighlightPdfWorkspace() {
     const [uploadProgress, setUploadProgress] = useState<number>(0);
     const [jobError, setJobError] = useState<string | null>(null);
     const [pdfLoadError, setPdfLoadError] = useState<string | null>(null);
+    const [canvasRenderError, setCanvasRenderError] = useState<string | null>(null);
     const [canvasElement, setCanvasElement] = useState<HTMLCanvasElement | null>(null);
     const canvasRef = useCallback((node: HTMLCanvasElement | null) => {
         setCanvasElement(node);
@@ -397,38 +400,40 @@ export default function HighlightPdfWorkspace() {
             pdfDocRef.current = null;
         }
 
-        if (!file) {
-            setPdfDocument(null);
-            setTotalPages(0);
-            setCurrentPage(1);
-            setBoxes([]);
-            setHistoryPast([]);
-            setHistoryFuture([]);
-            setActiveId(null);
-            setSuccess(false);
-            setHighlightMode("smart");
-            setPageAnalysisMap({});
-            setAnalysisLoaded(false);
-            setAnalysisError(null);
-            setIsAnalyzing(false);
-            setPdfLoadError(null);
-
-            setJobId("");
-            setJob(null);
-            setUploadProgress(0);
-            setJobError(null);
-            return;
-        }
-
         let isCancelled = false;
+        const controller = new AbortController();
 
         const loadPdf = async () => {
+            if (!file) {
+                setPdfDocument(null);
+                setIsRenderingCanvas(false);
+                setCanvasRenderError(null);
+                setTotalPages(0);
+                setCurrentPage(1);
+                setBoxes([]);
+                setHistoryPast([]);
+                setHistoryFuture([]);
+                setActiveId(null);
+                setSuccess(false);
+                setHighlightMode("smart");
+                setPageAnalysisMap({});
+                setAnalysisLoaded(false);
+                setAnalysisError(null);
+                setIsAnalyzing(false);
+                setPdfLoadError(null);
+                setJobId("");
+                setJob(null);
+                setUploadProgress(0);
+                setJobError(null);
+                return;
+            }
+
             try {
                 setIsRenderingCanvas(true);
                 setPdfLoadError(null);
 
-                const pdfjsLib = await loadPdfJs();
-                const arrayBuffer = await file.arrayBuffer();
+                const pdfjsLib = await awaitRasterStage(loadPdfJs(), "starting the PDF preview", { signal: controller.signal });
+                const arrayBuffer = await awaitRasterStage(file.arrayBuffer(), "reading the PDF", { signal: controller.signal });
                 if (isCancelled) return;
 
                 // Safe clone of buffer bytes to prevent worker transfer detachment from invalidating other readers
@@ -443,7 +448,10 @@ export default function HighlightPdfWorkspace() {
                 const loadingTask = pdfjsLib.getDocument(docParams);
                 loadingTaskRef.current = loadingTask;
 
-                const pdf = await loadingTask.promise;
+                const pdf = await awaitRasterStage(loadingTask.promise, "loading the PDF", {
+                    signal: controller.signal,
+                    onCancel: () => { void loadingTask.destroy(); },
+                });
                 if (isCancelled) {
                     try { (pdf as any)?.destroy?.(); } catch {}
                     return;
@@ -468,6 +476,8 @@ export default function HighlightPdfWorkspace() {
                     setPdfLoadError("This document is password-protected. Please unlock it to annotate.");
                 } else if (errName === "InvalidPDFException" || errMsg.toLowerCase().includes("invalid")) {
                     setPdfLoadError("Invalid or corrupted PDF document.");
+                } else if (errName === "RasterStageTimeoutError") {
+                    setPdfLoadError("PDF preview loading timed out. Try uploading the document again.");
                 } else {
                     setPdfLoadError("Could not render document preview.");
                 }
@@ -481,10 +491,11 @@ export default function HighlightPdfWorkspace() {
             }
         };
 
-        loadPdf();
+        void loadPdf();
 
         return () => {
             isCancelled = true;
+            controller.abort();
             if (loadingTaskRef.current) {
                 try { loadingTaskRef.current.destroy(); } catch {}
                 loadingTaskRef.current = null;
@@ -568,7 +579,11 @@ export default function HighlightPdfWorkspace() {
     useEffect(() => {
         if (!currentPageAnalysis) return;
         if (currentPageAnalysis.kind === "scanned" && highlightMode === "smart") {
-            setHighlightMode("manual");
+            let current = true;
+            queueMicrotask(() => {
+                if (current) setHighlightMode("manual");
+            });
+            return () => { current = false; };
         }
     }, [currentPageAnalysis, highlightMode]);
 
@@ -576,54 +591,43 @@ export default function HighlightPdfWorkspace() {
         if (!pdfDocument || !canvasElement) return;
 
         let isCancelled = false;
+        const controller = new AbortController();
 
         const renderPage = async () => {
+            setIsRenderingCanvas(true);
+            setCanvasRenderError(null);
+            let activeRenderTask: PdfJsRenderTask | null = null;
+            if (renderTaskRef.current) {
+                try { renderTaskRef.current.cancel(); } catch {}
+            }
             try {
-                setIsRenderingCanvas(true);
-                if (renderTaskRef.current) {
-                    try { renderTaskRef.current.cancel(); } catch {}
-                }
-
-                const page = await pdfDocument.getPage(currentPage);
-                if (isCancelled || !canvasElement) return;
-
-                const ctx = canvasElement.getContext("2d");
-                if (!ctx) return;
-
-                const baseViewport = page.getViewport({ scale: 1.0 });
-                const renderViewport = page.getViewport({ scale: 1.5 });
-
-                canvasElement.width = renderViewport.width;
-                canvasElement.height = renderViewport.height;
-
-                const renderTask = page.render({
-                    canvasContext: ctx,
-                    viewport: renderViewport,
+                const dimensions = await renderPdfPageToCanvas(pdfDocument, currentPage, canvasElement, {
+                    signal: controller.signal,
+                    onTask: (task) => {
+                        if (task) {
+                            activeRenderTask = task;
+                            renderTaskRef.current = task;
+                        } else if (renderTaskRef.current === activeRenderTask) {
+                            renderTaskRef.current = null;
+                        }
+                    },
                 });
-                renderTaskRef.current = renderTask;
-                await renderTask.promise;
                 if (isCancelled) return;
-                renderTaskRef.current = null;
-
-                if (canvasElement) {
-                    setPdfDimensions({ width: baseViewport.width, height: baseViewport.height });
-                    setDisplayDimensions({
-                        width: canvasElement.clientWidth,
-                        height: canvasElement.clientHeight,
-                    });
-                }
+                setPdfDimensions({ width: dimensions.pageWidth, height: dimensions.pageHeight });
+                setDisplayDimensions({ width: dimensions.displayWidth, height: dimensions.displayHeight });
             } catch (err: unknown) {
-                if ((err as Error)?.name !== "RenderingCancelledException") {
-                    console.error("Canvas render skipped:", err);
-                }
+                if (isCancelled || controller.signal.aborted || (err as Error)?.name === "RenderingCancelledException") return;
+                console.error("Canvas preview render failed:", err);
+                setCanvasRenderError("The page preview could not be rendered. Change pages or upload the PDF again to retry.");
             } finally {
                 if (!isCancelled) {
+                    renderTaskRef.current = null;
                     setIsRenderingCanvas(false);
                 }
             }
         };
 
-        renderPage();
+        void renderPage();
 
         const updateDisplaySize = () => {
             if (canvasElement) {
@@ -637,6 +641,7 @@ export default function HighlightPdfWorkspace() {
         window.addEventListener("resize", updateDisplaySize);
         return () => {
             isCancelled = true;
+            controller.abort();
             window.removeEventListener("resize", updateDisplaySize);
             if (renderTaskRef.current) {
                 try { renderTaskRef.current.cancel(); } catch {}
@@ -1166,7 +1171,7 @@ export default function HighlightPdfWorkspace() {
                                 text="Save Highlight Markers"
                                 loadingText="Uploading and queueing..."
                                 loading={isProcessing}
-                                disabled={isProcessing || isRenderingCanvas || boxes.length === 0}
+                                disabled={isProcessing || isRenderingCanvas || Boolean(pdfLoadError || canvasRenderError) || boxes.length === 0}
                                 onClick={handleHighlightProcessing}
                             />
                         </div>
@@ -1220,10 +1225,10 @@ export default function HighlightPdfWorkspace() {
                             className="w-full flex flex-col items-center justify-center bg-gray-500/5 dark:bg-black/20 rounded-xl border border-[color:var(--border)] p-4 relative overflow-hidden min-h-[420px]"
                             onClick={() => setActiveId(null)}
                         >
-                            {pdfLoadError && (
+                            {(pdfLoadError || canvasRenderError) && (
                                 <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center text-red-500 bg-red-500/5 rounded-xl z-20">
-                                    <p className="font-semibold text-sm">{pdfLoadError}</p>
-                                    <p className="text-xs text-[color:var(--muted)] mt-1">Please try uploading a valid, unlocked PDF file.</p>
+                                    <p className="font-semibold text-sm">{pdfLoadError || canvasRenderError}</p>
+                                    <p className="text-xs text-[color:var(--muted)] mt-1">Saving remains disabled until the page preview renders successfully.</p>
                                 </div>
                             )}
 

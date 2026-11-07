@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import {DndContext, closestCenter, DragEndEvent} from "@dnd-kit/core";
-import { SortableContext, rectSortingStrategy, arrayMove } from "@dnd-kit/sortable";
+import { DndContext, closestCenter, DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { SortableContext, rectSortingStrategy, arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import SortablePageCard from "./SortablePageCard";
 
 interface Props {
@@ -14,6 +14,10 @@ interface Props {
 
 export default function PageReorderGrid({ items, setItems, thumbnails = [], file }: Props) {
     const [isMounted, setIsMounted] = useState(false);
+    const sensors = useSensors(
+        useSensor(PointerSensor),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    );
 
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -44,7 +48,26 @@ export default function PageReorderGrid({ items, setItems, thumbnails = [], file
     }
 
     return (
-        <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+            accessibility={{
+                screenReaderInstructions: {
+                    draggable: "To reorder a page, focus its card and press Space. Use the arrow keys to move it, Space to drop, or Escape to cancel.",
+                },
+                announcements: {
+                    onDragStart: ({ active }) => `Picked up page ${active.id}. Use arrow keys to choose its position.`,
+                    onDragOver: ({ active, over }) => over
+                        ? `Page ${active.id} is in position ${items.indexOf(Number(over.id)) + 1} of ${items.length}.`
+                        : `Page ${active.id} is not over a page position.`,
+                    onDragEnd: ({ active, over }) => over
+                        ? `Page ${active.id} was moved to position ${items.indexOf(Number(over.id)) + 1} of ${items.length}.`
+                        : `Page ${active.id} was dropped without changing its position.`,
+                    onDragCancel: ({ active }) => `Reordering page ${active.id} was cancelled.`,
+                },
+            }}
+        >
             <SortableContext items={items} strategy={rectSortingStrategy}>
                 <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     {items.map((pageNum) => (

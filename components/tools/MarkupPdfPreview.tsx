@@ -337,7 +337,10 @@ export default function MarkupPdfPreview({
                     child.style.transform = "rotate(var(--rotate)) scaleX(var(--scale-x))";
                     child.style.userSelect = "text";
                     child.style.cursor = "text";
-                    if (textItemIndex < textItems.length) {
+                    // PDF.js inserts presentation <br> elements for text items
+                    // with hasEOL. Those are not text items and must not consume
+                    // an index, or Find highlighting drifts after each line break.
+                    if (child.tagName === "SPAN" && textItemIndex < textItems.length) {
                         child.dataset.textItemIndex = String(textItemIndex);
                         textItemIndex += 1;
                     }
