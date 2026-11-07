@@ -3,14 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/preflight-local-api-origin.mjs --dev && next dev",
     "build": "node scripts/validate-managed-build.mjs && next build",
     "start": "next start",
+    "start:local": "node scripts/preflight-local-api-origin.mjs --start --local && next start",
     "lint": "eslint",
     "test": "npx playwright test",
     "test:smoke": "npx playwright test smoke.spec.ts",
     "test:ui": "npx playwright test --ui",
-    "test:unit": "npx tsx tests/runUnitTests.ts",
+    "test:unit": "node --test scripts/preflight-local-api-origin.test.mjs && npx tsx tests/runUnitTests.ts",
+    "test:preflight": "node --test scripts/preflight-local-api-origin.test.mjs",
     "test:fixtures": "npx tsx tests/generate-fixtures.ts"
   },
   "dependencies": {
