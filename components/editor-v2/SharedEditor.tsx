@@ -5,6 +5,7 @@ import { flushSync } from "react-dom";
 import { ChevronLeft, ChevronRight, Maximize2, Redo2, RotateCcw, Undo2, ZoomIn, ZoomOut, Type, Search } from "lucide-react";
 import { clampPageIndex, clampZoom, EditorElement, EditorElementStyle, EditorLayout, editorKeyboardIntent, editorMatches, fitWidthZoom } from "./model";
 import { createEditorState, editorReducer } from "./reducer";
+import { resolveEditorCompileIntent, type WordEditRequest } from "./wordEdits";
 import {
   deriveEditableWords,
   type EditableWord,
@@ -17,6 +18,10 @@ export interface SharedEditorProps {
   initialPageIndex?: number;
   renderPageVisual: (pageIndex: number, context: EditorVisualContext) => ReactNode;
   onCompile: (layout: EditorLayout) => void | Promise<void>;
+  /** Opts only the standalone General Editor into the versioned word-operation path. */
+  wordEditMode?: "layout" | "operations";
+  wordEditSourceTracker?: string;
+  onCompileWordEdits?: (request: WordEditRequest) => void | Promise<void>;
   compiling?: boolean;
   compileLabel?: string;
   showPageSidebar?: boolean;
@@ -298,6 +303,9 @@ export const SharedEditor = React.forwardRef<SharedEditorHandle, SharedEditorPro
   initialPageIndex,
   renderPageVisual,
   onCompile,
+  wordEditMode = "layout",
+  wordEditSourceTracker = "",
+  onCompileWordEdits,
   compiling = false,
   compileLabel = "Compile",
   showPageSidebar = false,
@@ -311,6 +319,7 @@ export const SharedEditor = React.forwardRef<SharedEditorHandle, SharedEditorPro
   const [selection, setSelection] = useState<{ start: number; end: number; text: string }>();
   const [zoom, setZoom] = useState(1);
   const [query, setQuery] = useState("");
+  const [compileIntentError, setCompileIntentError] = useState<{ message: string; revision: number } | null>(null);
   const [matchIndex, setMatchIndex] = useState(0);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -331,9 +340,32 @@ export const SharedEditor = React.forwardRef<SharedEditorHandle, SharedEditorPro
   const matches = useMemo(() => editorMatches(state.layout, query), [state.layout, query]);
   const dirty = state.dirtyKeys.size > 0;
 
-  useImperativeHandle(ref, () => ({
-    compile: () => { void onCompile(state.layout); },
-  }), [onCompile, state.layout]);
+  const compileCurrentState = useCallback(() => {
+    setCompileIntentError(null);
+    if (wordEditMode === "operations") {
+      const intent = resolveEditorCompileIntent(state, wordEditSourceTracker);
+      if (intent.kind === "error") {
+        setCompileIntentError({ message: intent.message, revision: state.revision });
+        return;
+      }
+      if (intent.kind === "word_edits") {
+        if (!onCompileWordEdits) {
+          setCompileIntentError({
+            message: "This editor does not have a word-edit transport. No line-layout fallback was submitted.",
+            revision: state.revision,
+          });
+          return;
+        }
+        void onCompileWordEdits(intent.request);
+        return;
+      }
+    }
+    // The default remains the existing layout callback used by Studio and
+    // legacy editing. Whole-line changes never become word operations.
+    void onCompile(state.layout);
+  }, [onCompile, onCompileWordEdits, state, wordEditMode, wordEditSourceTracker]);
+
+  useImperativeHandle(ref, () => ({ compile: compileCurrentState }), [compileCurrentState]);
 
   // Derive editable words for the currently selected element
   const selectedWords = useMemo(() => {
@@ -683,7 +715,7 @@ export const SharedEditor = React.forwardRef<SharedEditorHandle, SharedEditorPro
         {selected && (
           <>
             <label>
-              Text
+              {wordEditMode === "operations" ? "Edit entire line" : "Text"}
               <textarea
                 value={selected.text}
                 onChange={(event) => dispatch({ type: "EDIT_TEXT", pageIndex, elementId: selected.id, text: event.target.value })}
@@ -738,10 +770,11 @@ export const SharedEditor = React.forwardRef<SharedEditorHandle, SharedEditorPro
             </div>
           </>
         )}
+        {compileIntentError?.revision === state.revision && <div role="alert" data-testid="editor-word-edit-error" className="mt-3 rounded border border-amber-400/40 bg-amber-100/30 p-2 text-amber-900">{compileIntentError.message}</div>}
         <button
           type="button"
           disabled={!dirty || compiling}
-          onClick={() => void onCompile(state.layout)}
+          onClick={compileCurrentState}
           className="mt-5 w-full rounded bg-violet-600 px-3 py-2 font-semibold text-white disabled:opacity-40"
         >
           {compiling ? "Compiling…" : compileLabel}

@@ -9,6 +9,7 @@ import PdfToolHero from "@/components/pdf/PdfToolHero";
 import JobProgressCard from "@/components/studio/ui/JobProgressCard";
 import { EditorVisualContext, SharedEditor } from "@/components/editor-v2/SharedEditor";
 import { DEFAULT_EDITOR_LANGUAGE, EditorLanguageChoice, EditorLayout, EditorPage } from "@/components/editor-v2/model";
+import type { WordEditRequest } from "@/components/editor-v2/wordEdits";
 import { studioVisualResolution } from "@/components/editor-v2/visualResolution";
 import { EditorLanguageControl } from "@/components/editor-v2/EditorLanguageControl";
 import { downloadEditorJob, EditorJobRecord, submitEditorCompile, submitEditorExtract, waitForEditorJob } from "@/lib/editorJobs";
@@ -106,7 +107,7 @@ export default function EditPdfWorkspace({ engine }: EditPdfWorkspaceProps = {})
     void (async () => {
       await Promise.resolve();
       if (cancelled) return;
-      setLayout(null); setError(null); setExtractJob(null);
+      setLayout(null); setError(null); setExtractJob(null); setSourceTracker("");
       try {
         assertCloudProcessingAuthorized(file, toolId || "edit-pdf");
         const form = new FormData(); form.append("file", file);
@@ -123,7 +124,7 @@ export default function EditPdfWorkspace({ engine }: EditPdfWorkspaceProps = {})
     return () => { cancelled = true; controller.abort(); };
   }, [file, language, retryCount, toolId, useOcrV2]);
 
-  const compile = (draft: EditorLayout) => {
+  const compileRequest = (request: unknown, isWordEdit: boolean) => {
     if (!file) return;
     setDownloadData(null);
     const restoreOutput = captureCloudPdfOutputRestoration(file, toolId || "edit-pdf");
@@ -134,11 +135,19 @@ export default function EditPdfWorkspace({ engine }: EditPdfWorkspaceProps = {})
       try {
         assertCloudProcessingAuthorized(operation.file, toolId || "edit-pdf");
         markCloudSubmissionInitiated([operation.file]);
-        const submitted = await submitEditorCompile({ ...draft, source_tracker: sourceTracker });
+        const submitted = await submitEditorCompile(request);
         if (!operation.isCurrent()) return;
         const job = await waitForEditorJob(submitted.job_id, undefined, operation.signal);
         if (!operation.isCurrent()) return;
-        if (job.status !== "succeeded") throw new Error(job.error || "Compilation failed");
+        if (job.status !== "succeeded") {
+          if (isWordEdit && job.error_code === "WORD_EDIT_COMPILATION_NOT_IMPLEMENTED") {
+            const message = "The selected-word request passed baseline validation and reached the worker. PDF word compilation is not implemented in Phase 2; no PDF was produced.";
+            setError(message);
+            handleClientError(new Error(message));
+            return;
+          }
+          throw new Error(job.error || "Compilation failed");
+        }
         const downloaded = await downloadEditorJob(job.id);
         if (!operation.isCurrent()) return;
         const blob = await restoreOutput(downloaded, operation.signal);
@@ -163,6 +172,14 @@ export default function EditPdfWorkspace({ engine }: EditPdfWorkspaceProps = {})
     });
   };
 
+  const compile = (draft: EditorLayout) => {
+    compileRequest({ ...draft, source_tracker: sourceTracker }, false);
+  };
+
+  const compileWordEdits = (request: WordEditRequest) => {
+    compileRequest(request, true);
+  };
+
   const renderPageVisual = useCallback(
     (index: number, visual: EditorVisualContext) => {
       const page = layout?.pages[index];
@@ -174,5 +191,5 @@ export default function EditPdfWorkspace({ engine }: EditPdfWorkspaceProps = {})
 
   if (!file) return <div className="flex h-full items-center justify-center p-8 text-muted-foreground">Select or upload a PDF first.</div>;
   const extracting = Boolean(extractJob && !["succeeded", "failed", "cancelled"].includes(extractJob.status));
-  return <><PdfToolHero title="Precision PDF Layout Editor" description="Edit native and scanned PDF text while preserving the source document."/><div className="mt-4 flex justify-end"><EditorLanguageControl value={language} onChange={changeLanguage} disabled={extracting}/></div>{!layout && <div className="mt-8"><JobProgressCard title="Extracting layout" job={extractJob} active={!error} description="Extracting text layers and geometry…"/></div>}{error && <div role="alert" className="mt-4 flex items-center justify-between gap-3 rounded border border-red-300 bg-red-50 p-3 text-red-700"><div className="flex items-center gap-2"><AlertTriangle size={18} className="shrink-0"/><span>{error}</span></div><button type="button" onClick={retryExtraction} className="shrink-0 rounded bg-red-100 px-3 py-1 text-sm font-medium text-red-800 hover:bg-red-200 transition-colors">Retry</button></div>}{layout && <div className="mt-8 flex h-[75vh] min-h-0 flex-col"><SharedEditor baseline={layout} renderPageVisual={renderPageVisual} onCompile={compile} compiling={compiling} compileLabel="Export edited PDF" onDirtyChange={setDirty}/></div>}</>;
+  return <><PdfToolHero title="Precision PDF Layout Editor" description="Edit native and scanned PDF text while preserving the source document."/><div className="mt-4 flex justify-end"><EditorLanguageControl value={language} onChange={changeLanguage} disabled={extracting}/></div>{!layout && <div className="mt-8"><JobProgressCard title="Extracting layout" job={extractJob} active={!error} description="Extracting text layers and geometry…"/></div>}{error && <div role="alert" className="mt-4 flex items-center justify-between gap-3 rounded border border-red-300 bg-red-50 p-3 text-red-700"><div className="flex items-center gap-2"><AlertTriangle size={18} className="shrink-0"/><span>{error}</span></div><button type="button" onClick={retryExtraction} className="shrink-0 rounded bg-red-100 px-3 py-1 text-sm font-medium text-red-800 hover:bg-red-200 transition-colors">Retry</button></div>}{layout && <div className="mt-8 flex h-[75vh] min-h-0 flex-col"><SharedEditor baseline={layout} renderPageVisual={renderPageVisual} onCompile={compile} wordEditMode={useOcrV2 ? "operations" : "layout"} wordEditSourceTracker={sourceTracker} onCompileWordEdits={compileWordEdits} compiling={compiling} compileLabel="Export edited PDF" onDirtyChange={setDirty}/></div>}</>;
 }
