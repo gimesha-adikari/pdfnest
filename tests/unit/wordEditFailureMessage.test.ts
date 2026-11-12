@@ -21,3 +21,18 @@ assert.match(
   /no downloadable PDF/i,
   "unknown worker failures should still fail closed"
 );
+assert.match(
+  wordEditFailureMessage("UNSUPPORTED_REPLACEMENT_TEXT", null),
+  /script|Sinhala|Tamil|language/i,
+  "unsupported language or script replacements should be described without implying English-only input"
+);
+assert.match(
+  wordEditFailureMessage("SCRIPT_SCAN_STYLE_UNRESOLVED", null),
+  /scan|font size|baseline|typography/i,
+  "complex script scan refusals should explain the missing alignment evidence"
+);
+assert.match(
+  wordEditFailureMessage("UNSUPPORTED_IMAGE_TRANSFORM", null),
+  /image|transform|rotation|shear/i,
+  "unsupported image placements should explain the geometry refusal"
+);
