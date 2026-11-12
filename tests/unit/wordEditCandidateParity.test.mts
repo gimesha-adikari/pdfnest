@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import ts from "typescript";
 import React, { act } from "react";
 import { canReusePreparedWordEdit, isCurrentWordEditPreparation } from "../../components/editor-v2/wordEdits";
+import { wordEditFailureMessage } from "../../components/editor-v2/wordEditErrors";
 import { verifyWordEditArtifact } from "../../lib/editorJobs";
 import { usePdfOutputOperation } from "../../lib/security/usePdfOutputOperation";
 import * as preparation from "../../lib/security/pdfInputPreparation";
@@ -123,6 +124,7 @@ async function main() {
       canReusePreparedWordEdit,
       isCurrentWordEditPreparation,
     },
+    "@/components/editor-v2/wordEditErrors": { wordEditFailureMessage },
     "@/components/editor-v2/visualResolution": { studioVisualResolution: () => ({ scale: 1 }) },
     "@/components/editor-v2/EditorLanguageControl": { EditorLanguageControl: empty },
     "@/lib/notify": { notify: empty },
@@ -157,11 +159,16 @@ async function main() {
     editorProps.onCompileWordEdits?.(request, 7);
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  await act(async () => {
+    const deadline = Date.now() + 2_000;
+    while (previewRequests.length === 0 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  });
 
   assert.equal(compileSubmissions, 1);
   assert.equal(downloads, 1);
-  assert.ok(previewRequests.length >= 1, "prepared candidate should be sent to the existing preview hook");
+  assert.ok(previewRequests.length >= 1, `prepared candidate should be sent to the existing preview hook; alerts: ${[...document.querySelectorAll('[role="alert"]')].map((node) => node.textContent).join(" | ")}`);
   const previewRequest = previewRequests.at(-1);
   if (!previewRequest) throw new Error("candidate preview request was not captured");
   assert.equal(previewRequest.renderer, "server");

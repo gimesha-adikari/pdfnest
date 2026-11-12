@@ -10,6 +10,7 @@ import JobProgressCard from "@/components/studio/ui/JobProgressCard";
 import { EditorVisualContext, SharedEditor } from "@/components/editor-v2/SharedEditor";
 import { DEFAULT_EDITOR_LANGUAGE, EditorLanguageChoice, EditorLayout, EditorPage } from "@/components/editor-v2/model";
 import { canReusePreparedWordEdit, isCurrentWordEditPreparation, type PreparedWordEditIdentity, type WordEditRequest } from "@/components/editor-v2/wordEdits";
+import { wordEditFailureMessage } from "@/components/editor-v2/wordEditErrors";
 import { studioVisualResolution } from "@/components/editor-v2/visualResolution";
 import { EditorLanguageControl } from "@/components/editor-v2/EditorLanguageControl";
 import { downloadEditorJob, EditorJobRecord, submitEditorCompile, submitEditorExtract, verifyWordEditArtifact, waitForEditorJob } from "@/lib/editorJobs";
@@ -100,29 +101,6 @@ function VerifiedCandidatePage({
   if (result?.error) return <div role="alert" className="p-5 text-red-700">Verified preview failed: {result.error.message || "The prepared PDF page could not be rendered."}</div>;
   if (result?.src) return <img src={result.src} alt={`Verified compiled PDF page ${page}`} className="mx-auto max-h-full max-w-full object-contain" draggable={false} />;
   return <div className="flex min-h-96 items-center justify-center gap-2 text-muted-foreground"><Loader2 className="animate-spin"/>Rendering the compiled PDF page…</div>;
-}
-
-function wordEditFailureMessage(errorCode: string | null | undefined, fallback: string | null | undefined): string {
-  const messages: Record<string, string> = {
-    BACKGROUND_COLORED_OVERLAP: "This word overlaps a stamp or colored mark. The edit was refused; choose a word on a clear background.",
-    BACKGROUND_RULE_OVERLAP: "A table border or drawn line crosses this word. The edit was refused to preserve that line.",
-    BACKGROUND_UNCERTAIN: "The paper around this word could not be repaired confidently. No PDF was produced.",
-    TARGET_NOT_IMAGE_BACKED: "This word is not on a qualified scanned image. Use whole-line editing or choose a scanned word.",
-    UNSUPPORTED_PAGE_GEOMETRY: "This page has rotation or cropping that this word-edit workflow does not support.",
-    UNSUPPORTED_WORD_GEOMETRY: "The selected word geometry could not be verified against the source page.",
-    VISIBLE_TEXT_LAYER_CONFLICT: "Visible PDF text overlaps this scanned word. The edit was refused to avoid changing conflicting content.",
-    TEXT_LAYER_CONFLICT: "An overlapping text layer does not match the selected OCR word. The edit was refused.",
-    HIDDEN_OCR_AMBIGUOUS: "More than one hidden OCR target overlaps this word. The edit was refused.",
-    HIDDEN_OCR_ALIGNMENT_UNCERTAIN: "The hidden OCR text does not align closely enough with this word to edit safely.",
-    UNSUPPORTED_REPLACEMENT_TEXT: "This replacement uses text outside the currently supported English character set.",
-    REPLACEMENT_DOES_NOT_FIT: "The replacement text does not fit in the selected word area without moving neighboring content.",
-    WORD_EDIT_TARGET_COLLISION: "The requested word edits overlap. Separate the selections and prepare the export again.",
-    CANDIDATE_VALIDATION_FAILED: "The compiled PDF did not pass the localized-change checks. No downloadable file is available.",
-    SOURCE_BASELINE_MISMATCH: "The source PDF changed after extraction. Reopen the PDF and extract its layout again.",
-    WORD_EDIT_BASELINE_MISMATCH: "The selected word no longer matches the trusted extraction. Re-extract the source PDF.",
-    WORD_EDIT_COMPILATION_NOT_IMPLEMENTED: "The worker does not have the Phase 3 word compiler. No PDF was produced.",
-  };
-  return (errorCode && messages[errorCode]) || fallback || "The selected-word edit could not be prepared safely. No downloadable PDF is available.";
 }
 
 export interface EditPdfWorkspaceProps {

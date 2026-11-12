@@ -6,6 +6,7 @@ import ts from "typescript";
 import React, { act } from "react";
 import { usePdfOutputOperation } from "../../lib/security/usePdfOutputOperation";
 import * as preparation from "../../lib/security/pdfInputPreparation";
+import { wordEditFailureMessage } from "../../components/editor-v2/wordEditErrors";
 const require = createRequire(import.meta.url);
 function load(relative: string, mocks: Record<string, unknown>) {
     const source = fs.readFileSync(path.resolve(process.env.F02_SOURCE_ROOT || ".", relative), "utf8");
@@ -68,6 +69,7 @@ async function main() {
             canReusePreparedWordEdit: () => false,
             isCurrentWordEditPreparation: (_expected: unknown, _current: unknown, operationIsCurrent: boolean) => operationIsCurrent,
         },
+        "@/components/editor-v2/wordEditErrors": { wordEditFailureMessage },
         "@/components/editor-v2/visualResolution": { studioVisualResolution: () => ({ scale: 1 }) },
         "@/components/editor-v2/EditorLanguageControl": { EditorLanguageControl: empty },
         "@/lib/notify": { notify: empty },
