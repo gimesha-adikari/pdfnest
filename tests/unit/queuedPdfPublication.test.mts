@@ -64,11 +64,16 @@ async function main() {
         "@/components/studio/ui/JobProgressCard": { default: empty },
         "@/components/editor-v2/SharedEditor": { SharedEditor: ({ onCompile }: { onCompile: typeof compile }) => { compile = onCompile; return null; } },
         "@/components/editor-v2/model": { DEFAULT_EDITOR_LANGUAGE: { mode: "EXPLICIT", languages: ["eng"] } },
+        "@/components/editor-v2/wordEdits": {
+            canReusePreparedWordEdit: () => false,
+            isCurrentWordEditPreparation: (_expected: unknown, _current: unknown, operationIsCurrent: boolean) => operationIsCurrent,
+        },
         "@/components/editor-v2/visualResolution": { studioVisualResolution: () => ({ scale: 1 }) },
         "@/components/editor-v2/EditorLanguageControl": { EditorLanguageControl: empty },
         "@/lib/notify": { notify: empty },
         "@/lib/errorHandler": { handleClientError: empty },
         "@/lib/preview/usePreviews": { usePreviews: () => [] },
+        "@/lib/preview/types": { getPreviewFileIdentity: () => "test-preview" },
         "@/lib/api": { captureCloudPdfOutputRestoration: (input: File) => async (_blob: Blob, signal: AbortSignal) => {
             assert.equal(input, source); capturedSignal = signal;
             if (failRestoration) throw new Error("Protection verification failed");

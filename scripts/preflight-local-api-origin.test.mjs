@@ -19,7 +19,9 @@ function runPreflight(args, { apiOrigin, chunks = {} } = {}) {
     const env = {
         PATH: process.env.PATH,
         NODE_ENV: "production",
-        ...(apiOrigin === undefined ? {} : { NEXT_PUBLIC_API_URL: apiOrigin }),
+        // Keep Next's dotenv loader from filling an intentionally missing
+        // value from the developer's .env.local during this test.
+        NEXT_PUBLIC_API_URL: apiOrigin ?? "",
     };
     const result = spawnSync(process.execPath, [scriptPath, ...args, "--dist-dir", temporaryRoot], {
         cwd: repoRoot,

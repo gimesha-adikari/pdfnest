@@ -24,6 +24,29 @@ export interface WordEditRequest {
   edits: WordEditOperation[];
 }
 
+export interface PreparedWordEditIdentity {
+  source: File;
+  revision: number;
+  requestSignature: string;
+}
+
+export function canReusePreparedWordEdit(
+  prepared: PreparedWordEditIdentity | null,
+  source: File,
+  revision: number,
+  requestSignature: string,
+): boolean {
+  return Boolean(prepared && prepared.source === source && prepared.revision === revision && prepared.requestSignature === requestSignature);
+}
+
+export function isCurrentWordEditPreparation(
+  expected: Pick<PreparedWordEditIdentity, "source" | "revision">,
+  current: Pick<PreparedWordEditIdentity, "source" | "revision">,
+  operationIsCurrent: boolean,
+): boolean {
+  return operationIsCurrent && expected.source === current.source && expected.revision === current.revision;
+}
+
 export type EditorCompileIntent =
   | { kind: "layout"; layout: EditorLayout }
   | { kind: "word_edits"; request: WordEditRequest }

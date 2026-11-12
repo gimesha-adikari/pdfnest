@@ -1,6 +1,6 @@
 "use client";
 
-import React, { ReactNode, useCallback, useEffect, useImperativeHandle, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
+import React, { ReactNode, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
 import { ChevronLeft, ChevronRight, Maximize2, Redo2, RotateCcw, Undo2, ZoomIn, ZoomOut, Type, Search } from "lucide-react";
 import { clampPageIndex, clampZoom, EditorElement, EditorElementStyle, EditorLayout, editorKeyboardIntent, editorMatches, fitWidthZoom } from "./model";
@@ -21,11 +21,12 @@ export interface SharedEditorProps {
   /** Opts only the standalone General Editor into the versioned word-operation path. */
   wordEditMode?: "layout" | "operations";
   wordEditSourceTracker?: string;
-  onCompileWordEdits?: (request: WordEditRequest) => void | Promise<void>;
+  onCompileWordEdits?: (request: WordEditRequest, revision: number) => void | Promise<void>;
   compiling?: boolean;
   compileLabel?: string;
   showPageSidebar?: boolean;
   onDirtyChange?: (dirty: boolean) => void;
+  onRevisionChange?: (revision: number) => void;
 }
 
 export interface SharedEditorHandle {
@@ -310,6 +311,7 @@ export const SharedEditor = React.forwardRef<SharedEditorHandle, SharedEditorPro
   compileLabel = "Compile",
   showPageSidebar = false,
   onDirtyChange,
+  onRevisionChange,
 }: SharedEditorProps, ref) {
   const [state, dispatch] = useReducer(editorReducer, baseline, createEditorState);
   const resolvedInitialPageIndex = clampPageIndex(initialPageIndex ?? 0, baseline.pages.length);
@@ -339,6 +341,7 @@ export const SharedEditor = React.forwardRef<SharedEditorHandle, SharedEditorPro
   const selected = page?.elements.find((element) => element.id === selectedId) ?? null;
   const matches = useMemo(() => editorMatches(state.layout, query), [state.layout, query]);
   const dirty = state.dirtyKeys.size > 0;
+  const hasWordReplacements = Object.values(state.wordReplacements).some((replacements) => Object.keys(replacements).length > 0);
 
   const compileCurrentState = useCallback(() => {
     setCompileIntentError(null);
@@ -356,7 +359,7 @@ export const SharedEditor = React.forwardRef<SharedEditorHandle, SharedEditorPro
           });
           return;
         }
-        void onCompileWordEdits(intent.request);
+        void onCompileWordEdits(intent.request, state.revision);
         return;
       }
     }
@@ -366,6 +369,7 @@ export const SharedEditor = React.forwardRef<SharedEditorHandle, SharedEditorPro
   }, [onCompile, onCompileWordEdits, state, wordEditMode, wordEditSourceTracker]);
 
   useImperativeHandle(ref, () => ({ compile: compileCurrentState }), [compileCurrentState]);
+  useLayoutEffect(() => onRevisionChange?.(state.revision), [onRevisionChange, state.revision]);
 
   // Derive editable words for the currently selected element
   const selectedWords = useMemo(() => {
@@ -723,6 +727,7 @@ export const SharedEditor = React.forwardRef<SharedEditorHandle, SharedEditorPro
                 className="mt-1 w-full rounded border border-current/20 bg-transparent p-2"
               />
             </label>
+            {wordEditMode === "operations" && <p className="mt-2 text-[11px] text-current/70">Selected-word changes are prepared as exact word operations. “Edit entire line” stays on the existing layout compiler; mixed edits must be resolved before export.</p>}
             {activeWord && (
               <div className="mt-2 rounded border border-violet-500/30 bg-violet-500/10 p-2">
                 <span className="font-semibold">Word:</span> <span data-testid="active-word-label">{activeWord.originalText}</span> → <span data-testid="active-word-draft">{activeWord.draftText}</span>
@@ -777,7 +782,7 @@ export const SharedEditor = React.forwardRef<SharedEditorHandle, SharedEditorPro
           onClick={compileCurrentState}
           className="mt-5 w-full rounded bg-violet-600 px-3 py-2 font-semibold text-white disabled:opacity-40"
         >
-          {compiling ? "Compiling…" : compileLabel}
+          {compiling ? (wordEditMode === "operations" && hasWordReplacements ? "Preparing…" : "Compiling…") : wordEditMode === "operations" && !hasWordReplacements && dirty ? "Compile whole-line edit" : compileLabel}
         </button>
       </aside>
     </div>

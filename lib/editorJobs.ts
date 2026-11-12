@@ -33,6 +33,40 @@ export interface EditorJobRecord {
     cancel_requested: boolean;
 }
 
+export interface WordEditArtifactMetadata {
+    compiler_protocol?: unknown;
+    artifact_sha256?: unknown;
+    page_count?: unknown;
+}
+
+/** Verify the exact worker artifact before it can be previewed or downloaded. */
+export async function verifyWordEditArtifact(
+    blob: Blob,
+    metadata: WordEditArtifactMetadata,
+    expectedPageCount: number,
+): Promise<{ artifactSha256: string; pageCount: number }> {
+    if (metadata.compiler_protocol !== "platen_word_edits.v1") {
+        throw new Error("The worker did not confirm the validated word-edit protocol.");
+    }
+    if (typeof metadata.artifact_sha256 !== "string" || !/^[0-9a-f]{64}$/.test(metadata.artifact_sha256)) {
+        throw new Error("The worker did not return a valid PDF artifact digest.");
+    }
+    if (!Number.isSafeInteger(metadata.page_count) || metadata.page_count !== expectedPageCount || expectedPageCount < 1) {
+        throw new Error("The compiled PDF page count does not match the source document.");
+    }
+    if (blob.size < 8) throw new Error("The compiled PDF artifact is empty or truncated.");
+    const header = new TextDecoder().decode(await blob.slice(0, 5).arrayBuffer());
+    if (header !== "%PDF-") throw new Error("The worker response is not a PDF artifact.");
+    if (!globalThis.crypto?.subtle) throw new Error("This browser cannot verify the compiled PDF artifact digest.");
+    const bytes = await blob.arrayBuffer();
+    const digest = new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", bytes));
+    const artifactSha256 = Array.from(digest, (value) => value.toString(16).padStart(2, "0")).join("");
+    if (artifactSha256 !== metadata.artifact_sha256) {
+        throw new Error("The downloaded PDF bytes do not match the validated worker artifact.");
+    }
+    return { artifactSha256, pageCount: metadata.page_count };
+}
+
 const TERMINAL = new Set<EditorJobStatus>([
     "succeeded",
     "failed",
