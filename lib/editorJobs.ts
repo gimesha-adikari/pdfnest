@@ -133,7 +133,11 @@ export async function downloadEditorJob(jobId: string): Promise<Blob> {
         throw new Error(await response.text());
     }
 
-    return response.blob();
+    // Consume the verified response bytes before constructing the Blob. The
+    // browser runtime failed Response.blob() while reading large scanned PDFs,
+    // even though the same response body was readable as an ArrayBuffer.
+    const bytes = await response.arrayBuffer();
+    return new Blob([bytes], { type: response.headers.get("Content-Type") || "application/pdf" });
 }
 
 const STALL_TIMEOUT_MS = 180_000; // 3 minutes without progress advance

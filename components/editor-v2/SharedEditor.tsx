@@ -3,7 +3,7 @@
 import React, { ReactNode, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
 import { ChevronLeft, ChevronRight, Maximize2, Redo2, RotateCcw, Undo2, ZoomIn, ZoomOut, Type, Search } from "lucide-react";
-import { clampPageIndex, clampZoom, EditorElement, EditorElementStyle, EditorLayout, editorKeyboardIntent, editorMatches, fitWidthZoom } from "./model";
+import { clampPageIndex, clampZoom, EditorElement, EditorElementStyle, EditorLayout, editorKeyboardIntent, editorMatches, fitWidthZoom, visibleNativeWordRect } from "./model";
 import { createEditorState, editorReducer } from "./reducer";
 import { resolveEditorCompileIntent, type WordEditRequest } from "./wordEdits";
 import {
@@ -90,8 +90,11 @@ function WordReplacementText({
   onClick: () => void;
 }) {
   const typography = getWordTypographyStyles(element, zoom);
-  const width = Math.max(2, word.rect.width * zoom);
-  const height = Math.max(2, word.rect.height * zoom);
+  const sourceRect = word.sourceRect ?? word.rect;
+  const left = word.rect.x + (word.rect.width - sourceRect.width) / 2;
+  const top = word.rect.y + (word.rect.height - sourceRect.height) / 2;
+  const width = Math.max(2, sourceRect.width * zoom);
+  const height = Math.max(2, sourceRect.height * zoom);
 
   return (
     <div
@@ -115,8 +118,8 @@ function WordReplacementText({
         isMatch ? "outline outline-1 outline-amber-500 bg-amber-200/20" : ""
       }`}
       style={{
-        left: word.rect.x * zoom,
-        top: word.rect.y * zoom,
+        left: left * zoom,
+        top: top * zoom,
         minWidth: width,
         height,
         margin: 0,
@@ -127,6 +130,8 @@ function WordReplacementText({
         pointerEvents: "auto",
         userSelect: "none",
         whiteSpace: "nowrap",
+        transform: word.rotation ? `rotate(${word.rotation}deg)` : undefined,
+        transformOrigin: "center",
         ...typography,
       }}
     >
@@ -213,8 +218,11 @@ function WordInlineEditor({
   }, []);
 
   const typography = getWordTypographyStyles(element, zoom);
+  const sourceRect = word.sourceRect ?? word.rect;
+  const left = word.rect.x + (word.rect.width - sourceRect.width) / 2;
+  const top = word.rect.y + (word.rect.height - sourceRect.height) / 2;
   const width = wordEditorWidth(
-    word.rect.width,
+    sourceRect.width,
     buffer,
     word.originalText,
     zoom,
@@ -273,10 +281,10 @@ function WordInlineEditor({
       onDoubleClick={(e) => e.stopPropagation()}
       style={{
         position: "absolute",
-        left: word.rect.x * zoom,
-        top: word.rect.y * zoom,
+        left: left * zoom,
+        top: top * zoom,
         width,
-        height: Math.max(2, word.rect.height * zoom),
+        height: Math.max(2, sourceRect.height * zoom),
         margin: 0,
         padding: 0,
         border: "none",
@@ -289,6 +297,8 @@ function WordInlineEditor({
         userSelect: "text",
         textOverflow: "ellipsis",
         overflow: "hidden",
+        transform: word.rotation ? `rotate(${word.rotation}deg)` : undefined,
+        transformOrigin: "center",
         ...typography,
       }}
     />
@@ -540,7 +550,15 @@ export const SharedEditor = React.forwardRef<SharedEditorHandle, SharedEditorPro
     if (hasWordGeometry(element)) {
       const baselineEl = baselinePage?.elements.find((e) => e.id === element.id);
       const replacements = state.wordReplacements[`${pageIndex}:${element.id}`];
-      const words = deriveEditableWords(element, baselineEl, replacements);
+      const words = deriveEditableWords(element, baselineEl, replacements).map((word) => {
+        if (wordEditMode !== "operations" || page?.source !== "NATIVE_EXTRACTION" || !page.rotation) return word;
+        return {
+          ...word,
+          sourceRect: word.rect,
+          rect: visibleNativeWordRect(word.rect, page),
+          rotation: page.rotation,
+        };
+      });
 
       return (
         <div key={element.id} data-testid="word-overlay-container" data-element-id={element.id}>
@@ -627,11 +645,16 @@ export const SharedEditor = React.forwardRef<SharedEditorHandle, SharedEditorPro
     matchIndex,
     matches,
     matchingWordIds,
+    page?.height,
     pageIndex,
+    page?.rotation,
+    page?.source,
+    page?.width,
     selectWord,
     selectedId,
     selectedWordId,
     state.wordReplacements,
+    wordEditMode,
     zoom,
   ]);
 

@@ -168,6 +168,9 @@ export interface EditableWord {
   draftText: string;
   /** Word geometry in page-point coordinates. */
   rect: { x: number; y: number; width: number; height: number };
+  /** Canonical glyph-frame box and page rotation for rotated native previews. */
+  sourceRect?: { x: number; y: number; width: number; height: number };
+  rotation?: number;
   /** 0-based ordering index within the element. */
   order: number;
   /** Character offset of this word's start in the element text. -1 if unmapped/deleted. */
