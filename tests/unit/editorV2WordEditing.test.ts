@@ -235,6 +235,32 @@ check("live word drafts reach the canonical compile layout without creating per-
   assert.equal(state.layout.pages[0].elements[0].text, "This is to formally certify");
 });
 
+check("committing a live draft on Prepare blur records undo without inventing a second content revision", () => {
+  let state = createEditorState(baseline);
+  state = editorReducer(state, {
+    type: "EDIT_WORD_DRAFT",
+    pageIndex: 0,
+    elementId: "e1",
+    wordId: "w4",
+    text: "formally",
+  });
+  const draftRevision = state.revision;
+  const draftLayout = state.layout;
+
+  state = editorReducer(state, {
+    type: "EDIT_WORD",
+    pageIndex: 0,
+    elementId: "e1",
+    wordId: "w4",
+    text: "formally",
+  });
+
+  assert.equal(state.revision, draftRevision, "blur commits undo history but does not change the already-current word intent");
+  assert.equal(state.layout, draftLayout, "the committed layout is already the canonical draft layout");
+  assert.equal(state.undo.length, 1, "the replacement remains one undoable operation");
+  assert.equal(Object.keys(state.pendingWordEdits).length, 0, "the pending draft marker is cleared");
+});
+
 check("cancelling a live word draft restores the pre-edit canonical layout", () => {
   let state = createEditorState(baseline);
   state = editorReducer(state, {

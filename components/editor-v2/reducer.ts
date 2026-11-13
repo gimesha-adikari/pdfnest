@@ -275,6 +275,27 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       return state;
     }
 
+    // Typing already applied this exact word draft to the canonical layout and
+    // advanced `revision`. A subsequent blur/Enter commit only adds the single
+    // undo operation; it must not create a second content revision. Otherwise
+    // a Prepare click that blurs this input can submit the draft revision and
+    // then invalidate the resulting candidate when this history-only commit
+    // reports a newer revision.
+    if (action.type === "EDIT_WORD" && state.pendingWordEdits[key] && sameDraft(currentDraft, after)) {
+      const nextPendingWordEdits = { ...state.pendingWordEdits };
+      delete nextPendingWordEdits[key];
+      const operation: EditorOperation = {
+        kind: "edit",
+        patch: { pageIndex: action.pageIndex, elementId: action.elementId, before, after },
+      };
+      return {
+        ...state,
+        undo: bounded(state.undo, operation),
+        redo: [],
+        pendingWordEdits: nextPendingWordEdits,
+      };
+    }
+
     const operation: EditorOperation = {
       kind: "edit",
       patch: { pageIndex: action.pageIndex, elementId: action.elementId, before, after },
