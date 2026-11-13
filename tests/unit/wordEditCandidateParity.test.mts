@@ -97,6 +97,7 @@ async function main() {
     wordEditMode?: string;
     onCompileWordEdits?: (value: typeof request, revision: number) => void;
     onRevisionChange?: (revision: number) => void;
+    renderPageVisual?: (index: number, visual: { zoom: number; devicePixelRatio: number }) => React.ReactNode;
   } = {};
   let compileSubmissions = 0;
   let downloads = 0;
@@ -117,7 +118,11 @@ async function main() {
     "@/components/pdf/PdfToolHero": { default: empty },
     "@/components/studio/ui/JobProgressCard": { default: empty },
     "@/components/editor-v2/SharedEditor": {
-      SharedEditor: (props: typeof editorProps) => { editorProps = props; return null; },
+      SharedEditor: (props: typeof editorProps) => {
+        editorProps = props;
+        return React.createElement("div", { "data-testid": "source-page-preview" },
+          props.renderPageVisual?.(0, { zoom: 1, devicePixelRatio: 1 }));
+      },
     },
     "@/components/editor-v2/model": { DEFAULT_EDITOR_LANGUAGE: { mode: "EXPLICIT", languages: ["eng"] } },
     "@/components/editor-v2/wordEdits": {
@@ -132,7 +137,9 @@ async function main() {
     "@/lib/preview/usePreviews": {
       usePreviews: (requests: typeof previewRequests) => {
         previewRequests.push(...requests);
-        return requests.map(() => ({ src: "data:image/png;base64,cHJldmlldw==" }));
+        return requests.map((request) => request.file === source
+          ? { src: "", isLoading: false, error: { code: "PREVIEW_FAILED", message: "source page render rejected" } }
+          : { src: "data:image/png;base64,cHJldmlldw==", isLoading: false, error: null });
       },
     },
     "@/lib/preview/types": { getPreviewFileIdentity: (file: File) => `${file.name}:${file.size}` },
@@ -152,6 +159,7 @@ async function main() {
   await act(async () => { root.render(React.createElement(component)); });
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
 
+  assert.match(document.querySelector('[data-testid="source-page-preview"]')?.textContent ?? "", /Source page preview failed: source page render rejected/);
   assert.equal(editorProps.wordEditMode, "operations");
   assert.equal(typeof editorProps.onCompileWordEdits, "function");
   await act(async () => {
@@ -161,7 +169,7 @@ async function main() {
   });
   await act(async () => {
     const deadline = Date.now() + 2_000;
-    while (previewRequests.length === 0 && Date.now() < deadline) {
+    while (!previewRequests.some((preview) => preview.file !== source) && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
   });
@@ -169,7 +177,7 @@ async function main() {
   assert.equal(compileSubmissions, 1);
   assert.equal(downloads, 1);
   assert.ok(previewRequests.length >= 1, `prepared candidate should be sent to the existing preview hook; alerts: ${[...document.querySelectorAll('[role="alert"]')].map((node) => node.textContent).join(" | ")}`);
-  const previewRequest = previewRequests.at(-1);
+  const previewRequest = [...previewRequests].reverse().find((preview) => preview.file !== source);
   if (!previewRequest) throw new Error("candidate preview request was not captured");
   assert.equal(previewRequest.renderer, "server");
   assert.equal(previewRequest.page, 1);

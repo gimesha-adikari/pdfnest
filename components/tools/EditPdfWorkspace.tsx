@@ -57,6 +57,14 @@ function ActiveStandalonePage({ file, page, visual }: ActiveStandalonePageProps)
   }
   const displaySrc = result?.src || cachedSrc;
 
+  if (result?.error) {
+    return (
+      <div role="alert" className="p-5 text-red-700">
+        Source page preview failed: {result.error.message || "The source page could not be rendered."} Re-upload the PDF to start a fresh preview session.
+      </div>
+    );
+  }
+
   return displaySrc ? (
     <img
       src={displaySrc}
