@@ -21,6 +21,7 @@ import { captureCloudPdfOutputRestoration } from "@/lib/api";
 import { usePdfOutputOperation } from "@/lib/security/usePdfOutputOperation";
 import { usePreviews } from "@/lib/preview/usePreviews";
 import { getPreviewFileIdentity } from "@/lib/preview/types";
+import CandidateWordSelection from "@/components/tools/CandidateWordSelection";
 
 interface ActiveStandalonePageProps {
   file: File;
@@ -86,16 +87,23 @@ interface PreparedWordEditCandidate extends PreparedWordEditIdentity {
   artifactSha256: string;
   pageCount: number;
   provenance: PdfResultProvenance;
+  selectionMetadata?: unknown;
 }
 
 function VerifiedCandidatePage({
   file,
   page,
+  artifactSha256,
+  selectionMetadata,
+  enableWordSelection,
   onReady,
   onError,
 }: {
   file: File;
   page: number;
+  artifactSha256: string;
+  selectionMetadata: unknown;
+  enableWordSelection: boolean;
   onReady: (file: File, page: number) => void;
   onError: (file: File, page: number, message: string) => void;
 }) {
@@ -107,15 +115,17 @@ function VerifiedCandidatePage({
   }, [file, onError, onReady, page, result?.error, result?.src]);
 
   if (result?.error) return <div role="alert" className="p-5 text-red-700">Verified preview failed: {result.error.message || "The prepared PDF page could not be rendered."}</div>;
+  if (result?.src && enableWordSelection && selectionMetadata) return <CandidateWordSelection file={file} artifactSha256={artifactSha256} metadata={selectionMetadata} page={page} imageSrc={result.src} />;
   if (result?.src) return <img src={result.src} alt={`Verified compiled PDF page ${page}`} className="mx-auto max-h-full max-w-full object-contain" draggable={false} />;
   return <div className="flex min-h-96 items-center justify-center gap-2 text-muted-foreground"><Loader2 className="animate-spin"/>Rendering the compiled PDF page…</div>;
 }
 
 export interface EditPdfWorkspaceProps {
   engine?: EditPdfEditorEngine;
+  enableWordSelection?: boolean;
 }
 
-export default function EditPdfWorkspace({ engine }: EditPdfWorkspaceProps = {}) {
+export default function EditPdfWorkspace({ engine, enableWordSelection = process.env.NEXT_PUBLIC_VERIFIED_WORD_SELECTION === "true" }: EditPdfWorkspaceProps = {}) {
   const { requireAuth } = useAuth();
   const router = useRouter();
   const { file: sharedFile, setDownloadData, toolId, editPdfEngine: contextEngine } = useSharedTool();
@@ -333,6 +343,7 @@ export default function EditPdfWorkspace({ engine }: EditPdfWorkspaceProps = {})
           artifactSha256: verified.artifactSha256,
           pageCount: verified.pageCount,
           provenance: operation.provenance(),
+          selectionMetadata: workerResult.candidate_selection,
         };
         publishCandidate(candidate);
         selectCandidatePage(1);
@@ -411,6 +422,9 @@ export default function EditPdfWorkspace({ engine }: EditPdfWorkspaceProps = {})
           key={`${getPreviewFileIdentity(preparedCandidate.file)}:${candidatePage}`}
           file={preparedCandidate.file}
           page={candidatePage}
+          artifactSha256={preparedCandidate.artifactSha256}
+          selectionMetadata={preparedCandidate.selectionMetadata}
+          enableWordSelection={enableWordSelection}
           onReady={candidatePreviewLoaded}
           onError={candidatePreviewFailed}
         />

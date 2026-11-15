@@ -6,7 +6,7 @@ import { verifiedCandidateWords, type CandidateWordPage } from "@/lib/verifiedCa
 export default function CandidateWordSelection({ file, artifactSha256, metadata, page, imageSrc }: {
   file: File; artifactSha256: string; metadata: unknown; page: number; imageSrc: string;
 }) {
-  const [verified, setVerified] = useState<{ file: File; metadata: unknown; pages: CandidateWordPage[] } | null>(null);
+  const [verified, setVerified] = useState<{ file: File; artifactSha256: string; metadata: unknown; pages: CandidateWordPage[] } | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<number | null>(null);
@@ -16,7 +16,7 @@ export default function CandidateWordSelection({ file, artifactSha256, metadata,
     const container = root.current;
     setEnabled(false); setSelected(null); setQuery("");
     void verifiedCandidateWords(file, artifactSha256, metadata).then(pages => {
-      if (!cancelled) setVerified({ file, metadata, pages });
+      if (!cancelled) setVerified({ file, artifactSha256, metadata, pages });
     }).catch(() => { if (!cancelled) setVerified(null); });
     return () => {
       cancelled = true;
@@ -24,7 +24,7 @@ export default function CandidateWordSelection({ file, artifactSha256, metadata,
       if (selection?.anchorNode && container?.contains(selection.anchorNode)) selection.removeAllRanges();
     };
   }, [file, artifactSha256, metadata, page]);
-  const current = verified?.file === file && verified.metadata === metadata ? verified.pages.find(p => p.page_num === page) : null;
+  const current = verified?.file === file && verified.artifactSha256 === artifactSha256 && verified.metadata === metadata ? verified.pages.find(p => p.page_num === page) : null;
   function selectWord(element: HTMLElement, index: number) {
     const range = document.createRange(); range.selectNodeContents(element);
     const selection = window.getSelection(); selection?.removeAllRanges(); selection?.addRange(range);

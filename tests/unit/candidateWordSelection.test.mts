@@ -28,7 +28,7 @@ new Function('require','module','exports',outputText)((name:string)=>name==='@/l
 const Component=(module.exports as any).default;
 const {createRoot}=await import('react-dom/client');const root=createRoot(document.getElementById('root')!);
 const file=new File([await data.arrayBuffer()],'candidate.pdf');
-async function render(fileArg=file,meta:any=metadata,page=1){await act(async()=>{root.render(React.createElement(Component,{file:fileArg,metadata:meta,artifactSha256:digest,page,imageSrc:"blob:verified"}));});await act(async()=>{await new Promise(r=>setTimeout(r,20));});}
+async function render(fileArg=file,meta:any=metadata,page=1,hash=digest){await act(async()=>{root.render(React.createElement(Component,{file:fileArg,metadata:meta,artifactSha256:hash,page,imageSrc:"blob:verified"}));});await act(async()=>{await new Promise(r=>setTimeout(r,20));});}
 await render();
 const checkbox=document.querySelector('input[type=checkbox]') as HTMLInputElement;assert.ok(checkbox);
 await act(async()=>checkbox.click());
@@ -38,8 +38,28 @@ assert.equal(window.getSelection()?.toString(),text,'keyboard selection must rea
 const partial=new dom.window.KeyboardEvent('keydown',{key:'ArrowLeft',shiftKey:true,bubbles:true,cancelable:true});
 await act(async()=>word.dispatchEvent(partial));assert.ok(partial.defaultPrevented,'unqualified partial selection is disabled');
 assert.equal(document.querySelectorAll('[data-candidate-word]').length,1,'no duplicate text node');
+assert.equal(word.tabIndex,0,'qualified words participate in keyboard focus');
+assert.equal(word.getAttribute('aria-label'),`Select whole word ${text}`);
+assert.equal(word.getAttribute('aria-pressed'),'true');
+await act(async()=>word.dispatchEvent(new dom.window.Event('pointerdown',{bubbles:true,cancelable:true})));
+assert.equal(document.activeElement,word,'pointer selection focuses the selected word');
+assert.equal(window.getSelection()?.toString(),text,'pointer selection contains exact PDF-derived Unicode');
+const search=document.querySelector('input[aria-label="Find selectable word"]') as HTMLInputElement;
+assert.ok(search,'qualified word search has an accessible name');
+const setter=Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value')!.set!;
+await act(async()=>{setter.call(search,text);search.dispatchEvent(new dom.window.Event('input',{bubbles:true}));});
+assert.equal(document.querySelector('output')?.textContent,'1 matches','search matches exact candidate Unicode');
+await render(file,metadata,2);
+assert.equal(document.querySelectorAll('[data-candidate-word]').length,0,'unqualified pages stay image-only');
+assert.equal(window.getSelection()?.toString(),'','page change removes the old selection');
+await render();
+await act(async()=>{(document.querySelector('input[type=checkbox]') as HTMLInputElement).click();});
+
 await render();assert.equal(document.querySelectorAll('[data-candidate-word]').length,1,'normal rerender preserves selectable candidate');
-const next=new File(['other'],'candidate.pdf');delayed=true;
+delayed=true;
+act(()=>root.render(React.createElement(Component,{file,metadata,artifactSha256:'0'.repeat(64),page:1,imageSrc:'blob:verified'})));
+assert.ok(!document.querySelector('input[type=checkbox]'),'changed expected digest must immediately hide prior semantics while verification is pending');
+const next=new File(['other'],'candidate.pdf');
 await render(next);
 assert.equal(document.querySelectorAll('[data-candidate-word]').length,0,'different bytes must immediately remove old words');
 await render(file);const oldResolve=delay!;

@@ -113,6 +113,7 @@ async function main() {
   let downloads = 0;
 
   const component = load("components/tools/EditPdfWorkspace.tsx", {
+    "@/components/tools/CandidateWordSelection": { default: () => null },
     "next/navigation": { useRouter: () => ({ replace: (url: string) => navigations.push(url) }) },
     "lucide-react": new Proxy({}, { get: () => empty }),
     "@/context/AuthContext": { useAuth: () => ({ requireAuth: (action: () => void) => action() }) },

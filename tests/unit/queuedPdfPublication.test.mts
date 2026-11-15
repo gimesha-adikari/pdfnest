@@ -56,6 +56,7 @@ async function main() {
     let deferAuth = false;
     let capturedSignal: AbortSignal | undefined;
     const component = load("components/tools/EditPdfWorkspace.tsx", {
+        "@/components/tools/CandidateWordSelection": { default: () => null },
         "next/navigation": { useRouter: () => ({ replace: (url: string) => navigations.push(url) }) },
         "lucide-react": new Proxy({}, { get: () => empty }),
         "@/context/AuthContext": { useAuth: () => ({ requireAuth: (action: () => void) => { if (deferAuth) delayedAuth = action; else action(); } }) },
