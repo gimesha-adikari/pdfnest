@@ -30,11 +30,11 @@ export default function CandidateWordSelection({ file, artifactSha256, metadata,
     const selection = window.getSelection(); selection?.removeAllRanges(); selection?.addRange(range);
     setSelected(index);
   }
-  return <div className="flex max-h-full max-w-full flex-col items-center gap-2">
+  return <div className="flex max-h-full max-w-full flex-col items-center gap-2 text-zinc-900">
     {current?.words.length ? <div className="flex flex-wrap items-center gap-3 text-sm">
       <label><input type="checkbox" checked={enabled} onChange={e => { setEnabled(e.target.checked); setSelected(null); window.getSelection()?.removeAllRanges(); }} /> Select whole words</label>
-      {enabled && <><span>Click a word or Tab to it and press Enter, then Ctrl+C. Partial and phrase selection are unavailable.</span><label>Find selectable word <input aria-label="Find selectable word" value={query} onChange={e => setQuery(e.target.value)} className="rounded border px-2" /></label><output aria-live="polite">{query ? `${current.words.filter(w => w.text.includes(query)).length} matches` : ""}</output></>}
-    </div> : <p className="text-sm text-muted-foreground">Text selection is unavailable for this page. The verified PDF can still be downloaded.</p>}
+      {enabled && <><span>Click a word or Tab to it and press Enter, then Ctrl+C. Partial and phrase selection are unavailable.</span><label>Find selectable word <input aria-label="Find selectable word" value={query} onChange={e => setQuery(e.target.value)} className="rounded border bg-white px-2" style={{ color: "inherit" }} /></label><output aria-live="polite">{query ? `${current.words.filter(w => w.text.includes(query)).length} matches` : ""}</output></>}
+    </div> : <p className="text-sm text-zinc-700">Text selection is unavailable for this page. The verified PDF can still be downloaded.</p>}
     <div ref={root} className="relative max-h-full max-w-full" role="group" aria-label="Verified PDF page with optional whole-word selection">
       <img src={imageSrc} alt={`Verified compiled PDF page ${page}`} className="block max-h-[54vh] max-w-full object-contain" draggable={false} />
       {enabled && current && <div className="absolute inset-0 overflow-hidden" style={{pointerEvents:"none"}} aria-label="Selectable PDF words">
