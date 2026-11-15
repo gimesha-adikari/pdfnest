@@ -291,7 +291,11 @@ for (const [name, code] of [
     ledger.failed_job_observed_at = Date.now();
     await expect(page.getByRole('alert').first()).toBeVisible(); ledger.alert = await page.getByRole('alert').allTextContents();
     ledger.alert_delay_ms = Date.now() - ledger.failed_job_observed_at;
-    await page.waitForTimeout(1500); await expect(page.getByRole('alert').first()).toBeVisible();
+    const refusalText = ledger.alert.find((text: string) => /refus|does not align|border|line|conflict|repair|image|transform/i.test(text));
+    expect(refusalText).toBeTruthy();
+    await page.waitForTimeout(1500);
+    await expect(page.getByRole('alert').filter({ hasText: refusalText! }).first()).toBeVisible();
+    ledger.refusal_text = refusalText; ledger.refusal_persisted_ms = 1500;
     expect(ledger.alert.join(' ')).toMatch(/refus|does not align|border|line|conflict|repair|image|transform/i);
     await expect(preview(page)).toHaveCount(0); await expect(page.getByRole('button', { name: 'Download verified PDF', exact: true })).toHaveCount(0);
     expect(job.result?.artifact_key).toBeFalsy();
