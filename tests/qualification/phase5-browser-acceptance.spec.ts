@@ -93,8 +93,13 @@ const compileJobs = (l: Ledger) => Object.values(l.jobs).filter(j => j.job_type 
 
 async function upload(page: Page, ledger: Ledger, source: string) {
   await page.goto('/edit-pdf');
+  const sourceInfo = execFileSync('pdfinfo', [source], { encoding: 'utf8' });
+  const pageCount = Number(sourceInfo.match(/^Pages:\s+(\d+)/m)?.[1] || 0);
+  const extractionWaitMs = pageCount >= 100 ? 300_000 : 180_000;
+  ledger.source_page_count = pageCount;
+  ledger.extraction_wait_ms = extractionWaitMs;
   await page.locator('input[type=file]').first().setInputFiles(source);
-  await page.getByTestId('editor-overlay-layer').waitFor({ timeout: 180_000 });
+  await page.getByTestId('editor-overlay-layer').waitFor({ timeout: extractionWaitMs });
   const sourceImage = page.getByRole('img', { name: 'Page 1', exact: true });
   await expect(sourceImage).toBeVisible({ timeout: 60_000 });
   await expect.poll(() => sourceImage.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
@@ -181,7 +186,10 @@ async function validateAndDownload(page: Page, ledger: Ledger, name: string, sou
     await download.saveAs(dest); expect(sha(fs.readFileSync(dest))).toBe(hash); paths.push(dest);
   }
   ledger.ui_download_sha256 = paths.map(p => sha(fs.readFileSync(p)));
-  execFileSync(python, [tools, 'validate', source, paths[0], declaration.file, path.join(output, name, 'pdf-validation.json')], { timeout: 120_000 });
+  // Full 100-page scanned PDFs take longer than mixed/native documents because
+  // both renderers produce both PDFs at all three DPIs for every page.
+  const validationTimeoutMs = ledger.source_page_count >= 100 ? 720_000 : 120_000;
+  execFileSync(python, [tools, 'validate', source, paths[0], declaration.file, path.join(output, name, 'pdf-validation.json')], { timeout: validationTimeoutMs });
   ledger.pdf_validation = JSON.parse(fs.readFileSync(path.join(output, name, 'pdf-validation.json'), 'utf8'));
   expect(sha(await (await page.context().request.get(`http://localhost:8080/api/edit/jobs/${job.id}/download`)).body())).toBe(hash);
 }
@@ -192,9 +200,11 @@ const scripts = [
   ['tamil-word', 'தமிழ்நாடு', 'native'], ['tamil-cluster', 'கல்வி', 'native'], ['tamil-vowel', 'கி', 'native'],
   ['sinhala-searchable', 'කී', 'searchable'], ['tamil-searchable', 'கி', 'searchable'],
   ['english-native', 'hello', 'native'], ['english-scan', 'hello', 'scan'],
+  ['native-100-default-off', 'hello', 'scan'],
 ] as const;
 
 for (const [name, text, kind] of scripts) test(`${name}: real UI ${kind === 'scan' ? 'image-only fallback' : 'selection clipboard'} downloads and PDF preservation`, async ({ page, context }) => {
+  if (name === 'english-scan' || name === 'native-100-default-off') test.setTimeout(900_000);
   const ledger = await setup(page, context, name); const source = path.join(fixtureDir, `${kind}.pdf`);
   try {
     const extraction = await upload(page, ledger, source); const id = await edit(page, text);
@@ -204,8 +214,10 @@ for (const [name, text, kind] of scripts) test(`${name}: real UI ${kind === 'sca
     expect(ledger.compileRequests[0].request).toEqual(declaration.request); expect(ledger.compileRequests[0].at).toBeGreaterThanOrEqual(declaration.at);
     if (kind === 'scan') {
       await expect(preview(page)).toBeVisible();
+      await expect(preview(page).getByRole('img', { name: 'Verified compiled PDF page 1' })).toBeVisible();
       await expect(page.getByRole('checkbox', { name: 'Select whole words' })).toHaveCount(0);
-      await expect(preview(page).getByText('Text selection is unavailable for this page.', { exact: false })).toBeVisible();
+      await expect(page.getByRole('textbox', { name: 'Find selectable word', exact: true })).toHaveCount(0);
+      await expect(preview(page).locator('[data-candidate-word]')).toHaveCount(0);
       ledger.selection_policy = 'image-only fallback; no clipboard qualification claimed';
       ledger.fallback_accessibility = await auditAccessibility(page); expect(ledger.fallback_accessibility.violations).toEqual([]);
       await validateAndDownload(page, ledger, name, source, declaration, job);

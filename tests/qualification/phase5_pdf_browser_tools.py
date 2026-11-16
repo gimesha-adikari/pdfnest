@@ -19,6 +19,15 @@ from tests.qualification.phase5l_candidate_verification import image, compare
 
 def sha(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
+def assert_page_text(candidate, page_num, replacement, original):
+    """Validate target text on its edited page, not across unrelated pages."""
+    page_text=subprocess.check_output(
+        ['pdftotext','-f',str(page_num),'-l',str(page_num),'-enc','UTF-8',str(candidate),'-'],
+        text=True,
+    )
+    assert page_text.count(replacement)==1 and original not in page_text
+    return page_text
+
 def private_path(value):
     p=Path(value).resolve()
     if any((a/'.git').exists() for a in (p,*p.parents)):
@@ -148,7 +157,6 @@ def _validate_materialized(source,candidate,declaration,output):
     assert sha(source)==frozen['source_sha256']
     q=subprocess.run(['qpdf','--check',str(candidate)],capture_output=True,text=True);assert q.returncode==0,q.stderr
     edit=frozen['request']['edits'][0];target_page=edit['page_num']-1;text=edit['replacement_text'];old=edit['expected_original_text'];mask=frozen['mask']
-    poppler=subprocess.check_output(['pdftotext','-enc','UTF-8',str(candidate),'-'],text=True)
     rows=[]
     with fitz.open(source) as a,fitz.open(candidate) as b:
         assert len(a)==len(b)
@@ -158,7 +166,7 @@ def _validate_materialized(source,candidate,declaration,output):
         stream=lambda d:[d.xref_stream_raw(i[0]) for p in d for i in p.get_images()]
         assert all(s in stream(b) for s in stream(a))
         extracted=b[target_page].get_text();assert extracted.count(text)==1 and old not in extracted
-        assert poppler.count(text)==1 and old not in poppler
+        assert_page_text(candidate,target_page+1,text,old)
         source_words=[w[4] for w in a[target_page].get_text('words')]
         candidate_words=[w[4] for w in b[target_page].get_text('words')]
         assert candidate_words==([text if w==old else w for w in source_words] if source_words else [text])
