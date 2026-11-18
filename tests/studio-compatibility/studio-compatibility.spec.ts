@@ -146,7 +146,7 @@ async function compileV2AndDownload(page: Page, context: BrowserContext, session
   event(caseName, "single_layout_line_match_selected_and_edited");
   const compileRequest = page.waitForRequest((request) => request.url().includes("/jobs") && request.method() === "POST" && request.postDataJSON()?.operation === "editor_compile", { timeout: 30_000 });
   const compileResponse = page.waitForResponse((response) => response.url().includes("/jobs") && response.request().method() === "POST" && response.request().postDataJSON()?.operation === "editor_compile", { timeout: 30_000 });
-  await page.getByRole("button", { name: "Compile", exact: true }).click();
+  await page.locator('[aria-label="Studio Editor document bar"]').getByRole("button", { name: "Compile", exact: true }).click();
   const request = await compileRequest;
   const payload = request.postDataJSON();
   expect(payload.operation).toBe("editor_compile");
