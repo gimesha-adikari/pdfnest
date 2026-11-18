@@ -337,6 +337,12 @@ test.describe("Pinned full-stack Studio compatibility acceptance", () => {
     const fixture = await nativePdf(source, "Classic layout Alpha Bravo", 0);
     const mask = declareMask(source, "Classic layout Alpha Bravo", "line", name);
     const { context, page } = await newAuthenticatedPage(browser, "/studio");
+    const extractionResponses: Array<Promise<any>> = [];
+    page.on("response", (response) => {
+      if (new URL(response.url()).pathname === "/api/edit/extract" && response.request().method() === "POST") {
+        extractionResponses.push(response.json().catch(() => null));
+      }
+    });
     try {
       await page.locator('input[type="file"]').first().setInputFiles(source);
       await expect(page.getByRole("button", { name: "Edit", exact: true })).toBeVisible({ timeout: 60_000 });
@@ -375,13 +381,22 @@ test.describe("Pinned full-stack Studio compatibility acceptance", () => {
       const request = await requestPromise;
       const payload = request.postDataJSON();
       const sourceTrackerPresent = typeof payload.source_tracker === "string" && payload.source_tracker.trim().length > 0;
-      const sourceTrackerMatchesSubmission = payload.source_tracker === issuedSourceTracker;
-      const uprightTrackerPresent = typeof payload.upright_tracker === "string" && payload.upright_tracker.trim().length > 0;
+      const activeSourceTracker = (await page.getByTestId("classic-source-tracker").textContent())?.trim() || "";
+      const issuedTrackers = (await Promise.all(extractionResponses))
+        .map((item) => typeof item?.source_tracker === "string" ? item.source_tracker : "")
+        .filter((value) => value.trim().length > 0);
+      const sourceTrackerMatchesSubmission = issuedTrackers.includes(payload.source_tracker);
+      const sourceTrackerMatchesActiveEditor = payload.source_tracker === activeSourceTracker;
+      const uprightTrackerOptional = payload.upright_tracker === "";
       event(name, "layout_compile_request_observed", {
         payload_keys: Object.keys(payload).sort(), page_count: Array.isArray(payload.pages) ? payload.pages.length : null,
-        source_tracker_present: sourceTrackerPresent, source_tracker_matches_submission: sourceTrackerMatchesSubmission,
+        extraction_response_count: issuedTrackers.length,
+        source_tracker_present: sourceTrackerPresent,
+        source_tracker_matches_server_submission: sourceTrackerMatchesSubmission,
+        source_tracker_matches_active_editor: sourceTrackerMatchesActiveEditor,
         source_tracker_sha256: sha(Buffer.from(typeof payload.source_tracker === "string" ? payload.source_tracker : "")),
-        upright_tracker_present: uprightTrackerPresent,
+        active_source_tracker_sha256: sha(Buffer.from(activeSourceTracker)),
+        upright_tracker_optional: uprightTrackerOptional,
         precise_word_protocol_absent: !JSON.stringify(payload).includes("platen_word_edits.v1"),
       });
       expect(payload.pages).toBeTruthy();
@@ -395,7 +410,10 @@ test.describe("Pinned full-stack Studio compatibility acceptance", () => {
         error_code_present: typeof responseBody.code === "string" && responseBody.code.length > 0,
       });
       expect(sourceTrackerPresent).toBe(true);
+      expect(activeSourceTracker).not.toBe("");
       expect(sourceTrackerMatchesSubmission).toBe(true);
+      expect(sourceTrackerMatchesActiveEditor).toBe(true);
+      expect(uprightTrackerOptional).toBe(true);
       expect(response.ok()).toBe(true);
       const submission = responseBody;
       if (!submission.job_id) throw new Error("Classic Studio layout compile omitted its worker job identity.");

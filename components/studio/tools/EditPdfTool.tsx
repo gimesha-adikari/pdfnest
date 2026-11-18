@@ -655,7 +655,7 @@ export default function EditPdfTool({baseFile, onEditedFile}: EditPdfToolProps) 
                                     </div>
                                     <div className="rounded-2xl border border-border p-4">
                                         <p className="text-sm text-muted">Source tracker</p>
-                                        <p className="mt-1 truncate text-xs font-mono text-foreground">
+                                        <p data-testid="classic-source-tracker" className="mt-1 truncate text-xs font-mono text-foreground">
                                             {sourceTracker || "-"}
                                         </p>
                                     </div>
