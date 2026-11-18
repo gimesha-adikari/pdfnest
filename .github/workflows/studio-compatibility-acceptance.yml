@@ -67,7 +67,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: gimesha-adikari/pdfnest-worker
-          ref: ac93a569eca5f9388cc8f52dec193cdfbfba6841
+          ref: 786b022d029b5010f8b382e3af57168b8130cdf4
           path: runtime/pdfnest-worker
           persist-credentials: false
 
@@ -121,7 +121,7 @@ jobs:
           set -euo pipefail
           BASE=cd74ffc724094503802b84a561296e9291d5dbf0
           test "$(git -C runtime/pdfnest-backend rev-parse HEAD)" = a4179d65099e3a8d11376923bf59af291eaac235
-          test "$(git -C runtime/pdfnest-worker rev-parse HEAD)" = ac93a569eca5f9388cc8f52dec193cdfbfba6841
+          test "$(git -C runtime/pdfnest-worker rev-parse HEAD)" = 786b022d029b5010f8b382e3af57168b8130cdf4
           test "$(git -C runtime/platen-document rev-parse HEAD)" = 83132f538cd296ad292cb4b9627cb0ebf2d6237a
           git cat-file -e "$BASE^{commit}"
           git merge-base --is-ancestor "$BASE" HEAD

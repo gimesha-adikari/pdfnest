@@ -419,6 +419,8 @@ test.describe("Pinned full-stack Studio compatibility acceptance", () => {
       if (!submission.job_id) throw new Error("Classic Studio layout compile omitted its worker job identity.");
       event(name, "layout_protocol_submitted", { response_status: response.status(), pages_present: true, source_tracker_present: true, no_precise_word_protocol: true });
       await expect(page.getByText("Edited PDF loaded back into Studio.", { exact: true })).toBeVisible({ timeout: 180_000 });
+      await page.getByRole("button", { name: "Select", exact: true }).click();
+      event(name, "classic_preview_tool_selected");
       await expect(page.getByAltText("Preview page 1")).toBeVisible({ timeout: 60_000 });
 
       let record: any = null;
