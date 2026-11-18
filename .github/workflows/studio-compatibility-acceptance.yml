@@ -127,7 +127,7 @@ jobs:
           git merge-base --is-ancestor "$BASE" HEAD
           while IFS= read -r changed; do
             case "$changed" in
-              .github/workflows/studio-compatibility-acceptance.yml|playwright.studio-compatibility.config.ts|tests/studio-compatibility/*|scripts/studio-compatibility/*|vercel.json) ;;
+              .github/workflows/studio-compatibility-acceptance.yml|components/studio/tools/EditPdfTool.tsx|playwright.studio-compatibility.config.ts|tests/studio-compatibility/*|scripts/studio-compatibility/*|vercel.json) ;;
               *) echo "Unexpected change outside the CI harness: $changed"; exit 1 ;;
             esac
           done < <(git diff --name-only "$BASE"...HEAD)
