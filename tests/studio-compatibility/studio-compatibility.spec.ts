@@ -132,11 +132,18 @@ async function uploadStudio(page: Page, file: string, caseName: string) {
 async function compileV2AndDownload(page: Page, context: BrowserContext, sessionId: string, caseName: string, text: string, replacement: string, fileName: string) {
   await page.getByTestId("studio-enter-edit-pdf").click();
   await expect(page.getByTestId("studio-edit-workspace")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("Ready to edit")).toBeVisible({ timeout: 180_000 });
-  await page.getByTestId("studio-editor-search").fill(text);
-  await expect(page.getByTestId("studio-editor-search-count")).toHaveText("1 matches", { timeout: 30_000 });
-  await page.getByRole("button", { name: "Select first match", exact: true }).click();
-  await page.getByTestId("studio-edit-text").fill(replacement);
+  const editorSurface = page.getByTestId("shared-editor-v2");
+  await expect(editorSurface).toBeVisible({ timeout: 180_000 });
+  event(caseName, "editor_extraction_ready_in_shared_layout_editor");
+  const search = page.getByTestId("editor-v2-search");
+  await search.fill(text);
+  const searchCount = page.getByTestId("editor-v2-search-count");
+  await expect(searchCount).toContainText("1 matches", { timeout: 30_000 });
+  await page.getByRole("button", { name: "Next match", exact: true }).click();
+  const lineEditor = page.getByRole("textbox", { name: /^(Edit entire line|Text)$/ });
+  await expect(lineEditor).toBeVisible();
+  await lineEditor.fill(replacement);
+  event(caseName, "single_layout_line_match_selected_and_edited");
   const compileRequest = page.waitForRequest((request) => request.url().includes("/jobs") && request.method() === "POST" && request.postDataJSON()?.operation === "editor_compile", { timeout: 30_000 });
   const compileResponse = page.waitForResponse((response) => response.url().includes("/jobs") && response.request().method() === "POST" && response.request().postDataJSON()?.operation === "editor_compile", { timeout: 30_000 });
   await page.getByRole("button", { name: "Compile", exact: true }).click();
