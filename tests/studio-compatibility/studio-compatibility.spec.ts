@@ -201,7 +201,22 @@ async function validateCandidate(source: string, candidate: string, mask: string
     "--expected", args.expected, "--stale", args.stale, "--neighbor", args.neighbor, "--pages", String(args.pages), "--mode", args.mode];
   if (args.neighborPosition) cli.push("--neighbor-position", args.neighborPosition);
   if (args.allowImageReencoding) cli.push("--allow-image-reencoding");
-  run(PYTHON, cli, 900_000);
+  try {
+    run(PYTHON, cli, 900_000);
+  } catch (error) {
+    if (fs.existsSync(output)) {
+      const failed = JSON.parse(fs.readFileSync(output, "utf8"));
+      event(caseName, "independent_pdf_validation_failed", {
+        source_sha256: failed.source_sha256, candidate_sha256: failed.candidate_sha256,
+        source_image_count: failed.source_image_sha256.length,
+        candidate_image_count: failed.candidate_image_sha256.length,
+        source_image_streams_preserved: failed.source_image_streams_preserved,
+        image_stream_policy: failed.image_stream_policy,
+        pixel_failures: failed.pixel_failures
+      });
+    }
+    throw error;
+  }
   const validation = JSON.parse(fs.readFileSync(output, "utf8"));
   event(caseName, "independent_pdf_validation_passed", {
     source_sha256: validation.source_sha256, candidate_sha256: validation.candidate_sha256,
@@ -253,7 +268,7 @@ async function actualGeneralEditorDownloads(page: Page, hash: string, caseName: 
   return paths;
 }
 
-test.describe.serial("Pinned full-stack Studio compatibility acceptance", () => {
+test.describe("Pinned full-stack Studio compatibility acceptance", () => {
   test("Studio V2 native unrotated layout edit, preview and download", async ({ browser }) => {
     const name = "studio-v2-native-0";
     const source = path.join(PDF_DIR, name + "-source.pdf");

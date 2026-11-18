@@ -99,7 +99,8 @@ def pixel_diff(src, cand, mask, dpi):
     a=np.asarray(Image.open(src).convert("RGB"),dtype=np.int16)
     b=np.asarray(Image.open(cand).convert("RGB"),dtype=np.int16)
     if a.shape != b.shape: raise ValueError("render dimensions changed")
-    changed=np.max(np.abs(a-b),axis=2)>2
+    delta=np.abs(a-b)
+    changed=np.max(delta,axis=2)>2
     allow=np.zeros(changed.shape,dtype=bool)
     if mask:
         x0,y0,x1,y1=mask
@@ -108,9 +109,16 @@ def pixel_diff(src, cand, mask, dpi):
         left=max(0,math.floor(x0*dpi/72)-px); top=max(0,math.floor(y0*dpi/72)-px)
         right=min(changed.shape[1],math.ceil(x1*dpi/72)+px); bottom=min(changed.shape[0],math.ceil(y1*dpi/72)+px)
         allow[top:bottom,left:right]=True
-    return {"changed_pixels":int(changed.sum()),"changed_outside_mask":int((changed & ~allow).sum()),"changed_inside_mask":int((changed & allow).sum()),"render_dimensions":[int(a.shape[1]),int(a.shape[0])],"mask_raster_box":None if mask is None else [left,top,right,bottom]}
+    outside=changed & ~allow
+    ys,xs=np.where(outside)
+    outside_bbox=None if not len(xs) else [int(xs.min()),int(ys.min()),int(xs.max()+1),int(ys.max()+1)]
+    outside_bbox_points=None if outside_bbox is None else [round(v*72/dpi,4) for v in outside_bbox]
+    max_outside_delta=int(delta[outside].max()) if outside.any() else 0
+    return {"changed_pixels":int(changed.sum()),"changed_outside_mask":int(outside.sum()),"changed_inside_mask":int((changed & allow).sum()),"max_channel_delta_outside_mask":max_outside_delta,"outside_changed_bbox_raster_pixels":outside_bbox,"outside_changed_bbox_page_points_from_top_left":outside_bbox_points,"render_dimensions":[int(a.shape[1]),int(a.shape[0])],"mask_raster_box":None if mask is None else [left,top,right,bottom]}
 
 def validate(args):
+    if args.allow_image_reencoding and args.mode != "scan":
+        raise ValueError("image re-encoding allowance is restricted to explicit Studio scan validation")
     source_hash=sha(Path(args.source).read_bytes())
     mask=json.loads(Path(args.mask).read_text())
     if not mask.get("declared_before_compile") or mask.get("source_sha256") != source_hash:
@@ -138,7 +146,7 @@ def validate(args):
     image_streams_preserved = not src_images or set(src_images).issubset(set(dst_images))
     if src_images and not image_streams_preserved and not args.allow_image_reencoding:
         raise ValueError("original image stream was not preserved")
-    metrics=[]
+    metrics=[]; pixel_failures=[]
     for dpi in (72,144,288):
         for renderer in ("mupdf","poppler"):
             for page_no in range(len(source_geometry)):
@@ -155,9 +163,9 @@ def validate(args):
                     record={"renderer":renderer,"dpi":dpi,"page":page_no+1,**m}
                     metrics.append(record)
                     if record["changed_outside_mask"]!=0:
-                        raise ValueError("unauthorized changed pixels detected outside the predeclared source mask")
+                        pixel_failures.append({"renderer":renderer,"dpi":dpi,"page":page_no+1,"reason":"off-mask-changes","changed_outside_mask":record["changed_outside_mask"],"bbox_raster_pixels":record["outside_changed_bbox_raster_pixels"],"bbox_page_points_from_top_left":record["outside_changed_bbox_page_points_from_top_left"],"max_channel_delta":record["max_channel_delta_outside_mask"]})
                     if page_no>0 and record["changed_pixels"]!=0:
-                        raise ValueError("an unedited control page is not pixel-identical")
+                        pixel_failures.append({"renderer":renderer,"dpi":dpi,"page":page_no+1,"reason":"control-page-difference","changed_pixels":record["changed_pixels"]})
     if args.neighbor_position:
         needle=args.neighbor_position
         sd=fitz.open(args.source); cd=fitz.open(args.candidate)
@@ -169,8 +177,10 @@ def validate(args):
         a=token(sd,needle); b=token(cd,needle); sd.close(); cd.close()
         if a is None or b is None or any(abs(x-y)>1.5 for x,y in zip(a,b)):
             raise ValueError("neighbor word position changed beyond 1.5 points")
-    result={"source_sha256":source_hash,"candidate_sha256":sha(Path(args.candidate).read_bytes()),"page_count":len(source_geometry),"geometry":source_geometry,"source_image_sha256":src_images,"candidate_image_sha256":dst_images,"source_image_streams_preserved":image_streams_preserved,"image_stream_policy":("source-stream-identity" if image_streams_preserved else ("representation-change-allowed; raster-preservation-required" if args.allow_image_reencoding else "source-stream-identity-required")),"qpdf_source":qsource,"qpdf_candidate":qcand,"expected_text_present":args.expected,"obsolete_target_absent":args.stale or None,"neighbor_text_present":args.neighbor or None,"visible_ocr":visible if args.mode=="scan" else None,"mask":mask,"pixel_metrics":metrics,"zero_unauthorized_changes":True,"untouched_pages_pixel_identical":True}
+    result={"source_sha256":source_hash,"candidate_sha256":sha(Path(args.candidate).read_bytes()),"page_count":len(source_geometry),"geometry":source_geometry,"source_image_sha256":src_images,"candidate_image_sha256":dst_images,"source_image_streams_preserved":image_streams_preserved,"image_stream_policy":("source-stream-identity" if image_streams_preserved else ("representation-change-allowed; raster-preservation-required" if args.allow_image_reencoding else "source-stream-identity-required")),"qpdf_source":qsource,"qpdf_candidate":qcand,"expected_text_present":args.expected,"obsolete_target_absent":args.stale or None,"neighbor_text_present":args.neighbor or None,"visible_ocr":visible if args.mode=="scan" else None,"mask":mask,"pixel_metrics":metrics,"pixel_failures":pixel_failures,"zero_unauthorized_changes":not pixel_failures,"untouched_pages_pixel_identical":not any(x["reason"]=="control-page-difference" for x in pixel_failures)}
     Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n")
+    if pixel_failures:
+        raise ValueError("pixel preservation failed: "+json.dumps(pixel_failures,separators=(",",":"))[:2500])
     return result
 
 def main():
