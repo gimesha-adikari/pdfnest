@@ -13,6 +13,10 @@ const INSPECTOR = path.resolve("scripts/studio-compatibility/inspect-pdf.py");
 const PYTHON = process.env.STUDIO_TEST_PYTHON || "python3";
 
 function sha(bytes: Buffer | Uint8Array): string { return createHash("sha256").update(bytes).digest("hex"); }
+function sha256Hex(value: unknown): string {
+  const match = String(value ?? "").match(/^(?:sha256:)?([a-f0-9]{64})$/);
+  return match?.[1] ?? "";
+}
 function event(caseName: string, eventName: string, data: Record<string, unknown> = {}) {
   fs.appendFileSync(path.join(EVIDENCE_DIR, "workflow-events.jsonl"), JSON.stringify({ at: new Date().toISOString(), case: caseName, event: eventName, ...data }) + "\n");
 }
@@ -233,8 +237,8 @@ async function getWorkerArtifact(context: BrowserContext, jobId: string, caseNam
   if (!recordResponse.ok()) throw new Error("Authorized worker job record was unavailable.");
   const record = await recordResponse.json();
   if (record.status !== "succeeded") throw new Error("Worker compile did not reach succeeded status.");
-  const expectedHash = record.result?.artifact_sha256;
-  if (!/^[a-f0-9]{64}$/.test(expectedHash || "")) throw new Error("Worker did not return its artifact SHA-256.");
+  const expectedHash = sha256Hex(record.result?.artifact_sha256);
+  if (!expectedHash) throw new Error("Worker did not return a valid artifact SHA-256.");
   const artifactResponse = await context.request.get(API_ROOT + "/edit/jobs/" + encodeURIComponent(jobId) + "/download");
   if (!artifactResponse.ok()) throw new Error("Authorized worker artifact endpoint did not return the successful PDF.");
   const bytes = Buffer.from(await artifactResponse.body());
@@ -336,7 +340,9 @@ test.describe("Pinned full-stack Studio compatibility acceptance", () => {
     try {
       await page.locator('input[type="file"]').first().setInputFiles(source);
       await expect(page.getByRole("button", { name: "Edit", exact: true })).toBeVisible({ timeout: 60_000 });
-      await page.getByRole("button", { name: "Edit", exact: true }).click();
+      const layoutEditTool = page.locator('button[title="Edit"]');
+      await expect(layoutEditTool).toHaveCount(1);
+      await layoutEditTool.click();
       await expect(page.getByText("Precision PDF Layout Editor", { exact: true })).toBeVisible({ timeout: 60_000 });
       const inputs = page.locator('input[type="text"]');
       let target: any = null;
@@ -370,7 +376,7 @@ test.describe("Pinned full-stack Studio compatibility acceptance", () => {
         await page.waitForTimeout(1000);
       }
       expect(record?.status).toBe("succeeded");
-      const workerHash = record.result?.artifact_sha256;
+      const workerHash = sha256Hex(record.result?.artifact_sha256);
       expect(workerHash).toMatch(/^[a-f0-9]{64}$/);
       const workerResponse = await context.request.get(API_ROOT + "/edit/jobs/" + encodeURIComponent(submission.job_id) + "/download");
       expect(workerResponse.ok()).toBe(true);
@@ -421,7 +427,8 @@ test.describe("Pinned full-stack Studio compatibility acceptance", () => {
       expect(payload.edit_protocol).toBe("platen_word_edits.v1");
       expect(payload.source_tracker).toBeTruthy();
       expect(payload.extraction_job_id).toBeTruthy();
-      expect(payload.baseline_digest).toMatch(/^[a-f0-9]{64}$/);
+      const baselineDigest = sha256Hex(payload.baseline_digest);
+      expect(baselineDigest).toMatch(/^[a-f0-9]{64}$/);
       expect(payload.edits).toHaveLength(1);
       expect(payload.edits[0]).toMatchObject({ word_id: wordId, expected_original_text: "Ministry", replacement_text: "Office", fit_policy: "preserve_neighbors" });
       const response = await responsePromise;
@@ -431,7 +438,7 @@ test.describe("Pinned full-stack Studio compatibility acceptance", () => {
       event(name, "source_bound_word_edit_submitted", {
         worker_job_identity_present: true, source_sha256: fixture.sourceSha256,
         source_tracker_sha256: sha(Buffer.from(payload.source_tracker)),
-        baseline_digest: payload.baseline_digest, word_id_sha256: sha(Buffer.from(wordId!)),
+        baseline_digest: baselineDigest, word_id_sha256: sha(Buffer.from(wordId!)),
         operation_sha256: sha(Buffer.from(JSON.stringify(payload.edits[0]))),
       });
 
@@ -445,7 +452,7 @@ test.describe("Pinned full-stack Studio compatibility acceptance", () => {
       }
       expect(record?.status).toBe("succeeded");
       expect(record.result?.compiler_protocol).toBe("platen_word_edits.v1");
-      expect(record.result?.artifact_sha256).toMatch(/^[a-f0-9]{64}$/);
+      expect(sha256Hex(record.result?.artifact_sha256)).toMatch(/^[a-f0-9]{64}$/);
       const artifact = await getWorkerArtifact(context, submission.job_id, name);
       await verifyPreviewHash(page, artifact.sha256, name);
       const downloads = await actualGeneralEditorDownloads(page, artifact.sha256, name);
