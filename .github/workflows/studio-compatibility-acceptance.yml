@@ -214,6 +214,7 @@ jobs:
           APP_ENV: test
           ENABLE_PERSISTENT_RENDER_POOL: "false"
           REDIS_URL: redis://127.0.0.1:6379/11
+          PYTHONPATH: ${{ github.workspace }}/runtime/pdfnest-worker
           F11_INSTALLED_ENV_ROOT: ${{ runner.temp }}/runtime/pdfnest-worker/.venv
         continue-on-error: true
         run: |

@@ -338,9 +338,7 @@ test.describe("Pinned full-stack Studio compatibility acceptance", () => {
     const mask = declareMask(source, "Classic layout Alpha Bravo", "line", name);
     const { context, page } = await newAuthenticatedPage(browser, "/studio");
     try {
-      const extractSubmissionPromise = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/edit/extract" && response.request().method() === "POST", { timeout: 60_000 });
       await page.locator('input[type="file"]').first().setInputFiles(source);
-      const extractSubmissionResponse = await extractSubmissionPromise;
       expect(extractSubmissionResponse.ok()).toBe(true);
       const extractSubmission = await extractSubmissionResponse.json();
       const issuedSourceTracker = extractSubmission.source_tracker;
@@ -350,7 +348,9 @@ test.describe("Pinned full-stack Studio compatibility acceptance", () => {
       await expect(page.getByRole("button", { name: "Edit", exact: true })).toBeVisible({ timeout: 60_000 });
       const layoutEditTool = page.locator('button[title="Edit"]');
       await expect(layoutEditTool).toHaveCount(1);
+      const extractSubmissionPromise = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/edit/extract" && response.request().method() === "POST", { timeout: 60_000 });
       await layoutEditTool.click();
+      const extractSubmissionResponse = await extractSubmissionPromise;
       await expect(page.getByText("Precision PDF Layout Editor", { exact: true })).toBeVisible({ timeout: 60_000 });
       await expect(page.getByText("Pages mapped", { exact: true })).toBeVisible({ timeout: 180_000 });
       const inputs = page.locator('input[type="text"]');
