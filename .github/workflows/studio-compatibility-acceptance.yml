@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: studio-compatibility-${{ github.event.before || github.event.pull_request.head.sha || github.sha }}
+  group: studio-compatibility-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -153,9 +153,11 @@ jobs:
           } > "$RUNNER_TEMP/studio-evidence/source-identities.json"
 
       - name: Install system PDF and OCR tools
+        shell: bash
         run: |
+          set -euo pipefail
           timeout 240s sudo apt-get update -o Acquire::ForceIPv4=true -o Acquire::Retries=1 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
-          DEBIAN_FRONTEND=noninteractive sudo apt-get install -y --no-install-recommends qpdf poppler-utils mupdf-tools tesseract-ocr ghostscript libreoffice-writer fonts-dejavu-core fonts-noto-core
+          timeout 600s sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends qpdf poppler-utils mupdf-tools tesseract-ocr ghostscript fonts-dejavu-core fonts-noto-core
 
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
