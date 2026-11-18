@@ -344,7 +344,16 @@ test.describe("Pinned full-stack Studio compatibility acceptance", () => {
       await expect(layoutEditTool).toHaveCount(1);
       await layoutEditTool.click();
       await expect(page.getByText("Precision PDF Layout Editor", { exact: true })).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByText("Pages mapped", { exact: true })).toBeVisible({ timeout: 180_000 });
       const inputs = page.locator('input[type="text"]');
+      const readLayoutInputValues = async () => {
+        const values: string[] = [];
+        for (let i = 0; i < await inputs.count(); i++) values.push(await inputs.nth(i).inputValue());
+        return values;
+      };
+      await expect.poll(async () => (await readLayoutInputValues()).some((value) => value.includes("Classic layout Alpha Bravo")), { timeout: 180_000 }).toBe(true);
+      const inputValues = await readLayoutInputValues();
+      event(name, "classic_editor_extraction_ready", { layout_input_count: inputValues.length, exact_target_present: inputValues.some((value) => value.includes("Classic layout Alpha Bravo")) });
       let target: any = null;
       for (let i = 0; i < await inputs.count(); i++) {
         const item = inputs.nth(i);
@@ -436,23 +445,30 @@ test.describe("Pinned full-stack Studio compatibility acceptance", () => {
       const submission = await response.json();
       if (!submission.job_id) throw new Error("General Editor compile omitted its worker job identity.");
       event(name, "source_bound_word_edit_submitted", {
-        worker_job_identity_present: true, source_sha256: fixture.sourceSha256,
+        worker_job_id_sha256: sha(Buffer.from(submission.job_id)), source_sha256: fixture.sourceSha256,
         source_tracker_sha256: sha(Buffer.from(payload.source_tracker)),
         baseline_digest: baselineDigest, word_id_sha256: sha(Buffer.from(wordId!)),
         operation_sha256: sha(Buffer.from(JSON.stringify(payload.edits[0]))),
       });
 
-      await expect(page.getByRole("region", { name: "Verified compiled PDF preview" })).toBeVisible({ timeout: 240_000 });
-      expect(await page.getByRole("textbox", { name: "Find selectable word", exact: true }).count()).toBe(0);
       let record: any = null;
-      for (let attempt = 0; attempt < 120; attempt++) {
+      for (let attempt = 0; attempt < 300; attempt++) {
         const jobResponse = await context.request.get(API_ROOT + "/edit/jobs/" + encodeURIComponent(submission.job_id));
-        if (jobResponse.ok()) { record = await jobResponse.json(); if (record.status === "succeeded" || record.status === "failed") break; }
+        if (jobResponse.ok()) {
+          record = await jobResponse.json();
+          if (record.status === "succeeded" || record.status === "failed" || record.status === "cancelled") break;
+        }
         await page.waitForTimeout(1000);
       }
-      expect(record?.status).toBe("succeeded");
+      if (record?.status !== "succeeded") {
+        event(name, "worker_compile_terminal_failure", { job_id_sha256: sha(Buffer.from(submission.job_id)), status: record?.status ?? "unknown", error_code: record?.error_code ?? record?.error?.code ?? record?.result?.error_code ?? null });
+        throw new Error("General Editor worker job did not reach succeeded status.");
+      }
       expect(record.result?.compiler_protocol).toBe("platen_word_edits.v1");
       expect(sha256Hex(record.result?.artifact_sha256)).toMatch(/^[a-f0-9]{64}$/);
+      event(name, "worker_compile_succeeded", { job_id_sha256: sha(Buffer.from(submission.job_id)), artifact_sha256: sha256Hex(record.result?.artifact_sha256) });
+      await expect(page.getByRole("region", { name: "Verified compiled PDF preview" })).toBeVisible({ timeout: 120_000 });
+      expect(await page.getByRole("textbox", { name: "Find selectable word", exact: true }).count()).toBe(0);
       const artifact = await getWorkerArtifact(context, submission.job_id, name);
       await verifyPreviewHash(page, artifact.sha256, name);
       const downloads = await actualGeneralEditorDownloads(page, artifact.sha256, name);
