@@ -179,9 +179,11 @@ async function compileV2AndDownload(page: Page, context: BrowserContext, session
     status: terminalJob.status, job_id_sha256: sha(Buffer.from(jobId)),
     result_version_id_sha256: sha(Buffer.from(terminalJob.result_version_id))
   });
-  await expect(page.getByText("Version 1", { exact: true }).first()).toBeVisible({ timeout: 180_000 });
-  await expect(page.locator("canvas").first()).toBeVisible();
+  await expect(page.getByTestId("studio-edit-workspace")).toBeHidden({ timeout: 60_000 });
+  await expect(page.locator("canvas").first()).toBeVisible({ timeout: 60_000 });
+  event(caseName, "compile_returned_to_verified_session_canvas");
   const exportButton = page.getByRole("button", { name: "Export PDF", exact: true });
+  await expect(exportButton).toBeVisible({ timeout: 60_000 });
   await expect(exportButton).toBeEnabled({ timeout: 60_000 });
   const downloadPromise = page.waitForEvent("download", { timeout: 120_000 });
   await exportButton.click();
