@@ -87,6 +87,11 @@ def page_texts(path):
     d=fitz.open(path); out=[p.get_text("text",sort=True) for p in d]; d.close()
     return out
 
+def phrase_present(text, phrase):
+    needle=phrase.split()
+    haystack=text.split()
+    return bool(needle) and any(haystack[i:i+len(needle)] == needle for i in range(len(haystack)-len(needle)+1))
+
 def render_mupdf(path,page_no,dpi,out):
     p=subprocess.run(["mutool","draw","-q","-F","png","-r",str(dpi),"-o",str(out),path,str(page_no+1)],capture_output=True,text=True)
     if p.returncode: raise ValueError("MuPDF render failed")
@@ -131,6 +136,10 @@ def validate(args):
     qsource=qpdf(args.source); qcand=qpdf(args.candidate)
     source_text=page_texts(args.source); candidate_text=page_texts(args.candidate)
     all_text="\n".join(candidate_text)
+    poppler_text=subprocess.run(
+        ["pdftotext","-f","1","-l",str(len(candidate_geometry)),"-enc","UTF-8",args.candidate,"-"],
+        check=True,capture_output=True,text=True
+    ).stdout
     if args.mode=="scan":
         with tempfile.TemporaryDirectory(prefix="studio-candidate-ocr-") as td:
             prefix=str(Path(td)/"candidate")
@@ -139,9 +148,22 @@ def validate(args):
         visible=ocr
     else:
         visible=all_text
-    if args.expected not in visible: raise ValueError("candidate logical/visible extraction missed the expected replacement")
-    if args.stale and args.stale in visible: raise ValueError("candidate extraction still contains the obsolete target")
-    if args.neighbor and args.neighbor not in all_text: raise ValueError("candidate extraction lost the declared neighboring/control text")
+    text_checks={
+        "mupdf_expected_sequence":phrase_present(all_text,args.expected),
+        "poppler_expected_sequence":phrase_present(poppler_text,args.expected),
+        "visible_expected_sequence":phrase_present(visible,args.expected),
+        "mupdf_stale_sequence":bool(args.stale and phrase_present(all_text,args.stale)),
+        "poppler_stale_sequence":bool(args.stale and phrase_present(poppler_text,args.stale)),
+        "visible_stale_sequence":bool(args.stale and phrase_present(visible,args.stale)),
+        "mupdf_neighbor_sequence":bool(args.neighbor and phrase_present(all_text,args.neighbor)),
+        "poppler_neighbor_sequence":bool(args.neighbor and phrase_present(poppler_text,args.neighbor)),
+    }
+    text_failure=(
+        not text_checks["visible_expected_sequence"]
+        or (args.mode=="text" and not (text_checks["mupdf_expected_sequence"] and text_checks["poppler_expected_sequence"]))
+        or bool(args.stale and text_checks["visible_stale_sequence"])
+        or bool(args.neighbor and not text_checks["mupdf_neighbor_sequence"])
+    )
     src_images=images_sha(args.source); dst_images=images_sha(args.candidate)
     image_streams_preserved = not src_images or set(src_images).issubset(set(dst_images))
     if src_images and not image_streams_preserved and not args.allow_image_reencoding:
@@ -177,10 +199,12 @@ def validate(args):
         a=token(sd,needle); b=token(cd,needle); sd.close(); cd.close()
         if a is None or b is None or any(abs(x-y)>1.5 for x,y in zip(a,b)):
             raise ValueError("neighbor word position changed beyond 1.5 points")
-    result={"source_sha256":source_hash,"candidate_sha256":sha(Path(args.candidate).read_bytes()),"page_count":len(source_geometry),"geometry":source_geometry,"source_image_sha256":src_images,"candidate_image_sha256":dst_images,"source_image_streams_preserved":image_streams_preserved,"image_stream_policy":("source-stream-identity" if image_streams_preserved else ("representation-change-allowed; raster-preservation-required" if args.allow_image_reencoding else "source-stream-identity-required")),"qpdf_source":qsource,"qpdf_candidate":qcand,"expected_text_present":args.expected,"obsolete_target_absent":args.stale or None,"neighbor_text_present":args.neighbor or None,"visible_ocr":visible if args.mode=="scan" else None,"mask":mask,"pixel_metrics":metrics,"pixel_failures":pixel_failures,"zero_unauthorized_changes":not pixel_failures,"untouched_pages_pixel_identical":not any(x["reason"]=="control-page-difference" for x in pixel_failures)}
+    result={"source_sha256":source_hash,"candidate_sha256":sha(Path(args.candidate).read_bytes()),"page_count":len(source_geometry),"geometry":source_geometry,"source_image_sha256":src_images,"candidate_image_sha256":dst_images,"source_image_streams_preserved":image_streams_preserved,"image_stream_policy":("source-stream-identity" if image_streams_preserved else ("representation-change-allowed; raster-preservation-required" if args.allow_image_reencoding else "source-stream-identity-required")),"qpdf_source":qsource,"qpdf_candidate":qcand,"expected_text_present":args.expected,"obsolete_target_absent":args.stale or None,"neighbor_text_present":args.neighbor or None,"visible_ocr":visible if args.mode=="scan" else None,"text_extraction_checks":text_checks,"mask":mask,"pixel_metrics":metrics,"pixel_failures":pixel_failures,"zero_unauthorized_changes":not pixel_failures,"untouched_pages_pixel_identical":not any(x["reason"]=="control-page-difference" for x in pixel_failures)}
     Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n")
     if pixel_failures:
         raise ValueError("pixel preservation failed: "+json.dumps(pixel_failures,separators=(",",":"))[:2500])
+    if text_failure:
+        raise ValueError("candidate logical/visible token extraction failed the expected sequence or stale-text checks")
     return result
 
 def main():

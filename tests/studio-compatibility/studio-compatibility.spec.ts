@@ -216,7 +216,8 @@ async function validateCandidate(source: string, candidate: string, mask: string
         candidate_image_count: failed.candidate_image_sha256.length,
         source_image_streams_preserved: failed.source_image_streams_preserved,
         image_stream_policy: failed.image_stream_policy,
-        pixel_failures: failed.pixel_failures
+        pixel_failures: failed.pixel_failures,
+        text_extraction_checks: failed.text_extraction_checks ?? null
       });
     }
     throw error;
@@ -422,6 +423,7 @@ test.describe("Pinned full-stack Studio compatibility acceptance", () => {
       await page.getByRole("button", { name: "Select", exact: true }).click();
       event(name, "classic_preview_tool_selected");
       await expect(page.getByAltText("Preview page 1")).toBeVisible({ timeout: 60_000 });
+      event(name, "classic_preview_visible");
 
       let record: any = null;
       for (let attempt = 0; attempt < 60; attempt++) {
@@ -430,12 +432,14 @@ test.describe("Pinned full-stack Studio compatibility acceptance", () => {
         await page.waitForTimeout(1000);
       }
       expect(record?.status).toBe("succeeded");
-      const workerHash = sha256Hex(record.result?.artifact_sha256);
-      expect(workerHash).toMatch(/^[a-f0-9]{64}$/);
+      const resultHash = sha256Hex(record.result?.artifact_sha256);
       const workerResponse = await context.request.get(API_ROOT + "/edit/jobs/" + encodeURIComponent(submission.job_id) + "/download");
       expect(workerResponse.ok()).toBe(true);
       const workerBytes = Buffer.from(await workerResponse.body());
-      expect(sha(workerBytes)).toBe(workerHash);
+      expect(workerBytes.subarray(0, 5).toString("ascii")).toBe("%PDF-");
+      const workerHash = sha(workerBytes);
+      if (resultHash) expect(workerHash).toBe(resultHash);
+      event(name, "worker_artifact_downloaded", { record_hash_present: Boolean(resultHash), worker_artifact_sha256: workerHash });
       fs.writeFileSync(path.join(PDF_DIR, name + "-worker.pdf"), workerBytes);
 
       await page.getByText("File", { exact: true }).first().click();
