@@ -67,7 +67,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: gimesha-adikari/pdfnest-worker
-          ref: 1f35e7a0d5035ae50c4b775505f87a7d84ab7222
+          ref: 920455d339c9a781c4e560df722a6e87c397fe81
           path: runtime/pdfnest-worker
           persist-credentials: false
 
@@ -121,7 +121,7 @@ jobs:
           set -euo pipefail
           BASE=cd74ffc724094503802b84a561296e9291d5dbf0
           test "$(git -C runtime/pdfnest-backend rev-parse HEAD)" = a4179d65099e3a8d11376923bf59af291eaac235
-          test "$(git -C runtime/pdfnest-worker rev-parse HEAD)" = 1f35e7a0d5035ae50c4b775505f87a7d84ab7222
+          test "$(git -C runtime/pdfnest-worker rev-parse HEAD)" = 920455d339c9a781c4e560df722a6e87c397fe81
           test "$(git -C runtime/platen-document rev-parse HEAD)" = 83132f538cd296ad292cb4b9627cb0ebf2d6237a
           git cat-file -e "$BASE^{commit}"
           git merge-base --is-ancestor "$BASE" HEAD
@@ -208,7 +208,7 @@ jobs:
           UV_CACHE_DIR: ${{ runner.temp }}/uv-cache
           UV_PROJECT_ENVIRONMENT: ${{ runner.temp }}/runtime/pdfnest-worker/.venv
         run: uv sync --locked --no-dev
-      - name: Run pre-fix scanned preservation regression (expected failure)
+      - name: Run worker diagnostic and scanned preservation regressions
         working-directory: runtime/pdfnest-worker
         env:
           APP_ENV: test
@@ -216,9 +216,9 @@ jobs:
           REDIS_URL: redis://127.0.0.1:6379/11
           PYTHONPATH: ${{ github.workspace }}/runtime/pdfnest-worker
           F11_INSTALLED_ENV_ROOT: ${{ runner.temp }}/runtime/pdfnest-worker/.venv
-        continue-on-error: true
         run: |
           uv sync --locked
+          uv run --locked pytest -q tests/test_candidate_validation_diagnostics.py
           uv run --locked pytest -q tests/test_studio_editor_compile_geometry.py -k studio_visible_scanned_layout_edit_preserves_pixels_outside_frozen_line_mask
 
       - name: Build exact backend source
@@ -298,6 +298,70 @@ jobs:
         env:
           CI: "true"
         run: npx playwright test --config=playwright.studio-compatibility.config.ts
+
+      - name: Extract sanitized General Editor validation diagnostics
+        if: always()
+        run: |
+          python3 - "$RUNNER_TEMP/worker-actor.log" "$RUNNER_TEMP/studio-evidence/candidate-validation-diagnostics.json" <<'PY'
+          import json
+          import re
+          import sys
+          from pathlib import Path
+
+          log_path, output_path = map(Path, sys.argv[1:])
+          marker = "word_edit_candidate_validation_failed "
+          static_checks = {
+              "candidate_valid", "page_count", "geometry", "image_streams_preserved",
+              "neighbors_preserved", "outside_pixels_clear", "target_content_valid",
+              "text_reading_order_preserved",
+          }
+          dynamic_check = re.compile(r"unedited_page_[1-9][0-9]*_(?:72|144|288)_identical")
+          results = []
+          if log_path.is_file():
+              for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines():
+                  if marker not in line:
+                      continue
+                  raw = line.split(marker, 1)[1].strip()
+                  try:
+                      item = json.loads(raw)
+                  except Exception:
+                      raise SystemExit("worker emitted an invalid candidate-validation diagnostic")
+                  if (type(item) is not dict or item.get("schema_version") != 1
+                          or not re.fullmatch(r"[0-9a-f]{16}", str(item.get("job_id_sha256_prefix", "")))):
+                      raise SystemExit("worker diagnostic did not match the safe schema")
+                  failed = item.get("failed_checks")
+                  if type(failed) is not list or any(
+                      type(value) is not str or (value not in static_checks and not dynamic_check.fullmatch(value))
+                      for value in failed
+                  ):
+                      raise SystemExit("worker diagnostic contained an unapproved check name")
+                  counts = item.get("outside_changed_pixels_by_dpi")
+                  if type(counts) is not dict or any(
+                      key not in {"72", "144", "288"} or type(value) is not int or not 0 <= value <= 1000000000
+                      for key, value in counts.items()
+                  ):
+                      raise SystemExit("worker diagnostic contained an invalid pixel-count summary")
+                  targets = item.get("target_summaries")
+                  if type(targets) is not list or len(targets) > 16:
+                      raise SystemExit("worker diagnostic contained invalid target summaries")
+                  for target in targets:
+                      if (type(target) is not dict or set(target) != {
+                              "replacement_searchable", "replacement_hits_at_target_count", "old_target_hits_at_target"
+                          } or type(target["replacement_searchable"]) is not bool
+                          or type(target["replacement_hits_at_target_count"]) is not int
+                          or type(target["old_target_hits_at_target"]) is not int
+                          or not 0 <= target["replacement_hits_at_target_count"] <= 1000000
+                          or not 0 <= target["old_target_hits_at_target"] <= 1000000):
+                          raise SystemExit("worker diagnostic contained an invalid target summary")
+                  results.append({
+                      "schema_version": 1,
+                      "job_id_sha256_prefix": item["job_id_sha256_prefix"],
+                      "failed_checks": sorted(set(failed)),
+                      "outside_changed_pixels_by_dpi": counts,
+                      "target_summaries": targets,
+                  })
+          output_path.write_text(json.dumps(results, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+          PY
 
       - name: Write CI summary
         if: always()

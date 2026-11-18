@@ -394,9 +394,9 @@ test.describe("Pinned full-stack Studio compatibility acceptance", () => {
         job_id_present: typeof responseBody.job_id === "string" && responseBody.job_id.length > 0,
         error_code_present: typeof responseBody.code === "string" && responseBody.code.length > 0,
       });
-      expect(response.ok()).toBe(true);
       expect(sourceTrackerPresent).toBe(true);
       expect(sourceTrackerMatchesSubmission).toBe(true);
+      expect(response.ok()).toBe(true);
       const submission = responseBody;
       if (!submission.job_id) throw new Error("Classic Studio layout compile omitted its worker job identity.");
       event(name, "layout_protocol_submitted", { response_status: response.status(), pages_present: true, source_tracker_present: true, no_precise_word_protocol: true });
