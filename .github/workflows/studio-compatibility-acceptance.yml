@@ -11,8 +11,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: studio-compatibility-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: false
+  group: studio-compatibility-${{ github.event.before || github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
 
 jobs:
   acceptance:
@@ -153,7 +153,7 @@ jobs:
           } > "$RUNNER_TEMP/studio-evidence/source-identities.json"
 
       - name: Install system PDF and OCR tools
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qpdf poppler-utils mupdf-tools tesseract-ocr ghostscript redis-tools libreoffice-writer fonts-dejavu-core fonts-noto-core
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qpdf poppler-utils mupdf-tools tesseract-ocr ghostscript libreoffice-writer fonts-dejavu-core fonts-noto-core
 
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -234,7 +234,7 @@ jobs:
             sleep 2
           done
           curl --silent --show-error --fail http://127.0.0.1:8000/health/ready > "$RUNNER_TEMP/studio-evidence/worker-readiness.json"
-          redis-cli -h 127.0.0.1 -p 6379 ping | grep -Fx PONG
+          "$STUDIO_TEST_PYTHON" -c 'import os, redis; assert redis.Redis.from_url(os.environ["REDIS_URL"]).ping() is True; print("PONG")'
           pg_isready -h 127.0.0.1 -p 5432 -U pdfnest_ci -d pdfnest_ci
 
       - name: Start backend and frontend
