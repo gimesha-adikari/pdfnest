@@ -62,12 +62,14 @@ async function scannedPdf(file: string, line: string) {
   fs.writeFileSync(file, bytes);
   return { bytes, sourceSha256: sha(bytes), pageCount: 2 };
 }
-function declareMask(source: string, target: string, mode: "word" | "line" | "scan-line", caseName: string): string {
+function declareMask(source: string, target: string, mode: "word" | "line" | "scan-line", caseName: string, plan?: { replacement: string; font: string; fontSize: number }): string {
   const output = path.join(PDF_DIR, caseName + "-mask.json");
-  run(PYTHON, [INSPECTOR, "declare-mask", "--source", source, "--output", output, "--target", target, "--mode", mode]);
-  const mask = JSON.parse(fs.readFileSync(output, "utf8")) as { declared_before_compile: boolean; source_sha256: string };
+  const args = [INSPECTOR, "declare-mask", "--source", source, "--output", output, "--target", target, "--mode", mode];
+  if (plan) args.push("--planned-replacement", plan.replacement, "--planned-font", plan.font, "--planned-size", String(plan.fontSize));
+  run(PYTHON, args);
+  const mask = JSON.parse(fs.readFileSync(output, "utf8")) as { declared_before_compile: boolean; source_sha256: string; mask_points: number[]; planned_output?: Record<string, unknown> };
   if (!mask.declared_before_compile || mask.source_sha256 !== sha(fs.readFileSync(source))) throw new Error("Source-derived preservation mask was not fixed before compilation.");
-  event(caseName, "mask_declared_before_compile", { source_sha256: mask.source_sha256, mask_sha256: sha(fs.readFileSync(output)) });
+  event(caseName, "mask_declared_before_compile", { source_sha256: mask.source_sha256, mask_sha256: sha(fs.readFileSync(output)), mask_points: mask.mask_points, planned_output: mask.planned_output ?? null });
   return output;
 }
 type AuditWindow = Window & { __studioCiPreviewHashes?: string[] };
@@ -335,8 +337,10 @@ test.describe("Pinned full-stack Studio compatibility acceptance", () => {
   test("Classic Studio existing layout editor and export remain compatible", async ({ browser }) => {
     const name = "classic-studio-native";
     const source = path.join(PDF_DIR, name + "-source.pdf");
-    const fixture = await nativePdf(source, "Classic layout Alpha Bravo", 0);
-    const mask = declareMask(source, "Classic layout Alpha Bravo", "line", name);
+    const originalLine = "Classic layout Alpha Bravo";
+    const replacementLine = "Classic layout Alpha Charlie";
+    const fixture = await nativePdf(source, originalLine, 0);
+    const mask = declareMask(source, originalLine, "line", name, { replacement: replacementLine, font: "helv", fontSize: 27 });
     const { context, page } = await newAuthenticatedPage(browser, "/studio");
     const extractionResponses: Array<Promise<any>> = [];
     page.on("response", (response) => {
@@ -375,12 +379,13 @@ test.describe("Pinned full-stack Studio compatibility acceptance", () => {
         if ((await item.inputValue()).includes("Classic layout Alpha Bravo")) { target = item; break; }
       }
       if (!target) throw new Error("Classic Studio layout extraction did not expose the exact synthetic line.");
-      await target.fill("Classic layout Alpha Charlie");
+      await target.fill(replacementLine);
       const requestPromise = page.waitForRequest((request) => request.url().endsWith("/api/edit/compile") && request.method() === "POST", { timeout: 30_000 });
       const responsePromise = page.waitForResponse((response) => response.url().endsWith("/api/edit/compile") && response.request().method() === "POST", { timeout: 30_000 });
       await page.getByRole("button", { name: /Export Precision Vector Document Changes/ }).click();
       const request = await requestPromise;
       const payload = request.postDataJSON();
+      expect(JSON.stringify(payload.pages)).toContain(replacementLine);
       const sourceTrackerPresent = typeof payload.source_tracker === "string" && payload.source_tracker.trim().length > 0;
       const activeSourceTracker = (await page.getByTestId("classic-source-tracker").textContent())?.trim() || "";
       const issuedTrackers = (await Promise.all(extractionResponses))
@@ -452,7 +457,7 @@ test.describe("Pinned full-stack Studio compatibility acceptance", () => {
       await download.saveAs(destination);
       expect(sha(fs.readFileSync(destination))).toBe(workerHash);
       const validation = await validateCandidate(source, destination, mask, {
-        expected: "Classic layout Alpha Charlie", stale: "Classic layout Alpha Bravo",
+        expected: replacementLine, stale: originalLine,
         neighbor: "Untouched control page remains identical", pages: fixture.pageCount, mode: "text",
       }, name);
       event(name, "complete", { worker_artifact_sha256: workerHash, ui_download_sha256: sha(fs.readFileSync(destination)), comparisons: validation.pixel_metrics.length });

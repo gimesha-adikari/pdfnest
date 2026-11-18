@@ -8,7 +8,7 @@ import numpy as np
 def sha(data):
     return hashlib.sha256(data).hexdigest()
 
-def words_and_mask(source, target, mode):
+def words_and_mask(source, target, mode, planned_replacement="", planned_font="", planned_size=None):
     doc = fitz.open(source)
     if not len(doc):
         raise ValueError("source has no pages")
@@ -53,10 +53,35 @@ def words_and_mask(source, target, mode):
         chosen={"mode":mode,"tokens":[w[4] for w in selected]}
         if page.rotation:
             rect=rect * page.rotation_matrix
+    planned_output=None
+    if planned_replacement or planned_font or planned_size is not None:
+        if mode!="line" or not planned_replacement or not planned_font or planned_size is None or page.rotation:
+            raise ValueError("planned output mask requires an unrotated text line and explicit replacement/font/size")
+        normalized_target=" ".join(target.split())
+        matching=[]
+        for block in page.get_text("dict")["blocks"]:
+            for line in block.get("lines",[]):
+                line_text=" ".join(" ".join(span.get("text","") for span in line.get("spans",[])).split())
+                if line_text==normalized_target:
+                    matching.extend(line.get("spans",[]))
+        if len(matching)!=1:
+            raise ValueError("planned output mask requires one source line span")
+        span=matching[0]
+        size=float(planned_size)
+        if abs(float(span.get("size",0))-size)>0.05:
+            raise ValueError("planned output font size differs from source line")
+        origin=span.get("origin")
+        if not isinstance(origin,(tuple,list)) or len(origin)!=2:
+            raise ValueError("source line span lacks baseline coordinates")
+        font=fitz.Font(planned_font)
+        output_width=float(font.text_length(planned_replacement,fontsize=size))
+        output_rect=fitz.Rect(float(origin[0]),float(origin[1])-font.ascender*size,float(origin[0])+output_width,float(origin[1])-font.descender*size)
+        rect=rect | output_rect
+        planned_output={"replacement_sha256":sha(planned_replacement.encode("utf-8")),"font":planned_font,"font_size":size,"source_baseline_origin":[round(float(origin[0]),4),round(float(origin[1]),4)],"predicted_width_points":round(output_width,4),"predicted_rect_points":[round(x,4) for x in output_rect]}
     rect=rect & page.rect
     margin=4.0
     rect=fitz.Rect(max(page.rect.x0,rect.x0-margin),max(page.rect.y0,rect.y0-margin),min(page.rect.x1,rect.x1+margin),min(page.rect.y1,rect.y1+margin))
-    result={"source_sha256":sha(Path(source).read_bytes()),"page_index":0,"page_rect":[page.rect.x0,page.rect.y0,page.rect.x1,page.rect.y1],"source_rotation":page.rotation,"mask_points":[round(rect.x0,4),round(rect.y0,4),round(rect.x1,4),round(rect.y1,4)],"margin_points":margin,"antialias_band_pixels":1,"channel_delta_threshold":2,"source_baseline":chosen,"declared_before_compile":True}
+    result={"source_sha256":sha(Path(source).read_bytes()),"page_index":0,"page_rect":[page.rect.x0,page.rect.y0,page.rect.x1,page.rect.y1],"source_rotation":page.rotation,"mask_points":[round(rect.x0,4),round(rect.y0,4),round(rect.x1,4),round(rect.y1,4)],"margin_points":margin,"antialias_band_pixels":1,"channel_delta_threshold":2,"source_baseline":chosen,"planned_output":planned_output,"declared_before_compile":True}
     doc.close()
     return result
 
@@ -212,6 +237,7 @@ def main():
     subs=p.add_subparsers(dest="cmd",required=True)
     d=subs.add_parser("declare-mask")
     d.add_argument("--source",required=True); d.add_argument("--output",required=True); d.add_argument("--target",required=True); d.add_argument("--mode",choices=["word","line","scan-line"],required=True)
+    d.add_argument("--planned-replacement",default=""); d.add_argument("--planned-font",default=""); d.add_argument("--planned-size",type=float)
     v=subs.add_parser("verify")
     for n in ("source","candidate","mask","output","expected"):
         v.add_argument("--"+n,required=True)
@@ -222,7 +248,7 @@ def main():
     a=p.parse_args()
     try:
         if a.cmd=="declare-mask":
-            Path(a.output).write_text(json.dumps(words_and_mask(a.source,a.target,a.mode),indent=2)+"\n")
+            Path(a.output).write_text(json.dumps(words_and_mask(a.source,a.target,a.mode,a.planned_replacement,a.planned_font,a.planned_size),indent=2)+"\n")
             print("source-bound mask declared before compilation")
         else:
             r=validate(a)
