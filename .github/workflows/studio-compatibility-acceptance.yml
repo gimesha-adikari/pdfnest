@@ -67,7 +67,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: gimesha-adikari/pdfnest-worker
-          ref: 684d37df79309b9f767fde10af6d6c25f7b4d349
+          ref: 873f1aa6ee1b7d0d17b64c3bcbad60bb15005fc3
           path: runtime/pdfnest-worker
           persist-credentials: false
 
@@ -121,7 +121,7 @@ jobs:
           set -euo pipefail
           BASE=cd74ffc724094503802b84a561296e9291d5dbf0
           test "$(git -C runtime/pdfnest-backend rev-parse HEAD)" = a4179d65099e3a8d11376923bf59af291eaac235
-          test "$(git -C runtime/pdfnest-worker rev-parse HEAD)" = 684d37df79309b9f767fde10af6d6c25f7b4d349
+          test "$(git -C runtime/pdfnest-worker rev-parse HEAD)" = 873f1aa6ee1b7d0d17b64c3bcbad60bb15005fc3
           test "$(git -C runtime/platen-document rev-parse HEAD)" = 83132f538cd296ad292cb4b9627cb0ebf2d6237a
           git cat-file -e "$BASE^{commit}"
           git merge-base --is-ancestor "$BASE" HEAD
@@ -219,7 +219,7 @@ jobs:
         run: |
           uv sync --locked
           uv run --locked pytest -q tests/test_candidate_validation_diagnostics.py
-          uv run --locked pytest -q tests/test_studio_editor_compile_geometry.py -k studio_visible_scanned_layout_edit_preserves_pixels_outside_frozen_line_mask
+          uv run --locked pytest -q tests/test_studio_editor_compile_geometry.py
 
       - name: Build exact backend source
         working-directory: runtime/pdfnest-backend
