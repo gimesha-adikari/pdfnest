@@ -366,13 +366,27 @@ test.describe("Pinned full-stack Studio compatibility acceptance", () => {
       await page.getByRole("button", { name: /Export Precision Vector Document Changes/ }).click();
       const request = await requestPromise;
       const payload = request.postDataJSON();
+      const sourceTrackerPresent = typeof payload.source_tracker === "string" && payload.source_tracker.trim().length > 0;
+      const uprightTrackerPresent = typeof payload.upright_tracker === "string" && payload.upright_tracker.trim().length > 0;
+      event(name, "layout_compile_request_observed", {
+        payload_keys: Object.keys(payload).sort(), page_count: Array.isArray(payload.pages) ? payload.pages.length : null,
+        source_tracker_present: sourceTrackerPresent, upright_tracker_present: uprightTrackerPresent,
+        precise_word_protocol_absent: !JSON.stringify(payload).includes("platen_word_edits.v1"),
+      });
       expect(payload.pages).toBeTruthy();
-      expect(payload.source_tracker).toBeTruthy();
-      expect(payload.upright_tracker).toBeTruthy();
       expect(JSON.stringify(payload)).not.toContain("platen_word_edits.v1");
       const response = await responsePromise;
+      const responseBody = await response.json();
+      event(name, "layout_compile_response_observed", {
+        http_status: response.status(), response_keys: Object.keys(responseBody).sort(),
+        success: responseBody.success === true,
+        job_id_present: typeof responseBody.job_id === "string" && responseBody.job_id.length > 0,
+        error_code_present: typeof responseBody.code === "string" && responseBody.code.length > 0,
+      });
       expect(response.ok()).toBe(true);
-      const submission = await response.json();
+      expect(sourceTrackerPresent).toBe(true);
+      expect(uprightTrackerPresent).toBe(true);
+      const submission = responseBody;
       if (!submission.job_id) throw new Error("Classic Studio layout compile omitted its worker job identity.");
       event(name, "layout_protocol_submitted", { response_status: response.status(), pages_present: true, source_tracker_present: true, no_precise_word_protocol: true });
       await expect(page.getByText("Edited PDF loaded back into Studio.", { exact: true })).toBeVisible({ timeout: 180_000 });
@@ -461,7 +475,18 @@ test.describe("Pinned full-stack Studio compatibility acceptance", () => {
         await page.waitForTimeout(1000);
       }
       if (record?.status !== "succeeded") {
-        event(name, "worker_compile_terminal_failure", { job_id_sha256: sha(Buffer.from(submission.job_id)), status: record?.status ?? "unknown", error_code: record?.error_code ?? record?.error?.code ?? record?.result?.error_code ?? null });
+        const workerResult = record?.result && typeof record.result === "object" ? record.result : {};
+        const checks = workerResult.checks && typeof workerResult.checks === "object" ? workerResult.checks : {};
+        event(name, "worker_compile_terminal_failure", {
+          job_id_sha256: sha(Buffer.from(submission.job_id)), status: record?.status ?? "unknown",
+          error_code: record?.error_code ?? record?.error?.code ?? workerResult.error_code ?? null,
+          worker_message: typeof record?.message === "string" ? record.message : null,
+          error_present: typeof record?.error === "string" && record.error.length > 0,
+          worker_result_keys: Object.keys(workerResult).sort(),
+          validation_check_keys: Object.keys(checks).sort(),
+          failed_validation_checks: Object.entries(checks).filter(([, value]) => value === false).map(([key]) => key).sort(),
+          boolean_validation_checks: Object.fromEntries(Object.entries(checks).filter(([, value]) => typeof value === "boolean")),
+        });
         throw new Error("General Editor worker job did not reach succeeded status.");
       }
       expect(record.result?.compiler_protocol).toBe("platen_word_edits.v1");
