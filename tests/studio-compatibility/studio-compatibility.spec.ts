@@ -109,6 +109,11 @@ async function uploadStudio(page: Page, file: string, caseName: string) {
   const responsePromise = page.waitForResponse((response) =>
     response.url().includes("/studio/v1/sessions/from-upload") && response.request().method() === "POST", { timeout: 60_000 });
   await page.locator('input[type="file"]').first().setInputFiles(file);
+  const authorizeUpload = page.getByRole("button", { name: "Authorize Cloud upload", exact: true });
+  await expect(authorizeUpload).toBeVisible({ timeout: 30_000 });
+  event(caseName, "synthetic_source_upload_consent_presented");
+  await authorizeUpload.click();
+  event(caseName, "synthetic_source_upload_consent_confirmed_in_application");
   const response = await responsePromise;
   expect(response.status()).toBe(201);
   const body = await response.json();

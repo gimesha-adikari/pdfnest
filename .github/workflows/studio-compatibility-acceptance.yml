@@ -157,8 +157,8 @@ jobs:
         run: |
           set -euo pipefail
           ubuntu_sources=/etc/apt/sources.list.d/ubuntu.sources
-          sudo sed -i -E 's#https?://[[:alnum:].-]+\\.ec2\\.archive\\.ubuntu\\.com/ubuntu/?#http://archive.ubuntu.com/ubuntu/#g' "$ubuntu_sources"
-          if grep -q '\\.ec2\\.archive\\.ubuntu\\.com' "$ubuntu_sources"; then
+          sudo sed -i -E 's#https?://[[:alnum:].-]+[.]ec2[.]archive[.]ubuntu[.]com/ubuntu/?#http://archive.ubuntu.com/ubuntu/#g' "$ubuntu_sources"
+          if grep -q '[.]ec2[.]archive[.]ubuntu[.]com' "$ubuntu_sources"; then
             echo "Regional Ubuntu mirror was not replaced" >&2
             exit 1
           fi
