@@ -67,7 +67,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: gimesha-adikari/pdfnest-worker
-          ref: c951a482376f69793033c4f651a531a47981bdba
+          ref: 788bb0d26b4cfb1a17512081de0ef329554d2716
           path: runtime/pdfnest-worker
           persist-credentials: false
 
@@ -121,7 +121,7 @@ jobs:
           set -euo pipefail
           BASE=cd74ffc724094503802b84a561296e9291d5dbf0
           test "$(git -C runtime/pdfnest-backend rev-parse HEAD)" = a4179d65099e3a8d11376923bf59af291eaac235
-          test "$(git -C runtime/pdfnest-worker rev-parse HEAD)" = c951a482376f69793033c4f651a531a47981bdba
+          test "$(git -C runtime/pdfnest-worker rev-parse HEAD)" = 788bb0d26b4cfb1a17512081de0ef329554d2716
           test "$(git -C runtime/platen-document rev-parse HEAD)" = 83132f538cd296ad292cb4b9627cb0ebf2d6237a
           git cat-file -e "$BASE^{commit}"
           git merge-base --is-ancestor "$BASE" HEAD
@@ -208,6 +208,17 @@ jobs:
           UV_CACHE_DIR: ${{ runner.temp }}/uv-cache
           UV_PROJECT_ENVIRONMENT: ${{ runner.temp }}/runtime/pdfnest-worker/.venv
         run: uv sync --locked --no-dev
+      - name: Run pre-fix scanned preservation regression (expected failure)
+        working-directory: runtime/pdfnest-worker
+        env:
+          APP_ENV: test
+          ENABLE_PERSISTENT_RENDER_POOL: "false"
+          REDIS_URL: redis://127.0.0.1:6379/11
+          F11_INSTALLED_ENV_ROOT: ${{ runner.temp }}/runtime/pdfnest-worker/.venv
+        continue-on-error: true
+        run: |
+          uv sync --locked
+          uv run --locked pytest -q tests/test_studio_editor_compile_geometry.py -k studio_visible_scanned_layout_edit_preserves_pixels_outside_frozen_line_mask
 
       - name: Build exact backend source
         working-directory: runtime/pdfnest-backend
