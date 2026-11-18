@@ -157,7 +157,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update -o Acquire::ForceIPv4=true -o Acquire::Retries=1 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
-          timeout 600s sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends qpdf poppler-utils mupdf-tools tesseract-ocr ghostscript fonts-dejavu-core fonts-noto-core
+          timeout 1200s sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends qpdf poppler-utils mupdf-tools tesseract-ocr ghostscript libreoffice-writer fonts-dejavu-core fonts-noto-core
 
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -233,11 +233,16 @@ jobs:
           mkdir -p "$RUNNER_TEMP/worker-tmp"
           env APP_ENV=test PYTHON_DOTENV_DISABLED=1 PYTHONPATH="$GITHUB_WORKSPACE/runtime/pdfnest-worker" REDIS_URL="$REDIS_URL" STORAGE_MODE=local LOCAL_STORAGE_DIR="$LOCAL_STORAGE_DIR" TMPDIR="$RUNNER_TEMP/worker-tmp" WORKER_SHARED_SECRET="$WORKER_SHARED_SECRET" ENABLE_PERSISTENT_RENDER_POOL=false nohup "$STUDIO_TEST_PYTHON" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 > "$RUNNER_TEMP/worker-api.log" 2>&1 < /dev/null &
           env APP_ENV=test PYTHON_DOTENV_DISABLED=1 PYTHONPATH="$GITHUB_WORKSPACE/runtime/pdfnest-worker" REDIS_URL="$REDIS_URL" STORAGE_MODE=local LOCAL_STORAGE_DIR="$LOCAL_STORAGE_DIR" TMPDIR="$RUNNER_TEMP/worker-tmp" WORKER_SHARED_SECRET="$WORKER_SHARED_SECRET" ENABLE_PERSISTENT_RENDER_POOL=false nohup "$RUNNER_TEMP/runtime/pdfnest-worker/.venv/bin/dramatiq" app.jobs.actors --processes 1 --threads 1 > "$RUNNER_TEMP/worker-actor.log" 2>&1 < /dev/null &
+          ready=0
           for attempt in $(seq 1 60); do
-            if curl --silent --fail http://127.0.0.1:8000/health/ready >/dev/null; then break; fi
+            if curl --silent --fail http://127.0.0.1:8000/health/ready > "$RUNNER_TEMP/studio-evidence/worker-readiness.json"; then ready=1; break; fi
             sleep 2
           done
-          curl --silent --show-error --fail http://127.0.0.1:8000/health/ready > "$RUNNER_TEMP/studio-evidence/worker-readiness.json"
+          if [[ "$ready" != "1" ]]; then
+            curl --silent --show-error http://127.0.0.1:8000/internal/health/ready > "$RUNNER_TEMP/studio-evidence/worker-readiness-diagnostic.json" || true
+            cat "$RUNNER_TEMP/studio-evidence/worker-readiness-diagnostic.json" || true
+            exit 1
+          fi
           "$STUDIO_TEST_PYTHON" -c 'import os, redis; assert redis.Redis.from_url(os.environ["REDIS_URL"]).ping() is True; print("PONG")'
           pg_isready -h 127.0.0.1 -p 5432 -U pdfnest_ci -d pdfnest_ci
 
