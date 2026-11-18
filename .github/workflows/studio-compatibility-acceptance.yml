@@ -1,0 +1,294 @@
+name: Studio Compatibility Acceptance
+
+on:
+  push:
+    branches: [codex/studio-compatibility-final-ci]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: studio-compatibility-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  acceptance:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: pdfnest_ci
+          POSTGRES_USER: pdfnest_ci
+          POSTGRES_PASSWORD: ci-only-test-secret
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pdfnest_ci -d pdfnest_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+      STUDIO_BASE_URL: http://localhost:3000
+      DATABASE_URL: postgres://pdfnest_ci:ci-only-test-secret@127.0.0.1:5432/pdfnest_ci?sslmode=disable
+      REDIS_URL: redis://127.0.0.1:6379/11
+      LOCAL: "true"
+      APP_ENV: development
+      BILLING_MODE: normal
+      STORAGE_MODE: local
+      LOCAL_STORAGE_DIR: ${{ runner.temp }}/platen-studio-ci-objects
+      MAILER_OUTBOX_DIR: ${{ runner.temp }}/platen-studio-ci-mail
+      PYTHON_DOTENV_DISABLED: "1"
+      ENABLE_PERSISTENT_RENDER_POOL: "false"
+      STUDIO_EVIDENCE_DIR: ${{ runner.temp }}/studio-evidence
+      STUDIO_PDF_DIR: ${{ runner.temp }}/studio-pdfs
+      STUDIO_TEST_PYTHON: ${{ runner.temp }}/runtime/pdfnest-worker/.venv/bin/python
+
+    steps:
+      - name: Checkout frontend harness
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout backend rotation fix
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: gimesha-adikari/pdfnest-backend
+          ref: a4179d65099e3a8d11376923bf59af291eaac235
+          path: runtime/pdfnest-backend
+          persist-credentials: false
+
+      - name: Checkout pinned worker
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: gimesha-adikari/pdfnest-worker
+          ref: c951a482376f69793033c4f651a531a47981bdba
+          path: runtime/pdfnest-worker
+          persist-credentials: false
+
+      - name: Checkout pinned SDK
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: gimesha-adikari/platen-document
+          ref: 83132f538cd296ad292cb4b9627cb0ebf2d6237a
+          path: runtime/platen-document
+          persist-credentials: false
+
+      - name: Preflight runner capacity and quotas before package installs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/studio-evidence" "$RUNNER_TEMP/studio-pdfs" "$RUNNER_TEMP/platen-studio-ci-objects" "$RUNNER_TEMP/platen-studio-ci-mail"
+          disk_free_mib="$(($(df -Pk "$RUNNER_TEMP" | awk 'NR==2 {print $4}') / 1024))"
+          disk_total_mib="$(($(df -Pk "$RUNNER_TEMP" | awk 'NR==2 {print $2}') / 1024))"
+          inode_free="$(df -Pi "$RUNNER_TEMP" | awk 'NR==2 {print $4}')"
+          mem_mib="$(($(awk '/^MemTotal:/ {print $2}' /proc/meminfo) / 1024))"
+          mem_available_mib="$(($(awk '/^MemAvailable:/ {print $2}' /proc/meminfo) / 1024))"
+          cgroup_memory_limit="$(cat /sys/fs/cgroup/memory.max 2>/dev/null || cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || echo unknown)"
+          cpu_count="$(getconf _NPROCESSORS_ONLN)"
+          fs_line="$(findmnt -no SOURCE,FSTYPE,OPTIONS -T "$RUNNER_TEMP")"
+          quota_mount_state="no-quota-mount-option"
+          if grep -Eq '(^|,)(usrquota|grpquota|prjquota)(,|$)' <<<"$fs_line"; then quota_mount_state="quota-mount-option-present"; fi
+          if command -v quota >/dev/null 2>&1; then
+            if quota -s >/dev/null 2>&1; then quota_cli_state="query-succeeded"; else quota_cli_state="query-failed"; fi
+          else
+            quota_cli_state="quota-command-unavailable"
+          fi
+          docker_root="$(docker info --format '{{.DockerRootDir}}')"
+          docker_info="$(docker info --format '{{.ServerVersion}} {{.Driver}}')"
+          docker_free_mib="$(($(df -Pk "$docker_root" | awk 'NR==2 {print $4}') / 1024))"
+          printf '{"runner":"ubuntu-24.04","image":"%s/%s","cpu_count":%s,"memory_mib":%s,"memory_available_mib":%s,"cgroup_memory_limit_bytes":"%s","disk_total_mib":%s,"disk_free_mib_before_install":%s,"docker_root":"%s","docker_disk_free_mib_before_install":%s,"inode_free":%s,"filesystem":"%s","quota_mount_state":"%s","quota_cli_state":"%s","container_runtime":"%s"}\n' "$ImageOS" "$ImageVersion" "$cpu_count" "$mem_mib" "$mem_available_mib" "$cgroup_memory_limit" "$disk_total_mib" "$disk_free_mib" "$docker_root" "$docker_free_mib" "$inode_free" "$fs_line" "$quota_mount_state" "$quota_cli_state" "$docker_info" > "$RUNNER_TEMP/studio-evidence/runner-capacity.json"
+          if (( disk_free_mib < 8192 || docker_free_mib < 8192 || mem_mib < 12288 || mem_available_mib < 8192 || cpu_count < 2 )); then
+            echo "Runner below required capacity. No application dependencies have been installed."
+            exit 1
+          fi
+
+      - name: Verify exact source identities and scoped frontend harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=cd74ffc724094503802b84a561296e9291d5dbf0
+          test "$(git -C runtime/pdfnest-backend rev-parse HEAD)" = a4179d65099e3a8d11376923bf59af291eaac235
+          test "$(git -C runtime/pdfnest-worker rev-parse HEAD)" = c951a482376f69793033c4f651a531a47981bdba
+          test "$(git -C runtime/platen-document rev-parse HEAD)" = 83132f538cd296ad292cb4b9627cb0ebf2d6237a
+          git cat-file -e "$BASE^{commit}"
+          git merge-base --is-ancestor "$BASE" HEAD
+          while IFS= read -r changed; do
+            case "$changed" in
+              .github/workflows/studio-compatibility-acceptance.yml|playwright.studio-compatibility.config.ts|tests/studio-compatibility/*|scripts/studio-compatibility/*|vercel.json) ;;
+              *) echo "Unexpected change outside the CI harness: $changed"; exit 1 ;;
+            esac
+          done < <(git diff --name-only "$BASE"...HEAD)
+          grep -F '83132f538cd296ad292cb4b9627cb0ebf2d6237a' runtime/pdfnest-worker/pyproject.toml >/dev/null
+          grep -F '83132f538cd296ad292cb4b9627cb0ebf2d6237a' runtime/pdfnest-worker/uv.lock >/dev/null
+          if env | grep -q '^NEXT_PUBLIC_VERIFIED_WORD_SELECTION='; then
+            echo "Feature gate must remain unset for the default-off CI run."
+            exit 1
+          fi
+          node -e 'const config=require("./vercel.json"); if(config.git?.deploymentEnabled?.["codex/studio-compatibility-final-ci"]!==false) process.exit(1)' 
+          {
+            echo '{'
+            echo '  "frontend_base": "'"$BASE"'",'
+            echo '  "frontend_harness_commit": "'"$(git rev-parse HEAD)"'",'
+            echo '  "frontend_tree": "'"$(git rev-parse 'HEAD^{tree}')"'",'
+            echo '  "backend_commit": "'"$(git -C runtime/pdfnest-backend rev-parse HEAD)"'",'
+            echo '  "backend_tree": "'"$(git -C runtime/pdfnest-backend rev-parse 'HEAD^{tree}')"'",'
+            echo '  "worker_commit": "'"$(git -C runtime/pdfnest-worker rev-parse HEAD)"'",'
+            echo '  "worker_tree": "'"$(git -C runtime/pdfnest-worker rev-parse 'HEAD^{tree}')"'",'
+            echo '  "sdk_commit": "'"$(git -C runtime/platen-document rev-parse HEAD)"'",'
+            echo '  "sdk_tree": "'"$(git -C runtime/platen-document rev-parse 'HEAD^{tree}')"'"'
+            echo '}'
+          } > "$RUNNER_TEMP/studio-evidence/source-identities.json"
+
+      - name: Install system PDF and OCR tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qpdf poppler-utils mupdf-tools tesseract-ocr ghostscript libreoffice-writer fonts-dejavu-core fonts-noto-core
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.11.1
+
+      - name: Record frontend runtime versions
+        run: |
+          node -e 'const p=require("./package.json"); if(p.dependencies.next!=="16.4.6"||p.dependencies.react!=="19.2.4")process.exit(1); console.log(JSON.stringify({next:p.dependencies.next,react:p.dependencies.react,node:process.version,npm:process.env.npm_config_user_agent||"unknown"}))' > "$RUNNER_TEMP/studio-evidence/frontend-runtime.json"
+
+      - name: Install frontend from lockfile
+        run: npm ci
+
+      - name: Frontend unit, TypeScript and API-origin preflights
+        run: |
+          npm run test:unit
+          npx tsc --noEmit --pretty false
+          node --test scripts/preflight-local-api-origin.test.mjs
+          NEXT_PUBLIC_API_URL=http://localhost:8080 node scripts/preflight-local-api-origin.mjs --dev
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: runtime/pdfnest-backend/go.mod
+          cache: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+          cache: "false"
+
+      - name: Install pinned uv
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          version: "0.8.12"
+          enable-cache: false
+
+      - name: Install locked worker dependencies
+        working-directory: runtime/pdfnest-worker
+        env:
+          UV_CACHE_DIR: ${{ runner.temp }}/uv-cache
+          UV_PROJECT_ENVIRONMENT: ${{ runner.temp }}/runtime/pdfnest-worker/.venv
+        run: uv sync --locked --no-dev
+
+      - name: Build exact backend source
+        working-directory: runtime/pdfnest-backend
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          go build -o "$RUNNER_TEMP/bin/pdfnest-backend" .
+
+      - name: Generate run-scoped backend secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          admin_password="$(openssl rand -hex 24)"
+          worker_secret="$(openssl rand -hex 32)"
+          jwt_secret="$(openssl rand -hex 32)"
+          encryption_key="$(openssl rand -hex 16)"
+          for secret in "$admin_password" "$worker_secret" "$jwt_secret" "$encryption_key"; do echo "::add-mask::$secret"; done
+          {
+            echo "ADMIN_EMAIL=studio-ci-admin@example.test"
+            echo "ADMIN_PASSWORD=$admin_password"
+            echo "WORKER_SHARED_SECRET=$worker_secret"
+            echo "JWT_SECRET=$jwt_secret"
+            echo "FILE_ENCRYPTION_KEY=$encryption_key"
+          } >> "$GITHUB_ENV"
+
+      - name: Start worker API and actor
+        working-directory: runtime/pdfnest-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/worker-tmp"
+          env APP_ENV=test PYTHON_DOTENV_DISABLED=1 PYTHONPATH="$GITHUB_WORKSPACE/runtime/pdfnest-worker" REDIS_URL="$REDIS_URL" STORAGE_MODE=local LOCAL_STORAGE_DIR="$LOCAL_STORAGE_DIR" TMPDIR="$RUNNER_TEMP/worker-tmp" WORKER_SHARED_SECRET="$WORKER_SHARED_SECRET" ENABLE_PERSISTENT_RENDER_POOL=false nohup "$STUDIO_TEST_PYTHON" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 > "$RUNNER_TEMP/worker-api.log" 2>&1 < /dev/null &
+          env APP_ENV=test PYTHON_DOTENV_DISABLED=1 PYTHONPATH="$GITHUB_WORKSPACE/runtime/pdfnest-worker" REDIS_URL="$REDIS_URL" STORAGE_MODE=local LOCAL_STORAGE_DIR="$LOCAL_STORAGE_DIR" TMPDIR="$RUNNER_TEMP/worker-tmp" WORKER_SHARED_SECRET="$WORKER_SHARED_SECRET" ENABLE_PERSISTENT_RENDER_POOL=false nohup "$RUNNER_TEMP/runtime/pdfnest-worker/.venv/bin/dramatiq" app.jobs.actors --processes 1 --threads 1 > "$RUNNER_TEMP/worker-actor.log" 2>&1 < /dev/null &
+          for attempt in $(seq 1 60); do
+            if curl --silent --fail http://127.0.0.1:8000/health/ready >/dev/null; then break; fi
+            sleep 2
+          done
+          curl --silent --show-error --fail http://127.0.0.1:8000/health/ready > "$RUNNER_TEMP/studio-evidence/worker-readiness.json"
+          redis-cli -h 127.0.0.1 -p 6379 ping | grep -Fx PONG
+          pg_isready -h 127.0.0.1 -p 5432 -U pdfnest_ci -d pdfnest_ci
+
+      - name: Start backend and frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          export APP_ENV=development LOCAL=true BILLING_MODE=normal PORT=8080
+          export DATABASE_URL="$DATABASE_URL" REDIS_URL="$REDIS_URL"
+          export LOCAL_STORAGE_DIR="$LOCAL_STORAGE_DIR" MAILER_OUTBOX_DIR="$MAILER_OUTBOX_DIR"
+          export PDFNEST_WORKER_URL=http://127.0.0.1:8000 WORKER_SHARED_SECRET="$WORKER_SHARED_SECRET"
+          export ALLOWED_ORIGINS=http://localhost:3000 FRONTEND_URL=http://localhost:3000
+          export ADMIN_EMAIL="$ADMIN_EMAIL" ADMIN_PASSWORD="$ADMIN_PASSWORD"
+          export JWT_SECRET="$JWT_SECRET" FILE_ENCRYPTION_KEY="$FILE_ENCRYPTION_KEY"
+          nohup "$RUNNER_TEMP/bin/pdfnest-backend" > "$RUNNER_TEMP/backend.log" 2>&1 < /dev/null &
+          cd "$GITHUB_WORKSPACE"
+          NEXT_PUBLIC_API_URL=http://localhost:8080 nohup npm run dev -- --hostname 127.0.0.1 --port 3000 > "$RUNNER_TEMP/frontend.log" 2>&1 < /dev/null &
+          for attempt in $(seq 1 90); do
+            if curl --silent --fail http://127.0.0.1:8080/api/ready >/dev/null && curl --silent --fail http://127.0.0.1:3000/login >/dev/null; then break; fi
+            sleep 2
+          done
+          curl --silent --show-error --fail http://127.0.0.1:8080/api/ready > "$RUNNER_TEMP/studio-evidence/backend-readiness.json"
+          curl --silent --show-error --fail http://127.0.0.1:8000/health/ready > "$RUNNER_TEMP/studio-evidence/worker-readiness-final.json"
+          curl --silent --show-error --fail http://127.0.0.1:3000/login >/dev/null
+          echo '{"frontend":"ready","backend":"ready","worker":"ready","postgres":"ready","redis":"ready"}' > "$RUNNER_TEMP/studio-evidence/application-readiness.json"
+
+      - name: Provision isolated account and verify live allowance
+        run: node scripts/studio-compatibility/provision-test-account.mjs
+
+      - name: Install isolated Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run real Studio and General Editor browser acceptance
+        env:
+          CI: "true"
+        run: npx playwright test --config=playwright.studio-compatibility.config.ts
+
+      - name: Write CI summary
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          if [[ -f "$RUNNER_TEMP/studio-evidence/playwright-results.json" ]]; then
+            node -e 'const r=require(process.argv[1]); console.log("Playwright status: "+r.status); for (const x of (r.results||[])) console.log(x.title+": "+x.status+" ("+x.duration_ms+" ms)")' "$RUNNER_TEMP/studio-evidence/playwright-results.json" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Browser results were not produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [[ -f "$RUNNER_TEMP/studio-evidence/runner-capacity.json" ]]; then cat "$RUNNER_TEMP/studio-evidence/runner-capacity.json" >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Upload sanitized Playwright and PDF evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: studio-compatibility-evidence-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/studio-evidence/*.json
+            ${{ runner.temp }}/studio-evidence/*.jsonl
+          if-no-files-found: warn
+          retention-days: 14
