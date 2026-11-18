@@ -339,18 +339,18 @@ test.describe("Pinned full-stack Studio compatibility acceptance", () => {
     const { context, page } = await newAuthenticatedPage(browser, "/studio");
     try {
       await page.locator('input[type="file"]').first().setInputFiles(source);
-      expect(extractSubmissionResponse.ok()).toBe(true);
-      const extractSubmission = await extractSubmissionResponse.json();
-      const issuedSourceTracker = extractSubmission.source_tracker;
-      expect(typeof issuedSourceTracker).toBe("string");
-      expect(issuedSourceTracker.trim().length).toBeGreaterThan(0);
-      event(name, "server_owned_source_identity_issued", { source_tracker_sha256: sha(Buffer.from(issuedSourceTracker)), job_id_sha256: sha(Buffer.from(extractSubmission.job_id)) });
       await expect(page.getByRole("button", { name: "Edit", exact: true })).toBeVisible({ timeout: 60_000 });
       const layoutEditTool = page.locator('button[title="Edit"]');
       await expect(layoutEditTool).toHaveCount(1);
       const extractSubmissionPromise = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/edit/extract" && response.request().method() === "POST", { timeout: 60_000 });
       await layoutEditTool.click();
       const extractSubmissionResponse = await extractSubmissionPromise;
+      expect(extractSubmissionResponse.ok()).toBe(true);
+      const extractSubmission = await extractSubmissionResponse.json();
+      const issuedSourceTracker = extractSubmission.source_tracker;
+      expect(typeof issuedSourceTracker).toBe("string");
+      expect(issuedSourceTracker.trim().length).toBeGreaterThan(0);
+      event(name, "server_owned_source_identity_issued", { source_tracker_sha256: sha(Buffer.from(issuedSourceTracker)), job_id_sha256: sha(Buffer.from(extractSubmission.job_id)) });
       await expect(page.getByText("Precision PDF Layout Editor", { exact: true })).toBeVisible({ timeout: 60_000 });
       await expect(page.getByText("Pages mapped", { exact: true })).toBeVisible({ timeout: 180_000 });
       const inputs = page.locator('input[type="text"]');
