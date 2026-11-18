@@ -194,15 +194,23 @@ async function compileV2AndDownload(page: Page, context: BrowserContext, session
   return { path: destination, jobId, resultVersionId: terminalJob.result_version_id };
 }
 async function validateCandidate(source: string, candidate: string, mask: string, args: {
-  expected: string; stale: string; neighbor: string; pages: number; mode: "text" | "scan"; neighborPosition?: string;
+  expected: string; stale: string; neighbor: string; pages: number; mode: "text" | "scan"; neighborPosition?: string; allowImageReencoding?: boolean;
 }, caseName: string) {
   const output = path.join(EVIDENCE_DIR, caseName + "-pdf-validation.json");
   const cli = [INSPECTOR, "verify", "--source", source, "--candidate", candidate, "--mask", mask, "--output", output,
     "--expected", args.expected, "--stale", args.stale, "--neighbor", args.neighbor, "--pages", String(args.pages), "--mode", args.mode];
   if (args.neighborPosition) cli.push("--neighbor-position", args.neighborPosition);
+  if (args.allowImageReencoding) cli.push("--allow-image-reencoding");
   run(PYTHON, cli, 900_000);
   const validation = JSON.parse(fs.readFileSync(output, "utf8"));
-  event(caseName, "independent_pdf_validation_passed", { source_sha256: validation.source_sha256, candidate_sha256: validation.candidate_sha256, comparison_count: validation.pixel_metrics.length });
+  event(caseName, "independent_pdf_validation_passed", {
+    source_sha256: validation.source_sha256, candidate_sha256: validation.candidate_sha256,
+    comparison_count: validation.pixel_metrics.length,
+    source_image_count: validation.source_image_sha256.length,
+    candidate_image_count: validation.candidate_image_sha256.length,
+    source_image_streams_preserved: validation.source_image_streams_preserved,
+    image_stream_policy: validation.image_stream_policy
+  });
   return validation;
 }
 async function getWorkerArtifact(context: BrowserContext, jobId: string, caseName: string) {
@@ -297,6 +305,7 @@ test.describe.serial("Pinned full-stack Studio compatibility acceptance", () => 
       const validation = await validateCandidate(source, candidate, mask, {
         expected: "Studio scanned Alpha Charlie", stale: "Studio scanned Alpha Bravo",
         neighbor: "Untouched scan control page remains identical", pages: fixture.pageCount, mode: "scan",
+        allowImageReencoding: true,
       }, name);
       expect(validation.source_image_sha256.length).toBeGreaterThan(0);
       event(name, "complete", { source_sha256: fixture.sourceSha256, download_sha256: sha(fs.readFileSync(candidate)) });

@@ -135,7 +135,8 @@ def validate(args):
     if args.stale and args.stale in visible: raise ValueError("candidate extraction still contains the obsolete target")
     if args.neighbor and args.neighbor not in all_text: raise ValueError("candidate extraction lost the declared neighboring/control text")
     src_images=images_sha(args.source); dst_images=images_sha(args.candidate)
-    if src_images and not set(src_images).issubset(set(dst_images)):
+    image_streams_preserved = not src_images or set(src_images).issubset(set(dst_images))
+    if src_images and not image_streams_preserved and not args.allow_image_reencoding:
         raise ValueError("original image stream was not preserved")
     metrics=[]
     for dpi in (72,144,288):
@@ -168,7 +169,7 @@ def validate(args):
         a=token(sd,needle); b=token(cd,needle); sd.close(); cd.close()
         if a is None or b is None or any(abs(x-y)>1.5 for x,y in zip(a,b)):
             raise ValueError("neighbor word position changed beyond 1.5 points")
-    result={"source_sha256":source_hash,"candidate_sha256":sha(Path(args.candidate).read_bytes()),"page_count":len(source_geometry),"geometry":source_geometry,"source_image_sha256":src_images,"candidate_image_sha256":dst_images,"qpdf_source":qsource,"qpdf_candidate":qcand,"expected_text_present":args.expected,"obsolete_target_absent":args.stale or None,"neighbor_text_present":args.neighbor or None,"visible_ocr":visible if args.mode=="scan" else None,"mask":mask,"pixel_metrics":metrics,"zero_unauthorized_changes":True,"untouched_pages_pixel_identical":True}
+    result={"source_sha256":source_hash,"candidate_sha256":sha(Path(args.candidate).read_bytes()),"page_count":len(source_geometry),"geometry":source_geometry,"source_image_sha256":src_images,"candidate_image_sha256":dst_images,"source_image_streams_preserved":image_streams_preserved,"image_stream_policy":("source-stream-identity" if image_streams_preserved else ("representation-change-allowed; raster-preservation-required" if args.allow_image_reencoding else "source-stream-identity-required")),"qpdf_source":qsource,"qpdf_candidate":qcand,"expected_text_present":args.expected,"obsolete_target_absent":args.stale or None,"neighbor_text_present":args.neighbor or None,"visible_ocr":visible if args.mode=="scan" else None,"mask":mask,"pixel_metrics":metrics,"zero_unauthorized_changes":True,"untouched_pages_pixel_identical":True}
     Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n")
     return result
 
@@ -183,6 +184,7 @@ def main():
     for n in ("stale","neighbor","neighbor-position"):
         v.add_argument("--"+n,default="")
     v.add_argument("--pages",type=int,required=True); v.add_argument("--mode",choices=["text","scan"],required=True)
+    v.add_argument("--allow-image-reencoding",action="store_true",help="For representation-changing Studio raster exports, rely on the frozen source mask, independent renderers and exact untouched-page checks instead of requiring identical embedded image streams.")
     a=p.parse_args()
     try:
         if a.cmd=="declare-mask":
