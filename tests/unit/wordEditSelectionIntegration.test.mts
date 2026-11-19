@@ -1,3 +1,5 @@
+import { EditorRequestError } from "../../lib/editorJobs";
+import * as extractionSession from "../../lib/editorExtraction";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
@@ -124,6 +126,7 @@ async function main() {
 
   const component = load("components/tools/EditPdfWorkspace.tsx", {
     "@/components/tools/CandidateWordSelection": { default: CandidateWordSelection },
+    "@/lib/editorExtraction": extractionSession,
     "next/navigation": { useRouter: () => ({ replace: (url: string) => navigations.push(url) }) },
     "lucide-react": new Proxy({}, { get: () => empty }),
     "@/context/AuthContext": { useAuth: () => ({ requireAuth: (action: () => void) => action() }) },
@@ -168,6 +171,7 @@ async function main() {
     "@/lib/preview/types": { getPreviewFileIdentity: (file: File) => `${file.name}:${file.size}` },
     "@/lib/api": { captureCloudPdfOutputRestoration: () => async (blob: Blob) => blob },
     "@/lib/editorJobs": {
+      EditorRequestError,
       submitEditorExtract: async () => { extractSubmissions += 1; return { job_id: `extract-${extractSubmissions}`, source_tracker: `owned/source-${extractSubmissions}.pdf` }; },
       waitForEditorJob: async (id: string) => {
         if (id.startsWith("extract-")) return { id, status: "succeeded", result: layout };
