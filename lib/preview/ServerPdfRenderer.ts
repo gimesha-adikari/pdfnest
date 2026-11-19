@@ -1,6 +1,7 @@
 // pdfnest/lib/preview/ServerPdfRenderer.ts
 
 import { PreviewRenderer, PreviewRequest, PreviewResource, getPreviewFileIdentity } from "./types";
+import { abortableDelay } from "@/lib/abortableDelay";
 import { markCloudSubmissionInitiated } from "@/lib/security/pdfInputPreparation";
 import { assertRestoredStudioPreviewAuthorized } from "@/lib/security/restoredStudioPreviewAuthorization";
 
@@ -19,6 +20,14 @@ interface PreviewSession {
     sessionId: string;
     pageCount?: number;
 }
+
+const RETRYABLE_PREVIEW_CODES = new Set([
+    "RENDER_SESSION_STORAGE_BUSY",
+    "RENDER_QUEUE_FULL",
+    "RENDER_QUEUE_TIMEOUT",
+    "SESSION_METADATA_BUSY",
+]);
+const MAX_CAPACITY_RETRIES = 2;
 
 /** Checks whether an unknown value is an AbortError without any cast. */
 function isAbortError(err: unknown): boolean {
@@ -94,7 +103,7 @@ export class ServerPdfRenderer implements PreviewRenderer {
         }
 
         let activeSession = session;
-        let response = await this._fetchPage(activeSession.sessionId, request.page, scale, signal);
+        let response = await this._fetchPage(file, activeSession.sessionId, request.page, scale, signal);
 
         if (signal.aborted) {
             throw this._abortError();
@@ -102,23 +111,20 @@ export class ServerPdfRenderer implements PreviewRenderer {
 
         // On session expiry, create a fresh session and retry once.
         if (response.status === 404) {
-            this._invalidateSession(file);
+            this._invalidateSession(file, session);
             const fresh = await this._ensureSession(file, signal); // caller's signal still respected here
             if (signal.aborted) {
                 throw this._abortError();
             }
             activeSession = fresh;
-            response = await this._fetchPage(activeSession.sessionId, request.page, scale, signal);
+            response = await this._fetchPage(file, activeSession.sessionId, request.page, scale, signal);
             if (signal.aborted) {
                 throw this._abortError();
             }
         }
 
         if (!response.ok) {
-            const message = await this._readErrorMessage(response, `Preview fetch failed (${response.status})`);
-            const err = new Error(message) as Error & { status?: number };
-            err.status = response.status;
-            throw err;
+            throw await this._previewError(response, `Preview fetch failed (${response.status})`);
         }
 
         const blob = await response.blob();
@@ -154,10 +160,9 @@ export class ServerPdfRenderer implements PreviewRenderer {
         return getPreviewFileIdentity(file);
     }
 
-    private _invalidateSession(file: File): void {
+    private _invalidateSession(file: File, expired: PreviewSession): void {
         const identity = this._fileIdentity(file);
-        this._sessions.delete(identity);
-        this._sessionPromises.delete(identity);
+        if (this._sessions.get(identity) === expired) this._sessions.delete(identity);
     }
 
     /**
@@ -224,23 +229,16 @@ export class ServerPdfRenderer implements PreviewRenderer {
         const formData = new FormData();
         formData.append("file", file);
 
-        // Recheck immediately at the transport boundary. The outer check also
-        // protects an already-created or in-flight session from later reuse.
-        assertRestoredStudioPreviewAuthorized(file);
-        // This is the Legacy Studio upload boundary. The marker is an attempt
-        // record only and remains set if the request fails or is cancelled.
-        markCloudSubmissionInitiated([file]);
-        const response = await this.fetchImpl(
-            `${this.baseUrl}/api/conversion/preview/session`,
-            { method: "POST", body: formData, credentials: "include" },
-        );
+        const response = await this._requestWithCapacityRetry(() => {
+            assertRestoredStudioPreviewAuthorized(file);
+            markCloudSubmissionInitiated([file]);
+            return this.fetchImpl(`${this.baseUrl}/api/conversion/preview/session`, {
+                method: "POST", body: formData, credentials: "include", signal: AbortSignal.timeout(90_000),
+            });
+        });
 
         if (!response.ok) {
-            const message = await this._readErrorMessage(
-                response,
-                `Preview session creation failed (${response.status})`,
-            );
-            throw new Error(message);
+            throw await this._previewError(response, `Preview session creation failed (${response.status})`);
         }
 
         const data: unknown = await response.json();
@@ -267,6 +265,7 @@ export class ServerPdfRenderer implements PreviewRenderer {
     // ---------------------------------------------------------------------------
 
     private _fetchPage(
+        file: File,
         sessionId: string,
         page: number,
         scale: number,
@@ -277,13 +276,28 @@ export class ServerPdfRenderer implements PreviewRenderer {
             `${encodeURIComponent(sessionId)}/page/${page}` +
             `?scale=${encodeURIComponent(scale)}`;
 
-        try {
-            return this.fetchImpl(url, { method: "GET", credentials: "include", signal });
-        } catch (err) {
-            if (isAbortError(err) || signal.aborted) {
-                return Promise.reject(this._abortError());
-            }
-            return Promise.reject(err);
+        return this._requestWithCapacityRetry(() => {
+            assertRestoredStudioPreviewAuthorized(file);
+            return this.fetchImpl(url, {
+                method: "GET", credentials: "include",
+                signal: AbortSignal.any([signal, AbortSignal.timeout(45_000)]),
+            });
+        }, signal);
+    }
+
+    private async _requestWithCapacityRetry(request: () => Promise<Response>, signal?: AbortSignal): Promise<Response> {
+        for (let attempt = 0; ; attempt++) {
+            signal?.throwIfAborted();
+            const response = await request();
+            if (response.status !== 429) return response;
+
+            const error = await this._previewError(response, "Preview request failed (429)");
+            if (!RETRYABLE_PREVIEW_CODES.has(error.code) || attempt >= MAX_CAPACITY_RETRIES) throw error;
+
+            const retryAfter = response.headers.get("Retry-After");
+            const seconds = retryAfter === null ? 1 : Number(retryAfter);
+            const delay = Number.isFinite(seconds) ? Math.max(0, Math.min(2, seconds)) * 1000 : 1000;
+            await abortableDelay(delay, signal);
         }
     }
 
@@ -301,21 +315,17 @@ export class ServerPdfRenderer implements PreviewRenderer {
         return request.scale ?? 2.0;
     }
 
-    private async _readErrorMessage(response: Response, fallback: string): Promise<string> {
+    private async _previewError(response: Response, fallback: string) {
+        let code = "PREVIEW_FAILED";
+        let message = fallback;
         try {
-            const data: unknown = await response.json();
-            if (
-                data !== null &&
-                typeof data === "object" &&
-                "message" in data &&
-                typeof (data as Record<string, unknown>).message === "string"
-            ) {
-                return (data as Record<string, string>).message;
-            }
+            const data = await response.json();
+            if (typeof data?.code === "string") code = data.code;
+            if (typeof data?.message === "string") message = data.message;
         } catch {
-            // Body could not be parsed as JSON — use fallback.
+            // Non-JSON responses have no verified retryable error code.
         }
-        return fallback;
+        return Object.assign(new Error(message), { code, status: response.status });
     }
 
     private _abortError(): Error {

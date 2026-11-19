@@ -28,6 +28,7 @@ import { getDefaultPreviewManager } from "./usePreview";
 export interface PreviewItemRequest {
     /** PDF file to render. null means this slot is disabled. */
     file: File | null;
+    priority?: PreviewRequest["priority"];
     /** 1-based page number within the file. */
     page: number;
     /** Render scale. Defaults to 0.3 (suitable for thumbnail grids). */
@@ -70,6 +71,7 @@ function buildFullRequest(req: PreviewItemRequest): PreviewRequest {
         scale: req.scale ?? 0.3,
         mode: "thumbnail",
         renderer: req.renderer ?? "client",
+        priority: req.priority,
     };
 }
 
@@ -157,9 +159,9 @@ function computeRequestsKeyString(reqs: PreviewItemRequest[]): string {
  */
 export function usePreviews(
     requests: PreviewItemRequest[],
-    options?: { manager?: PreviewManager }
+    options?: { manager?: PreviewManager; retryNonce?: number }
 ): PreviewItemResult[] {
-    const manager = options?.manager;
+    const { manager, retryNonce } = options ?? {};
 
     // Stable content-derived key string. useMemo fires when `requests` reference
     // changes, but the returned STRING VALUE only changes when effective request
@@ -252,7 +254,7 @@ export function usePreviews(
     // Intentionally exclude the `requests` reference — stability is achieved
     // through requestsKeyString (content-derived stable string).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [requestsKeyString, manager]);
+    }, [requestsKeyString, manager, retryNonce]);
 
     return results;
 }

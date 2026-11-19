@@ -106,6 +106,7 @@ export default function EditPdfTool({baseFile, onEditedFile}: EditPdfToolProps) 
 
     const pageCanvasRefs = useRef<Map<number, HTMLCanvasElement>>(new Map());
     const renderTaskRefs = useRef<Map<number, { cancel: () => void }>>(new Map());
+    const extractJobSourceRef = useRef<{ jobId: string; file: File } | null>(null);
 
     const [extractJobId, setExtractJobId] = useState<string>("");
     const [compileJobId, setCompileJobId] = useState<string>("");
@@ -125,6 +126,9 @@ export default function EditPdfTool({baseFile, onEditedFile}: EditPdfToolProps) 
             setPages([]);
             setSourceTracker("");
             setUprightTracker("");
+            extractJobSourceRef.current = null;
+            setExtractJobId("");
+            localStorage.removeItem("pdfnest:edit:extractJobId");
             setPdfDocument(null);
             setAnalysis(null);
             setScannedPages([]);
@@ -141,6 +145,12 @@ export default function EditPdfTool({baseFile, onEditedFile}: EditPdfToolProps) 
         const parsePdfLayout = async () => {
             setIsExtracting(true);
             setPages([]);
+            setSourceTracker("");
+            setUprightTracker("");
+            extractJobSourceRef.current = null;
+            setExtractJobId("");
+            setExtractJob(null);
+            localStorage.removeItem("pdfnest:edit:extractJobId");
             setPdfDocument(null);
             setAnalysis(null);
             setScannedPages([]);
@@ -182,7 +192,19 @@ export default function EditPdfTool({baseFile, onEditedFile}: EditPdfToolProps) 
                 const submission = await submitEditorExtract(formData);
 
                 if (cancelled) return;
+                if (typeof submission.job_id !== "string" || !submission.job_id.trim()) {
+                    throw new Error("The extraction service did not return a valid job identity.");
+                }
+                if (typeof submission.source_tracker !== "string" || !submission.source_tracker.trim()) {
+                    throw new Error("The extraction service did not return a valid source identity.");
+                }
 
+                // This storage reference is issued by the authenticated backend
+                // for this uploaded file. Keep it bound to the exact file/job;
+                // the public worker layout result intentionally omits it.
+                extractJobSourceRef.current = {jobId: submission.job_id, file: baseFile};
+                setSourceTracker(submission.source_tracker);
+                setUprightTracker("");
                 setExtractJobId(submission.job_id);
                 localStorage.setItem("pdfnest:edit:extractJobId", submission.job_id);
                 notify("Layout extraction queued. Waiting for worker...", "info");
@@ -221,15 +243,23 @@ export default function EditPdfTool({baseFile, onEditedFile}: EditPdfToolProps) 
     useEffect(() => {
         if (!extractJobId) return;
 
+        const sourceFile = baseFile;
+        const sourceBinding = extractJobSourceRef.current;
+        if (!sourceBinding || sourceBinding.jobId !== extractJobId || sourceBinding.file !== sourceFile) return;
+
         let cancelled = false;
+        const isCurrentSource = () => {
+            const current = extractJobSourceRef.current;
+            return !cancelled && current?.jobId === extractJobId && current.file === sourceFile;
+        };
 
         void (async () => {
             try {
                 const job = await waitForEditorJob(extractJobId, (nextJob) => {
-                    if (!cancelled) setExtractJob(nextJob);
+                    if (isCurrentSource()) setExtractJob(nextJob);
                 });
 
-                if (cancelled) return;
+                if (!isCurrentSource()) return;
 
                 setExtractJob(job);
 
@@ -242,8 +272,6 @@ export default function EditPdfTool({baseFile, onEditedFile}: EditPdfToolProps) 
                 const result = job.result as
                     | {
                     pages?: PageData[];
-                    source_tracker?: string;
-                    upright_tracker?: string;
                 }
                     | null;
 
@@ -252,18 +280,16 @@ export default function EditPdfTool({baseFile, onEditedFile}: EditPdfToolProps) 
                 }
 
                 setPages(result.pages);
-                setSourceTracker(result.source_tracker || "");
-                setUprightTracker(result.upright_tracker || result.source_tracker || "");
 
                 const pdfjsLib = await loadPdfJs();
 
-                if (baseFile == null) {
+                if (sourceFile == null || !isCurrentSource()) {
                     notify("Compilation failed", "error");
                     return;
                 }
 
                 const rawPdfTask = await pdfjsLib.getDocument({
-                    data: new Uint8Array(await baseFile.arrayBuffer()),
+                    data: new Uint8Array(await sourceFile.arrayBuffer()),
                 }).promise;
 
                 let foundRotation = false;
@@ -275,17 +301,19 @@ export default function EditPdfTool({baseFile, onEditedFile}: EditPdfToolProps) 
                     }
                 }
 
-                if (!cancelled) {
+                if (isCurrentSource()) {
                     setIsDocumentRotated(foundRotation);
                 }
 
 
-                const arrayBuffer = await (baseFile.arrayBuffer());
+                const arrayBuffer = await (sourceFile.arrayBuffer());
                 const pdf = await pdfjsLib.getDocument({data: new Uint8Array(arrayBuffer)}).promise;
 
-                if (!cancelled) {
+                if (isCurrentSource()) {
                     setPdfDocument(pdf as unknown as PdfJsDocument);
                 }
+
+                if (!isCurrentSource()) return;
 
                 if (foundRotation) {
                     notify(
@@ -297,11 +325,12 @@ export default function EditPdfTool({baseFile, onEditedFile}: EditPdfToolProps) 
                 }
 
                 localStorage.removeItem("pdfnest:edit:extractJobId");
+                extractJobSourceRef.current = null;
                 setExtractJobId("");
             } catch (e) {
                 if (e != null)
                     console.error(e);
-                if (!cancelled) {
+                if (isCurrentSource()) {
                     setError(getFriendlyErrorMessage(e));
                     notify("Failed to parse structural layout grids.", "error");
                 }
@@ -626,7 +655,7 @@ export default function EditPdfTool({baseFile, onEditedFile}: EditPdfToolProps) 
                                     </div>
                                     <div className="rounded-2xl border border-border p-4">
                                         <p className="text-sm text-muted">Source tracker</p>
-                                        <p className="mt-1 truncate text-xs font-mono text-foreground">
+                                        <p data-testid="classic-source-tracker" className="mt-1 truncate text-xs font-mono text-foreground">
                                             {sourceTracker || "-"}
                                         </p>
                                     </div>

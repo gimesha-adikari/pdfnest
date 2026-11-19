@@ -212,6 +212,16 @@ for (const [name, text, kind] of scripts) test(`${name}: real UI ${kind === 'sca
     expect(declaration.planning_refusal).toBeNull();
     const job = await prepare(page, ledger, 0); expect(job.status, job.error || job.error_code).toBe('succeeded');
     expect(ledger.compileRequests[0].request).toEqual(declaration.request); expect(ledger.compileRequests[0].at).toBeGreaterThanOrEqual(declaration.at);
+    if (name === 'native-default-off') {
+      await expect(preview(page)).toBeVisible();
+      await expect(preview(page).getByRole('img', { name: 'Verified compiled PDF page 1' })).toBeVisible();
+      await expect(page.getByRole('checkbox', { name: 'Select whole words' })).toHaveCount(0);
+      await expect(page.getByRole('textbox', { name: 'Find selectable word', exact: true })).toHaveCount(0);
+      await expect(preview(page).locator('[data-candidate-word]')).toHaveCount(0);
+      ledger.selection_policy = 'selectable-viewer gates explicitly off; verified raster preview only';
+      await validateAndDownload(page, ledger, name, source, declaration, job);
+      return;
+    }
     if (kind === 'scan') {
       await expect(preview(page)).toBeVisible();
       await expect(preview(page).getByRole('img', { name: 'Verified compiled PDF page 1' })).toBeVisible();
@@ -266,7 +276,12 @@ for (const [name, text, kind] of scripts) test(`${name}: real UI ${kind === 'sca
     await expect(page.getByRole('button', { name: `Select whole word ${text}`, exact: true })).toHaveCount(0);
     expect(await page.evaluate(() => getSelection()?.toString())).not.toBe(text);
     await expect(page.getByRole('checkbox', { name: 'Select whole words' })).toHaveCount(0);
-    await expect(preview(page).getByText('Text selection is unavailable for this page.', { exact: false })).toBeVisible();
+    // Unsupported pages stay on the verified raster preview. The explanatory
+    // text belongs to the optional semantic viewer and is not mounted when the
+    // selectable-viewer gate is off (or no candidate-derived region exists).
+    await expect(preview(page).getByRole('img', { name: 'Verified compiled PDF page 2' })).toBeVisible();
+    await expect(preview(page).locator('[data-candidate-word]')).toHaveCount(0);
+    await expect(page.getByRole('textbox', { name: 'Find selectable word', exact: true })).toHaveCount(0);
     ledger.fallback_accessibility = await auditAccessibility(page);
     expect(ledger.fallback_accessibility.violations).toEqual([]);
     await preview(page).getByRole('button', { name: 'Previous page', exact: true }).click();

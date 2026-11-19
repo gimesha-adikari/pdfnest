@@ -1,3 +1,5 @@
+import { EditorRequestError } from "../../lib/editorJobs";
+import * as extractionSession from "../../lib/editorExtraction";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
@@ -114,6 +116,7 @@ async function main() {
 
   const component = load("components/tools/EditPdfWorkspace.tsx", {
     "@/components/tools/CandidateWordSelection": { default: () => null },
+    "@/lib/editorExtraction": extractionSession,
     "next/navigation": { useRouter: () => ({ replace: (url: string) => navigations.push(url) }) },
     "lucide-react": new Proxy({}, { get: () => empty }),
     "@/context/AuthContext": { useAuth: () => ({ requireAuth: (action: () => void) => action() }) },
@@ -158,6 +161,7 @@ async function main() {
     "@/lib/preview/types": { getPreviewFileIdentity: (file: File) => `${file.name}:${file.size}` },
     "@/lib/api": { captureCloudPdfOutputRestoration: () => async (blob: Blob) => blob },
     "@/lib/editorJobs": {
+      EditorRequestError,
       submitEditorExtract: async () => { extractSubmissions += 1; return { job_id: `extract-${extractSubmissions}`, source_tracker: `owned/source-${extractSubmissions}.pdf` }; },
       waitForEditorJob: async (id: string) => {
         if (id.startsWith("extract-")) return { id, status: "succeeded", result: layout };
@@ -186,7 +190,7 @@ async function main() {
   await act(async () => { root.render(React.createElement(Parent)); });
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
 
-  assert.match(document.querySelector('[data-testid="source-page-preview"]')?.textContent ?? "", /Source page preview failed: source page render rejected/);
+  assert.match(document.querySelector('[data-testid="source-page-preview"]')?.textContent ?? "", /Source page preview failed\. source page render rejected/);
   assert.equal(editorProps.wordEditMode, "operations");
   assert.equal(typeof editorProps.onCompileWordEdits, "function");
   assert.equal(extractSubmissions, 1, "the initial source identity should submit one extraction");

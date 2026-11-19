@@ -36,3 +36,18 @@ assert.match(
   /image|transform|rotation|shear/i,
   "unsupported image placements should explain the geometry refusal"
 );
+assert.match(
+  wordEditFailureMessage("SIGNED_SOURCE_UNSUPPORTED", null),
+  /signed|signature/i,
+  "signed PDF refusals should explain that editing could invalidate a signature"
+);
+assert.match(
+  wordEditFailureMessage("PROTECTED_SOURCE_PERMISSION_DENIED", null),
+  /permission|modification|modify/i,
+  "permission refusals should explain that the source does not allow modification"
+);
+assert.match(
+  wordEditFailureMessage("PROTECTED_SOURCE_UNSUPPORTED", null),
+  /encrypted|password|protection/i,
+  "protected PDF refusals should explain that this edit path cannot preserve protection"
+);

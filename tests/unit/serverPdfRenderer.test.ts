@@ -579,6 +579,79 @@ async function test22_previewManagerCacheSeparatesDistinctFilesWithMatchingMetad
     manager.dispose();
 }
 
+async function test23_previewCapacityErrorsRetryOnlyKnownTransientResponses(): Promise<void> {
+    let pageCalls = 0;
+    const renderer = new ServerPdfRenderer({ fetchImpl: async input => {
+        if (!String(input).includes("/page/")) return sessionResponse();
+        pageCalls++;
+        if (pageCalls === 1) {
+            const busy = errorResponse(429, { code: "RENDER_SESSION_STORAGE_BUSY", message: "Busy" });
+            busy.headers.set("Retry-After", "0");
+            return busy;
+        }
+        return pageResponse();
+    } });
+    const resource = await renderer.render(makeRequest(), liveSignal());
+    resource.revoke?.();
+    assert.equal(pageCalls, 2);
+
+    let rejectedCalls = 0;
+    const hardLimit = new ServerPdfRenderer({ fetchImpl: async input => {
+        if (!String(input).includes("/page/")) return sessionResponse();
+        rejectedCalls++;
+        return errorResponse(413, { code: "RENDER_SESSION_STORAGE_LIMIT", message: "Storage limit reached" });
+    } });
+    await assert.rejects(() => hardLimit.render(makeRequest(), liveSignal()), {
+        code: "RENDER_SESSION_STORAGE_LIMIT", status: 413,
+    });
+    assert.equal(rejectedCalls, 1);
+}
+
+async function test24_previewCancellationStopsCapacityRetry(): Promise<void> {
+    const controller = new AbortController();
+    let pageCalls = 0;
+    const renderer = new ServerPdfRenderer({ fetchImpl: async input => {
+        if (!String(input).includes("/page/")) return sessionResponse();
+        pageCalls++;
+        setTimeout(() => controller.abort(), 10);
+        return errorResponse(429, { code: "RENDER_SESSION_STORAGE_BUSY", message: "Busy" });
+    } });
+    await assert.rejects(() => renderer.render(makeRequest(), controller.signal), { name: "AbortError" });
+    assert.equal(pageCalls, 1);
+}
+
+async function test25_oneServerLanePrioritizesVisiblePageAndDropsObsoleteWork(): Promise<void> {
+    const pages: number[] = [];
+    let release!: () => void;
+    const first = new Promise<void>(resolve => { release = resolve; });
+    const manager = new PreviewManager(undefined, { maxServerConcurrency: 1 });
+    manager.registerRenderer(new ServerPdfRenderer({ fetchImpl: async input => {
+        const match = String(input).match(/\/page\/(\d+)/);
+        if (!match) return sessionResponse();
+        const page = Number(match[1]);
+        pages.push(page);
+        if (page === 1) await first;
+        return pageResponse();
+    } }));
+    const request = makeRequest({ renderer: "server" });
+    const initial = manager.request(request);
+    const background = manager.request({ ...request, page: 2, priority: "background" });
+    const visible = manager.request({ ...request, page: 3, priority: "critical" });
+    manager.request({ ...request, page: 4 }).unsubscribe();
+    const results = [initial, background, visible].map(handle =>
+        new Promise<void>((resolve, reject) => handle.subscribe(result => {
+            if (result.status === "success") resolve();
+            if (result.status === "error") reject(new Error(result.error?.message));
+        })),
+    );
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(pages, [1]);
+    release();
+    await Promise.all(results);
+    assert.deepEqual(pages, [1, 3, 2]);
+    manager.dispose();
+}
+
 // ---------------------------------------------------------------------------
 // Runner
 // ---------------------------------------------------------------------------
@@ -607,6 +680,9 @@ async function runTests(): Promise<void> {
         ["20: revoked restored preview authorization blocks session reuse", test20_revokedRestoredFileCannotReuseAnExistingPreviewSession],
         ["21: preview manager cache cannot bypass revoked authorization", test21_previewManagerCacheCannotBypassRevokedConsent],
         ["22: preview cache separates File objects with matching metadata", test22_previewManagerCacheSeparatesDistinctFilesWithMatchingMetadata],
+        ["23: only typed temporary capacity errors retry", test23_previewCapacityErrorsRetryOnlyKnownTransientResponses],
+        ["24: cancellation stops retry backoff", test24_previewCancellationStopsCapacityRetry],
+        ["25: server lane prioritizes the visible page and drops obsolete work", test25_oneServerLanePrioritizesVisiblePageAndDropsObsoleteWork],
     ];
 
     let passed = 0;
