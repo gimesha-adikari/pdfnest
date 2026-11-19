@@ -13,7 +13,8 @@ import { canReusePreparedWordEdit, isCurrentWordEditPreparation, type PreparedWo
 import { wordEditFailureMessage } from "@/components/editor-v2/wordEditErrors";
 import { studioVisualResolution } from "@/components/editor-v2/visualResolution";
 import { EditorLanguageControl } from "@/components/editor-v2/EditorLanguageControl";
-import { downloadEditorJob, EditorJobRecord, submitEditorCompile, submitEditorExtract, verifyWordEditArtifact, waitForEditorJob } from "@/lib/editorJobs";
+import { downloadEditorJob, EditorRequestError, submitEditorCompile, submitEditorExtract, verifyWordEditArtifact, waitForEditorJob } from "@/lib/editorJobs";
+import { discardExtractionAttempt, extractionAttempt, isConfirmedExtractionRejection, recoverEditorExtraction } from "@/lib/editorExtraction";
 import { notify } from "@/lib/notify";
 import { assertCloudProcessingAuthorized, hasProtectedPdfInputLineage, markCloudSubmissionInitiated, type PdfResultProvenance } from "@/lib/security/pdfInputPreparation";
 import { handleClientError } from "@/lib/errorHandler";
@@ -126,7 +127,8 @@ export interface EditPdfWorkspaceProps {
 }
 
 export default function EditPdfWorkspace({ engine, enableWordSelection = process.env.NEXT_PUBLIC_VERIFIED_WORD_SELECTION === "true" }: EditPdfWorkspaceProps = {}) {
-  const { requireAuth } = useAuth();
+  const { requireAuth, user, guest, isLoading: loadingSession } = useAuth();
+  const extractionOwner = user ? `user:${user.id}` : `guest:${guest?.id ?? ""}`;
   const router = useRouter();
   const { file: sharedFile, setDownloadData, toolId, editPdfEngine: contextEngine } = useSharedTool();
   const resolvedEngine = engine ?? contextEngine ?? resolveEditPdfEditorEngine();
@@ -135,7 +137,11 @@ export default function EditPdfWorkspace({ engine, enableWordSelection = process
   const beginOutput = usePdfOutputOperation(file, toolId || "edit-pdf", () => setDownloadData(null));
   const [language, setLanguage] = useState<EditorLanguageChoice>(DEFAULT_EDITOR_LANGUAGE);
   const [layout, setLayout] = useState<EditorLayout | null>(null);
-  const [extractJob, setExtractJob] = useState<EditorJobRecord | null>(null);
+  const [extractJob, setExtractJob] = useState<React.ComponentProps<typeof JobProgressCard>["job"]>(null);
+  const [extractPhase, setExtractPhase] = useState<"uploading" | "submitting" | "checking" | "failed">("uploading");
+  const [retryLabel, setRetryLabel] = useState("Check extraction status");
+  const retryPreparation = useRef<(() => void) | null>(null);
+  const extractionScope = `${extractionOwner}:${resolvedEngine}:${language.mode}:${language.languages.join(",")}`;
   const [sourceTracker, setSourceTracker] = useState("");
   const [compilingSource, setCompilingSource] = useState<File | null>(null);
   const compiling = Boolean(file && compilingSource === file);
@@ -186,8 +192,7 @@ export default function EditPdfWorkspace({ engine, enableWordSelection = process
     setCandidatePreviewError(message);
   }, []);
   const retryExtraction = () => {
-    setError(null);
-    setExtractJob(null);
+    retryPreparation.current?.();
     setRetryCount((c) => c + 1);
   };
   const changeLanguage = (next: EditorLanguageChoice) => {
@@ -200,11 +205,14 @@ export default function EditPdfWorkspace({ engine, enableWordSelection = process
       setShowCandidatePreview(false);
       return;
     }
-    let cancelled = false;
+    if (loadingSession) return;
     const controller = new AbortController();
+    const { signal } = controller;
+    let detach: (() => void) | undefined;
+
     void (async () => {
       await Promise.resolve();
-      if (cancelled) return;
+      if (signal.aborted) return;
       editorRevisionRef.current = 0;
       publishCandidate(null);
       setShowCandidatePreview(false);
@@ -213,21 +221,104 @@ export default function EditPdfWorkspace({ engine, enableWordSelection = process
       setCandidatePreviewReady(false);
       setCandidatePreviewError(null);
       setLayout(null); setError(null); setExtractJob(null); setSourceTracker("");
+      retryPreparation.current = null;
+      setRetryLabel("Check extraction status");
+      const attempt = extractionAttempt(file, extractionScope);
+      const fail = (message: string, retryLabel = "Check extraction status", prepare?: () => void) => {
+        if (signal.aborted) return;
+        retryPreparation.current = prepare ?? null;
+        setRetryLabel(retryLabel);
+        setExtractPhase("failed");
+        setError(message);
+      };
+      const restart = () => discardExtractionAttempt(file, extractionScope, attempt);
+
       try {
         assertCloudProcessingAuthorized(file, toolId || "edit-pdf");
-        const form = new FormData(); form.append("file", file);
-        if (useOcrV2) { form.append("ocr_v2", "true"); form.append("language_mode", language.mode); form.append("languages", language.languages.join(",")); }
-        const submitted = await submitEditorExtract(form);
-        if (cancelled) return;
+      } catch {
+        fail("Authorize Cloud processing for this PDF before extracting its layout.", "Retry extraction", restart);
+        return;
+      }
+
+      try {
+        if (!attempt.submission) {
+          attempt.phase = "uploading";
+          const form = new FormData();
+          form.append("file", file);
+          if (useOcrV2) {
+            form.append("ocr_v2", "true");
+            form.append("language_mode", language.mode);
+            form.append("languages", language.languages.join(","));
+          }
+          // Keep the one bounded submission with this File across workspace
+          // remounts. Cleanup detaches the UI and cancels reads, not the receipt.
+          attempt.submission = submitEditorExtract(form, {
+            requestId: attempt.id,
+            onUploadComplete: () => {
+              attempt.phase = "submitting";
+              attempt.listeners.forEach((listener) => listener("submitting"));
+            },
+          });
+        }
+        setExtractPhase(attempt.receipt ? "checking" : attempt.phase);
+        attempt.listeners.add(setExtractPhase);
+        detach = () => { attempt.listeners.delete(setExtractPhase); };
+
+        try {
+          attempt.receipt ??= await attempt.submission;
+        } catch (error) {
+          if (signal.aborted) return;
+          if (isConfirmedExtractionRejection(error)) {
+            fail(error.message, "Retry extraction", restart);
+            return;
+          }
+          setExtractPhase("checking");
+          const receipt = await recoverEditorExtraction(attempt.id, signal);
+          if (signal.aborted) return;
+          if (receipt.state === "accepted") {
+            attempt.receipt = { ...receipt, success: true, status: "checking", queue_name: "" };
+          } else if (receipt.state === "not_found") {
+            fail("The upload could not be confirmed. Retry the same request when your connection is stable.", "Retry upload", () => { attempt.submission = undefined; });
+            return;
+          } else if (receipt.state === "expired") {
+            fail("This extraction has expired. Start a new extraction to continue.", "Retry extraction", restart);
+            return;
+          } else {
+            fail(`The server has not confirmed this extraction yet. Check request ${attempt.id.slice(0, 8)} again before starting another upload.`);
+            return;
+          }
+        }
+
+        if (signal.aborted) return;
+        const submitted = attempt.receipt;
         setSourceTracker(submitted.source_tracker ?? "");
-        const job = await waitForEditorJob(submitted.job_id, (next) => { if (!cancelled) setExtractJob(next); }, controller.signal);
-        if (cancelled) return;
-        if (job.status === "succeeded" && job.result) setLayout(job.result as unknown as EditorLayout);
-        else setError(job.error_code === "LANGUAGE_REQUIRED" ? "Automatic language detection was uncertain. Choose a language and retry." : job.error || "Layout extraction failed.");
-      } catch (err) { if (!cancelled && !controller.signal.aborted) { setError("Failed to extract the editor layout."); handleClientError(err); } }
+        setExtractJob({
+          id: submitted.job_id,
+          status: submitted.status === "queued" || submitted.status === "running" ? submitted.status : "checking",
+          message: "",
+        });
+        setExtractPhase("checking");
+        const job = await waitForEditorJob(submitted.job_id, (next) => { if (!signal.aborted) setExtractJob(next); }, signal, true);
+        if (signal.aborted) return;
+        if (job.status === "succeeded" && Array.isArray(job.result?.pages)) {
+          setLayout(job.result as unknown as EditorLayout);
+        } else {
+          fail(job.error_code === "LANGUAGE_REQUIRED"
+            ? "Automatic language detection was uncertain. Choose a language and retry."
+            : job.status === "succeeded" ? "The extraction finished without a usable layout." : job.error || "Layout extraction failed.",
+          "Retry extraction", restart);
+        }
+      } catch (error) {
+        const message = error instanceof EditorRequestError && [401, 403].includes(error.status)
+          ? error.message
+          : attempt.receipt
+            ? `Could not read job ${attempt.receipt.job_id.slice(0, 8)}. Restore your connection and check its status.`
+            : `Could not confirm extraction request ${attempt.id.slice(0, 8)}. Restore your connection and check its status.`;
+        fail(message);
+      }
     })();
-    return () => { cancelled = true; controller.abort(); };
-  }, [file, language, publishCandidate, retryCount, toolId, useOcrV2]);
+    return () => { detach?.(); controller.abort(); };
+  }, [extractionScope, file, language, loadingSession, publishCandidate, retryCount, toolId, useOcrV2]);
 
   const compileLayoutRequest = (request: unknown) => {
     if (!file) return;
@@ -399,12 +490,16 @@ export default function EditPdfWorkspace({ engine, enableWordSelection = process
   );
 
   if (!file) return <div className="flex h-full items-center justify-center p-8 text-muted-foreground">Select or upload a PDF first.</div>;
-  const extracting = Boolean(extractJob && !["succeeded", "failed", "cancelled"].includes(extractJob.status));
+  const extracting = !layout && !error;
+  const extractionDescription = loadingSession ? "Checking your session…" :
+    extractPhase === "uploading" ? "Sending the PDF to Platen." :
+    extractPhase === "submitting" ? "Waiting for the server to acknowledge the extraction." :
+    extractPhase === "failed" ? "Extraction needs your attention." : "Checking extraction status…";
   return <>
     <PdfToolHero title="Precision PDF Layout Editor" description="Edit native and scanned PDF text while preserving the source document." />
-    <div className="mt-4 flex justify-end"><EditorLanguageControl value={language} onChange={changeLanguage} disabled={extracting} /></div>
-    {!layout && <div className="mt-8"><JobProgressCard title="Extracting layout" job={extractJob} active={!error} description="Extracting text layers and geometry…" /></div>}
-    {error && <div role="alert" className="mt-4 flex items-center justify-between gap-3 rounded border border-red-300 bg-red-50 p-3 text-red-700"><div className="flex items-center gap-2"><AlertTriangle size={18} className="shrink-0" /><span>{error}</span></div>{!layout && <button type="button" onClick={retryExtraction} className="shrink-0 rounded bg-red-100 px-3 py-1 text-sm font-medium text-red-800 hover:bg-red-200 transition-colors">Retry extraction</button>}</div>}
+    <div className="mt-4 flex justify-end"><EditorLanguageControl value={language} onChange={changeLanguage} disabled={extracting || !layout && retryLabel !== "Retry extraction"} /></div>
+    {!layout && <div className="mt-8"><JobProgressCard title="Extracting layout" job={extractJob} active={extracting} phase={loadingSession ? "checking" : extractPhase} description={extractionDescription} /></div>}
+    {error && <div role="alert" className="mt-4 flex items-center justify-between gap-3 rounded border border-red-300 bg-red-50 p-3 text-red-700"><div className="flex items-center gap-2"><AlertTriangle size={18} className="shrink-0" /><span>{error}</span></div>{!layout && <button type="button" onClick={retryExtraction} className="shrink-0 rounded bg-red-100 px-3 py-1 text-sm font-medium text-red-800 hover:bg-red-200 transition-colors">{retryLabel}</button>}</div>}
     {preparedCandidate && <section aria-label="Verified compiled PDF preview" className={showCandidatePreview ? "mt-8 flex h-[75vh] min-h-0 flex-col" : "hidden"}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>

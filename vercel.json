@@ -11,7 +11,8 @@
       "codex/markdown-device-pending-20261018": false,
       "codex/code-pdf-result-ownership": false,
       "codex/phase6-rc02-security-remediation-20261117": false,
-      "codex/studio-compatibility-final-ci": false
+      "codex/studio-compatibility-final-ci": false,
+      "codex/general-editor-extraction-recovery": false
     }
   }
 }
