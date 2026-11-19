@@ -200,7 +200,7 @@ async function main() {
   await act(async () => { root.render(React.createElement(Parent)); });
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
 
-  assert.match(document.querySelector('[data-testid="source-page-preview"]')?.textContent ?? "", /Source page preview failed: source page render rejected/);
+  assert.match(document.querySelector('[data-testid="source-page-preview"]')?.textContent ?? "", /Source page preview failed\. source page render rejected/);
   assert.equal(editorProps.wordEditMode, "operations");
   assert.equal(typeof editorProps.onCompileWordEdits, "function");
   assert.equal(extractSubmissions, 1, "the initial source identity should submit one extraction");

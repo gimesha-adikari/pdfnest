@@ -46,7 +46,7 @@ let defaultManager: PreviewManager | null = null;
  */
 export function getDefaultPreviewManager(): PreviewManager {
     if (!defaultManager) {
-        defaultManager = new PreviewManager();
+        defaultManager = new PreviewManager(undefined, { maxServerConcurrency: 1 });
         defaultManager.registerRenderer(new ClientPdfRenderer());
         defaultManager.registerRenderer(new ServerPdfRenderer());
     }

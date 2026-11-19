@@ -47,12 +47,14 @@ function ActiveStandalonePage({ file, page, visual }: ActiveStandalonePageProps)
         page: page.page_num,
         scale: resolution.scale,
         renderer: "server" as const,
+        priority: "critical" as const,
         enabled: true,
       },
     ],
     [file, page.page_num, resolution.scale]
   );
-  const result = usePreviews(requests)[0];
+  const [retryNonce, setRetryNonce] = useState(0);
+  const result = usePreviews(requests, { retryNonce })[0];
   const [cachedSrc, setCachedSrc] = useState<string>("");
   if (result?.src && result.src !== cachedSrc) {
     setCachedSrc(result.src);
@@ -61,8 +63,9 @@ function ActiveStandalonePage({ file, page, visual }: ActiveStandalonePageProps)
 
   if (result?.error) {
     return (
-      <div role="alert" className="p-5 text-red-700">
-        Source page preview failed: {result.error.message || "The source page could not be rendered."} Re-upload the PDF to start a fresh preview session.
+      <div role="alert" className="relative z-10 p-5 text-red-700">
+        <p>Source page preview failed. {result.error.message || "The source page could not be rendered."}</p>
+        <button type="button" className="mt-2 rounded border px-3 py-1" onClick={() => setRetryNonce(value => value + 1)}>Retry preview</button>
       </div>
     );
   }
@@ -108,7 +111,7 @@ function VerifiedCandidatePage({
   onReady: (file: File, page: number) => void;
   onError: (file: File, page: number, message: string) => void;
 }) {
-  const requests = useMemo(() => [{ file, page, scale: 2, renderer: "server" as const, enabled: true }], [file, page]);
+  const requests = useMemo(() => [{ file, page, scale: 2, renderer: "server" as const, priority: "critical" as const, enabled: true }], [file, page]);
   const result = usePreviews(requests)[0];
   useEffect(() => {
     if (result?.src) onReady(file, page);
@@ -484,7 +487,7 @@ export default function EditPdfWorkspace({ engine, enableWordSelection = process
     (index: number, visual: EditorVisualContext) => {
       const page = layout?.pages[index];
       if (!file || !page) return null;
-      return <ActiveStandalonePage file={file} page={page} visual={visual} />;
+      return <ActiveStandalonePage key={`${getPreviewFileIdentity(file)}:${page.page_num}`} file={file} page={page} visual={visual} />;
     },
     [file, layout]
   );

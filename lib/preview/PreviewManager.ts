@@ -21,6 +21,8 @@ export class PreviewManager {
     // Bounded Render Queue settings
     private readonly maxConcurrency: number;
     private activeCount = 0;
+    private activeServerCount = 0;
+    private readonly maxServerConcurrency: number;
     private readonly renderQueue: Array<{
         key: PreviewKey;
         request: PreviewRequest;
@@ -30,9 +32,10 @@ export class PreviewManager {
         deferredReject: (err: unknown) => void;
     }> = [];
 
-    constructor(cache?: PreviewCache, options?: { maxConcurrency?: number }) {
+    constructor(cache?: PreviewCache, options?: { maxConcurrency?: number; maxServerConcurrency?: number }) {
         this.cache = cache ?? new PreviewCache();
         this.maxConcurrency = options?.maxConcurrency ?? 2;
+        this.maxServerConcurrency = options?.maxServerConcurrency ?? this.maxConcurrency;
     }
 
     /** Register a renderer with a unique identifier. */
@@ -225,14 +228,22 @@ export class PreviewManager {
 
         // Register subscriber for (new or existing) in‑flight entry.
         entry.subscribers.add(handle._callbackBound);
+        if (request.priority === "critical") {
+            const pending = this.renderQueue.find(task => task.controller === entry.controller);
+            if (pending) pending.request = request;
+        }
         this._processQueue();
         return handle;
     }
 
     private _processQueue(): void {
         while (this.activeCount < this.maxConcurrency && this.renderQueue.length > 0) {
-            const task = this.renderQueue.shift();
-            if (!task) break;
+            const eligible = (task: (typeof this.renderQueue)[number]) =>
+                !task.renderer.capabilities.server || this.activeServerCount < this.maxServerConcurrency;
+            let index = this.renderQueue.findIndex(task => eligible(task) && task.request.priority === "critical");
+            if (index < 0) index = this.renderQueue.findIndex(eligible);
+            if (index < 0) break;
+            const [task] = this.renderQueue.splice(index, 1);
 
             if (task.controller.signal.aborted || !this.inflight.has(task.key)) {
                 continue;
@@ -245,16 +256,20 @@ export class PreviewManager {
             }
 
             this.activeCount++;
+            const server = task.renderer.capabilities.server;
+            if (server) this.activeServerCount++;
+            const release = () => {
+                this.activeCount--;
+                if (server) this.activeServerCount--;
+                this._processQueue();
+            };
 
             try {
                 const resultOrPromise = task.renderer.render(task.request, task.controller.signal);
                 Promise.resolve(resultOrPromise)
                     .then((res) => task.deferredResolve(res))
                     .catch((err) => task.deferredReject(err))
-                    .finally(() => {
-                        this.activeCount = Math.max(0, this.activeCount - 1);
-                        this._processQueue();
-                    });
+                    .finally(release);
             } catch (syncErr) {
                 const isAbort = typeof syncErr === "object" && syncErr !== null && "name" in syncErr && (syncErr as { name: unknown }).name === "AbortError";
                 if (!isAbort) {
@@ -276,8 +291,7 @@ export class PreviewManager {
                     }
                 }
                 task.deferredReject(syncErr);
-                this.activeCount = Math.max(0, this.activeCount - 1);
-                this._processQueue();
+                release();
             }
         }
     }
@@ -303,6 +317,8 @@ export class PreviewManager {
             if (entry.subscribers.size === 0) {
                 entry.controller.abort();
                 this.inflight.delete(key);
+                const queued = this.renderQueue.findIndex(task => task.controller === entry.controller);
+                if (queued >= 0) this.renderQueue.splice(queued, 1);
             }
         }
         if (retained) {
