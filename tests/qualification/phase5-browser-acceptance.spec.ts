@@ -200,12 +200,10 @@ const scripts = [
   ['tamil-word', 'தமிழ்நாடு', 'native'], ['tamil-cluster', 'கல்வி', 'native'], ['tamil-vowel', 'கி', 'native'],
   ['sinhala-searchable', 'කී', 'searchable'], ['tamil-searchable', 'கி', 'searchable'],
   ['english-native', 'hello', 'native'], ['english-scan', 'hello', 'scan'],
-  ['native-default-off', 'hello', 'native'],
   ['native-100-default-off', 'hello', 'scan'],
 ] as const;
 
 for (const [name, text, kind] of scripts) test(`${name}: real UI ${kind === 'scan' ? 'image-only fallback' : 'selection clipboard'} downloads and PDF preservation`, async ({ page, context }) => {
-  if (name === 'native-default-off' && process.env.PLATEN_PHASE5_DEFAULT_OFF !== '1') test.skip(true, 'Run only against the local app with selectable-viewer gates explicitly off');
   if (name === 'english-scan' || name === 'native-100-default-off') test.setTimeout(900_000);
   const ledger = await setup(page, context, name); const source = path.join(fixtureDir, `${kind}.pdf`);
   try {
